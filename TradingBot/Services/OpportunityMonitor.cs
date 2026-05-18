@@ -65,17 +65,7 @@ public class OpportunityMonitor
 
     public void PrintCycleRanking(int top = 15)
     {
-        List<ArbMonitorRecord> snapshot;
-
-        lock (_lock)
-        {
-            snapshot = _cycleRecords.ToList();
-        }
-
-        var ranked = snapshot
-            .OrderByDescending(x => x.EdgePerShare)
-            .Take(top)
-            .ToList();
+        var ranked = GetTopCycleRecords(top);
 
         Console.WriteLine();
         Console.WriteLine("========== OPPORTUNITY RANKING ==========");
@@ -109,6 +99,22 @@ public class OpportunityMonitor
 
         Console.WriteLine("=========================================");
         Console.WriteLine();
+    }
+
+    public List<ArbMonitorRecord> GetTopCycleRecords(int top = 10, bool executableOnly = true)
+    {
+        lock (_lock)
+        {
+            var query = _cycleRecords.AsEnumerable();
+
+            if (executableOnly)
+                query = query.Where(x => x.IsExecutable);
+
+            return query
+                .OrderByDescending(x => x.EdgePerShare)
+                .Take(top)
+                .ToList();
+        }
     }
 
     public void FlushCsv()

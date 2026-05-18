@@ -222,6 +222,11 @@ class Program
 
                 positionBook.PrintOpenPositions(top: 5);
                 settlementService.PrintSettlementCandidates();
+                positionBook.PrintSessionStatistics(
+                    monitor: monitor,
+                    feeRatePerLeg: 0.001m,
+                    topOpportunities: 5
+                );
 
                 // settlement по GroupKey го пускай само временно, когато искаш да тестваш close flow.
                 //if (!settlementTestDone)
