@@ -303,6 +303,78 @@ public class PaperPositionBook
         Console.WriteLine();
     }
 
+    public void PrintSessionStatistics(
+        OpportunityMonitor? monitor = null,
+        decimal feeRatePerLeg = 0.001m,
+        int topOpportunities = 5)
+    {
+        List<PaperPosition> openPositions;
+        List<PaperPosition> closedPositions;
+
+        lock (_lock)
+        {
+            openPositions = _openPositions.Values.ToList();
+            closedPositions = _closedPositions.ToList();
+        }
+
+        var today = DateTime.UtcNow.Date;
+        var todaysOpened = openPositions.Count(x => x.OpenedAtUtc.Date == today);
+        var todaysClosed = closedPositions.Count(x => (x.ClosedAtUtc ?? DateTime.MinValue).Date == today);
+
+        var sessionRealizedPnl = closedPositions.Sum(x => x.RealizedProfit ?? 0m);
+        var dailyRealizedPnl = closedPositions
+            .Where(x => (x.ClosedAtUtc ?? DateTime.MinValue).Date == today)
+            .Sum(x => x.RealizedProfit ?? 0m);
+
+        var winningClosed = closedPositions.Count(x => (x.RealizedProfit ?? 0m) > 0m);
+        var winRate = closedPositions.Count == 0
+            ? 0m
+            : (decimal)winningClosed / closedPositions.Count * 100m;
+
+        var totalFeesEstimate = (openPositions.Sum(x => x.TotalCost) + closedPositions.Sum(x => x.TotalCost))
+            * feeRatePerLeg;
+
+        var avgEdgeOpen = openPositions.Count == 0 ? 0m : openPositions.Average(x => x.EdgePerShare);
+        var avgEdgeClosed = closedPositions.Count == 0 ? 0m : closedPositions.Average(x => x.EdgePerShare);
+
+        Console.WriteLine();
+        Console.WriteLine("========== DAILY / SESSION STATS ==========");
+        Console.WriteLine($"Opened (session): {openPositions.Count}");
+        Console.WriteLine($"Opened (today UTC): {todaysOpened}");
+        Console.WriteLine($"Closed (session): {closedPositions.Count}");
+        Console.WriteLine($"Closed (today UTC): {todaysClosed}");
+        Console.WriteLine($"Realized PnL (session): {sessionRealizedPnl:0.####}");
+        Console.WriteLine($"Realized PnL (today UTC): {dailyRealizedPnl:0.####}");
+        Console.WriteLine($"Win rate (session): {winRate:0.##}%");
+        Console.WriteLine($"Total fees est. (@{feeRatePerLeg * 100m:0.###}%): {totalFeesEstimate:0.####}");
+        Console.WriteLine($"Average edge/share open: {avgEdgeOpen:0.####}");
+        Console.WriteLine($"Average edge/share closed: {avgEdgeClosed:0.####}");
+
+        if (monitor != null)
+        {
+            var best = monitor.GetTopCycleRecords(topOpportunities, executableOnly: true);
+            Console.WriteLine();
+            Console.WriteLine($"Top opportunities (cycle, executable, top {topOpportunities}):");
+
+            if (best.Count == 0)
+            {
+                Console.WriteLine("- none");
+            }
+            else
+            {
+                foreach (var item in best)
+                {
+                    Console.WriteLine(
+                        $"- {item.Engine}/{item.Strategy} | edge {item.EdgePerShare:0.####} | exp {item.ExpectedProfit:0.####} | qty {item.QuantityAvailable:0.####}"
+                    );
+                }
+            }
+        }
+
+        Console.WriteLine("===========================================");
+        Console.WriteLine();
+    }
+
     private static string BuildPositionId(BasketArbOpportunity opportunity)
     {
         var legsKey = string.Join("_",
