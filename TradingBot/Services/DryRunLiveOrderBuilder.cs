@@ -11,6 +11,7 @@ public sealed class DryRunLiveOrderBuilder
     private readonly decimal _tickSize;
     private readonly LiveOrderType _orderType;
     private readonly string _logDir;
+    private readonly ExecutionPolicy _policy;
 
     private const string ZeroBytes32 =
         "0x0000000000000000000000000000000000000000000000000000000000000000";
@@ -21,7 +22,8 @@ public sealed class DryRunLiveOrderBuilder
         decimal minSize = 1m,
         decimal tickSize = 0.01m,
         LiveOrderType orderType = LiveOrderType.FOK,
-        string logDir = "logs")
+        string logDir = "logs",
+        ExecutionPolicy? policy = null)
     {
         _minEdgePerShare = minEdgePerShare;
         _maxPlanCost = maxPlanCost;
@@ -29,6 +31,7 @@ public sealed class DryRunLiveOrderBuilder
         _tickSize = tickSize;
         _orderType = orderType;
         _logDir = logDir;
+        _policy = policy ?? new ExecutionPolicy();
     }
 
     public DryRunLiveOrderPlan? BuildPlan(
@@ -124,9 +127,10 @@ public sealed class DryRunLiveOrderBuilder
         var nonOrderCapitalRequired = EstimateNonOrderCapitalRequired(legs);
         var totalCapitalRequired = estimatedOrderCost + nonOrderCapitalRequired;
 
-        if (totalCapitalRequired > _maxPlanCost)
+        var effectiveCap = Math.Min(_maxPlanCost, _policy.MaxNotionalPerTrade);
+        if (totalCapitalRequired > effectiveCap)
         {
-            errors.Add($"Plan capital too high: {totalCapitalRequired:0.####}. Max allowed: {_maxPlanCost:0.####}");
+            errors.Add($"Plan capital too high: {totalCapitalRequired:0.####}. Max allowed: {effectiveCap:0.####}");
             return null;
         }
 

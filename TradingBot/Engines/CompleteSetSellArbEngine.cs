@@ -10,19 +10,22 @@ public class CompleteSetSellArbEngine
     private readonly decimal _feeBuffer;
     private readonly decimal _slippageBuffer;
     private readonly OpportunityMonitor? _monitor;
+    private readonly ExecutionSizingService _sizing;
 
     public CompleteSetSellArbEngine(
         IOrderBookProvider orderBooks,
         decimal minEdgePerShare = 0.003m,
         decimal feeBuffer = 0.001m,
         decimal slippageBuffer = 0.001m,
-        OpportunityMonitor? monitor = null)
+        OpportunityMonitor? monitor = null,
+        ExecutionSizingService? sizing = null)
     {
         _orderBooks = orderBooks;
         _minEdgePerShare = minEdgePerShare;
         _feeBuffer = feeBuffer;
         _slippageBuffer = slippageBuffer;
         _monitor = monitor;
+        _sizing = sizing ?? new ExecutionSizingService(new ExecutionPolicy());
     }
 
     public async Task ScanAsync(
@@ -105,6 +108,9 @@ public class CompleteSetSellArbEngine
             var edge = adjustedProceeds - 1m;
 
             var quantityAvailable = Math.Min(book.YesBid.Size, book.NoBid.Size);
+            var executableQuantity = _sizing.ClampQuantityByNotional(quantityAvailable, 1m);
+            if (executableQuantity < quantityAvailable && executableQuantity > 0)
+                Console.WriteLine($"[SIZING] Strategy=MINT_AND_SELL_YES_NO AvailableQty={quantityAvailable:0.####} ExecutableQty={executableQuantity:0.####} Notional={executableQuantity:0.####}");
 
             var orderLegs = new List<OrderLegCandidate>
             {
@@ -116,7 +122,7 @@ public class CompleteSetSellArbEngine
                     Outcome: "YES",
                     Side: LiveOrderSide.SELL,
                     Price: book.YesBid.Price,
-                    Size: quantityAvailable,
+                    Size: executableQuantity,
                     EdgePerShare: edge
                 ),
 
@@ -128,7 +134,7 @@ public class CompleteSetSellArbEngine
                     Outcome: "NO",
                     Side: LiveOrderSide.SELL,
                     Price: book.NoBid.Price,
-                    Size: quantityAvailable,
+                    Size: executableQuantity,
                     EdgePerShare: edge
                 )
             };
@@ -141,9 +147,9 @@ public class CompleteSetSellArbEngine
                 EdgePerShare: edge,
                 CostOrProceeds: adjustedProceeds,
                 GuaranteedPayout: 1m,
-                QuantityAvailable: quantityAvailable,
-                ExpectedProfit: quantityAvailable * edge,
-                IsExecutable: edge >= _minEdgePerShare && quantityAvailable > 0,
+                QuantityAvailable: executableQuantity,
+                ExpectedProfit: executableQuantity * edge,
+                IsExecutable: edge >= _minEdgePerShare && executableQuantity > 0,
                 Leg1: $"SELL YES @ {book.YesBid.Price} | {book.Question}",
                 Leg2: $"SELL NO @ {book.NoBid.Price} | {book.Question}",
                 GroupKey: null
@@ -164,7 +170,7 @@ public class CompleteSetSellArbEngine
                 );
             }
 
-            var quantity = quantityAvailable;
+            var quantity = executableQuantity;
 
             if (quantity <= 0)
             {

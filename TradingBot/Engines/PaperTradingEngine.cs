@@ -5,8 +5,6 @@ namespace TradingBot.Engines;
 
 public class PaperTradingEngine
 {
-    const decimal minExpectedProfit = 0.25m;
-
     private readonly Dictionary<string, PaperPosition> _positions = new();
     private readonly object _lock = new();
     private readonly HashSet<string> _executedArbs = new();
@@ -147,9 +145,6 @@ public class PaperTradingEngine
             return false;
         }
 
-        const decimal maxNotionalPerTrade = 100m;
-        const decimal minNotionalPerTrade = 1m;
-
         var key = BuildKey(opportunity);
 
         lock (_lock)
@@ -161,7 +156,7 @@ public class PaperTradingEngine
                 return false;
 
             var maxQuantityByBalance = Balance / opportunity.CostPerShare;
-            var maxQuantityByRisk = maxNotionalPerTrade / opportunity.CostPerShare;
+            var maxQuantityByRisk = _policy.MaxNotionalPerTrade / opportunity.CostPerShare;
 
             var executableQuantity = Math.Min(
                 opportunity.Quantity,
@@ -173,7 +168,7 @@ public class PaperTradingEngine
 
             var totalCost = executableQuantity * opportunity.CostPerShare;
 
-            if (totalCost < minNotionalPerTrade)
+            if (totalCost < _policy.MinNotionalPerTrade)
                 return false;
 
             var expectedProfit = executableQuantity * opportunity.GrossEdgePerShare;
@@ -509,9 +504,6 @@ public class PaperTradingEngine
 
     public bool RecordCompleteSetSellArbitrage(ArbOpportunity opportunity)
     {
-        const decimal maxNotionalPerTrade = 100m;
-        const decimal minNotionalPerTrade = 1m;
-
         if (!_policy.AllowCompleteSetSellArbs)
             return false;
 
@@ -529,7 +521,7 @@ public class PaperTradingEngine
                 return false;
 
             var maxQuantityByBalance = Balance / opportunity.CostPerShare;
-            var maxQuantityByRisk = maxNotionalPerTrade / opportunity.CostPerShare;
+            var maxQuantityByRisk = _policy.MaxNotionalPerTrade / opportunity.CostPerShare;
 
             var executableQuantity = Math.Min(
                 opportunity.Quantity,
@@ -541,7 +533,7 @@ public class PaperTradingEngine
 
             var mintCost = executableQuantity * opportunity.CostPerShare;
 
-            if (mintCost < minNotionalPerTrade)
+            if (mintCost < _policy.MinNotionalPerTrade)
                 return false;
 
             if (Balance < mintCost)
