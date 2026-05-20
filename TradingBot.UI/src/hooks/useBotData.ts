@@ -1,0 +1,15 @@
+import { useEffect, useMemo, useState } from 'react';
+import { createSignalR, getBotStatus, getOpportunities, getPositions, getRisk, getScannerStats, getTerminalLogs, getTradeLogs } from '../services/botApi';
+import type { BotStatus, ConnectionStatus, Opportunity, PaperPosition, RiskState, ScannerStats, TerminalLogEntry, TradeLogEntry } from '../types/models';
+
+export function useBotData(){
+  const [status,setStatus]=useState<BotStatus|null>(null); const [opps,setOpps]=useState<Opportunity[]>([]); const [positions,setPositions]=useState<PaperPosition[]>([]); const [trades,setTrades]=useState<TradeLogEntry[]>([]); const [risk,setRisk]=useState<RiskState|null>(null); const [scanner,setScanner]=useState<ScannerStats|null>(null); const [logs,setLogs]=useState<TerminalLogEntry[]>([]);
+  const [connectionStatus,setConnectionStatus]=useState<ConnectionStatus>('DISCONNECTED'); const [loading,setLoading]=useState(true); const [error,setError]=useState<string|undefined>(); const [lastUpdated,setLastUpdated]=useState<string>(''); const [lastHeartbeat,setLastHeartbeat]=useState<string>(''); const [isMock,setIsMock]=useState(false);
+  useEffect(()=>{const ac=new AbortController(); (async()=>{try{const [s,o,p,t,sc,r,l]=await Promise.all([getBotStatus(ac.signal),getOpportunities(ac.signal),getPositions(ac.signal),getTradeLogs(ac.signal),getScannerStats(ac.signal),getRisk(ac.signal),getTerminalLogs(ac.signal)]); setStatus(s);setOpps(o);setPositions(p);setTrades(t);setScanner(sc);setRisk(r);setLogs(l);setConnectionStatus('CONNECTED');}catch{setIsMock(true);setConnectionStatus('MOCK');} finally {setLoading(false);setLastUpdated(new Date().toISOString());}})();
+  const hub=createSignalR(); hub.start().then(()=>setConnectionStatus('CONNECTED')).catch(()=>{setConnectionStatus('MOCK');setIsMock(true);});
+  const unsubs=[hub.on('opportunitiesUpdated',(d:Opportunity[])=>{setOpps(d);setLastUpdated(new Date().toISOString());}),hub.on('opportunityDetected',(d:Opportunity)=>setOpps(x=>[d,...x.filter(y=>y.id!==d.id)].slice(0,500))),hub.on('tradeLogUpdated',(d:TradeLogEntry[])=>setTrades(d)),hub.on('tradeExecuted',(d:TradeLogEntry)=>setTrades(x=>[d,...x.filter(y=>y.id!==d.id)].slice(0,500))),hub.on('positionsUpdated',(d:PaperPosition[])=>setPositions(d)),hub.on('riskUpdated',(d:RiskState)=>setRisk(d)),hub.on('scannerStatsUpdated',(d:ScannerStats)=>setScanner(d)),hub.on('botStatusUpdated',(d:BotStatus)=>setStatus(d)),hub.on('terminalLogAdded',(d:TerminalLogEntry)=>setLogs(x=>[d,...x].slice(0,1000))),hub.on('heartbeat',()=>setLastHeartbeat(new Date().toISOString()))];
+  hub.onReconnecting(()=>setConnectionStatus('RECONNECTING')); hub.onClose(()=>setConnectionStatus(isMock?'MOCK':'DISCONNECTED')); hub.onReconnected(()=>setConnectionStatus('CONNECTED'));
+  return ()=>{ac.abort(); unsubs.forEach(u=>u()); void hub.stop();};
+  },[]);
+  return useMemo(()=>({status,opps,positions,trades,risk,scanner,logs,connectionStatus,loading,error,lastUpdated,lastHeartbeat,isMock}),[status,opps,positions,trades,risk,scanner,logs,connectionStatus,loading,error,lastUpdated,lastHeartbeat,isMock]);
+}
