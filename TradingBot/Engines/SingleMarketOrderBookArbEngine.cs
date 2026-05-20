@@ -132,6 +132,33 @@ public class SingleMarketOrderBookArbEngine
 
             var quantityAvailable = Math.Min(book.YesAsk.Size, book.NoAsk.Size);
 
+            var orderLegs = new List<OrderLegCandidate>
+            {
+                new OrderLegCandidate(
+                    Strategy: "BUY_YES_AND_BUY_NO",
+                    GroupKey: book.MarketId,
+                    Question: book.Question,
+                    TokenId: book.YesTokenId,
+                    Outcome: "YES",
+                    Side: LiveOrderSide.BUY,
+                    Price: book.YesAsk.Price,
+                    Size: quantityAvailable,
+                    EdgePerShare: edge
+                ),
+
+                new OrderLegCandidate(
+                    Strategy: "BUY_YES_AND_BUY_NO",
+                    GroupKey: book.MarketId,
+                    Question: book.Question,
+                    TokenId: book.NoTokenId,
+                    Outcome: "NO",
+                    Side: LiveOrderSide.BUY,
+                    Price: book.NoAsk.Price,
+                    Size: quantityAvailable,
+                    EdgePerShare: edge
+                )
+            };
+
             _monitor?.Record(new ArbMonitorRecord(
                 TimestampUtc: DateTime.UtcNow,
                 Engine: "SingleMarketBuyBoth",
@@ -146,7 +173,10 @@ public class SingleMarketOrderBookArbEngine
                 Leg1: $"BUY YES @ {book.YesAsk.Price} | {book.Question}",
                 Leg2: $"BUY NO @ {book.NoAsk.Price} | {book.Question}",
                 GroupKey: null
-            ));
+            )
+            {
+                OrderLegs = orderLegs
+            });
 
             if (edge < _minEdgePerShare)
             {

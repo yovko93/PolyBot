@@ -19,6 +19,7 @@ public class OpportunityMonitor
     private readonly List<ArbMonitorRecord> _cycleRecords = new();
     private readonly Dictionary<string, DateTime> _lastAlerts = new();
     private readonly Dictionary<string, (DateTime Time, decimal Edge, bool Executable)> _lastWritten = new();
+    private readonly DryRunLiveOrderBuilder? _dryRunOrderBuilder;
 
     private readonly TimeSpan _csvWriteCooldown = TimeSpan.FromMinutes(1);
     private readonly decimal _minEdgeChangeToRewrite = 0.001m;
@@ -28,13 +29,15 @@ public class OpportunityMonitor
         decimal alertEdgeThreshold = 0.003m,
         decimal minRecordEdgePerShare = -0.02m,
         TimeSpan? alertCooldown = null,
-        decimal minAlertExpectedProfit = 0)
+        decimal minAlertExpectedProfit = 0,
+        DryRunLiveOrderBuilder? dryRunOrderBuilder = null)
     {
         _csvPath = csvPath;
         _alertEdgeThreshold = alertEdgeThreshold;
         _minRecordEdgePerShare = minRecordEdgePerShare;
         _minAlertExpectedProfit = minAlertExpectedProfit;
         _alertCooldown = alertCooldown ?? TimeSpan.FromMinutes(2);
+        _dryRunOrderBuilder = dryRunOrderBuilder;
 
         EnsureCsvHeader();
     }
@@ -215,6 +218,8 @@ public class OpportunityMonitor
         Console.WriteLine("===============================");
         Console.WriteLine();
 
+        TryBuildDryRunOrderPlanUnderLock(record);
+
         Console.ForegroundColor = previousColor;
 
         try
@@ -225,6 +230,44 @@ public class OpportunityMonitor
         {
             // Console.Beep may not work on every OS/terminal.
         }
+    }
+
+    private void TryBuildDryRunOrderPlanUnderLock(ArbMonitorRecord record)
+    {
+        if (_dryRunOrderBuilder == null)
+            return;
+
+        if (!record.IsExecutable)
+            return;
+
+        if (record.OrderLegs.Count == 0)
+        {
+            Console.WriteLine("[DRY-RUN ORDER SKIPPED] No structured order legs on record.");
+            return;
+        }
+
+        var plan = _dryRunOrderBuilder.BuildPlan(
+            planId: record.Key,
+            legs: record.OrderLegs,
+            errors: out var errors
+        );
+
+        if (plan == null)
+        {
+            Console.WriteLine("[DRY-RUN ORDER REJECTED]");
+
+            foreach (var error in errors)
+                Console.WriteLine($" - {error}");
+
+            return;
+        }
+
+        _dryRunOrderBuilder.SavePlan(plan);
+
+        Console.WriteLine("[DRY-RUN LIVE ORDER PLAN CREATED]");
+        Console.WriteLine($"Plan: {plan.PlanId}");
+        Console.WriteLine($"Orders: {plan.Orders.Count}");
+        Console.WriteLine($"Estimated cost: {plan.TotalEstimatedCost:0.####}");
     }
 
     private void EnsureCsvHeader()

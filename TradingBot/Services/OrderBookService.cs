@@ -77,10 +77,12 @@ public class OrderBookService : IOrderBookProvider
         var snapshot = new BinaryOrderBookSnapshot(
             MarketId: market.id,
             Question: market.question,
-            YesAsk: GetBestAsk(yesBook),
-            NoAsk: GetBestAsk(noBook),
+            YesTokenId: yesTokenId,
+            NoTokenId: noTokenId,
             YesBid: GetBestBid(yesBook),
-            NoBid: GetBestBid(noBook)
+            YesAsk: GetBestAsk(yesBook),
+            NoBid: GetBestBid(noBook),
+            NoAsk: GetBestAsk(noBook)
         );
 
         lock (_cacheLock)
@@ -165,10 +167,12 @@ public class OrderBookService : IOrderBookProvider
                 var snapshot = new BinaryOrderBookSnapshot(
                     MarketId: market.id,
                     Question: market.question,
-                    YesAsk: GetBestAsk(yesBook),
-                    NoAsk: GetBestAsk(noBook),
+                    YesTokenId: yesTokenId,
+                    NoTokenId: noTokenId,
                     YesBid: GetBestBid(yesBook),
-                    NoBid: GetBestBid(noBook)
+                    YesAsk: GetBestAsk(yesBook),
+                    NoBid: GetBestBid(noBook),
+                    NoAsk: GetBestAsk(noBook)
                 );
 
                 _snapshotCache[market.id] = (now, snapshot);

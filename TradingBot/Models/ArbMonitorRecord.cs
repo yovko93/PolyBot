@@ -14,4 +14,8 @@ public record ArbMonitorRecord(
     string Leg1,
     string? Leg2 = null,
     string? GroupKey = null
-);
+)
+{
+    public IReadOnlyList<OrderLegCandidate> OrderLegs { get; init; } =
+        Array.Empty<OrderLegCandidate>();
+}

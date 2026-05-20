@@ -293,8 +293,19 @@ public class MultiOutcomeGroupArbEngine
             if (noAsk == null)
                 return null;
 
+            // todo use this
+            //legs.Add(new BasketArbLeg(
+            //    MarketId: item.Snapshot.MarketId,
+            //    TokenId: item.Snapshot.NoTokenId,
+            //    Question: item.Snapshot.Question,
+            //    Outcome: "NO",
+            //    Price: noAsk.Price,
+            //    Size: noAsk.Size
+            //));
+
             legs.Add(new BasketArbLeg(
                 MarketId: item.Snapshot.MarketId,
+                TokenId: item.Snapshot.MarketId,
                 Question: item.Snapshot.Question,
                 Outcome: "NO",
                 Price: noAsk.Price,
@@ -338,12 +349,13 @@ public class MultiOutcomeGroupArbEngine
                 return null;
 
             legs.Add(new BasketArbLeg(
-                MarketId: item.Snapshot.MarketId,
-                Question: item.Snapshot.Question,
-                Outcome: "YES",
-                Price: yesAsk.Price,
-                Size: yesAsk.Size
-            ));
+                 MarketId: item.Snapshot.MarketId,
+                 TokenId: item.Snapshot.YesTokenId,
+                 Question: item.Snapshot.Question,
+                 Outcome: "YES",
+                 Price: yesAsk.Price,
+                 Size: yesAsk.Size
+             ));
         }
 
         if (legs.Count < 2)
@@ -374,9 +386,9 @@ public class MultiOutcomeGroupArbEngine
     }
 
     private void RecordMonitorPreview(
-        BasketArbOpportunity opportunity,
-        PaperTradingEngine paper,
-        string engine)
+    BasketArbOpportunity opportunity,
+    PaperTradingEngine paper,
+    string engine)
     {
         var monitorQuantity = opportunity.Quantity;
         var monitorExpectedProfit = opportunity.ExpectedProfit;
@@ -397,6 +409,18 @@ public class MultiOutcomeGroupArbEngine
             monitorExecutable = decision.CanExecute;
         }
 
+        var orderLegs = opportunity.Legs.Select(leg => new OrderLegCandidate(
+            Strategy: opportunity.Strategy,
+            GroupKey: opportunity.GroupKey,
+            Question: leg.Question,
+            TokenId: leg.TokenId,
+            Outcome: leg.Outcome,
+            Side: LiveOrderSide.BUY,
+            Price: leg.Price,
+            Size: monitorQuantity,
+            EdgePerShare: opportunity.EdgePerShare
+        )).ToList();
+
         _monitor?.Record(new ArbMonitorRecord(
             TimestampUtc: DateTime.UtcNow,
             Engine: engine,
@@ -411,7 +435,10 @@ public class MultiOutcomeGroupArbEngine
             Leg1: $"{opportunity.Strategy} | Legs={opportunity.Legs.Count}",
             Leg2: SummarizeBasketLegs(opportunity.Legs),
             GroupKey: opportunity.GroupKey
-        ));
+        )
+        {
+            OrderLegs = orderLegs
+        });
     }
 
     private static void PrintExecutedBasket(

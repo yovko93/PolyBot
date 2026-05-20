@@ -2,6 +2,7 @@
 
 public record BasketArbLeg(
     string MarketId,
+    string TokenId,
     string Question,
     string Outcome,
     decimal Price,

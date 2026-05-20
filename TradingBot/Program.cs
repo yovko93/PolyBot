@@ -52,6 +52,14 @@ class Program
             positionBook
         );
 
+        var dryRunOrderBuilder = new DryRunLiveOrderBuilder(
+            minEdgePerShare: 0.002m,
+            maxPlanCost: 100m,
+            minSize: 1m,
+            tickSize: 0.01m,
+            orderType: LiveOrderType.FOK
+        );
+
         var monitor = new OpportunityMonitor(
             csvPath: Path.Combine(AppContext.BaseDirectory, "data", "arb-opportunities.csv"),
             alertEdgeThreshold: 0.003m,
@@ -96,8 +104,8 @@ class Program
             slippageBufferPerLeg: 0.001m,
             enableYesBasket: false,
             monitor: monitor,
-            //requoteGate: requoteGate //todo use this
-            requoteGate: null,
+            requoteGate: requoteGate, //todo use this
+            //requoteGate: null,
             decisionService: executionDecisionService
         );
 
@@ -156,37 +164,14 @@ class Program
 
                 await orderbookService.PrefetchBinarySnapshotsAsync(filtered);
 
-                await singleMarketArb.ScanAsync(
-                    filtered,
-                    paper,
-                    semaphore
-                );
-
-                await completeSetSellArb.ScanAsync(
-                    filtered,
-                    paper,
-                    semaphore
-                );
-
-                await thresholdArb.ScanAsync(
-                    filtered,
-                    paper,
-                    semaphore
-                );
-
-                await multiOutcomeArb.ScanAsync(
-                    filtered,
-                    paper,
-                    semaphore
-                );
+                await singleMarketArb.ScanAsync(filtered, paper, semaphore);
+                await completeSetSellArb.ScanAsync(filtered, paper, semaphore);
+                await thresholdArb.ScanAsync(filtered, paper, semaphore);
+                await multiOutcomeArb.ScanAsync(filtered, paper, semaphore);
 
                 if (DateTime.UtcNow >= nextTrueArbScanUtc)
                 {
-                    await trueArb.ScanAsync(
-                        filtered,
-                        paper,
-                        semaphore
-                    );
+                    await trueArb.ScanAsync(filtered, paper, semaphore);
 
                     nextTrueArbScanUtc = DateTime.UtcNow.AddMinutes(1);
                 }

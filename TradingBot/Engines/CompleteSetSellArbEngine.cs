@@ -106,6 +106,33 @@ public class CompleteSetSellArbEngine
 
             var quantityAvailable = Math.Min(book.YesBid.Size, book.NoBid.Size);
 
+            var orderLegs = new List<OrderLegCandidate>
+            {
+                new OrderLegCandidate(
+                    Strategy: "MINT_AND_SELL_YES_NO",
+                    GroupKey: book.MarketId,
+                    Question: book.Question,
+                    TokenId: book.YesTokenId,
+                    Outcome: "YES",
+                    Side: LiveOrderSide.SELL,
+                    Price: book.YesBid.Price,
+                    Size: quantityAvailable,
+                    EdgePerShare: edge
+                ),
+
+                new OrderLegCandidate(
+                    Strategy: "MINT_AND_SELL_YES_NO",
+                    GroupKey: book.MarketId,
+                    Question: book.Question,
+                    TokenId: book.NoTokenId,
+                    Outcome: "NO",
+                    Side: LiveOrderSide.SELL,
+                    Price: book.NoBid.Price,
+                    Size: quantityAvailable,
+                    EdgePerShare: edge
+                )
+            };
+
             _monitor?.Record(new ArbMonitorRecord(
                 TimestampUtc: DateTime.UtcNow,
                 Engine: "CompleteSetSell",
@@ -120,7 +147,10 @@ public class CompleteSetSellArbEngine
                 Leg1: $"SELL YES @ {book.YesBid.Price} | {book.Question}",
                 Leg2: $"SELL NO @ {book.NoBid.Price} | {book.Question}",
                 GroupKey: null
-            ));
+            )
+            {
+                OrderLegs = orderLegs
+            });
 
             if (edge < _minEdgePerShare)
             {

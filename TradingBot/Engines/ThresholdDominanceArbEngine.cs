@@ -168,10 +168,41 @@ public class ThresholdDominanceArbEngine
             var thresholdKey =
                 $"{yesMarket.MarketId}|YES|{noMarket.MarketId}|NO";
 
+            var strategy = pair.LowInfo.Direction == ThresholdDirection.GreaterThan
+                ? "BUY_YES_LOWER_BUY_NO_HIGHER"
+                : "BUY_YES_HIGHER_BUY_NO_LOWER";
+
+            var orderLegs = new List<OrderLegCandidate>
+            {
+                new OrderLegCandidate(
+                    Strategy: strategy,
+                    GroupKey: pair.LowInfo.BaseKey,
+                    Question: yesMarket.Question,
+                    TokenId: yesMarket.YesTokenId,
+                    Outcome: "YES",
+                    Side: LiveOrderSide.BUY,
+                    Price: yesLeg.Price,
+                    Size: quantityAvailable,
+                    EdgePerShare: edge
+                    ),
+
+                new OrderLegCandidate(
+                    Strategy: strategy,
+                    GroupKey: pair.LowInfo.BaseKey,
+                    Question: noMarket.Question,
+                    TokenId: noMarket.NoTokenId,
+                    Outcome: "NO",
+                    Side: LiveOrderSide.BUY,
+                    Price: noLeg.Price,
+                    Size: quantityAvailable,
+                    EdgePerShare: edge
+                    )
+            };
+
             _monitor?.Record(new ArbMonitorRecord(
                 TimestampUtc: DateTime.UtcNow,
                 Engine: "ThresholdDominance",
-                Strategy: "BUY_YES_LOWER_BUY_NO_HIGHER",
+                Strategy: strategy,
                 Key: thresholdKey,
                 EdgePerShare: edge,
                 CostOrProceeds: adjustedCost,
@@ -182,7 +213,10 @@ public class ThresholdDominanceArbEngine
                 Leg1: $"BUY YES @ {yesLeg.Price} | {yesMarket.Question}",
                 Leg2: $"BUY NO @ {noLeg.Price} | {noMarket.Question}",
                 GroupKey: pair.LowInfo.BaseKey
-            ));
+            )
+            {
+                OrderLegs = orderLegs
+            });
 
             var result = new ThresholdScanResult(
                 Candidate: edge >= _minEdgePerShare,

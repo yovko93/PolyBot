@@ -104,6 +104,33 @@ public class TrueArbitrageEngine
 
         var quantity = Math.Min(yesAsk.Size, noAsk.Size);
 
+        var orderLegs = new List<OrderLegCandidate>
+        {
+            new OrderLegCandidate(
+                Strategy: "BUY_YES_MARKET_A_BUY_NO_MARKET_B",
+                GroupKey: $"semantic-score:{semanticScore:0.0000}",
+                Question: yesMarket.Question,
+                TokenId: yesMarket.YesTokenId,
+                Outcome: "YES",
+                Side: LiveOrderSide.BUY,
+                Price: yesAsk.Price,
+                Size: quantity,
+                EdgePerShare: edge
+            ),
+
+            new OrderLegCandidate(
+                Strategy: "BUY_YES_MARKET_A_BUY_NO_MARKET_B",
+                GroupKey: $"semantic-score:{semanticScore:0.0000}",
+                Question: noMarket.Question,
+                TokenId: noMarket.NoTokenId,
+                Outcome: "NO",
+                Side: LiveOrderSide.BUY,
+                Price: noAsk.Price,
+                Size: quantity,
+                EdgePerShare: edge
+            )
+        };
+
         _monitor?.Record(new ArbMonitorRecord(
             TimestampUtc: DateTime.UtcNow,
             Engine: "TrueSemanticCrossMarket",
@@ -118,7 +145,10 @@ public class TrueArbitrageEngine
             Leg1: $"BUY YES @ {yesAsk.Price} | {yesMarket.Question}",
             Leg2: $"BUY NO @ {noAsk.Price} | {noMarket.Question}",
             GroupKey: $"semantic-score:{semanticScore:0.0000}"
-        ));
+        )
+        {
+            OrderLegs = orderLegs
+        });
 
 
         if (edge < _minEdgePerShare)

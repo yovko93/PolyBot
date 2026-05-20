@@ -8,8 +8,10 @@ public record BookQuote(
 public record BinaryOrderBookSnapshot(
     string MarketId,
     string Question,
-    BookQuote? YesAsk,
-    BookQuote? NoAsk,
+    string YesTokenId,
+    string NoTokenId,
     BookQuote? YesBid,
-    BookQuote? NoBid
+    BookQuote? YesAsk,
+    BookQuote? NoBid,
+    BookQuote? NoAsk
 );
