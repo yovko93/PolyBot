@@ -21,7 +21,7 @@ class Program
             MinNotionalPerTrade = 0.001m, //5m,
             MinEdgePerShare = 0.001m, //0.005m,
             MinExpectedProfit = 0.0001m, // 1.00m,
-            MaxLockedCapital = 5m,
+            MaxLockedCapital = 100m,
             MaxLegsPerBasket = 20,
 
             AllowBasketArbs = true,
@@ -53,10 +53,10 @@ class Program
         );
 
         var dryRunOrderBuilder = new DryRunLiveOrderBuilder(
-            minEdgePerShare: 0.002m,
-            maxPlanCost: 100m,
+            minEdgePerShare: -0.01m,
+            maxPlanCost: 100000m,
             minSize: 1m,
-            tickSize: 0.01m,
+            tickSize: 0.001m,
             orderType: LiveOrderType.FOK
         );
 
@@ -65,7 +65,8 @@ class Program
             alertEdgeThreshold: 0.003m,
             minRecordEdgePerShare: -0.02m,
             minAlertExpectedProfit: 0.25m,
-            alertCooldown: TimeSpan.FromMinutes(2)
+            alertCooldown: TimeSpan.FromMinutes(2),
+            dryRunOrderBuilder: dryRunOrderBuilder
         );
 
         var semaphore = new SemaphoreSlim(5);
@@ -178,7 +179,8 @@ class Program
 
                 simResolution.Scan(paper);
 
-                monitor.PrintCycleRanking(top: 15);
+                monitor.PrintCycleRanking(top: 15, executableOnly: false);
+                //monitor.BuildDebugDryRunForTopRecorded(top: 3);
                 monitor.FlushCsv();
 
                 var stats = orderbookService.GetStats();

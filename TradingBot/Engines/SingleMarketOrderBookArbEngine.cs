@@ -10,19 +10,22 @@ public class SingleMarketOrderBookArbEngine
     private readonly decimal _feeBuffer;
     private readonly decimal _slippageBuffer;
     private readonly OpportunityMonitor? _monitor;
+    private readonly decimal _maxDryRunCapital; // todo temporary
 
     public SingleMarketOrderBookArbEngine(
         IOrderBookProvider orderBooks,
         decimal minEdgePerShare = 0.005m,
         decimal feeBuffer = 0.001m,
         decimal slippageBuffer = 0.001m,
-        OpportunityMonitor? monitor = null)
+        OpportunityMonitor? monitor = null,
+        decimal maxDryRunCapital = 5m)
     {
         _orderBooks = orderBooks;
         _minEdgePerShare = minEdgePerShare;
         _feeBuffer = feeBuffer;
         _slippageBuffer = slippageBuffer;
         _monitor = monitor;
+        _maxDryRunCapital = maxDryRunCapital;
     }
 
     public async Task ScanAsync(
@@ -131,6 +134,13 @@ public class SingleMarketOrderBookArbEngine
             }
 
             var quantityAvailable = Math.Min(book.YesAsk.Size, book.NoAsk.Size);
+            var executableQuantity = quantityAvailable;
+
+            if (edge >= _minEdgePerShare)
+            {
+                var maxQtyByCapital = _maxDryRunCapital / adjustedCost;
+                executableQuantity = Math.Min(quantityAvailable, maxQtyByCapital);
+            }
 
             var orderLegs = new List<OrderLegCandidate>
             {
@@ -142,7 +152,7 @@ public class SingleMarketOrderBookArbEngine
                     Outcome: "YES",
                     Side: LiveOrderSide.BUY,
                     Price: book.YesAsk.Price,
-                    Size: quantityAvailable,
+                    Size: executableQuantity,
                     EdgePerShare: edge
                 ),
 
@@ -154,7 +164,7 @@ public class SingleMarketOrderBookArbEngine
                     Outcome: "NO",
                     Side: LiveOrderSide.BUY,
                     Price: book.NoAsk.Price,
-                    Size: quantityAvailable,
+                    Size: executableQuantity,
                     EdgePerShare: edge
                 )
             };
@@ -167,9 +177,9 @@ public class SingleMarketOrderBookArbEngine
                 EdgePerShare: edge,
                 CostOrProceeds: adjustedCost,
                 GuaranteedPayout: 1m,
-                QuantityAvailable: quantityAvailable,
-                ExpectedProfit: quantityAvailable * edge,
-                IsExecutable: edge >= _minEdgePerShare && quantityAvailable > 0,
+                QuantityAvailable: executableQuantity,
+                ExpectedProfit: executableQuantity * edge,
+                IsExecutable: edge >= _minEdgePerShare && executableQuantity > 0,
                 Leg1: $"BUY YES @ {book.YesAsk.Price} | {book.Question}",
                 Leg2: $"BUY NO @ {book.NoAsk.Price} | {book.Question}",
                 GroupKey: null
@@ -190,7 +200,7 @@ public class SingleMarketOrderBookArbEngine
                 );
             }
 
-            var quantity = quantityAvailable;
+            var quantity = executableQuantity;
 
             if (quantity <= 0)
             {

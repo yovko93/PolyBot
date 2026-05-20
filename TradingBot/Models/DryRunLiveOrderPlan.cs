@@ -9,6 +9,9 @@ public sealed class DryRunLiveOrderPlan
     public decimal TotalEstimatedCost { get; init; }
     public decimal EdgePerShare { get; init; }
     public string Status { get; init; } = "DRY_RUN_ONLY";
+    public decimal EstimatedOrderCost { get; init; }
+    public decimal NonOrderCapitalRequired { get; init; }
+    public decimal TotalCapitalRequired { get; init; }
     public List<DryRunLiveOrder> Orders { get; init; } = new();
     public List<string> Warnings { get; init; } = new();
 }

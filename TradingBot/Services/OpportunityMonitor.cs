@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using System.Numerics;
 using System.Text;
 using TradingBot.Models;
 
@@ -13,7 +14,6 @@ public class OpportunityMonitor
     private readonly decimal _minRecordEdgePerShare;
     private readonly TimeSpan _alertCooldown;
     private readonly decimal _minAlertExpectedProfit;
-    decimal ExpectedProfit;
 
     private readonly List<ArbMonitorRecord> _buffer = new();
     private readonly List<ArbMonitorRecord> _cycleRecords = new();
@@ -66,17 +66,25 @@ public class OpportunityMonitor
         }
     }
 
-    public void PrintCycleRanking(int top = 15)
+    public void PrintCycleRanking(int top = 15, bool executableOnly = false)
     {
-        var ranked = GetTopCycleRecords(top);
+        var ranked = GetTopCycleRecords(top, executableOnly);
 
         Console.WriteLine();
-        Console.WriteLine("========== OPPORTUNITY RANKING ==========");
+
+        if (executableOnly)
+            Console.WriteLine("========== OPPORTUNITY RANKING: EXECUTABLE ==========");
+        else
+            Console.WriteLine("========== OPPORTUNITY RANKING: ALL RECORDED ==========");
 
         if (ranked.Count == 0)
         {
-            Console.WriteLine("No near opportunities recorded this cycle.");
-            Console.WriteLine("=========================================");
+            if (executableOnly)
+                Console.WriteLine("No executable opportunities recorded this cycle.");
+            else
+                Console.WriteLine("No opportunities recorded above minRecordEdgePerShare this cycle.");
+
+            Console.WriteLine("======================================================");
             Console.WriteLine();
             return;
         }
@@ -86,6 +94,7 @@ public class OpportunityMonitor
             Console.WriteLine("----------------------------------------");
             Console.WriteLine($"{item.Engine} | {item.Strategy}");
             Console.WriteLine($"Edge/share: {item.EdgePerShare:0.####}");
+            Console.WriteLine($"Expected profit: {item.ExpectedProfit:0.####}");
             Console.WriteLine($"Cost/Proceeds: {item.CostOrProceeds:0.####}");
             Console.WriteLine($"Guaranteed: {item.GuaranteedPayout:0.####}");
             Console.WriteLine($"Executable: {item.IsExecutable}");
@@ -100,7 +109,7 @@ public class OpportunityMonitor
                 Console.WriteLine($"Leg2: {item.Leg2}");
         }
 
-        Console.WriteLine("=========================================");
+        Console.WriteLine("======================================================");
         Console.WriteLine();
     }
 
@@ -141,6 +150,68 @@ public class OpportunityMonitor
         File.AppendAllText(_csvPath, sb.ToString());
     }
 
+    // todo remove debug
+    public void BuildDebugDryRunForTopRecorded(int top = 3)
+    {
+        if (_dryRunOrderBuilder == null)
+            return;
+
+        var records = GetTopCycleRecords(top, executableOnly: false);
+
+        if (records.Count == 0)
+        {
+            Console.WriteLine("[DEBUG DRY-RUN] No recorded opportunities.");
+            return;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("========== DEBUG DRY-RUN ORDER PLANS ==========");
+
+        foreach (var record in records)
+        {
+            if (record.OrderLegs.Count == 0)
+            {
+                Console.WriteLine($"[DEBUG DRY-RUN SKIP] No OrderLegs | {record.Engine} | {record.Strategy}");
+                continue;
+            }
+
+            var planId =
+                $"DEBUG_{record.Engine}_{record.Strategy}_{record.Key}_{DateTime.UtcNow:yyyyMMddHHmmssfff}"
+                    .Replace(" ", "_")
+                    .Replace("|", "_")
+                    .Replace(":", "_");
+
+            var plan = _dryRunOrderBuilder.BuildPlan(
+                planId: planId,
+                legs: record.OrderLegs,
+                errors: out var errors
+            );
+
+            if (plan == null)
+            {
+                Console.WriteLine($"[DEBUG DRY-RUN REJECTED] {record.Engine} | {record.Strategy}");
+                Console.WriteLine($"Edge/share: {record.EdgePerShare:0.####}");
+
+                foreach (var error in errors)
+                    Console.WriteLine($" - {error}");
+
+                continue;
+            }
+
+            _dryRunOrderBuilder.SavePlan(plan);
+
+            Console.WriteLine($"[DEBUG DRY-RUN CREATED] {record.Engine} | {record.Strategy}");
+            Console.WriteLine($"Plan: {plan.PlanId}");
+            Console.WriteLine($"Orders: {plan.Orders.Count}");
+            Console.WriteLine($"Estimated cost: {plan.TotalEstimatedCost:0.####}");
+            Console.WriteLine($"Edge/share: {plan.EdgePerShare:0.####}");
+        }
+
+        Console.WriteLine("================================================");
+        Console.WriteLine();
+    }
+
+    #region Helpers
     private bool ShouldWriteToCsvUnderLock(ArbMonitorRecord record)
     {
         var key = $"{record.Engine}|{record.Strategy}|{record.Key}";
@@ -247,7 +318,7 @@ public class OpportunityMonitor
         }
 
         var plan = _dryRunOrderBuilder.BuildPlan(
-            planId: record.Key,
+            planId: BuildDryRunPlanId(record),
             legs: record.OrderLegs,
             errors: out var errors
         );
@@ -268,6 +339,19 @@ public class OpportunityMonitor
         Console.WriteLine($"Plan: {plan.PlanId}");
         Console.WriteLine($"Orders: {plan.Orders.Count}");
         Console.WriteLine($"Estimated cost: {plan.TotalEstimatedCost:0.####}");
+    }
+
+    private static string BuildDryRunPlanId(ArbMonitorRecord record)
+    {
+        var raw =
+            $"{record.Engine}_{record.Strategy}_{record.Key}_{DateTime.UtcNow:yyyyMMddHHmmssfff}";
+
+        return raw
+            .Replace(" ", "_")
+            .Replace("|", "_")
+            .Replace(":", "_")
+            .Replace("/", "_")
+            .Replace("\\", "_");
     }
 
     private void EnsureCsvHeader()
@@ -314,4 +398,5 @@ public class OpportunityMonitor
         value = value.Replace("\"", "\"\"");
         return $"\"{value}\"";
     }
+    #endregion
 }

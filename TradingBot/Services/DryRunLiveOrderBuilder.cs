@@ -60,7 +60,7 @@ public sealed class DryRunLiveOrderBuilder
         };
 
         var orders = new List<DryRunLiveOrder>();
-        decimal totalEstimatedCost = 0m;
+        decimal estimatedOrderCost = 0m;
 
         foreach (var leg in legs)
         {
@@ -73,7 +73,7 @@ public sealed class DryRunLiveOrderBuilder
                 ? leg.Price * leg.Size
                 : 0m;
 
-            totalEstimatedCost += cost;
+            estimatedOrderCost += cost;
 
             var makerAmount = CalculateMakerAmount(leg);
             var takerAmount = CalculateTakerAmount(leg);
@@ -121,9 +121,12 @@ public sealed class DryRunLiveOrderBuilder
             });
         }
 
-        if (totalEstimatedCost > _maxPlanCost)
+        var nonOrderCapitalRequired = EstimateNonOrderCapitalRequired(legs);
+        var totalCapitalRequired = estimatedOrderCost + nonOrderCapitalRequired;
+
+        if (totalCapitalRequired > _maxPlanCost)
         {
-            errors.Add($"Plan cost too high: {totalEstimatedCost:0.####}. Max allowed: {_maxPlanCost:0.####}");
+            errors.Add($"Plan capital too high: {totalCapitalRequired:0.####}. Max allowed: {_maxPlanCost:0.####}");
             return null;
         }
 
@@ -133,7 +136,12 @@ public sealed class DryRunLiveOrderBuilder
             CreatedAtUtc = DateTimeOffset.UtcNow,
             Strategy = first.Strategy,
             GroupKey = first.GroupKey,
-            TotalEstimatedCost = totalEstimatedCost,
+
+            TotalEstimatedCost = estimatedOrderCost,
+            EstimatedOrderCost = estimatedOrderCost,
+            NonOrderCapitalRequired = nonOrderCapitalRequired,
+            TotalCapitalRequired = totalCapitalRequired,
+
             EdgePerShare = first.EdgePerShare,
             Orders = orders,
             Warnings = warnings
@@ -156,6 +164,7 @@ public sealed class DryRunLiveOrderBuilder
         File.AppendAllText(file, json + Environment.NewLine);
     }
 
+    #region Helpers
     private void ValidateLeg(OrderLegCandidate leg, List<string> errors)
     {
         if (string.IsNullOrWhiteSpace(leg.TokenId))
@@ -208,4 +217,21 @@ public sealed class DryRunLiveOrderBuilder
         var scaled = decimal.Round(value * 1_000_000m, 0, MidpointRounding.AwayFromZero);
         return scaled.ToString("0");
     }
+
+    private static decimal EstimateNonOrderCapitalRequired(IReadOnlyCollection<OrderLegCandidate> legs)
+    {
+        var first = legs.FirstOrDefault();
+
+        if (first == null)
+            return 0m;
+
+        if (first.Strategy == "MINT_AND_SELL_YES_NO")
+        {
+            // Mint complete set costs 1 USDC per complete set.
+            return legs.Max(x => x.Size);
+        }
+
+        return 0m;
+    }
+    #endregion
 }
