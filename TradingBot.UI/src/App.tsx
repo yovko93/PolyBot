@@ -1,23 +1,31 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import { useBotData } from './hooks/useBotData';
+import type { Opportunity, PaperPosition, TradeLogEntry } from './types/models';
 
-export default function App(){
-  const {status,opps,trades,positions,scanner,risk,logs,connectionStatus,lastHeartbeat,lastUpdated,isMock}=useBotData();
-  const [search,setSearch]=useState(''); const [minEdge,setMinEdge]=useState(0); const [execOnly,setExecOnly]=useState(false);
-  const filtered = useMemo(()=>opps.filter(o=>(!execOnly||o.executable)&&o.edgePerShare>=minEdge&&(`${o.group} ${o.market}`.toLowerCase().includes(search.toLowerCase()))).sort((a,b)=>b.edgePerShare-a.edgePerShare),[opps,execOnly,minEdge,search]);
-  const mode=status?.mode ?? 'UNKNOWN';
-  return <div className='terminal-root p-3 text-green-100'>
-    <div className='terminal-panel p-2 mb-2'>BACKEND: {connectionStatus} | MODE: {mode} | Last heartbeat: {lastHeartbeat || '-'} | Last update: {lastUpdated || '-'} | SOURCE: {isMock?'MOCK FALLBACK':'LIVE BACKEND'}</div>
-    {mode==='LIVE' && <div className='terminal-panel p-2 mb-2 text-rose-400'>WARNING: LIVE MODE</div>}
-    <div className='grid grid-cols-3 gap-2'>
-      <section className='terminal-panel p-2'><h3>Opportunity Ranking</h3><input placeholder='search group/market' value={search} onChange={e=>setSearch(e.target.value)} /><input type='number' value={minEdge} onChange={e=>setMinEdge(Number(e.target.value)||0)} /><label><input type='checkbox' checked={execOnly} onChange={e=>setExecOnly(e.target.checked)} /> executable only</label>{filtered.slice(0,100).map(o=><div key={o.id}>{o.strategy} | {o.market} | {o.edgePerShare}</div>)}</section>
-      <section className='terminal-panel p-2'><h3>Trade Log</h3>{trades.slice(0,100).map(t=><div key={t.id}>{t.timestamp} {t.status} {t.market}</div>)}</section>
-      <section className='terminal-panel p-2'><h3>Positions</h3>{positions.slice(0,100).map(p=><div key={p.id}>{p.group} {p.status} {p.expectedProfit}</div>)}</section>
-    </div>
-    <div className='grid grid-cols-3 gap-2 mt-2'>
-      <section className='terminal-panel p-2'><h3>Risk</h3><div>Max Locked {risk?.maxLockedCapital}</div></section>
-      <section className='terminal-panel p-2'><h3>Scanner</h3><div>Markets {scanner?.marketsScanned}</div></section>
-      <section className='terminal-panel p-2'><h3>Terminal</h3>{logs.slice(0,30).map(l=><div key={l.id}>{l.level} {l.message}</div>)}</section>
-    </div>
-  </div>
+const money = (n: number) => `$${(n ?? 0).toFixed(2)}`;
+function Panel({ title, children, active }: { title: string; children: React.ReactNode; active?: boolean }) { return <section className={`terminal-panel ${active ? 'terminal-panel-active' : ''}`}><h3 className="panel-title">{title}</h3>{children}</section>; }
+
+export default function App() {
+  const { status, opps, positions, trades, scanner, risk, logs, connectionStatus, lastHeartbeat, lastUpdated, source } = useBotData();
+  const [search, setSearch] = useState(''); const [execOnly, setExecOnly] = useState(false); const logRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { logRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }, [logs]);
+  const filteredOpps = useMemo(() => opps.filter(o => (!execOnly || o.executable) && `${o.group} ${o.market}`.toLowerCase().includes(search.toLowerCase())).sort((a, b) => b.edgePerShare - a.edgePerShare), [opps, execOnly, search]);
+  const opCols = useMemo(() => { const c = createColumnHelper<Opportunity>(); return ['rank', 'strategy', 'group', 'market', 'edgePerShare', 'expectedProfit', 'qtyAvailable', 'status'].map((k) => c.accessor(k as keyof Opportunity, { header: k.toUpperCase(), cell: (i) => String(i.getValue() ?? '') })); }, []);
+  const trCols = useMemo(() => { const c = createColumnHelper<TradeLogEntry>(); return ['timestamp', 'strategy', 'market', 'amount', 'edge', 'expectedProfit', 'status'].map((k) => c.accessor(k as keyof TradeLogEntry, { header: k.toUpperCase(), cell: (i) => String(i.getValue() ?? '') })); }, []);
+  const posCols = useMemo(() => { const c = createColumnHelper<PaperPosition>(); return ['openedAt', 'strategy', 'group', 'cost', 'expectedProfit', 'status'].map((k) => c.accessor(k as keyof PaperPosition, { header: k.toUpperCase(), cell: (i) => String(i.getValue() ?? '') })); }, []);
+  const opTable = useReactTable({ data: filteredOpps, columns: opCols, getCoreRowModel: getCoreRowModel() });
+  const trTable = useReactTable({ data: trades, columns: trCols, getCoreRowModel: getCoreRowModel() });
+  const posTable = useReactTable({ data: positions, columns: posCols, getCoreRowModel: getCoreRowModel() });
+
+  return <div className="terminal-root min-h-screen px-3 py-2 text-[11px] text-green-100 terminal-font">
+    <header className="terminal-panel terminal-panel-active mb-2 p-2"><div className="grid grid-cols-1 xl:grid-cols-[1.1fr_2fr_1.4fr] gap-2 items-center"><div className="text-neon tracking-widest font-semibold text-sm">POLYBOT TERMINAL</div><div className="grid grid-cols-5 gap-x-2 gap-y-1 text-[10px]"><Metric label="BACKEND" value={connectionStatus} tone="green" /><Metric label="MODE" value={status?.mode ?? 'UNKNOWN'} tone="yellow" /><Metric label="SOURCE" value={source} tone="neutral" /><Metric label="HEARTBEAT" value={lastHeartbeat ? new Date(lastHeartbeat).toLocaleTimeString() : '-'} tone="green" /><Metric label="UPDATED" value={lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : '-'} tone="neutral" /></div><div className="grid grid-cols-4 gap-2 text-[10px]"><Metric label="CASH" value={money(status?.cash ?? 0)} tone="green" /><Metric label="LOCKED" value={money(status?.lockedCapital ?? 0)} tone="yellow" /><Metric label="EQUITY" value={money(status?.equity ?? 0)} tone="green" /><Metric label="PNL" value={money(status?.realizedPnl ?? 0)} tone={(status?.realizedPnl ?? 0) >= 0 ? 'green' : 'red'} /></div></div></header>
+    <div className="grid gap-2 xl:grid-cols-[280px_1fr_320px] items-start">
+      <aside className="space-y-2"><Panel title="RISK CONSOLE" active><div className="space-y-1 text-[10px]"><div>MAX LOCKED: <span className="text-neon">{money(risk?.maxLockedCapital ?? 0)}</span></div><div>LOCKED NOW: <span className="text-yellow-300">{money(risk?.lockedCapital ?? 0)}</span></div><div>OPEN POSITIONS: <span className="text-neon">{risk?.openPositions ?? 0}</span></div></div></Panel><Panel title="ARBITRAGE SCANNER"><div className="grid grid-cols-2 gap-1 text-[10px]"><Stat label="MARKETS" value={String(scanner?.marketsScanned ?? 0)} /><Stat label="ORDERBOOKS" value={String(scanner?.orderbooksScanned ?? 0)} /><Stat label="DETECTED" value={String(scanner?.opportunitiesDetected ?? 0)} /><Stat label="EXEC" value={String(scanner?.executableOpportunities ?? 0)} /></div></Panel></aside>
+      <main className="space-y-2"><Panel title="MARKET SCANNER" active><div className='mb-1 text-[10px]'><input className='bg-black/40 border border-green-500/40 px-1 mr-1' value={search} onChange={(e)=>setSearch(e.target.value)} placeholder='search group/market' /><label><input type='checkbox' checked={execOnly} onChange={(e)=>setExecOnly(e.target.checked)} /> executable only</label></div><Table t={opTable} /></Panel><Panel title="TRADE LOG"><Table t={trTable} /></Panel><Panel title="PAPER POSITIONS">{positions.length ? <Table t={posTable} /> : <div className='text-yellow-300 text-[10px]'>No paper positions yet.</div>}</Panel></main>
+      <aside className="space-y-2"><Panel title="LIVE TERMINAL LOG" active><div ref={logRef} className="space-y-1 max-h-[560px] overflow-auto text-[10px] pr-1">{logs.map((l) => <div key={l.id} className={l.level === 'error' ? 'text-rose-300' : l.level === 'warn' ? 'text-yellow-300' : l.level === 'success' ? 'text-cyan-300' : 'terminal-line'}>[{new Date(l.timestamp).toLocaleTimeString()}] [{l.source}] {l.message}</div>)}</div></Panel></aside>
+    </div></div>;
 }
+function Stat({ label, value }: { label: string; value: string }) { return <div className="border border-green-500/30 px-1 py-[2px]"><span className="text-green-500/80">{label}</span> <span className="text-neon">{value}</span></div>; }
+function Metric({ label, value, tone }: { label: string; value: string; tone: 'green' | 'yellow' | 'red' | 'neutral' }) { const toneClass = tone === 'green' ? 'text-neon' : tone === 'yellow' ? 'text-yellow-300' : tone === 'red' ? 'text-rose-400' : 'text-green-200'; return <div><span className="text-green-500/80">{label}:</span> <span className={toneClass}>{value}</span></div>; }
+function Table<T>({ t }: { t: ReturnType<typeof useReactTable<T>> }) { return <div className="overflow-auto"><table className="w-full terminal-table"><thead>{t.getHeaderGroups().map((hg) => <tr key={hg.id}>{hg.headers.map((h) => <th key={h.id} className="text-left">{flexRender(h.column.columnDef.header, h.getContext())}</th>)}</tr>)}</thead><tbody>{t.getRowModel().rows.map((r) => <tr key={r.id}>{r.getVisibleCells().map((c) => <td key={c.id}>{flexRender(c.column.columnDef.cell, c.getContext())}</td>)}</tr>)}</tbody></table></div>; }
