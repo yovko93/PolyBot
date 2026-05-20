@@ -11,19 +11,22 @@ public class ThresholdDominanceArbEngine
     private readonly decimal _feeBuffer;
     private readonly decimal _slippageBuffer;
     private readonly OpportunityMonitor? _monitor;
+    private readonly ExecutionSizingService _sizing;
 
     public ThresholdDominanceArbEngine(
         IOrderBookProvider orderBooks,
         decimal minEdgePerShare = 0.005m,
         decimal feeBuffer = 0.001m,
         decimal slippageBuffer = 0.001m,
-        OpportunityMonitor? monitor = null)
+        OpportunityMonitor? monitor = null,
+        ExecutionSizingService? sizing = null)
     {
         _orderBooks = orderBooks;
         _minEdgePerShare = minEdgePerShare;
         _feeBuffer = feeBuffer;
         _slippageBuffer = slippageBuffer;
         _monitor = monitor;
+        _sizing = sizing ?? new ExecutionSizingService(new ExecutionPolicy());
     }
 
     public async Task ScanAsync(
@@ -164,6 +167,7 @@ public class ThresholdDominanceArbEngine
             var edge = 1m - adjustedCost;
 
             var quantityAvailable = Math.Min(yesLeg.Size, noLeg.Size);
+            var executableQuantity = _sizing.ClampQuantityByNotional(quantityAvailable, adjustedCost);
 
             var thresholdKey =
                 $"{yesMarket.MarketId}|YES|{noMarket.MarketId}|NO";
@@ -182,7 +186,7 @@ public class ThresholdDominanceArbEngine
                     Outcome: "YES",
                     Side: LiveOrderSide.BUY,
                     Price: yesLeg.Price,
-                    Size: quantityAvailable,
+                    Size: executableQuantity,
                     EdgePerShare: edge
                     ),
 
@@ -194,7 +198,7 @@ public class ThresholdDominanceArbEngine
                     Outcome: "NO",
                     Side: LiveOrderSide.BUY,
                     Price: noLeg.Price,
-                    Size: quantityAvailable,
+                    Size: executableQuantity,
                     EdgePerShare: edge
                     )
             };
@@ -207,9 +211,9 @@ public class ThresholdDominanceArbEngine
                 EdgePerShare: edge,
                 CostOrProceeds: adjustedCost,
                 GuaranteedPayout: 1m,
-                QuantityAvailable: quantityAvailable,
-                ExpectedProfit: quantityAvailable * edge,
-                IsExecutable: edge >= _minEdgePerShare && quantityAvailable > 0,
+                QuantityAvailable: executableQuantity,
+                ExpectedProfit: executableQuantity * edge,
+                IsExecutable: edge >= _minEdgePerShare && executableQuantity > 0,
                 Leg1: $"BUY YES @ {yesLeg.Price} | {yesMarket.Question}",
                 Leg2: $"BUY NO @ {noLeg.Price} | {noMarket.Question}",
                 GroupKey: pair.LowInfo.BaseKey
@@ -229,7 +233,7 @@ public class ThresholdDominanceArbEngine
             if (edge < _minEdgePerShare)
                 return result;
 
-            var quantity = quantityAvailable;
+            var quantity = executableQuantity;
 
             if (quantity <= 0)
                 return result;

@@ -15,6 +15,7 @@ public class TrueArbitrageEngine
     private readonly decimal _feeBuffer;
     private readonly decimal _slippageBuffer;
     private readonly OpportunityMonitor? _monitor;
+    private readonly ExecutionSizingService _sizing;
 
     public TrueArbitrageEngine(
         IOrderBookProvider orderBooks,
@@ -22,7 +23,8 @@ public class TrueArbitrageEngine
         decimal minEdgePerShare = 0.01m,
         decimal feeBuffer = 0.002m,
         decimal slippageBuffer = 0.002m,
-        OpportunityMonitor? monitor = null)
+        OpportunityMonitor? monitor = null,
+        ExecutionSizingService? sizing = null)
     {
         _orderBooks = orderBooks;
         _matcher = matcher;
@@ -30,6 +32,7 @@ public class TrueArbitrageEngine
         _feeBuffer = feeBuffer;
         _slippageBuffer = slippageBuffer;
         _monitor = monitor;
+        _sizing = sizing ?? new ExecutionSizingService(new ExecutionPolicy());
     }
 
     public async Task ScanAsync(
@@ -102,7 +105,8 @@ public class TrueArbitrageEngine
 
         var edge = 1m - adjustedCost;
 
-        var quantity = Math.Min(yesAsk.Size, noAsk.Size);
+        var quantityAvailable = Math.Min(yesAsk.Size, noAsk.Size);
+        var quantity = _sizing.ClampQuantityByNotional(quantityAvailable, adjustedCost);
 
         var orderLegs = new List<OrderLegCandidate>
         {

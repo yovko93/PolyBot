@@ -17,18 +17,20 @@ class Program
 
         var executionPolicy = new ExecutionPolicy
         {
-            MaxNotionalPerTrade = 200m,
-            MinNotionalPerTrade = 0.001m, //5m,
-            MinEdgePerShare = 0.001m, //0.005m,
-            MinExpectedProfit = 0.0001m, // 1.00m,
-            MaxLockedCapital = 100m,
-            MaxLegsPerBasket = 20,
+            MaxNotionalPerTrade = 100m,
+            MinNotionalPerTrade = 5m,
+            MinEdgePerShare = 0.003m,
+            MinExpectedProfit = 0.25m,
+            MaxLockedCapital = 300m,
+            MaxOpenPositions = 5,
+            MaxExposurePerGroup = 100m,
 
             AllowBasketArbs = true,
             AllowSingleMarketArbs = true,
             AllowCompleteSetSellArbs = true,
             AllowThresholdArbs = true
         };
+        var sizing = new ExecutionSizingService(executionPolicy);
 
         var executionDecisionService = new ExecutionDecisionService(executionPolicy);
 
@@ -58,6 +60,8 @@ class Program
             minSize: 1m,
             tickSize: 0.001m,
             orderType: LiveOrderType.FOK
+            ,
+            policy: executionPolicy
         );
 
         var monitor = new OpportunityMonitor(
@@ -79,7 +83,8 @@ class Program
             minEdgePerShare: 0.003m,
             feeBuffer: 0.001m,
             slippageBuffer: 0.001m,
-            monitor: monitor
+            monitor: monitor,
+            sizing: sizing
         );
 
         var completeSetSellArb = new CompleteSetSellArbEngine(
@@ -87,7 +92,8 @@ class Program
             minEdgePerShare: 0.003m,
             feeBuffer: 0.001m,
             slippageBuffer: 0.001m,
-            monitor: monitor
+            monitor: monitor,
+            sizing: sizing
         );
 
         var thresholdArb = new ThresholdDominanceArbEngine(
@@ -95,7 +101,8 @@ class Program
             minEdgePerShare: 0.005m,
             feeBuffer: 0.001m,
             slippageBuffer: 0.001m,
-            monitor: monitor
+            monitor: monitor,
+            sizing: sizing
         );
 
         var multiOutcomeArb = new MultiOutcomeGroupArbEngine(
@@ -121,7 +128,8 @@ class Program
             minEdgePerShare: 0.01m,
             feeBuffer: 0.002m,
             slippageBuffer: 0.002m,
-            monitor: monitor
+            monitor: monitor,
+            sizing: sizing
         );
 
         var simResolution = new SimulatedResolutionEngine(TimeSpan.FromMinutes(2));

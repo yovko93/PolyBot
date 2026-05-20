@@ -10,7 +10,7 @@ public class SingleMarketOrderBookArbEngine
     private readonly decimal _feeBuffer;
     private readonly decimal _slippageBuffer;
     private readonly OpportunityMonitor? _monitor;
-    private readonly decimal _maxDryRunCapital; // todo temporary
+    private readonly ExecutionSizingService _sizing;
 
     public SingleMarketOrderBookArbEngine(
         IOrderBookProvider orderBooks,
@@ -18,14 +18,14 @@ public class SingleMarketOrderBookArbEngine
         decimal feeBuffer = 0.001m,
         decimal slippageBuffer = 0.001m,
         OpportunityMonitor? monitor = null,
-        decimal maxDryRunCapital = 5m)
+        ExecutionSizingService? sizing = null)
     {
         _orderBooks = orderBooks;
         _minEdgePerShare = minEdgePerShare;
         _feeBuffer = feeBuffer;
         _slippageBuffer = slippageBuffer;
         _monitor = monitor;
-        _maxDryRunCapital = maxDryRunCapital;
+        _sizing = sizing ?? new ExecutionSizingService(new ExecutionPolicy());
     }
 
     public async Task ScanAsync(
@@ -134,13 +134,10 @@ public class SingleMarketOrderBookArbEngine
             }
 
             var quantityAvailable = Math.Min(book.YesAsk.Size, book.NoAsk.Size);
-            var executableQuantity = quantityAvailable;
-
-            if (edge >= _minEdgePerShare)
-            {
-                var maxQtyByCapital = _maxDryRunCapital / adjustedCost;
-                executableQuantity = Math.Min(quantityAvailable, maxQtyByCapital);
-            }
+            var executableQuantity = _sizing.ClampQuantityByNotional(quantityAvailable, adjustedCost);
+            var notional = _sizing.EstimateNotional(executableQuantity, adjustedCost);
+            if (executableQuantity < quantityAvailable && executableQuantity > 0)
+                Console.WriteLine($"[SIZING] Strategy=BUY_YES_AND_BUY_NO AvailableQty={quantityAvailable:0.####} ExecutableQty={executableQuantity:0.####} Notional={notional:0.####}");
 
             var orderLegs = new List<OrderLegCandidate>
             {
