@@ -1,0 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body { @apply bg-black text-green-200; font-family: Inter, system-ui, sans-serif; }
+.terminal-font { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+.panel { @apply bg-panel border border-green-500/40 rounded-md shadow-neon; }
