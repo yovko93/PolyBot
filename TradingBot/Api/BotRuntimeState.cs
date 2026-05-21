@@ -13,6 +13,7 @@ public class BotRuntimeState
     private readonly ConcurrentQueue<TradeLogEntryDto> _trades = new();
     private readonly ConcurrentQueue<PaperPositionDto> _positions = new();
     private readonly ConcurrentQueue<TerminalLogEntryDto> _logs = new();
+    private readonly ConcurrentQueue<EquityPointDto> _equity = new();
     private static void Trim<T>(ConcurrentQueue<T> q,int max){ while(q.Count>max) q.TryDequeue(out _); }
     public long NextSeq()=>Interlocked.Increment(ref _seq);
     public void SetStatus(BotStatusDto s){lock(_gate) Status=s;}
@@ -22,8 +23,10 @@ public class BotRuntimeState
     public void AddTrade(TradeLogEntryDto t){_trades.Enqueue(t); Trim(_trades,500);}    
     public void AddPosition(PaperPositionDto p){_positions.Enqueue(p); Trim(_positions,200);}    
     public void AddLog(TerminalLogEntryDto l){_logs.Enqueue(l); Trim(_logs,1000);}    
+    public void AddEquity(EquityPointDto e){_equity.Enqueue(e); Trim(_equity,1000);}    
     public OpportunityDto[] Opportunities()=>_opps.ToArray();
     public TradeLogEntryDto[] Trades()=>_trades.ToArray();
     public PaperPositionDto[] Positions()=>_positions.ToArray();
     public TerminalLogEntryDto[] Logs()=>_logs.ToArray();
+    public EquityPointDto[] Equity()=>_equity.ToArray();
 }

@@ -7,3 +7,4 @@ public record PaperPositionDto(string Id,DateTime OpenedAt,DateTime? ClosedAt,st
 public record RiskStateDto(decimal MaxNotionalPerTrade,decimal MinNotionalPerTrade,decimal MinEdgePerShare,decimal MinExpectedProfit,decimal MaxLockedCapital,decimal LockedCapital,int MaxOpenPositions,int OpenPositions,decimal MaxExposurePerGroup,Dictionary<string,decimal> CurrentExposureByGroup,bool AllowBasketArbs,bool AllowSingleMarketArbs,bool AllowCompleteSetSellArbs,bool AllowThresholdArbs,DateTime Timestamp,long Sequence);
 public record ScannerStatsDto(int MarketsScanned,int OrderbooksScanned,int OpportunitiesDetected,int ExecutableOpportunities,int SkippedByRisk,long ScanDurationMs,DateTime LastScanStartedAt,DateTime LastScanCompletedAt,long Sequence);
 public record TerminalLogEntryDto(string Id,DateTime Timestamp,string Level,string Source,string Message,long Sequence);
+public record EquityPointDto(DateTime Timestamp, decimal Equity, long Sequence);
