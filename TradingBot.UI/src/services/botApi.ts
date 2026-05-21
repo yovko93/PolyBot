@@ -1,18 +1,105 @@
-import { botStatus, opportunities, positions, riskState, scannerStats, terminalLogs, tradeLogs, equitySeries } from '../data/mockData';
 import type { BotStatus, Opportunity, PaperPosition, RiskState, ScannerStats, TerminalLogEntry, TradeLogEntry } from '../types/models';
 import { BotSignalR } from './botSignalR';
 
-export const API = (import.meta as any).env.VITE_BOT_API_BASE_URL ?? 'http://localhost:5000/api/bot';
-export const HUB = (import.meta as any).env.VITE_BOT_HUB_URL ?? 'http://localhost:5000/hubs/bot';
-const USE_MOCK = String((import.meta as any).env.VITE_USE_MOCK_DATA ?? 'false') === 'true';
-const j = async <T>(path: string, signal?: AbortSignal): Promise<T> => { const r = await fetch(`${API}${path}`, { signal }); if (!r.ok) throw new Error(`${path} ${r.status}`); return r.json(); };
-export const getBotHealth = async (signal?: AbortSignal): Promise<boolean> => USE_MOCK ? true : !!(await j<{ok:boolean}>('/health', signal)).ok;
-export const getBotStatus = async (signal?: AbortSignal): Promise<BotStatus> => USE_MOCK ? botStatus as any : j('/status', signal);
-export const getOpportunities = async (signal?: AbortSignal): Promise<Opportunity[]> => USE_MOCK ? opportunities as any : j('/opportunities', signal);
-export const getPositions = async (signal?: AbortSignal): Promise<PaperPosition[]> => USE_MOCK ? positions as any : j('/positions', signal);
-export const getTradeLogs = async (signal?: AbortSignal): Promise<TradeLogEntry[]> => USE_MOCK ? tradeLogs as any : j('/trade-log', signal);
-export const getScannerStats = async (signal?: AbortSignal): Promise<ScannerStats> => USE_MOCK ? scannerStats as any : j('/scanner-stats', signal);
-export const getRisk = async (signal?: AbortSignal): Promise<RiskState> => USE_MOCK ? riskState as any : j('/risk', signal);
-export const getTerminalLogs = async (signal?: AbortSignal): Promise<TerminalLogEntry[]> => USE_MOCK ? terminalLogs.map((x, i) => ({ id: String(i), timestamp: new Date().toISOString(), level: 'info', source: 'mock', message: x })) as any : j('/logs/recent', signal);
-export const getEquity = async (signal?: AbortSignal): Promise<Array<{timestamp:string;equity:number}>> => USE_MOCK ? equitySeries.map(x=>({timestamp:new Date().toISOString(),equity:x.equity})) : j('/equity', signal);
-export const createSignalR = () => new BotSignalR(HUB);
+const BASE_URL = ((import.meta as any).env.VITE_API_BASE_URL ?? 'http://localhost:5000').replace(/\/$/, '');
+export const API = `${BASE_URL}/api/bot`;
+export const HUB = `${BASE_URL}/hubs/bot`;
+
+const mapStatus = (x: any): BotStatus => x;
+const mapOpportunity = (x: any): Opportunity => x;
+const mapPosition = (x: any): PaperPosition => x;
+const mapTrade = (x: any): TradeLogEntry => x;
+const mapRisk = (x: any): RiskState => x;
+const mapScanner = (x: any): ScannerStats => x;
+const mapLog = (x: any): TerminalLogEntry => x;
+const mapEquity = (x: any) => x;
+
+async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(`${API}${path}`, { signal });
+  if (!response.ok) throw new Error(`API ${path} failed: ${response.status}`);
+  return response.json();
+}
+
+async function safeRequest<T>(path: string, fallback: T, signal?: AbortSignal): Promise<T> {
+  try { return await request<T>(path, signal); } catch { return fallback; }
+}
+
+export const getBotHealth = async (signal?: AbortSignal): Promise<boolean> => {
+  try {
+    const health = await safeRequest<{ ok: boolean }>('/health', { ok: false }, signal);
+    return !!health.ok;
+  } catch { return false; }
+};
+
+export const getBotStatus = async (signal?: AbortSignal): Promise<BotStatus> => mapStatus(await request('/status', signal));
+export const getOpportunities = async (signal?: AbortSignal): Promise<Opportunity[]> => (await safeRequest<any[]>('/opportunities', [], signal)).map(mapOpportunity);
+export const getPositions = async (signal?: AbortSignal): Promise<PaperPosition[]> => (await safeRequest<any[]>('/positions', [], signal)).map(mapPosition);
+export const getTradeLogs = async (signal?: AbortSignal): Promise<TradeLogEntry[]> => (await safeRequest<any[]>('/trade-log', [], signal)).map(mapTrade);
+export const getScannerStats = async (signal?: AbortSignal): Promise<ScannerStats | null> => {
+  const stats = await safeRequest<any | null>('/scanner-stats', null, signal);
+  return stats ? mapScanner(stats) : null;
+};
+export const getRisk = async (signal?: AbortSignal): Promise<RiskState | null> => {
+  const risk = await safeRequest<any | null>('/risk', null, signal);
+  return risk ? mapRisk(risk) : null;
+};
+export const getTerminalLogs = async (signal?: AbortSignal): Promise<TerminalLogEntry[]> => (await safeRequest<any[]>('/logs/recent', [], signal)).map(mapLog);
+export const getEquity = async (signal?: AbortSignal): Promise<Array<{ timestamp: string; equity: number }>> => (await safeRequest<any[]>('/equity', [], signal)).map(mapEquity);
+
+type BotEventHandlers = {
+  onStatus: (x: BotStatus) => void;
+  onOpportunities: (x: Opportunity[]) => void;
+  onOpportunityDetected: (x: Opportunity) => void;
+  onTrades: (x: TradeLogEntry[]) => void;
+  onPositions: (x: PaperPosition[]) => void;
+  onRisk: (x: RiskState) => void;
+  onScanner: (x: ScannerStats) => void;
+  onLog: (x: TerminalLogEntry) => void;
+  onEquity: (x: Array<{ timestamp: string; equity: number }>) => void;
+  onHeartbeat: (x: string) => void;
+  onConnectionState: (x: 'CONNECTED'|'RECONNECTING'|'DISCONNECTED') => void;
+};
+
+export const subscribeToBotEvents = async (handlers: BotEventHandlers): Promise<() => void> => {
+  const hub = new BotSignalR(HUB);
+  let polling: ReturnType<typeof setInterval> | null = null;
+  let closed = false;
+
+  const pollSnapshot = async () => {
+    const [status, opportunities, positions, trades, scanner, risk, logs, equity] = await Promise.all([
+      getBotStatus(), getOpportunities(), getPositions(), getTradeLogs(), getScannerStats(), getRisk(), getTerminalLogs(), getEquity()
+    ]);
+    handlers.onStatus(status); handlers.onOpportunities(opportunities); handlers.onPositions(positions); handlers.onTrades(trades);
+    if (scanner) handlers.onScanner(scanner); if (risk) handlers.onRisk(risk);
+    logs.slice(-50).forEach(handlers.onLog); handlers.onEquity(equity);
+  };
+
+  const ensurePolling = () => {
+    if (polling || closed) return;
+    polling = setInterval(() => { void pollSnapshot(); }, 3000);
+  };
+  const stopPolling = () => { if (polling) { clearInterval(polling); polling = null; } };
+
+  hub.onState((s) => { handlers.onConnectionState(s); if (s === 'CONNECTED') { stopPolling(); } else { ensurePolling(); } });
+  const unsubs = [
+    hub.on('botStatusUpdated', (d) => handlers.onStatus(mapStatus(d))),
+    hub.on('opportunitiesUpdated', (d) => handlers.onOpportunities(((d as any[]) ?? []).map(mapOpportunity))),
+    hub.on('opportunityDetected', (d) => handlers.onOpportunityDetected(mapOpportunity(d))),
+    hub.on('tradeLogUpdated', (d) => handlers.onTrades(((d as any[]) ?? []).map(mapTrade))),
+    hub.on('positionsUpdated', (d) => handlers.onPositions(((d as any[]) ?? []).map(mapPosition))),
+    hub.on('riskUpdated', (d) => handlers.onRisk(mapRisk(d))),
+    hub.on('scannerStatsUpdated', (d) => handlers.onScanner(mapScanner(d))),
+    hub.on('terminalLogAdded', (d) => handlers.onLog(mapLog(d))),
+    hub.on('equityUpdated', (d) => handlers.onEquity(((d as any[]) ?? []).map(mapEquity))),
+    hub.on('heartbeat', (d: any) => handlers.onHeartbeat(d?.timestamp ?? new Date().toISOString()))
+  ];
+
+  try { await hub.start(); stopPolling(); } catch { ensurePolling(); }
+
+  return () => {
+    closed = true;
+    stopPolling();
+    unsubs.forEach((u) => u());
+    void hub.stop();
+  };
+};

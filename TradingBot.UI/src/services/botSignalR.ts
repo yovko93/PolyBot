@@ -1,5 +1,5 @@
 import { HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr';
-export type BotEvents = 'botStatusUpdated'|'opportunitiesUpdated'|'opportunityDetected'|'tradeLogUpdated'|'tradeExecuted'|'positionsUpdated'|'riskUpdated'|'scannerStatsUpdated'|'terminalLogAdded'|'heartbeat';
+export type BotEvents = 'botStatusUpdated'|'opportunitiesUpdated'|'opportunityDetected'|'tradeLogUpdated'|'tradeExecuted'|'positionsUpdated'|'riskUpdated'|'scannerStatsUpdated'|'terminalLogAdded'|'heartbeat'|'equityUpdated';
 export class BotSignalR {
   private conn: HubConnection;
   constructor(url: string) { this.conn = new HubConnectionBuilder().withUrl(url).withAutomaticReconnect([0,1000,2000,5000]).configureLogging(LogLevel.Warning).build(); }

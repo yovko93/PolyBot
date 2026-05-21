@@ -1,7 +1,7 @@
 import type { BotStatus, Opportunity, PaperPosition, RiskState, ScannerStats, TradeLogEntry } from '../types/models';
 
 export const botStatus: BotStatus = { mode: 'DRY RUN', connection: 'CONNECTED', cash: 1000, lockedCapital: 0, equity: 1000, realizedPnl: 0, lastScanTime: '2026-05-20T15:30:00Z' };
-export const scannerStats: ScannerStats = { scansPerMin: 52, marketsTracked: 214, opportunitiesLastScan: 15, executableRate: 0.6, lastScanTime: botStatus.lastScanTime };
+export const scannerStats: ScannerStats = { scansPerMin: 52, marketsTracked: 214, opportunitiesLastScan: 15, executableRate: 0.6, lastScanTime: botStatus.lastScanTime, marketsScanned: 214, orderbooksScanned: 214, opportunitiesDetected: 15, executableOpportunities: 9, skippedByRisk: 6, scanDurationMs: 1200, lastScanStartedAt: botStatus.lastScanTime, lastScanCompletedAt: botStatus.lastScanTime, lastError: null };
 export const riskState: RiskState = { maxLockedCapital: 100, lockedCapital: 0, cash: 1000, equity: 1000, dailyLossLimit: -40, utilizationPct: 0 };
 export const opportunities: Opportunity[] = [
   { id: '1', rank: 1, strategy: 'SingleMarketBuyBoth | BUY_YES_AND_BUY_NO', group: 'US Election', market: 'Will Candidate X win?', side: 'BOTH', edgePerShare: 0.008, expectedProfit: 0.8326, costOrProceeds: 99.14, guaranteedPayout: 100, qtyAvailable: 104, executable: true, status: 'READY' },
