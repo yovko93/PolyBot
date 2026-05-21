@@ -54,7 +54,7 @@ public class MultiOutcomeGroupArbEngine
 
         var tasks = groupedMarkets.Select(group =>
             ScanGroupAsync(
-                group.Select(x => (x.Market, x.Group)).ToList(),
+                group.Select(x => (x.Market, x.Group!)).ToList(),
                 paper,
                 semaphore,
                 ct

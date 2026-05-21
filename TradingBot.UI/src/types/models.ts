@@ -1,37 +1,9 @@
-export type StrategyType =
-  | 'SingleMarketBuyBoth | BUY_YES_AND_BUY_NO'
-  | 'MultiOutcomeGroup | BUY_ALL_NO_MUTUALLY_EXCLUSIVE'
-  | 'CompleteSetSell | MINT_AND_SELL_YES_NO';
-
-export interface Opportunity {
-  id: string;
-  rank: number;
-  strategy: StrategyType;
-  group: string;
-  market: string;
-  side: 'YES' | 'NO' | 'BOTH';
-  edgePerShare: number;
-  expectedProfit: number;
-  costOrProceeds: number;
-  guaranteedPayout: number;
-  qtyAvailable: number;
-  executable: boolean;
-  status: 'READY' | 'RISK_REJECTED' | 'WATCH';
-}
-
-export interface TradeLogEntry {
-  id: string;
-  time: string;
-  strategy: StrategyType;
-  side: string;
-  market: string;
-  amount: number;
-  price: number;
-  edge: number;
-  status: 'FILLED' | 'SKIPPED' | 'REJECTED';
-}
-
-export interface PaperPosition { id: string; market: string; side: string; qty: number; avgPrice: number; mark: number; unrealizedPnl: number; status: string; }
-export interface RiskState { maxLockedCapital: number; lockedCapital: number; cash: number; equity: number; dailyLossLimit: number; utilizationPct: number; }
-export interface ScannerStats { scansPerMin: number; marketsTracked: number; opportunitiesLastScan: number; executableRate: number; lastScanTime: string; }
-export interface BotStatus { mode: 'DRY RUN' | 'PAPER' | 'LIVE'; connection: 'CONNECTED' | 'DEGRADED' | 'DISCONNECTED'; cash: number; lockedCapital: number; equity: number; realizedPnl: number; lastScanTime: string; }
+export type BotMode = 'DRY_RUN' | 'PAPER' | 'LIVE' | 'UNKNOWN' | 'DRY RUN';
+export type ConnectionStatus = 'CONNECTED' | 'RECONNECTING' | 'DISCONNECTED' | 'MOCK' | 'DEGRADED';
+export interface BotStatus { mode: BotMode; scannerActive?: boolean; connectionStatus?: ConnectionStatus; connection?: ConnectionStatus; cash: number; lockedCapital: number; equity: number; realizedPnl: number; expectedProfit?: number; openPositions?: number; signalCount?: number; lastScanTime: string; lastHeartbeat?: string; }
+export interface Opportunity { id: string; timestamp?: string; rank: number; strategy: string; group: string; market: string; side: string; edgePerShare: number; expectedProfit: number; costOrProceeds: number; guaranteedPayout: number; qtyAvailable: number; executable: boolean; status: 'READY'|'RISK_REJECTED'|'WATCH'|'DETECTED'|'EXECUTABLE'|'DRY_RUN'|'PAPER_EXECUTED'|'SKIPPED'|'EXPIRED'; reason?: string; sequence?: number; }
+export interface TradeLogEntry { id: string; time?: string; timestamp?: string; strategy: string; side: string; market: string; amount: number; price: number; edge: number; expectedProfit?: number; status: 'FILLED'|'REJECTED'|'DRY_RUN'|'PAPER_EXECUTED'|'SKIPPED'|'FAILED'; reason?: string; sequence?: number; }
+export interface PaperPosition { id: string; openedAt?: string; closedAt?: string; strategy?: string; group?: string; legs?: string[]; cost?: number; guaranteedPayout?: number; expectedProfit?: number; realizedPayout?: number; realizedProfit?: number; market?:string; side?:string; qty?:number; avgPrice?:number; mark?:number; unrealizedPnl?:number; status: 'OPEN'|'CLOSED'|'SIMULATED_CLOSED'|'DRY RUN'|'PAPER SKIP'|string; sequence?: number; }
+export interface ScannerStats { scansPerMin?: number; marketsTracked?: number; opportunitiesLastScan?: number; executableRate?: number; lastScanTime?: string; marketsScanned: number; orderbooksScanned: number; opportunitiesDetected: number; executableOpportunities: number; skippedByRisk: number; scanDurationMs: number; lastScanStartedAt: string; lastScanCompletedAt: string; }
+export interface RiskState { maxLockedCapital: number; lockedCapital: number; cash?:number; equity?:number; dailyLossLimit?:number; utilizationPct?:number; maxNotionalPerTrade?: number; minNotionalPerTrade?: number; minEdgePerShare?: number; minExpectedProfit?: number; maxOpenPositions?: number; openPositions?: number; maxExposurePerGroup?: number; currentExposureByGroup?: Record<string, number>; allowBasketArbs?: boolean; allowSingleMarketArbs?: boolean; allowCompleteSetSellArbs?: boolean; allowThresholdArbs?: boolean; }
+export interface TerminalLogEntry { id: string; timestamp: string; level: 'info'|'warn'|'error'|'success'; source: string; message: string; sequence?: number; }
