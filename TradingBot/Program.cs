@@ -30,6 +30,23 @@ app.MapGet("/api/bot/positions", (BotRuntimeState s) => s.Positions());
 app.MapGet("/api/bot/trade-log", (BotRuntimeState s) => s.Trades());
 app.MapGet("/api/bot/scanner-stats", (BotRuntimeState s) => s.ScannerStats);
 app.MapGet("/api/bot/risk", (BotRuntimeState s) => s.Risk);
+app.MapGet("/api/bot/controls", (BotRuntimeState s) => s.Controls);
+app.MapPost("/api/bot/controls/pause", async (BotRuntimeState s, IHubContext<BotHub> hub) =>
+{
+    s.SetControls(new BotControlStateDto(true, "MANUAL_PAUSE", DateTime.UtcNow, s.NextSeq()));
+    s.SetStatus(s.Status with { ScannerActive = false, LastScanTime = DateTime.UtcNow });
+    await hub.Clients.All.SendAsync("controlsUpdated", s.Controls);
+    await hub.Clients.All.SendAsync("botStatusUpdated", s.Status);
+    return Results.Ok(s.Controls);
+});
+app.MapPost("/api/bot/controls/resume", async (BotRuntimeState s, IHubContext<BotHub> hub) =>
+{
+    s.SetControls(new BotControlStateDto(false, "RUNNING", DateTime.UtcNow, s.NextSeq()));
+    s.SetStatus(s.Status with { ScannerActive = true, LastScanTime = DateTime.UtcNow });
+    await hub.Clients.All.SendAsync("controlsUpdated", s.Controls);
+    await hub.Clients.All.SendAsync("botStatusUpdated", s.Status);
+    return Results.Ok(s.Controls);
+});
 app.MapGet("/api/bot/logs/recent", (BotRuntimeState s) => s.Logs());
 app.MapGet("/api/bot/equity", (BotRuntimeState s) => s.Equity());
 app.MapHub<BotHub>("/hubs/bot");
@@ -98,6 +115,14 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         try
         {
             uiLogger.LogInfo("scanner", "{\"event\":\"scan_start\",\"timestamp\":\"" + started.ToString("O") + "\"}");
+            if (state.Controls.IsPaused)
+            {
+                state.SetStatus(state.Status with { ScannerActive = false, LastScanTime = DateTime.UtcNow });
+                await PushUiUpdates(state, hub, uiLogger);
+                uiLogger.LogInfo("scanner", "{\"event\":\"scan_skipped\",\"reason\":\"PAUSED\"}");
+                await Task.Delay(options.ScanIntervalMs);
+                continue;
+            }
             monitor.BeginCycle();
             var cachedMarkets = await marketService.GetMarketsAsync();
             var filtered = cachedMarkets.Where(m => m?.outcomes?.Count == 2 && m.clobTokenIds?.Count >= 2).Take(options.MarketScanLimit).ToList();
@@ -129,6 +154,7 @@ static async Task PushUiUpdates(BotRuntimeState state, IHubContext<BotHub> hub, 
         await hub.Clients.All.SendAsync("positionsUpdated", state.Positions());
         await hub.Clients.All.SendAsync("scannerStatsUpdated", state.ScannerStats);
         await hub.Clients.All.SendAsync("riskUpdated", state.Risk);
+        await hub.Clients.All.SendAsync("controlsUpdated", state.Controls);
         await hub.Clients.All.SendAsync("botStatusUpdated", state.Status);
         await hub.Clients.All.SendAsync("equityUpdated", state.Equity());
     }
@@ -152,7 +178,7 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
     var s = obs.GetStats();
     state.SetScannerStats(new ScannerStatsDto(marketsScanned, (int)Math.Min(int.MaxValue, s.BatchBooksLoaded), top.Count, top.Count(x => x.IsExecutable), Math.Max(0, top.Count - top.Count(x => x.IsExecutable)), (long)(DateTime.UtcNow - scanStart).TotalMilliseconds, scanStart, DateTime.UtcNow, lastError, state.NextSeq()));
     state.SetRisk(new RiskStateDto(p.MaxNotionalPerTrade, p.MinNotionalPerTrade, p.MinEdgePerShare, p.MinExpectedProfit, p.MaxLockedCapital, paper.LockedCapital, p.MaxOpenPositions, pb.OpenPositions.Count, p.MaxExposurePerGroup, new Dictionary<string, decimal>(), p.AllowBasketArbs, p.AllowSingleMarketArbs, p.AllowCompleteSetSellArbs, p.AllowThresholdArbs, DateTime.UtcNow, state.NextSeq()));
-    state.SetStatus(new BotStatusDto("PAPER", true, "CONNECTED", paper.Balance, paper.LockedCapital, paper.Equity, 0m, paper.ExpectedProfit, pb.OpenPositions.Count, top.Count, DateTime.UtcNow, DateTime.UtcNow));
+    state.SetStatus(new BotStatusDto("PAPER", !state.Controls.IsPaused, "CONNECTED", paper.Balance, paper.LockedCapital, paper.Equity, 0m, paper.ExpectedProfit, pb.OpenPositions.Count, top.Count, DateTime.UtcNow, DateTime.UtcNow));
     state.AddEquity(new EquityPointDto(DateTime.UtcNow, paper.Equity, state.NextSeq()));
 }
 
