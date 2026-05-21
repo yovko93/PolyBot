@@ -81,7 +81,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var executionJournal = new ExecutionJournal(executionJournalPath);
     var positionBook = new PaperPositionBook(Path.Combine(AppContext.BaseDirectory, "data", "paper-positions.csv"));
     var paper = new PaperTradingEngine(executionPolicy, executionJournal, executionDecisionService, positionBook);
-    var monitor = new OpportunityMonitor(Path.Combine(AppContext.BaseDirectory, "data", "arb-opportunities.csv"),0.003m,-0.02m,TimeSpan.FromMinutes(2),0.25m,new DryRunLiveOrderBuilder(-0.01m,100000m,1m,0.001m,LiveOrderType.FOK,executionPolicy));
+    var monitor = new OpportunityMonitor(Path.Combine(AppContext.BaseDirectory, "data", "arb-opportunities.csv"),0.003m,-0.02m,TimeSpan.FromMinutes(2),0.25m,new DryRunLiveOrderBuilder(minEdgePerShare: -0.01m, maxPlanCost: 100000m, minSize: 1m, tickSize: 0.001m, orderType: LiveOrderType.FOK, policy: executionPolicy));
     var semaphore = new SemaphoreSlim(5);
     var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService,0.003m,0.001m,0.001m,monitor,sizing);
 
@@ -121,9 +121,9 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
     foreach (var pz in pb.OpenPositions.Concat(pb.ClosedPositions).Take(200)) state.AddPosition(new PaperPositionDto(pz.PositionId,pz.OpenedAtUtc,pz.ClosedAtUtc,pz.Strategy,pz.GroupKey,pz.Legs.Select(l=>$"{l.Outcome}:{l.Question}").ToList(),pz.TotalCost,pz.GuaranteedPayout,pz.ExpectedProfit,pz.RealizedPayout,pz.RealizedProfit,pz.Status.ToString().ToUpperInvariant(),state.NextSeq()));
     if (File.Exists(executionJournalPath)) foreach (var line in File.ReadLines(executionJournalPath).Skip(1).TakeLast(100)) { var c=line.Split(','); if(c.Length<10) continue; state.AddTrade(new TradeLogEntryDto(Guid.NewGuid().ToString("N"),DateTime.UtcNow,"SCAN","BASKET",c[4],0,0,0,0,"SKIPPED",null,state.NextSeq())); }
     var s = obs.GetStats();
-    state.SetScannerStats(new ScannerStatsDto(marketsScanned,s.BatchBooksLoaded,top.Count,top.Count(x=>x.Executable),Math.Max(0,top.Count-top.Count(x=>x.Executable)),(long)(DateTime.UtcNow-scanStart).TotalMilliseconds,scanStart,DateTime.UtcNow,state.NextSeq()));
+    state.SetScannerStats(new ScannerStatsDto(marketsScanned,s.BatchBooksLoaded,top.Count,top.Count(x=>x.IsExecutable),Math.Max(0,top.Count-top.Count(x=>x.IsExecutable)),(long)(DateTime.UtcNow-scanStart).TotalMilliseconds,scanStart,DateTime.UtcNow,state.NextSeq()));
     state.SetRisk(new RiskStateDto(p.MaxNotionalPerTrade,p.MinNotionalPerTrade,p.MinEdgePerShare,p.MinExpectedProfit,p.MaxLockedCapital,paper.LockedCapital,p.MaxOpenPositions,pb.OpenPositions.Count,p.MaxExposurePerGroup,new Dictionary<string,decimal>(),p.AllowBasketArbs,p.AllowSingleMarketArbs,p.AllowCompleteSetSellArbs,p.AllowThresholdArbs,DateTime.UtcNow,state.NextSeq()));
-    state.SetStatus(new BotStatusDto("PAPER",true,"CONNECTED",paper.Balance,paper.LockedCapital,paper.Equity,paper.RealizedProfit,paper.ExpectedProfit,pb.OpenPositions.Count,top.Count,DateTime.UtcNow,DateTime.UtcNow));
+    state.SetStatus(new BotStatusDto("PAPER",true,"CONNECTED",paper.Balance,paper.LockedCapital,paper.Equity,0m,paper.ExpectedProfit,pb.OpenPositions.Count,top.Count,DateTime.UtcNow,DateTime.UtcNow));
     state.AddEquity(new EquityPointDto(DateTime.UtcNow, paper.Equity, state.NextSeq()));
 }
 
