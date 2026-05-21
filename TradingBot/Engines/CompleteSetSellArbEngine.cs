@@ -11,6 +11,7 @@ public class CompleteSetSellArbEngine
     private readonly decimal _slippageBuffer;
     private readonly OpportunityMonitor? _monitor;
     private readonly ExecutionSizingService _sizing;
+    private readonly bool _sizingLogsEnabled;
 
     public CompleteSetSellArbEngine(
         IOrderBookProvider orderBooks,
@@ -26,6 +27,7 @@ public class CompleteSetSellArbEngine
         _slippageBuffer = slippageBuffer;
         _monitor = monitor;
         _sizing = sizing ?? new ExecutionSizingService(new ExecutionPolicy());
+        _sizingLogsEnabled = _sizing.EnableSizingLogs;
     }
 
     public async Task ScanAsync(
@@ -108,9 +110,10 @@ public class CompleteSetSellArbEngine
             var edge = adjustedProceeds - 1m;
 
             var quantityAvailable = Math.Min(book.YesBid.Size, book.NoBid.Size);
-            var executableQuantity = _sizing.ClampQuantityByNotional(quantityAvailable, 1m);
-            if (executableQuantity < quantityAvailable && executableQuantity > 0)
-                Console.WriteLine($"[SIZING] Strategy=MINT_AND_SELL_YES_NO AvailableQty={quantityAvailable:0.####} ExecutableQty={executableQuantity:0.####} Notional={executableQuantity:0.####}");
+            var sizing = _sizing.SizeByNotional(quantityAvailable, 1m);
+            var executableQuantity = sizing.ExecutableQuantity;
+            if (_sizingLogsEnabled && edge >= _minEdgePerShare && executableQuantity > 0m && sizing.WasClamped)
+                Console.WriteLine($"[SIZING] Strategy=MINT_AND_SELL_YES_NO AvailableQty={sizing.QuantityAvailable:0.####} ExecutableQty={sizing.ExecutableQuantity:0.####} Notional={sizing.Notional:0.####} MaxNotional={sizing.MaxNotional:0.####} Edge={edge:0.####}");
 
             var orderLegs = new List<OrderLegCandidate>
             {

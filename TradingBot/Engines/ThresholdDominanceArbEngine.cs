@@ -12,6 +12,7 @@ public class ThresholdDominanceArbEngine
     private readonly decimal _slippageBuffer;
     private readonly OpportunityMonitor? _monitor;
     private readonly ExecutionSizingService _sizing;
+    private readonly bool _sizingLogsEnabled;
 
     public ThresholdDominanceArbEngine(
         IOrderBookProvider orderBooks,
@@ -27,6 +28,7 @@ public class ThresholdDominanceArbEngine
         _slippageBuffer = slippageBuffer;
         _monitor = monitor;
         _sizing = sizing ?? new ExecutionSizingService(new ExecutionPolicy());
+        _sizingLogsEnabled = _sizing.EnableSizingLogs;
     }
 
     public async Task ScanAsync(
@@ -167,7 +169,8 @@ public class ThresholdDominanceArbEngine
             var edge = 1m - adjustedCost;
 
             var quantityAvailable = Math.Min(yesLeg.Size, noLeg.Size);
-            var executableQuantity = _sizing.ClampQuantityByNotional(quantityAvailable, adjustedCost);
+            var sizing = _sizing.SizeByNotional(quantityAvailable, adjustedCost);
+            var executableQuantity = sizing.ExecutableQuantity;
 
             var thresholdKey =
                 $"{yesMarket.MarketId}|YES|{noMarket.MarketId}|NO";
@@ -175,6 +178,9 @@ public class ThresholdDominanceArbEngine
             var strategy = pair.LowInfo.Direction == ThresholdDirection.GreaterThan
                 ? "BUY_YES_LOWER_BUY_NO_HIGHER"
                 : "BUY_YES_HIGHER_BUY_NO_LOWER";
+
+            if (_sizingLogsEnabled && edge >= _minEdgePerShare && executableQuantity > 0m && sizing.WasClamped)
+                Console.WriteLine($"[SIZING] Strategy={strategy} AvailableQty={sizing.QuantityAvailable:0.####} ExecutableQty={sizing.ExecutableQuantity:0.####} Notional={sizing.Notional:0.####} MaxNotional={sizing.MaxNotional:0.####} Edge={edge:0.####}");
 
             var orderLegs = new List<OrderLegCandidate>
             {

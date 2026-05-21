@@ -16,6 +16,7 @@ public class TrueArbitrageEngine
     private readonly decimal _slippageBuffer;
     private readonly OpportunityMonitor? _monitor;
     private readonly ExecutionSizingService _sizing;
+    private readonly bool _sizingLogsEnabled;
 
     public TrueArbitrageEngine(
         IOrderBookProvider orderBooks,
@@ -33,6 +34,7 @@ public class TrueArbitrageEngine
         _slippageBuffer = slippageBuffer;
         _monitor = monitor;
         _sizing = sizing ?? new ExecutionSizingService(new ExecutionPolicy());
+        _sizingLogsEnabled = _sizing.EnableSizingLogs;
     }
 
     public async Task ScanAsync(
@@ -106,7 +108,11 @@ public class TrueArbitrageEngine
         var edge = 1m - adjustedCost;
 
         var quantityAvailable = Math.Min(yesAsk.Size, noAsk.Size);
-        var quantity = _sizing.ClampQuantityByNotional(quantityAvailable, adjustedCost);
+        var sizing = _sizing.SizeByNotional(quantityAvailable, adjustedCost);
+        var quantity = sizing.ExecutableQuantity;
+
+        if (_sizingLogsEnabled && edge >= _minEdgePerShare && quantity > 0m && sizing.WasClamped)
+            Console.WriteLine($"[SIZING] Strategy=BUY_YES_MARKET_A_BUY_NO_MARKET_B AvailableQty={sizing.QuantityAvailable:0.####} ExecutableQty={sizing.ExecutableQuantity:0.####} Notional={sizing.Notional:0.####} MaxNotional={sizing.MaxNotional:0.####} Edge={edge:0.####}");
 
         var orderLegs = new List<OrderLegCandidate>
         {

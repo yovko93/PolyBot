@@ -11,6 +11,7 @@ public class SingleMarketOrderBookArbEngine
     private readonly decimal _slippageBuffer;
     private readonly OpportunityMonitor? _monitor;
     private readonly ExecutionSizingService _sizing;
+    private readonly bool _sizingLogsEnabled;
 
     public SingleMarketOrderBookArbEngine(
         IOrderBookProvider orderBooks,
@@ -26,6 +27,7 @@ public class SingleMarketOrderBookArbEngine
         _slippageBuffer = slippageBuffer;
         _monitor = monitor;
         _sizing = sizing ?? new ExecutionSizingService(new ExecutionPolicy());
+        _sizingLogsEnabled = _sizing.EnableSizingLogs;
     }
 
     public async Task ScanAsync(
@@ -134,10 +136,10 @@ public class SingleMarketOrderBookArbEngine
             }
 
             var quantityAvailable = Math.Min(book.YesAsk.Size, book.NoAsk.Size);
-            var executableQuantity = _sizing.ClampQuantityByNotional(quantityAvailable, adjustedCost);
-            var notional = _sizing.EstimateNotional(executableQuantity, adjustedCost);
-            if (executableQuantity < quantityAvailable && executableQuantity > 0)
-                Console.WriteLine($"[SIZING] Strategy=BUY_YES_AND_BUY_NO AvailableQty={quantityAvailable:0.####} ExecutableQty={executableQuantity:0.####} Notional={notional:0.####}");
+            var sizing = _sizing.SizeByNotional(quantityAvailable, adjustedCost);
+            var executableQuantity = sizing.ExecutableQuantity;
+            if (_sizingLogsEnabled && edge >= _minEdgePerShare && executableQuantity > 0m && sizing.WasClamped)
+                Console.WriteLine($"[SIZING] Strategy=BUY_YES_AND_BUY_NO AvailableQty={sizing.QuantityAvailable:0.####} ExecutableQty={sizing.ExecutableQuantity:0.####} Notional={sizing.Notional:0.####} MaxNotional={sizing.MaxNotional:0.####} Edge={edge:0.####}");
 
             var orderLegs = new List<OrderLegCandidate>
             {
