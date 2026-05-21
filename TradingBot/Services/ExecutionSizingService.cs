@@ -11,19 +11,54 @@ public sealed class ExecutionSizingService
         _policy = policy ?? new ExecutionPolicy();
     }
 
-    public decimal ClampQuantityByNotional(decimal quantityAvailable, decimal capitalPerShare)
+    public bool EnableSizingLogs => _policy.EnableSizingLogs;
+
+    public ExecutionSizingResult SizeByNotional(decimal quantityAvailable, decimal capitalPerShare)
     {
         if (quantityAvailable <= 0m || capitalPerShare <= 0m)
-            return 0m;
+        {
+            return new ExecutionSizingResult(
+                QuantityAvailable: quantityAvailable,
+                ExecutableQuantity: 0m,
+                CapitalPerShare: capitalPerShare,
+                Notional: 0m,
+                MaxNotional: _policy.MaxNotionalPerTrade,
+                WasClamped: false,
+                MeetsMinNotional: false
+            );
+        }
 
-        var maxQty = _policy.MaxNotionalPerTrade / capitalPerShare;
-        var executable = Math.Min(quantityAvailable, maxQty);
-        var notional = EstimateNotional(executable, capitalPerShare);
+        var maxQtyByNotional = _policy.MaxNotionalPerTrade / capitalPerShare;
+        var executableQuantity = Math.Min(quantityAvailable, maxQtyByNotional);
+        var notional = executableQuantity * capitalPerShare;
 
         if (notional < _policy.MinNotionalPerTrade)
-            return 0m;
+        {
+            return new ExecutionSizingResult(
+                QuantityAvailable: quantityAvailable,
+                ExecutableQuantity: 0m,
+                CapitalPerShare: capitalPerShare,
+                Notional: 0m,
+                MaxNotional: _policy.MaxNotionalPerTrade,
+                WasClamped: quantityAvailable > executableQuantity,
+                MeetsMinNotional: false
+            );
+        }
 
-        return executable;
+        return new ExecutionSizingResult(
+            QuantityAvailable: quantityAvailable,
+            ExecutableQuantity: executableQuantity,
+            CapitalPerShare: capitalPerShare,
+            Notional: notional,
+            MaxNotional: _policy.MaxNotionalPerTrade,
+            WasClamped: quantityAvailable > executableQuantity,
+            MeetsMinNotional: true
+        );
+    }
+
+    public decimal ClampQuantityByNotional(decimal quantityAvailable, decimal capitalPerShare)
+    {
+        return SizeByNotional(quantityAvailable, capitalPerShare).ExecutableQuantity;
     }
 
     public decimal EstimateNotional(decimal quantity, decimal capitalPerShare)

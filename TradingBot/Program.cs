@@ -74,7 +74,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     http.Timeout = TimeSpan.FromSeconds(10);
     var marketService = new MarketDataService(http);
     var orderbookService = new OrderBookService(http) { DisableSingleBookHttpFallback = true };
-    var executionPolicy = new ExecutionPolicy { MaxNotionalPerTrade = 100m, MinNotionalPerTrade = 5m, MinEdgePerShare = 0.003m, MinExpectedProfit = 0.25m, MaxLockedCapital = 300m, MaxOpenPositions = 5, MaxExposurePerGroup = 100m, AllowBasketArbs = true, AllowSingleMarketArbs = true, AllowCompleteSetSellArbs = true, AllowThresholdArbs = true };
+    var executionPolicy = new ExecutionPolicy { MaxNotionalPerTrade = 100m, MinNotionalPerTrade = 5m, MinEdgePerShare = 0.003m, MinExpectedProfit = 0.25m, MaxLockedCapital = 300m, MaxOpenPositions = 5, MaxExposurePerGroup = 100m, AllowBasketArbs = true, AllowSingleMarketArbs = true, AllowCompleteSetSellArbs = true, AllowThresholdArbs = true, EnableSizingLogs = false };
     var sizing = new ExecutionSizingService(executionPolicy);
     var executionDecisionService = new ExecutionDecisionService(executionPolicy);
     var executionJournalPath = Path.Combine(AppContext.BaseDirectory, "data", "execution-journal.csv");

@@ -20,4 +20,6 @@ public class ExecutionPolicy
     public bool AllowSingleMarketArbs { get; init; } = true;
     public bool AllowCompleteSetSellArbs { get; init; } = true;
     public bool AllowThresholdArbs { get; init; } = true;
+
+    public bool EnableSizingLogs { get; init; } = false;
 }
