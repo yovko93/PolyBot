@@ -8,3 +8,4 @@ public record RiskStateDto(decimal MaxNotionalPerTrade,decimal MinNotionalPerTra
 public record ScannerStatsDto(int MarketsScanned,int OrderbooksScanned,int OpportunitiesDetected,int ExecutableOpportunities,int SkippedByRisk,long ScanDurationMs,DateTime LastScanStartedAt,DateTime LastScanCompletedAt,string? LastError,long Sequence);
 public record TerminalLogEntryDto(string Id,DateTime Timestamp,string Level,string Source,string Message,long Sequence);
 public record EquityPointDto(DateTime Timestamp, decimal Equity, long Sequence);
+public record BotControlStateDto(bool IsPaused, string Reason, DateTime UpdatedAtUtc, long Sequence);

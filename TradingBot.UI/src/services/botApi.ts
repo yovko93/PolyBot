@@ -1,4 +1,4 @@
-import type { BotStatus, Opportunity, PaperPosition, RiskState, ScannerStats, TerminalLogEntry, TradeLogEntry } from '../types/models';
+import type { BotControlState, BotStatus, Opportunity, PaperPosition, RiskState, ScannerStats, TerminalLogEntry, TradeLogEntry } from '../types/models';
 import { BotSignalR } from './botSignalR';
 
 const BASE_URL = ((import.meta as any).env.VITE_API_BASE_URL ?? 'http://localhost:5000').replace(/\/$/, '');
@@ -13,9 +13,10 @@ const mapRisk = (x: any): RiskState => x;
 const mapScanner = (x: any): ScannerStats => x;
 const mapLog = (x: any): TerminalLogEntry => x;
 const mapEquity = (x: any) => x;
+const mapControls = (x: any): BotControlState => x;
 
-async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(`${API}${path}`, { signal });
+async function request<T>(path: string, signal?: AbortSignal, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${API}${path}`, { signal, ...init });
   if (!response.ok) throw new Error(`API ${path} failed: ${response.status}`);
   return response.json();
 }
@@ -45,6 +46,9 @@ export const getRisk = async (signal?: AbortSignal): Promise<RiskState | null> =
 };
 export const getTerminalLogs = async (signal?: AbortSignal): Promise<TerminalLogEntry[]> => (await safeRequest<any[]>('/logs/recent', [], signal)).map(mapLog);
 export const getEquity = async (signal?: AbortSignal): Promise<Array<{ timestamp: string; equity: number }>> => (await safeRequest<any[]>('/equity', [], signal)).map(mapEquity);
+export const getControls = async (signal?: AbortSignal): Promise<BotControlState> => mapControls(await request('/controls', signal));
+export const pauseScanner = async (): Promise<BotControlState> => mapControls(await request('/controls/pause', undefined, { method: 'POST' }));
+export const resumeScanner = async (): Promise<BotControlState> => mapControls(await request('/controls/resume', undefined, { method: 'POST' }));
 
 type BotEventHandlers = {
   onStatus: (x: BotStatus) => void;
@@ -58,6 +62,7 @@ type BotEventHandlers = {
   onEquity: (x: Array<{ timestamp: string; equity: number }>) => void;
   onHeartbeat: (x: string) => void;
   onConnectionState: (x: 'CONNECTED'|'RECONNECTING'|'DISCONNECTED') => void;
+  onControls: (x: BotControlState) => void;
 };
 
 export const subscribeToBotEvents = async (handlers: BotEventHandlers): Promise<() => void> => {
@@ -66,12 +71,13 @@ export const subscribeToBotEvents = async (handlers: BotEventHandlers): Promise<
   let closed = false;
 
   const pollSnapshot = async () => {
-    const [status, opportunities, positions, trades, scanner, risk, logs, equity] = await Promise.all([
-      getBotStatus(), getOpportunities(), getPositions(), getTradeLogs(), getScannerStats(), getRisk(), getTerminalLogs(), getEquity()
+    const [status, opportunities, positions, trades, scanner, risk, logs, equity, controls] = await Promise.all([
+      getBotStatus(), getOpportunities(), getPositions(), getTradeLogs(), getScannerStats(), getRisk(), getTerminalLogs(), getEquity(), getControls()
     ]);
     handlers.onStatus(status); handlers.onOpportunities(opportunities); handlers.onPositions(positions); handlers.onTrades(trades);
     if (scanner) handlers.onScanner(scanner); if (risk) handlers.onRisk(risk);
     logs.slice(-50).forEach(handlers.onLog); handlers.onEquity(equity);
+    handlers.onControls(controls);
   };
 
   const ensurePolling = () => {
@@ -91,7 +97,8 @@ export const subscribeToBotEvents = async (handlers: BotEventHandlers): Promise<
     hub.on('scannerStatsUpdated', (d) => handlers.onScanner(mapScanner(d))),
     hub.on('terminalLogAdded', (d) => handlers.onLog(mapLog(d))),
     hub.on('equityUpdated', (d) => handlers.onEquity(((d as any[]) ?? []).map(mapEquity))),
-    hub.on('heartbeat', (d: any) => handlers.onHeartbeat(d?.timestamp ?? new Date().toISOString()))
+    hub.on('heartbeat', (d: any) => handlers.onHeartbeat(d?.timestamp ?? new Date().toISOString())),
+    hub.on('controlsUpdated', (d) => handlers.onControls(mapControls(d)))
   ];
 
   try { await hub.start(); stopPolling(); } catch { ensurePolling(); }

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { API, HUB, getBotHealth, getBotStatus, getEquity, getOpportunities, getPositions, getRisk, getScannerStats, getTerminalLogs, getTradeLogs, subscribeToBotEvents } from '../services/botApi';
+import { API, HUB, getBotHealth, getBotStatus, getControls, getEquity, getOpportunities, getPositions, getRisk, getScannerStats, getTerminalLogs, getTradeLogs, pauseScanner, resumeScanner, subscribeToBotEvents } from '../services/botApi';
 
 export function useBotData() {
-  const [status, setStatus] = useState<any>(null); const [opps, setOpps] = useState<any[]>([]); const [positions, setPositions] = useState<any[]>([]); const [trades, setTrades] = useState<any[]>([]); const [risk, setRisk] = useState<any>(null); const [scanner, setScanner] = useState<any>(null); const [logs, setLogs] = useState<any[]>([]); const [equity, setEquity] = useState<any[]>([]);
+  const [status, setStatus] = useState<any>(null); const [opps, setOpps] = useState<any[]>([]); const [positions, setPositions] = useState<any[]>([]); const [trades, setTrades] = useState<any[]>([]); const [risk, setRisk] = useState<any>(null); const [scanner, setScanner] = useState<any>(null); const [logs, setLogs] = useState<any[]>([]); const [equity, setEquity] = useState<any[]>([]); const [controls, setControls] = useState<any>(null);
   const [connectionStatus, setConnectionStatus] = useState('DISCONNECTED'); const [lastUpdated, setLastUpdated] = useState(''); const [lastHeartbeat, setLastHeartbeat] = useState(''); const [source, setSource] = useState('SNAPSHOT'); const [lastRestError, setLastRestError] = useState(''); const [lastEvent, setLastEvent] = useState('');
   const seenEvents = useRef(new Set<string>());
 
@@ -12,8 +12,8 @@ export function useBotData() {
       try {
         const healthy = await getBotHealth(ac.signal);
         if (!healthy) setLastRestError('backend health endpoint unavailable');
-        const [s, o, p, t, sc, r, l, eq] = await Promise.all([getBotStatus(ac.signal), getOpportunities(ac.signal), getPositions(ac.signal), getTradeLogs(ac.signal), getScannerStats(ac.signal), getRisk(ac.signal), getTerminalLogs(ac.signal), getEquity(ac.signal)]);
-        setStatus(s); setOpps(o); setPositions(p); setTrades(t); setScanner(sc); setRisk(r); setLogs(l); setEquity(eq); setConnectionStatus(healthy ? 'CONNECTED' : 'DEGRADED'); setSource('SNAPSHOT'); setLastUpdated(new Date().toISOString());
+        const [s, o, p, t, sc, r, l, eq, c] = await Promise.all([getBotStatus(ac.signal), getOpportunities(ac.signal), getPositions(ac.signal), getTradeLogs(ac.signal), getScannerStats(ac.signal), getRisk(ac.signal), getTerminalLogs(ac.signal), getEquity(ac.signal), getControls(ac.signal)]);
+        setStatus(s); setOpps(o); setPositions(p); setTrades(t); setScanner(sc); setRisk(r); setLogs(l); setEquity(eq); setControls(c); setConnectionStatus(healthy ? 'CONNECTED' : 'DEGRADED'); setSource('SNAPSHOT'); setLastUpdated(new Date().toISOString());
       } catch (e: any) { setLastRestError(String(e)); setConnectionStatus('DISCONNECTED'); }
 
       cleanup = await subscribeToBotEvents({
@@ -27,7 +27,8 @@ export function useBotData() {
         onLog: (d) => setLogs((x: any[]) => [d, ...x].slice(0, 1000)),
         onEquity: setEquity,
         onHeartbeat: setLastHeartbeat,
-        onConnectionState: (s) => { if (!seenEvents.current.has(s)) seenEvents.current.add(s); setConnectionStatus(s); setSource(s === 'CONNECTED' ? 'LIVE BACKEND' : 'POLLING FALLBACK'); }
+        onConnectionState: (s) => { if (!seenEvents.current.has(s)) seenEvents.current.add(s); setConnectionStatus(s); setSource(s === 'CONNECTED' ? 'LIVE BACKEND' : 'POLLING FALLBACK'); },
+        onControls: setControls
       });
     };
 
@@ -35,5 +36,5 @@ export function useBotData() {
     return () => { ac.abort(); cleanup(); };
   }, []);
 
-  return useMemo(() => ({ API, HUB, status, opps, positions, trades, risk, scanner, logs, equity, connectionStatus, lastHeartbeat, lastUpdated, source, lastRestError, lastEvent }), [status, opps, positions, trades, risk, scanner, logs, equity, connectionStatus, lastHeartbeat, lastUpdated, source, lastRestError, lastEvent]);
+  return useMemo(() => ({ API, HUB, status, opps, positions, trades, risk, scanner, logs, equity, controls, connectionStatus, lastHeartbeat, lastUpdated, source, lastRestError, lastEvent, pauseScanner, resumeScanner }), [status, opps, positions, trades, risk, scanner, logs, equity, controls, connectionStatus, lastHeartbeat, lastUpdated, source, lastRestError, lastEvent]);
 }

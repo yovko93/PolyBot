@@ -9,6 +9,7 @@ public class BotRuntimeState
     public BotStatusDto Status { get; private set; } = new("DRY_RUN", false, "DISCONNECTED", 1000, 0, 1000, 0, 0, 0, 0, DateTime.UtcNow, DateTime.UtcNow);
     public ScannerStatsDto ScannerStats { get; private set; } = new(0,0,0,0,0,0,DateTime.UtcNow,DateTime.UtcNow,null,0);
     public RiskStateDto Risk { get; private set; } = new(100,5,0.003m,0.25m,300,0,5,0,100,new(),true,true,true,true,DateTime.UtcNow,0);
+    public BotControlStateDto Controls { get; private set; } = new(false, "RUNNING", DateTime.UtcNow, 0);
     private readonly ConcurrentQueue<OpportunityDto> _opps = new();
     private readonly ConcurrentQueue<TradeLogEntryDto> _trades = new();
     private readonly ConcurrentQueue<PaperPositionDto> _positions = new();
@@ -19,6 +20,7 @@ public class BotRuntimeState
     public void SetStatus(BotStatusDto s){lock(_gate) Status=s;}
     public void SetScannerStats(ScannerStatsDto s){lock(_gate) ScannerStats=s;}
     public void SetRisk(RiskStateDto r){lock(_gate) Risk=r;}
+    public void SetControls(BotControlStateDto c){lock(_gate) Controls=c;}
     public void AddOpportunity(OpportunityDto o){_opps.Enqueue(o); Trim(_opps,500);}    
     public void AddTrade(TradeLogEntryDto t){_trades.Enqueue(t); Trim(_trades,500);}    
     public void AddPosition(PaperPositionDto p){_positions.Enqueue(p); Trim(_positions,200);}    
