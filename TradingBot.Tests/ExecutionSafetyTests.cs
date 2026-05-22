@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using TradingBot.Models;
 using TradingBot.Options;
 using TradingBot.Services;
+using Xunit;
 
 namespace TradingBot.Tests;
 
