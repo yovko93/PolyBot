@@ -3,6 +3,8 @@ using TradingBot.Services;
 
 namespace TradingBot.Engines;
 
+public record SingleMarketScanStats(int Scanned,int BookOk,int BothAsks,int Candidates,int Executed,int PositiveEdgeFound,int NegativeEdgeSkipped,int ZeroEdgeSkipped);
+
 public class SingleMarketOrderBookArbEngine
 {
     private readonly IOrderBookProvider _orderBooks;
@@ -30,7 +32,7 @@ public class SingleMarketOrderBookArbEngine
         _sizingLogsEnabled = _sizing.EnableSizingLogs;
     }
 
-    public async Task ScanAsync(
+    public async Task<SingleMarketScanStats> ScanAsync(
         List<Market> markets,
         PaperTradingEngine paper,
         SemaphoreSlim semaphore,
@@ -46,42 +48,11 @@ public class SingleMarketOrderBookArbEngine
         var candidates = results.Count(x => x.Candidate);
         var executed = results.Count(x => x.Executed);
 
-        var best = results
-            .Where(x => x.AdjustedCost.HasValue)
-            .OrderBy(x => x.AdjustedCost!.Value)
-            .FirstOrDefault();
+        var positiveEdge = results.Count(x => x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value > 0m);
+        var negativeEdgeSkipped = results.Count(x => x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value < 0m);
+        var zeroEdgeSkipped = results.Count(x => x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value == 0m);
 
-        var top = results
-            .Where(x => x.AdjustedCost.HasValue)
-            .OrderBy(x => x.AdjustedCost!.Value)
-            .Take(10)
-            .ToList();
-
-        Console.WriteLine();
-        Console.WriteLine("========== SINGLE MARKET SCAN ==========");
-        Console.WriteLine($"Scanned: {scanned}");
-        Console.WriteLine($"Book OK: {bookOk}");
-        Console.WriteLine($"Both YES/NO asks: {bothAsks}");
-        Console.WriteLine($"Candidates: {candidates}");
-        Console.WriteLine($"Executed: {executed}");
-
-        //if (top.Count > 0)
-        //{
-        //    Console.WriteLine();
-        //    Console.WriteLine("Top closest YES+NO markets:");
-
-        //    foreach (var item in top)
-        //    {
-        //        var edge = 1m - item.AdjustedCost!.Value;
-
-        //        Console.WriteLine("----------------------------------------");
-        //        Console.WriteLine($"Cost: {item.AdjustedCost.Value:0.####} | Edge: {edge:0.####}");
-        //        Console.WriteLine($"Market: {item.Question}");
-        //    }
-        //}
-
-        Console.WriteLine("========================================");
-        Console.WriteLine();
+        return new SingleMarketScanStats(scanned, bookOk, bothAsks, candidates, executed, positiveEdge, negativeEdgeSkipped, zeroEdgeSkipped);
     }
 
     private async Task<SingleMarketScanResult> ScanMarketAsync(
