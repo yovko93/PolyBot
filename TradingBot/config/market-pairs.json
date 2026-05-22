@@ -1,0 +1,14 @@
+[
+  {
+    "enabled": false,
+    "canonicalKey": "sample-future-event",
+    "description": "Sample mapping",
+    "polymarketMarketId": "",
+    "polymarketConditionId": "",
+    "polymarketQuestion": "",
+    "kalshiTicker": "",
+    "kalshiMarketId": "",
+    "riskLevel": "Candidate",
+    "settlementNotes": "Verify source/date before enabling"
+  }
+]
