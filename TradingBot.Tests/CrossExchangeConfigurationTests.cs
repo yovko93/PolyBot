@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using TradingBot.Options;
 using TradingBot.Services.CrossExchange;
 using TradingBot.Services.Kalshi;
+using Xunit;
 
 public class CrossExchangeConfigurationTests
 {

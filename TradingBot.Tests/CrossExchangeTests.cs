@@ -3,6 +3,7 @@ using TradingBot.Models.Normalized;
 using TradingBot.Options;
 using TradingBot.Services.CrossExchange;
 using TradingBot.Services.Kalshi;
+using Xunit;
 
 public class CrossExchangeTests
 {
