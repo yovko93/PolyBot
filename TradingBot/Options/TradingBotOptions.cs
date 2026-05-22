@@ -53,4 +53,18 @@ public class TradingBotOptions
     [Required] public string ListenUrl { get; set; } = "http://localhost:5000";
     [Range(1000, int.MaxValue)] public int HeartbeatIntervalMs { get; set; } = 3000;
     [Range(1, int.MaxValue)] public int ExternalApiTimeoutSeconds { get; set; } = 10;
+    public DiagnosticsOptions Diagnostics { get; set; } = new();
+}
+
+public class DiagnosticsOptions
+{
+    public bool EnableOpportunityDiagnostics { get; set; } = true;
+    public bool TrackNearMisses { get; set; } = true;
+    public int NearMissTopN { get; set; } = 25;
+    public decimal NearMissMaxNegativeEdge { get; set; } = 0.02m;
+    public bool IncludeNegativeEdgeInDiagnostics { get; set; } = true;
+    public bool IncludeNegativeEdgeInMainOpportunities { get; set; } = false;
+    public bool LogNearMissSummary { get; set; } = true;
+    public bool LogNearMissDetails { get; set; } = false;
+    public bool EnableThresholdSimulation { get; set; } = true;
 }

@@ -3,7 +3,7 @@ using TradingBot.Services;
 
 namespace TradingBot.Engines;
 
-public record SingleMarketScanStats(int Scanned,int BookOk,int BothAsks,int Candidates,int Executed,int PositiveEdgeFound,int NegativeEdgeSkipped,int ZeroEdgeSkipped);
+public record SingleMarketScanStats(int Scanned,int BookOk,int BothAsks,int Candidates,int Executed,int PositiveEdgeFound,int NegativeEdgeSkipped,int ZeroEdgeSkipped, Dictionary<string,int>? SkipReasons = null, List<NearMissOpportunity>? NearMisses = null, decimal? BestEdgeSeen = null, decimal? WorstEdgeSeen = null);
 
 public class SingleMarketOrderBookArbEngine
 {
@@ -41,6 +41,9 @@ public class SingleMarketOrderBookArbEngine
         var tasks = markets.Select(market => ScanMarketAsync(market, paper, semaphore, ct));
 
         var results = await Task.WhenAll(tasks);
+        var skipReasons = new Dictionary<string, int>();
+        var nearMisses = new List<NearMissOpportunity>();
+        var edges = new List<decimal>();
 
         var scanned = results.Length;
         var bookOk = results.Count(x => x.BookOk);
@@ -51,8 +54,14 @@ public class SingleMarketOrderBookArbEngine
         var positiveEdge = results.Count(x => x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value > 0m);
         var negativeEdgeSkipped = results.Count(x => x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value < 0m);
         var zeroEdgeSkipped = results.Count(x => x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value == 0m);
+        foreach (var r in results)
+        {
+            if (r.Edge.HasValue) edges.Add(r.Edge.Value);
+            if (!string.IsNullOrWhiteSpace(r.SkipReason)) skipReasons[r.SkipReason!] = skipReasons.GetValueOrDefault(r.SkipReason!, 0) + 1;
+            if (r.NearMiss != null) nearMisses.Add(r.NearMiss);
+        }
 
-        return new SingleMarketScanStats(scanned, bookOk, bothAsks, candidates, executed, positiveEdge, negativeEdgeSkipped, zeroEdgeSkipped);
+        return new SingleMarketScanStats(scanned, bookOk, bothAsks, candidates, executed, positiveEdge, negativeEdgeSkipped, zeroEdgeSkipped, skipReasons, nearMisses, edges.Count>0?edges.Max():null, edges.Count>0?edges.Min():null);
     }
 
     private async Task<SingleMarketScanResult> ScanMarketAsync(
@@ -77,12 +86,19 @@ public class SingleMarketOrderBookArbEngine
                     Candidate: false,
                     Executed: false,
                     AdjustedCost: null,
-                    Question: book.Question
+                    Question: book.Question,
+                    Edge: null,
+                    SkipReason: book.YesAsk == null ? OpportunitySkipReason.MissingYesAsk.ToString() : OpportunitySkipReason.MissingNoAsk.ToString(),
+                    NearMiss: null
                 );
 
             var rawCost = book.YesAsk.Price + book.NoAsk.Price;
             var adjustedCost = rawCost + _feeBuffer + _slippageBuffer;
             var edge = 1m - adjustedCost;
+            if (book.YesAsk.Price is < 0m or > 1m || book.NoAsk.Price is < 0m or > 1m)
+            {
+                return new SingleMarketScanResult(true, true, false, false, adjustedCost, book.Question, edge, OpportunitySkipReason.InvalidPriceNormalization.ToString(), null);
+            }
 
             //todo remove the guard
             if (rawCost < 0.90m)
@@ -96,14 +112,7 @@ public class SingleMarketOrderBookArbEngine
                 Console.WriteLine("Skipping this market until token/book mapping is verified.");
                 Console.WriteLine();
 
-                return new SingleMarketScanResult(
-                    BookOk: true,
-                    BothAsks: true,
-                    Candidate: false,
-                    Executed: false,
-                    AdjustedCost: adjustedCost,
-                    Question: book.Question
-                );
+                return new SingleMarketScanResult(true,true,false,false,adjustedCost,book.Question,edge,OpportunitySkipReason.BelowMinEdgeThreshold.ToString(), edge < 0 ? new NearMissOpportunity(book.MarketId, book.Question, "BUY_YES_AND_BUY_NO", book.YesAsk.Price, book.NoAsk.Price, rawCost, _feeBuffer, _slippageBuffer, adjustedCost, edge, executableQuantity*edge, executableQuantity, Math.Abs(edge), OpportunitySkipReason.NegativeEdge.ToString(), 0) : null);
             }
 
             var quantityAvailable = Math.Min(book.YesAsk.Size, book.NoAsk.Size);
@@ -160,14 +169,7 @@ public class SingleMarketOrderBookArbEngine
 
             if (edge < _minEdgePerShare)
             {
-                return new SingleMarketScanResult(
-                    BookOk: true,
-                    BothAsks: true,
-                    Candidate: false,
-                    Executed: false,
-                    AdjustedCost: adjustedCost,
-                    Question: book.Question
-                );
+                return new SingleMarketScanResult(true,true,false,false,adjustedCost,book.Question,edge,OpportunitySkipReason.InsufficientLiquidity.ToString(),null);
             }
 
             var quantity = executableQuantity;
@@ -223,14 +225,7 @@ public class SingleMarketOrderBookArbEngine
                 Console.WriteLine();
             }
 
-            return new SingleMarketScanResult(
-                BookOk: true,
-                BothAsks: true,
-                Candidate: true,
-                Executed: executed,
-                AdjustedCost: adjustedCost,
-                Question: book.Question
-            );
+            return new SingleMarketScanResult(true,true,true,executed,adjustedCost,book.Question,edge,executed?null:OpportunitySkipReason.AlreadyExecuted.ToString(),null);
         }
         catch
         {
@@ -248,7 +243,10 @@ public class SingleMarketOrderBookArbEngine
         bool Candidate,
         bool Executed,
         decimal? AdjustedCost,
-        string? Question)
+        string? Question,
+        decimal? Edge,
+        string? SkipReason,
+        NearMissOpportunity? NearMiss)
     {
         public static SingleMarketScanResult Empty =>
             new(
@@ -257,7 +255,10 @@ public class SingleMarketOrderBookArbEngine
                 Candidate: false,
                 Executed: false,
                 AdjustedCost: null,
-                Question: null
+                Question: null,
+                Edge: null,
+                SkipReason: null,
+                NearMiss: null
             );
     }
 }
