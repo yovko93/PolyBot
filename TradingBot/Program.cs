@@ -219,7 +219,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             {
                 emptyCycles++;
                 if (options.LogEmptyOpportunityCycles || options.LogNoOpportunityCycles)
-                    Console.WriteLine($"[SINGLE_SCAN] Markets={filtered.Count} BookOk={scanStats.BookAvailable} PositiveEdge={scanStats.PositiveEdgeFound} Executable=0 DurationMs={(long)(DateTime.UtcNow - started).TotalMilliseconds}");
+                    Console.WriteLine($"[SINGLE_SCAN] Markets={filtered.Count} BookOk={scanStats.BookOk} PositiveEdge={scanStats.PositiveEdgeFound} Executable=0 DurationMs={(long)(DateTime.UtcNow - started).TotalMilliseconds}");
             }
             monitor.FlushCsv();
             SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, filtered.Count, started, null, scanStats, filtering, lastDiscoverySummary, rollingOffset, options.ScanBatchSize, discoveredMarkets.Count, discoveryStartedAt, discoveryCompletedAt, emptyCycles, options.MarketScanLimit, effectiveMarketLimit, options.MaxMarketsToDiscover);
