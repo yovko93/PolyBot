@@ -20,6 +20,7 @@ builder.Services.AddOptions<TradingBotOptions>().Bind(builder.Configuration.GetS
 builder.Services.AddOptions<CrossExchangeOptions>().Bind(builder.Configuration.GetSection(CrossExchangeOptions.SectionName)).ValidateDataAnnotations();
 builder.Services.AddOptions<ExchangeFeesOptions>().Bind(builder.Configuration.GetSection(ExchangeFeesOptions.SectionName)).ValidateDataAnnotations();
 builder.Services.AddOptions<KalshiOptions>().Bind(builder.Configuration.GetSection(KalshiOptions.SectionName)).ValidateDataAnnotations();
+builder.Services.AddOptions<OpportunityFilteringOptions>().Bind(builder.Configuration.GetSection(OpportunityFilteringOptions.SectionName));
 builder.Services.AddSingleton<BotRuntimeState>();
 builder.Services.AddSingleton<TextWriter>(originalOut);
 builder.Services.AddSingleton<IBotUiLogger, BotUiLogger>();
@@ -32,7 +33,11 @@ var listenUrl = options.ListenUrl;
 app.MapHealthChecks("/health");
 app.MapGet("/api/bot/health", () => Results.Ok(new { ok = true, service = "PolyBot", timestamp = DateTime.UtcNow }));
 app.MapGet("/api/bot/status", (BotRuntimeState s) => s.Status);
-app.MapGet("/api/bot/opportunities", (BotRuntimeState s) => s.Opportunities());
+app.MapGet("/api/bot/opportunities", (BotRuntimeState s, IOptions<OpportunityFilteringOptions> f, bool? includeNegativeEdge, bool? debug) =>
+{
+    var include = (includeNegativeEdge ?? false) || (debug ?? false) || f.Value.EnableDebugNegativeEdgeView;
+    return s.Opportunities().Where(o => include || OpportunityVisibilityFilter.IsVisibleOpportunity(o, f.Value)).ToArray();
+});
 app.MapGet("/api/bot/positions", (BotRuntimeState s) => s.Positions());
 app.MapGet("/api/bot/trade-log", (BotRuntimeState s) => s.Trades());
 app.MapGet("/api/bot/scanner-stats", (BotRuntimeState s) => s.ScannerStats);
@@ -78,10 +83,10 @@ _ = Task.Run(async () =>
     }
 });
 
-await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), options, app.Lifetime.ApplicationStopping);
+await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Lifetime.ApplicationStopping);
 await apiTask;
 
-static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, TradingBotOptions options, CancellationToken stoppingToken)
+static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, TradingBotOptions options, OpportunityFilteringOptions filtering, CancellationToken stoppingToken)
 {
     using var http = new HttpClient();
     http.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0");
@@ -167,7 +172,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             if (!options.LogOnlyExecutableOpportunities) monitor.PrintCycleRanking(top: 10, executableOnly: false);
             else monitor.PrintCycleRanking(top: 10, executableOnly: true);
             monitor.FlushCsv();
-            SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, filtered.Count, started, null, scanStats);
+            SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, filtered.Count, started, null, scanStats, filtering);
             await PushUiUpdates(state, hub, uiLogger);
             uiLogger.LogInfo("scanner", $"{{\"event\":\"scan_end\",\"durationMs\":{(long)(DateTime.UtcNow - started).TotalMilliseconds},\"marketsScanned\":{filtered.Count},\"detected\":{monitor.GetTopCycleRecords(200,false).Count},\"executable\":{monitor.GetTopCycleRecords(200,false).Count(x=>x.IsExecutable)}}}");
         }
@@ -179,7 +184,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         {
             lastError = ex.Message;
             uiLogger.LogError("scanner", $"{{\"event\":\"scan_error\",\"message\":\"{ex.Message.Replace("\"", "'")}\"}}");
-            SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, 0, started, lastError, new SingleMarketScanStats(0,0,0,0,0,0,0,0));
+            SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, 0, started, lastError, new SingleMarketScanStats(0,0,0,0,0,0,0,0), filtering);
         }
 
         await Task.Delay(options.ScanIntervalMs, stoppingToken);
@@ -205,9 +210,11 @@ static async Task PushUiUpdates(BotRuntimeState state, IHubContext<BotHub> hub, 
     }
 }
 
-static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, PaperPositionBook pb, string executionJournalPath, ExecutionPolicy p, OrderBookService obs, PaperTradingEngine paper, int marketsScanned, DateTime scanStart, string? lastError, SingleMarketScanStats scanStats)
+static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, PaperPositionBook pb, string executionJournalPath, ExecutionPolicy p, OrderBookService obs, PaperTradingEngine paper, int marketsScanned, DateTime scanStart, string? lastError, SingleMarketScanStats scanStats, OpportunityFilteringOptions filtering)
 {
     var top = monitor.GetTopCycleRecords(200, executableOnly: false);
+    var skippedPositive = top.Count(x => !x.IsExecutable && x.EdgePerShare > 0 && x.ExpectedProfit > 0);
+    var hiddenFromUi = top.Count(x => !OpportunityVisibilityFilter.IsVisibleOpportunity(new OpportunityDto("", DateTime.UtcNow, 0, "", "", "", "", x.EdgePerShare, x.ExpectedProfit, 0, 0, 0, x.IsExecutable, x.IsExecutable ? "EXECUTABLE" : "SKIPPED", null, 0), filtering));
     state.ReplaceOpportunities(top.Select((r, i) =>
     {
         var status = r.IsExecutable ? "EXECUTABLE" : "SKIPPED";
@@ -217,25 +224,33 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
 
     state.ReplacePositions(pb.OpenPositions.Concat(pb.ClosedPositions).Take(200).Select(pz => new PaperPositionDto(pz.PositionId, pz.OpenedAtUtc, pz.ClosedAtUtc, pz.Strategy, pz.GroupKey, pz.Legs.Select(l => $"{l.Outcome}:{l.Question}").ToList(), pz.TotalCost, pz.GuaranteedPayout, pz.ExpectedProfit, pz.RealizedPayout, pz.RealizedProfit, pz.Status.ToString().ToUpperInvariant(), state.NextSeq())));
 
-    state.ReplaceTrades(ReadTradeEntries(executionJournalPath, state));
+    state.ReplaceTrades(ReadTradeEntries(executionJournalPath, state, filtering));
 
     var s = obs.GetStats();
-    state.SetScannerStats(new ScannerStatsDto(marketsScanned, (int)Math.Min(int.MaxValue, s.BatchBooksLoaded), top.Count, top.Count(x => x.IsExecutable), Math.Max(0, top.Count - top.Count(x => x.IsExecutable)), scanStats.NegativeEdgeSkipped, scanStats.ZeroEdgeSkipped, scanStats.PositiveEdgeFound, scanStats.Executed, (long)(DateTime.UtcNow - scanStart).TotalMilliseconds, scanStart, DateTime.UtcNow, lastError, state.NextSeq()));
+    state.SetScannerStats(new ScannerStatsDto(marketsScanned, (int)Math.Min(int.MaxValue, s.BatchBooksLoaded), top.Count, top.Count(x => x.IsExecutable), Math.Max(0, top.Count - top.Count(x => x.IsExecutable)), scanStats.NegativeEdgeSkipped, scanStats.ZeroEdgeSkipped, scanStats.PositiveEdgeFound, scanStats.Executed, skippedPositive, hiddenFromUi, (long)(DateTime.UtcNow - scanStart).TotalMilliseconds, scanStart, DateTime.UtcNow, lastError, state.NextSeq()));
     state.SetRisk(new RiskStateDto(p.MaxNotionalPerTrade, p.MinNotionalPerTrade, p.MinEdgePerShare, p.MinExpectedProfit, p.MaxLockedCapital, paper.LockedCapital, p.MaxOpenPositions, pb.OpenPositions.Count, p.MaxExposurePerGroup, new Dictionary<string, decimal>(), p.AllowBasketArbs, p.AllowSingleMarketArbs, p.AllowCompleteSetSellArbs, p.AllowThresholdArbs, DateTime.UtcNow, state.NextSeq()));
     state.SetStatus(new BotStatusDto("PAPER", !state.Controls.IsPaused, "CONNECTED", paper.Balance, paper.LockedCapital, paper.Equity, 0m, paper.ExpectedProfit, pb.OpenPositions.Count, top.Count, DateTime.UtcNow, DateTime.UtcNow));
     state.AddEquity(new EquityPointDto(DateTime.UtcNow, paper.Equity, state.NextSeq()));
 }
 
 
-static IEnumerable<TradeLogEntryDto> ReadTradeEntries(string executionJournalPath, BotRuntimeState state)
+static IEnumerable<TradeLogEntryDto> ReadTradeEntries(string executionJournalPath, BotRuntimeState state, OpportunityFilteringOptions filtering)
 {
     if (!File.Exists(executionJournalPath)) yield break;
     foreach (var line in File.ReadLines(executionJournalPath).Skip(1).TakeLast(100))
     {
         var c = line.Split(',');
         if (c.Length < 10) continue;
-        yield return new TradeLogEntryDto(Guid.NewGuid().ToString("N"), DateTime.UtcNow, "SCAN", "BASKET", c[4], 0, 0, 0, 0, "SKIPPED", "JOURNAL", state.NextSeq());
+        var entry = new TradeLogEntryDto(Guid.NewGuid().ToString("N"), DateTime.UtcNow, "SCAN", "BASKET", c[4], 0, 0, 0, 0, "SKIPPED", "JOURNAL", state.NextSeq());
+        if (!IsVisibleTrade(entry, filtering)) continue;
+        yield return entry;
     }
+}
+
+static bool IsVisibleTrade(TradeLogEntryDto t, OpportunityFilteringOptions _)
+{
+    if (string.Equals(t.Status, "SKIPPED", StringComparison.OrdinalIgnoreCase) && t.Edge <= 0) return false;
+    return t.Edge > 0 && t.ExpectedProfit > 0;
 }
 
 public class MultiTextWriter(TextWriter original, Action<string> mirror) : TextWriter
