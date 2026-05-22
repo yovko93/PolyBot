@@ -1,5 +1,6 @@
 using TradingBot.Api;
 using TradingBot.Options;
+using Xunit;
 
 namespace TradingBot.Tests;
 
