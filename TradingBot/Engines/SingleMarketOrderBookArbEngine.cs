@@ -112,7 +112,33 @@ public class SingleMarketOrderBookArbEngine
                 Console.WriteLine("Skipping this market until token/book mapping is verified.");
                 Console.WriteLine();
 
-                return new SingleMarketScanResult(true,true,false,false,adjustedCost,book.Question,edge,OpportunitySkipReason.BelowMinEdgeThreshold.ToString(), edge < 0 ? new NearMissOpportunity(book.MarketId, book.Question, "BUY_YES_AND_BUY_NO", book.YesAsk.Price, book.NoAsk.Price, rawCost, _feeBuffer, _slippageBuffer, adjustedCost, edge, executableQuantity*edge, executableQuantity, Math.Abs(edge), OpportunitySkipReason.NegativeEdge.ToString(), 0) : null);
+                return new SingleMarketScanResult(
+                    true,
+                    true,
+                    false,
+                    false,
+                    adjustedCost,
+                    book.Question,
+                    edge,
+                    OpportunitySkipReason.BelowMinEdgeThreshold.ToString(),
+                    edge < 0
+                        ? new NearMissOpportunity(
+                            book.MarketId,
+                            book.Question,
+                            "BUY_YES_AND_BUY_NO",
+                            book.YesAsk.Price,
+                            book.NoAsk.Price,
+                            rawCost,
+                            _feeBuffer,
+                            _slippageBuffer,
+                            adjustedCost,
+                            edge,
+                            0m,
+                            0m,
+                            Math.Abs(edge),
+                            OpportunitySkipReason.NegativeEdge.ToString(),
+                            0)
+                        : null);
             }
 
             var quantityAvailable = Math.Min(book.YesAsk.Size, book.NoAsk.Size);
@@ -182,7 +208,10 @@ public class SingleMarketOrderBookArbEngine
                     Candidate: false,
                     Executed: false,
                     AdjustedCost: adjustedCost,
-                    Question: book.Question
+                    Question: book.Question,
+                    Edge: edge,
+                    SkipReason: OpportunitySkipReason.InsufficientLiquidity.ToString(),
+                    NearMiss: null
                 );
             }
 
