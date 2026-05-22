@@ -21,4 +21,7 @@ public class TradingBotOptions
     [Range(0.01, double.MaxValue)] public decimal MaxExposurePerGroup { get; set; } = 100m;
     [Range(0.0, double.MaxValue)] public decimal SingleMarketSlippage { get; set; } = 0.001m;
     [Range(0.0, double.MaxValue)] public decimal SingleMarketFees { get; set; } = 0.001m;
+    [Required] public string ListenUrl { get; set; } = "http://localhost:5000";
+    [Range(1000, int.MaxValue)] public int HeartbeatIntervalMs { get; set; } = 3000;
+    [Range(1000, int.MaxValue)] public int ExternalApiTimeoutSeconds { get; set; } = 10;
 }

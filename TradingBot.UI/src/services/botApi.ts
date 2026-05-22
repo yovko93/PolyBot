@@ -2,6 +2,7 @@ import type { BotControlState, BotStatus, Opportunity, PaperPosition, RiskState,
 import { BotSignalR } from './botSignalR';
 
 const BASE_URL = ((import.meta as any).env.VITE_API_BASE_URL ?? 'http://localhost:5000').replace(/\/$/, '');
+const POLLING_INTERVAL_MS = Number((import.meta as any).env.VITE_BOT_POLLING_INTERVAL_MS ?? 3000);
 export const API = `${BASE_URL}/api/bot`;
 export const HUB = `${BASE_URL}/hubs/bot`;
 
@@ -71,18 +72,22 @@ export const subscribeToBotEvents = async (handlers: BotEventHandlers): Promise<
   let closed = false;
 
   const pollSnapshot = async () => {
-    const [status, opportunities, positions, trades, scanner, risk, logs, equity, controls] = await Promise.all([
-      getBotStatus(), getOpportunities(), getPositions(), getTradeLogs(), getScannerStats(), getRisk(), getTerminalLogs(), getEquity(), getControls()
-    ]);
-    handlers.onStatus(status); handlers.onOpportunities(opportunities); handlers.onPositions(positions); handlers.onTrades(trades);
-    if (scanner) handlers.onScanner(scanner); if (risk) handlers.onRisk(risk);
-    logs.slice(-50).forEach(handlers.onLog); handlers.onEquity(equity);
-    handlers.onControls(controls);
+    try {
+      const [status, opportunities, positions, trades, scanner, risk, logs, equity, controls] = await Promise.all([
+        getBotStatus(), getOpportunities(), getPositions(), getTradeLogs(), getScannerStats(), getRisk(), getTerminalLogs(), getEquity(), getControls()
+      ]);
+      handlers.onStatus(status); handlers.onOpportunities(opportunities); handlers.onPositions(positions); handlers.onTrades(trades);
+      if (scanner) handlers.onScanner(scanner); if (risk) handlers.onRisk(risk);
+      logs.slice(-50).forEach(handlers.onLog); handlers.onEquity(equity);
+      handlers.onControls(controls);
+    } catch {
+      handlers.onConnectionState('DISCONNECTED');
+    }
   };
 
   const ensurePolling = () => {
     if (polling || closed) return;
-    polling = setInterval(() => { void pollSnapshot(); }, 3000);
+    polling = setInterval(() => { void pollSnapshot(); }, POLLING_INTERVAL_MS);
   };
   const stopPolling = () => { if (polling) { clearInterval(polling); polling = null; } };
 

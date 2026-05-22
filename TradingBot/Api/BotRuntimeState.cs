@@ -22,8 +22,11 @@ public class BotRuntimeState
     public void SetRisk(RiskStateDto r){lock(_gate) Risk=r;}
     public void SetControls(BotControlStateDto c){lock(_gate) Controls=c;}
     public void AddOpportunity(OpportunityDto o){_opps.Enqueue(o); Trim(_opps,500);}    
+    public void ReplaceOpportunities(IEnumerable<OpportunityDto> items){while(_opps.TryDequeue(out _)){} foreach(var i in items) _opps.Enqueue(i); Trim(_opps,500);}    
     public void AddTrade(TradeLogEntryDto t){_trades.Enqueue(t); Trim(_trades,500);}    
+    public void ReplaceTrades(IEnumerable<TradeLogEntryDto> items){while(_trades.TryDequeue(out _)){} foreach(var i in items) _trades.Enqueue(i); Trim(_trades,500);}    
     public void AddPosition(PaperPositionDto p){_positions.Enqueue(p); Trim(_positions,200);}    
+    public void ReplacePositions(IEnumerable<PaperPositionDto> items){while(_positions.TryDequeue(out _)){} foreach(var i in items) _positions.Enqueue(i); Trim(_positions,200);}    
     public void AddLog(TerminalLogEntryDto l){_logs.Enqueue(l); Trim(_logs,1000);}    
     public void AddEquity(EquityPointDto e){_equity.Enqueue(e); Trim(_equity,1000);}    
     public OpportunityDto[] Opportunities()=>_opps.ToArray();
