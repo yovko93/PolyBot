@@ -66,6 +66,11 @@ public class OpportunityMonitor
         }
     }
 
+    public void AddExternalOpportunity(string key, string strategy, string leg1, decimal edgePerShare, decimal expectedProfit, decimal costOrProceeds, decimal guaranteedPayout, decimal qty)
+    {
+        Record(new ArbMonitorRecord(DateTime.UtcNow, "CrossExchangeArbEngine", strategy, key, edgePerShare, costOrProceeds, guaranteedPayout, qty, expectedProfit, true, leg1));
+    }
+
     public void PrintCycleRanking(int top = 15, bool executableOnly = false)
     {
         var ranked = GetTopCycleRecords(top, executableOnly);

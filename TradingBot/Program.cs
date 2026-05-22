@@ -6,6 +6,9 @@ using TradingBot.Engines;
 using TradingBot.Models;
 using TradingBot.Options;
 using TradingBot.Services;
+using TradingBot.Services.CrossExchange;
+using TradingBot.Services.Kalshi;
+using TradingBot.Models.Normalized;
 
 var originalOut = Console.Out;
 var builder = WebApplication.CreateBuilder(args);
@@ -14,6 +17,9 @@ builder.Services.AddCors(o => o.AddPolicy("ui", p => p.WithOrigins("http://local
 builder.Services.AddSignalR();
 builder.Services.AddHealthChecks();
 builder.Services.AddOptions<TradingBotOptions>().Bind(builder.Configuration.GetSection(TradingBotOptions.SectionName)).ValidateDataAnnotations().ValidateOnStart();
+builder.Services.AddOptions<CrossExchangeOptions>().Bind(builder.Configuration.GetSection(CrossExchangeOptions.SectionName)).ValidateDataAnnotations();
+builder.Services.AddOptions<ExchangeFeesOptions>().Bind(builder.Configuration.GetSection(ExchangeFeesOptions.SectionName)).ValidateDataAnnotations();
+builder.Services.AddOptions<KalshiOptions>().Bind(builder.Configuration.GetSection(KalshiOptions.SectionName)).ValidateDataAnnotations();
 builder.Services.AddSingleton<BotRuntimeState>();
 builder.Services.AddSingleton<TextWriter>(originalOut);
 builder.Services.AddSingleton<IBotUiLogger, BotUiLogger>();
@@ -83,6 +89,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
 
     var marketService = new MarketDataService(http);
     var orderbookService = new OrderBookService(http) { DisableSingleBookHttpFallback = true };
+    var crossOptions = new CrossExchangeOptions();
+    options.GetType();
+    var feeOptions = new ExchangeFeesOptions();
+    var kalshiOptions = new KalshiOptions();
     var executionPolicy = new ExecutionPolicy
     {
         MaxNotionalPerTrade = options.MaxNotionalPerTrade,
@@ -109,6 +119,14 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var semaphore = new SemaphoreSlim(options.MaxConcurrentRequests);
     var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketSlippage, options.SingleMarketFees, monitor, sizing);
 
+    var config = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory).AddJsonFile("appsettings.json", optional: true).Build();
+    config.GetSection(CrossExchangeOptions.SectionName).Bind(crossOptions);
+    config.GetSection(ExchangeFeesOptions.SectionName).Bind(feeOptions);
+    config.GetSection(KalshiOptions.SectionName).Bind(kalshiOptions);
+    var crossEngine = new CrossExchangeArbitrageEngine(crossOptions, feeOptions);
+    var pairLoader = new MarketPairConfigLoader(Path.Combine(AppContext.BaseDirectory, "config", "market-pairs.json"));
+    var kalshiHttp = new HttpClient { Timeout = TimeSpan.FromMilliseconds(kalshiOptions.RequestTimeoutMs) };
+    var kalshiBookService = new KalshiOrderbookService(kalshiHttp, kalshiOptions);
     while (!stoppingToken.IsCancellationRequested)
     {
         var started = DateTime.UtcNow;
@@ -129,6 +147,22 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             var filtered = cachedMarkets.Where(m => m?.outcomes?.Count == 2 && m.clobTokenIds?.Count >= 2).Take(options.MarketScanLimit).ToList();
             await orderbookService.PrefetchBinarySnapshotsAsync(filtered);
             await singleMarketArb.ScanAsync(filtered!, paper, semaphore);
+            var pairs = pairLoader.Load();
+            foreach (var pair in pairs.Where(x=>x.Enabled && x.RiskLevel == MarketPairRiskLevel.Verified))
+            {
+                var pm = filtered.FirstOrDefault(x => x.id == pair.PolymarketMarketId);
+                if (pm is null) continue;
+                var polySnap = await orderbookService.GetBinarySnapshotAsync(pm, stoppingToken);
+                if (polySnap is null) continue;
+                var kalshiSnap = await kalshiBookService.GetNormalizedOrderbookAsync(pair.KalshiTicker, stoppingToken);
+                if (kalshiSnap is null) continue;
+                var polyNorm = PolymarketOrderbookNormalizer.Normalize(polySnap);
+                foreach (var opp in crossEngine.Evaluate(pair, polyNorm, kalshiSnap, positionBook.OpenPositions.Count))
+                {
+                    if (!opp.IsExecutable) continue;
+                    monitor.AddExternalOpportunity(opp.PairKey, opp.Strategy, $"{opp.Leg1Exchange}:{opp.Leg1Side}+{opp.Leg2Exchange}:{opp.Leg2Side}", opp.EdgePerShare, opp.ExpectedProfit, opp.GrossCost, opp.GuaranteedPayout, opp.ExecutableQty);
+                }
+            }
             monitor.PrintCycleRanking(top: 10, executableOnly: false);
             monitor.FlushCsv();
             SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, filtered.Count, started, null);
