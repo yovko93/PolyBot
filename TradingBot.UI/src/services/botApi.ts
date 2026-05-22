@@ -7,6 +7,14 @@ export const API = `${BASE_URL}/api/bot`;
 export const HUB = `${BASE_URL}/hubs/bot`;
 
 const mapStatus = (x: any): BotStatus => x;
+const shouldDisplayOpportunity = (x: any): boolean => {
+  const edge = Number(x?.edgePerShare ?? x?.edge ?? 0);
+  const expectedProfit = Number(x?.expectedProfit ?? x?.profit ?? 0);
+  const status = String(x?.status ?? '').toUpperCase();
+  if (edge <= 0 || expectedProfit <= 0) return false;
+  if (status === 'SKIPPED' && edge <= 0) return false;
+  return true;
+};
 const mapOpportunity = (x: any): Opportunity => x;
 const mapPosition = (x: any): PaperPosition => x;
 const mapTrade = (x: any): TradeLogEntry => x;
@@ -34,7 +42,7 @@ export const getBotHealth = async (signal?: AbortSignal): Promise<boolean> => {
 };
 
 export const getBotStatus = async (signal?: AbortSignal): Promise<BotStatus> => mapStatus(await request('/status', signal));
-export const getOpportunities = async (signal?: AbortSignal): Promise<Opportunity[]> => (await safeRequest<any[]>('/opportunities', [], signal)).map(mapOpportunity);
+export const getOpportunities = async (signal?: AbortSignal): Promise<Opportunity[]> => (await safeRequest<any[]>('/opportunities', [], signal)).filter(shouldDisplayOpportunity).map(mapOpportunity);
 export const getPositions = async (signal?: AbortSignal): Promise<PaperPosition[]> => (await safeRequest<any[]>('/positions', [], signal)).map(mapPosition);
 export const getTradeLogs = async (signal?: AbortSignal): Promise<TradeLogEntry[]> => (await safeRequest<any[]>('/trade-log', [], signal)).map(mapTrade);
 export const getScannerStats = async (signal?: AbortSignal): Promise<ScannerStats | null> => {
@@ -94,8 +102,8 @@ export const subscribeToBotEvents = async (handlers: BotEventHandlers): Promise<
   hub.onState((s) => { handlers.onConnectionState(s); if (s === 'CONNECTED') { stopPolling(); } else { ensurePolling(); } });
   const unsubs = [
     hub.on('botStatusUpdated', (d) => handlers.onStatus(mapStatus(d))),
-    hub.on('opportunitiesUpdated', (d) => handlers.onOpportunities(((d as any[]) ?? []).map(mapOpportunity))),
-    hub.on('opportunityDetected', (d) => handlers.onOpportunityDetected(mapOpportunity(d))),
+    hub.on('opportunitiesUpdated', (d) => handlers.onOpportunities(((d as any[]) ?? []).filter(shouldDisplayOpportunity).map(mapOpportunity))),
+    hub.on('opportunityDetected', (d) => { if (shouldDisplayOpportunity(d)) handlers.onOpportunityDetected(mapOpportunity(d)); }),
     hub.on('tradeLogUpdated', (d) => handlers.onTrades(((d as any[]) ?? []).map(mapTrade))),
     hub.on('positionsUpdated', (d) => handlers.onPositions(((d as any[]) ?? []).map(mapPosition))),
     hub.on('riskUpdated', (d) => handlers.onRisk(mapRisk(d))),
