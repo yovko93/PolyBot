@@ -45,8 +45,8 @@ public static class KalshiOrderbookNormalizer
         var noBid = orderbook.No?.OrderByDescending(x => x.Price).FirstOrDefault();
         var bestYesBid = yesBid is null ? (decimal?)null : ToProb(yesBid.Price);
         var bestNoBid = noBid is null ? (decimal?)null : ToProb(noBid.Price);
-        var bestYesAsk = bestNoBid.HasValue ? 1m - bestNoBid.Value : null;
-        var bestNoAsk = bestYesBid.HasValue ? 1m - bestYesBid.Value : null;
+        decimal? bestYesAsk = bestNoBid.HasValue ? 1m - bestNoBid.Value : null;
+        decimal? bestNoAsk = bestYesBid.HasValue ? 1m - bestYesBid.Value : null;
         var yesQty = noBid?.Quantity ?? 0m;
         var noQty = yesBid?.Quantity ?? 0m;
         return new ExchangeOrderbook("KALSHI", marketId, title, bestYesBid, bestYesAsk, bestNoBid, bestNoAsk, yesQty, noQty, DateTime.UtcNow, "active", source);
