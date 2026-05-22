@@ -21,6 +21,13 @@ builder.Services.AddOptions<CrossExchangeOptions>().Bind(builder.Configuration.G
 builder.Services.AddOptions<ExchangeFeesOptions>().Bind(builder.Configuration.GetSection(ExchangeFeesOptions.SectionName)).ValidateDataAnnotations();
 builder.Services.AddOptions<KalshiOptions>().Bind(builder.Configuration.GetSection(KalshiOptions.SectionName)).ValidateDataAnnotations();
 builder.Services.AddOptions<OpportunityFilteringOptions>().Bind(builder.Configuration.GetSection(OpportunityFilteringOptions.SectionName));
+builder.Services.AddOptions<ExecutionOptions>().Bind(builder.Configuration.GetSection(ExecutionOptions.SectionName)).ValidateDataAnnotations().ValidateOnStart();
+builder.Services.AddSingleton<IRiskManager, RiskManager>();
+builder.Services.AddSingleton<DuplicateExecutionGuard>();
+builder.Services.AddSingleton<PreTradeValidator>();
+builder.Services.AddSingleton<OrderPlanBuilder>();
+builder.Services.AddSingleton<ExecutionAuditLog>();
+builder.Services.AddSingleton<DryRunLiveExecutor>();
 builder.Services.AddSingleton<BotRuntimeState>();
 builder.Services.AddSingleton<TextWriter>(originalOut);
 builder.Services.AddSingleton<IBotUiLogger, BotUiLogger>();
@@ -41,7 +48,9 @@ app.MapGet("/api/bot/opportunities", (BotRuntimeState s, IOptions<OpportunityFil
 app.MapGet("/api/bot/positions", (BotRuntimeState s) => s.Positions());
 app.MapGet("/api/bot/trade-log", (BotRuntimeState s) => s.Trades());
 app.MapGet("/api/bot/scanner-stats", (BotRuntimeState s) => s.ScannerStats);
-app.MapGet("/api/bot/risk", (BotRuntimeState s) => s.Risk);
+app.MapGet("/api/bot/risk", (BotRuntimeState s, IRiskManager risk) => Results.Ok(new { runtime = s.Risk, executionRisk = risk.GetRiskSnapshot() }));
+app.MapGet("/api/bot/execution-audit", (ExecutionAuditLog audit) => audit.List());
+app.MapGet("/api/bot/execution-plans", (BotRuntimeState s) => s.Trades().TakeLast(100));
 app.MapGet("/api/bot/controls", (BotRuntimeState s) => s.Controls);
 app.MapPost("/api/bot/controls/pause", async (BotRuntimeState s, IHubContext<BotHub> hub) =>
 {
@@ -51,6 +60,8 @@ app.MapPost("/api/bot/controls/pause", async (BotRuntimeState s, IHubContext<Bot
     await hub.Clients.All.SendAsync("botStatusUpdated", s.Status);
     return Results.Ok(s.Controls);
 });
+app.MapPost("/api/bot/controls/kill-switch/enable", (IRiskManager risk) => { risk.SetKillSwitch(true); return Results.Ok(new { killSwitchEnabled = true }); });
+app.MapPost("/api/bot/controls/kill-switch/disable", (IRiskManager risk) => { risk.SetKillSwitch(false); return Results.Ok(new { killSwitchEnabled = false }); });
 app.MapPost("/api/bot/controls/resume", async (BotRuntimeState s, IHubContext<BotHub> hub) =>
 {
     s.SetControls(new BotControlStateDto(false, "RUNNING", DateTime.UtcNow, s.NextSeq()));
