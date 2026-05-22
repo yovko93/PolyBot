@@ -8,8 +8,25 @@ public class TradingBotOptions
 
     [Range(1, int.MaxValue)] public int ScanIntervalMs { get; set; } = 3000;
     [Range(1, int.MaxValue)] public int MaxConcurrentRequests { get; set; } = 5;
-    [Range(1, int.MaxValue)] public int MarketScanLimit { get; set; } = 200;
-    [Range(1, int.MaxValue)] public int AbsoluteMaxMarkets { get; set; } = 2000;
+    public string Mode { get; set; } = "AllPaginatedRolling";
+    [Range(0, int.MaxValue)] public int MaxMarketsToDiscover { get; set; } = 0;
+    [Range(1, int.MaxValue)] public int AbsoluteMaxMarketsSafetyCap { get; set; } = 10000;
+    [Range(1, int.MaxValue)] public int DiscoveryPageSize { get; set; } = 200;
+    [Range(1, int.MaxValue)] public int ScanBatchSize { get; set; } = 250;
+    [Range(1, int.MaxValue)] public int MaxOrderbooksPerCycle { get; set; } = 500;
+    [Range(1, int.MaxValue)] public int MaxConcurrentOrderbookRequests { get; set; } = 20;
+    [Range(1, int.MaxValue)] public int FullDiscoveryIntervalMinutes { get; set; } = 10;
+    public bool EnableRollingScan { get; set; } = true;
+    public bool PriorityMode { get; set; } = true;
+    [Range(0, 100)] public int HighPriorityBatchPercent { get; set; } = 70;
+    [Range(0, 100)] public int LowPriorityBatchPercent { get; set; } = 30;
+    [Range(1, int.MaxValue)] public int RecentlyPositiveEdgeBoostMinutes { get; set; } = 30;
+    [Range(0.0, double.MaxValue)] public decimal MinLiquidity { get; set; } = 0m;
+    [Range(0.0, double.MaxValue)] public decimal MinVolume24h { get; set; } = 0m;
+    public bool LogNoOpportunityCycles { get; set; } = false;
+    public bool LogPrefetchSummary { get; set; } = true;
+    [Range(100, int.MaxValue)] public int OrderbookRequestTimeoutMs { get; set; } = 3000;
+    [Range(1, int.MaxValue)] public int RateLimitBackoffMs { get; set; } = 1500;
     [Range(0.0, double.MaxValue)] public decimal LogMinEdgeToLog { get; set; } = 0.001m;
     public bool ShowNegativeEdgeOpportunities { get; set; } = false;
     public bool ShowZeroEdgeOpportunities { get; set; } = false;

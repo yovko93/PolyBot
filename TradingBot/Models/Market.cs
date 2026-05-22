@@ -22,6 +22,22 @@ public class Market
 
     [JsonProperty("outcomePrices")]
     public JToken? outcomePrices { get; set; }
+    [JsonProperty("conditionId")]
+    public string? conditionId { get; set; }
+    [JsonProperty("active")]
+    public bool? active { get; set; }
+    [JsonProperty("closed")]
+    public bool? closed { get; set; }
+    [JsonProperty("archived")]
+    public bool? archived { get; set; }
+    [JsonProperty("accepting_orders")]
+    public bool? accepting_orders { get; set; }
+    [JsonProperty("liquidity")]
+    public decimal? liquidity { get; set; }
+    [JsonProperty("volume24hr")]
+    public decimal? volume24hr { get; set; }
+    [JsonIgnore] public decimal liquidityNum => liquidity ?? 0m;
+    [JsonIgnore] public decimal volume24hrNum => volume24hr ?? 0m;
 
     public List<Outcome> GetParsedOutcomes()
     {
