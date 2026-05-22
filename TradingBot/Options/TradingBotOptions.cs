@@ -23,5 +23,5 @@ public class TradingBotOptions
     [Range(0.0, double.MaxValue)] public decimal SingleMarketFees { get; set; } = 0.001m;
     [Required] public string ListenUrl { get; set; } = "http://localhost:5000";
     [Range(1000, int.MaxValue)] public int HeartbeatIntervalMs { get; set; } = 3000;
-    [Range(1000, int.MaxValue)] public int ExternalApiTimeoutSeconds { get; set; } = 10;
+    [Range(1, int.MaxValue)] public int ExternalApiTimeoutSeconds { get; set; } = 10;
 }
