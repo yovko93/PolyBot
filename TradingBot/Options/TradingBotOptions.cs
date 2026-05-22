@@ -5,6 +5,7 @@ namespace TradingBot.Options;
 public class TradingBotOptions
 {
     public const string SectionName = "TradingBot";
+    public const string LegacyScannerSectionName = "Scanner";
 
     [Range(1, int.MaxValue)] public int ScanIntervalMs { get; set; } = 3000;
     [Range(1, int.MaxValue)] public int MaxConcurrentRequests { get; set; } = 5;
@@ -24,6 +25,10 @@ public class TradingBotOptions
     [Range(0.0, double.MaxValue)] public decimal MinLiquidity { get; set; } = 0m;
     [Range(0.0, double.MaxValue)] public decimal MinVolume24h { get; set; } = 0m;
     public bool LogNoOpportunityCycles { get; set; } = false;
+    public bool LogEmptyOpportunityCycles { get; set; } = false;
+    public bool LogExecutableRankingOnlyWhenNotEmpty { get; set; } = true;
+    public bool LogDiscoveryPages { get; set; } = false;
+    [Range(1, int.MaxValue)] public int MarketScanLimit { get; set; } = 1000;
     public bool LogPrefetchSummary { get; set; } = true;
     [Range(100, int.MaxValue)] public int OrderbookRequestTimeoutMs { get; set; } = 3000;
     [Range(1, int.MaxValue)] public int RateLimitBackoffMs { get; set; } = 1500;

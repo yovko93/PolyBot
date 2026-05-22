@@ -57,6 +57,8 @@ public class MarketDataService
             }
 
             pages++;
+            if (options.LogDiscoveryPages)
+                Console.WriteLine($"[DISCOVERY] Page={pages} Count={batch.Count} TotalSoFar={allMarkets.Count + batch.Count}");
             if (batch.Count == 0) break;
 
             foreach (var market in batch)
@@ -89,6 +91,8 @@ public class MarketDataService
             if (allMarkets.Count >= cap) break;
         }
 
+        if (options.LogDiscoveryPages)
+            Console.WriteLine($"[DISCOVERY] Completed ActiveMarkets={allMarkets.Count} Pages={pages}");
         var summary = new MarketDiscoverySummary(allMarkets.Count, pages, duplicates, inactive, allMarkets.Count);
         return (allMarkets, summary);
     }
