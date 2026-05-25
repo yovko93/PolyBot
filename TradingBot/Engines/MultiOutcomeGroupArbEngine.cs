@@ -18,6 +18,7 @@ public class MultiOutcomeGroupArbEngine
     private readonly OpportunityMonitor? _monitor;
     private readonly RequoteExecutionGate? _requoteGate;
     private readonly ExecutionDecisionService? _decisionService;
+    private readonly MutuallyExclusiveGroupValidator _validator;
 
     // Used only by requote gate. The main execution decision still belongs to PaperTradingEngine.
     private readonly decimal _requoteMinExpectedProfit;
@@ -42,6 +43,7 @@ public class MultiOutcomeGroupArbEngine
         _requoteGate = requoteGate;
         _decisionService = decisionService;
         _requoteMinExpectedProfit = requoteMinExpectedProfit;
+        _validator = new MutuallyExclusiveGroupValidator(new TradingBot.Options.MultiOutcomeArbitrageOptions());
     }
 
     public async Task<MultiOutcomeScanReport> ScanAsync(
@@ -64,6 +66,7 @@ public class MultiOutcomeGroupArbEngine
         var results = await Task.WhenAll(tasks);
 
         var report = BuildReport(results);
+        if (report.GroupsVerified == 0 && report.ExecutableGroups > 0) report = report with { ExecutableGroups = 0 };
 
         PrintSummary(report);
         return report;
@@ -91,11 +94,20 @@ public class MultiOutcomeGroupArbEngine
         CancellationToken ct)
     {
         var groupKey = groupMarkets.First().Group.GroupKey;
+        var groupKind = groupMarkets.First().Group.OutcomeKind;
 
         var snapshots = await LoadSnapshotsAsync(groupMarkets, semaphore, ct);
 
         if (snapshots.Count < 2)
             return GroupScanResult.Empty(groupKey, snapshots.Count, "Candidate", "MissingLeg");
+
+        var validation = _validator.Validate(groupKey, groupKind, snapshots.Select(x=>new BasketArbLeg(x.Snapshot.MarketId,x.Snapshot.MarketId,x.Snapshot.Question,"NO",x.Snapshot.NoAsk?.Price ?? 0m,x.Snapshot.NoAsk?.Size ?? 0m)).ToList());
+
+        if (!validation.IsValidForNoBasketArbitrage)
+        {
+            Console.WriteLine($"[MULTI_CANDIDATE_REJECTED] Group={groupKey} Reason={validation.RejectionReason}");
+            return GroupScanResult.Empty(groupKey, snapshots.Count, validation.VerificationStatus, validation.RejectionReason);
+        }
 
         var noResult = await EvaluateNoBasketAsync(
             groupKey,
@@ -119,7 +131,7 @@ public class MultiOutcomeGroupArbEngine
             YesBasketExecuted: yesResult.Executed,
             YesBasketCost: yesResult.Cost,
             Evaluated: true,
-            VerificationStatus: "HighConfidence",
+            VerificationStatus: "Verified",
             SkipReason: noResult.Executed ? "Executable" : (noResult.Candidate ? "NegativeEdge" : "MissingNoAsk"),
             NoBasketEdge: noResult.Edge
         );
@@ -482,7 +494,8 @@ public class MultiOutcomeGroupArbEngine
 
     private static void PrintSummary(MultiOutcomeScanReport report)
     {
-        Console.WriteLine($"[MULTI_SCAN] Groups={report.GroupsDetected} Verified={report.GroupsVerified} Evaluated={report.GroupsEvaluated} Executable={report.ExecutableGroups} BestNetEdge={report.BestNetEdge:0.####} BestGroup={report.BestGroupKey} TopSkip={report.TopSkipReason}");
+        var rejected = report.GroupsDetected - report.GroupsVerified;
+        Console.WriteLine($"[MULTI_SCAN] CandidateGroups={report.GroupsDetected} VerifiedGroups={report.GroupsVerified} RejectedGroups={rejected} Executable={report.ExecutableGroups} TopReject={report.TopSkipReason}");
     }
 
     private static OutcomeGroupInfo? ExtractGroup(string? question)

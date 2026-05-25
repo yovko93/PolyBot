@@ -5,6 +5,7 @@ namespace TradingBot.Engines;
 
 public class PaperTradingEngine
 {
+    private readonly MutuallyExclusiveGroupValidator _groupValidator = new(new TradingBot.Options.MultiOutcomeArbitrageOptions());
     private readonly Dictionary<string, PaperPosition> _positions = new();
     private readonly object _lock = new();
     private readonly HashSet<string> _executedArbs = new();
@@ -353,6 +354,13 @@ public class PaperTradingEngine
             if (_positionBook == null)
             {
                 Console.WriteLine("[PAPER BASKET SKIP] Position book is not configured.");
+                return false;
+            }
+
+            var gv = _groupValidator.Validate(opportunity.GroupKey, "generic", opportunity.Legs);
+            if (!gv.IsValidForNoBasketArbitrage)
+            {
+                Console.WriteLine($"[PAPER BASKET REJECTED] Reason={gv.RejectionReason} Group={opportunity.GroupKey}");
                 return false;
             }
 
