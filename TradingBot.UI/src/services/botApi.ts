@@ -1,4 +1,4 @@
-import type { BotControlState, BotStatus, Opportunity, PaperPosition, RiskState, ScannerStats, TerminalLogEntry, TradeLogEntry } from '../types/models';
+import type { BotControlState, BotStatus, Opportunity, OpportunityDiagnostics, PaperPosition, RiskState, ScannerStats, TerminalLogEntry, TradeLogEntry } from '../types/models';
 import { BotSignalR } from './botSignalR';
 
 const BASE_URL = ((import.meta as any).env.VITE_API_BASE_URL ?? 'http://localhost:5000').replace(/\/$/, '');
@@ -56,6 +56,7 @@ export const getRisk = async (signal?: AbortSignal): Promise<RiskState | null> =
 export const getTerminalLogs = async (signal?: AbortSignal): Promise<TerminalLogEntry[]> => (await safeRequest<any[]>('/logs/recent', [], signal)).map(mapLog);
 export const getEquity = async (signal?: AbortSignal): Promise<Array<{ timestamp: string; equity: number }>> => (await safeRequest<any[]>('/equity', [], signal)).map(mapEquity);
 export const getControls = async (signal?: AbortSignal): Promise<BotControlState> => mapControls(await request('/controls', signal));
+export const getOpportunityDiagnostics = async (signal?: AbortSignal): Promise<OpportunityDiagnostics | null> => safeRequest<any | null>('/opportunity-diagnostics', null, signal);
 export const pauseScanner = async (): Promise<BotControlState> => mapControls(await request('/controls/pause', undefined, { method: 'POST' }));
 export const resumeScanner = async (): Promise<BotControlState> => mapControls(await request('/controls/resume', undefined, { method: 'POST' }));
 
