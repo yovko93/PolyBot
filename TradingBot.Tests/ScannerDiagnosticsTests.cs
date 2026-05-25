@@ -93,6 +93,24 @@ public class ScannerDiagnosticsTests
         Assert.False(result.Summary.DiscoveryHealthy);
         Assert.NotNull(result.Summary.LastDiscoveryWarning);
     }
+    [Fact]
+    public async Task Pagination_Uses_Effective_Page_Size_When_Endpoint_Caps()
+    {
+        var offsets = new List<int>();
+        using var http = new HttpClient(new FakeHandler((req) =>
+        {
+            var q = System.Web.HttpUtility.ParseQueryString(req.RequestUri!.Query);
+            var offset = int.Parse(q["offset"]!);
+            offsets.Add(offset);
+            if (offset >= 300) return "[]";
+            return Newtonsoft.Json.JsonConvert.SerializeObject(
+                Enumerable.Range(0, 100).Select(i => new Market { id=$"m{offset+i}", conditionId=$"c{offset+i}", active=true, closed=false, archived=false, clobTokenIds = new(){"y","n"}, outcomes = new(){"Yes","No"} }));
+        }));
+        var svc = new MarketDataService(http);
+        await svc.GetMarketsAsync(new TradingBotOptions { DiscoveryPageSize = 200, AbsoluteMaxMarketsSafetyCap = 400 });
+        Assert.Equal(new[] { 0, 100, 200, 300 }, offsets);
+    }
+
 }
 
 file sealed class FakeHandler(Func<HttpRequestMessage,string> func) : HttpMessageHandler
