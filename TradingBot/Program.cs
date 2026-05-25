@@ -338,9 +338,72 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
 
     var edges = top.Select(x => x.EdgePerShare).OrderBy(x => x).ToList();
     var median = edges.Count == 0 ? 0m : edges[edges.Count / 2];
-    var nearMissTop = (scanStats.NearMisses ?? new List<NearMissOpportunity>()).OrderByDescending(x => x.EdgePerShare).Take(options.Diagnostics.NearMissTopN).Select((x,i)=>x with { Rank = i+1 }).ToList();
+    var nearMissTop = (scanStats.NearMisses ?? new List<NearMissOpportunity>()).OrderByDescending(x => x.NetEdge).Take(options.Diagnostics.NearMissTopN).Select((x,i)=>x with { Rank = i+1 }).ToList();
     var skipReasonList = (scanStats.SkipReasons ?? new Dictionary<string,int>()).OrderByDescending(x=>x.Value).Select(x=>new SkipReasonSummary(x.Key, x.Value, null, null)).ToList();
-    var diag = new OpportunityDiagnosticsSnapshot(Guid.NewGuid().ToString("N"), DateTime.UtcNow, marketsScanned, (int)Math.Min(int.MaxValue, s.BatchBooksLoaded), scanStats.BothAsks, scanStats.Candidates, scanStats.PositiveEdgeFound, scanStats.Executed, nearMissTop.Count, scanStats.BestEdgeSeen ?? 0m, scanStats.WorstEdgeSeen ?? 0m, edges.Count==0?0m:edges.Average(), median, nearMissTop.Count==0?0m:nearMissTop.First().MissingToBreakEven, skipReasonList, new [] { new StrategyBreakdownItem("BUY_YES_AND_BUY_NO", marketsScanned, scanStats.Candidates, scanStats.PositiveEdgeFound, scanStats.Executed, scanStats.BestEdgeSeen ?? 0m, nearMissTop.Count, skipReasonList.FirstOrDefault()?.Reason ?? "None") }, (long)(DateTime.UtcNow-scanStart).TotalMilliseconds, nearMissTop, new Dictionary<string,int>{{"minEdge 0.000", edges.Count(x=>x>0m)}, {"minEdge 0.001", edges.Count(x=>x>=0.001m)}, {"minEdge 0.005", edges.Count(x=>x>=0.005m)}});
+    var thresholdSimulation = new ThresholdSimulationSnapshot(
+        ActualPositive: scanStats.PositiveEdgeFound,
+        ZeroBufferPositive: edges.Count(x => x > 0m),
+        ZeroFeePositive: edges.Count(x => x > 0m),
+        RawPositive: edges.Count(x => x > 0m),
+        RelaxedMinEdgePositive: edges.Count(x => x >= 0m),
+        RelaxedMinProfitPositive: edges.Count(x => x >= 0m));
+    var strategyRecommendation = new StrategyRecommendationSnapshot(
+        scanStats.PositiveEdgeFound == 0
+            ? "Single-market BUY_YES_AND_BUY_NO is not producing positive edge. Prioritize multi-outcome NO basket or cross-exchange matching."
+            : "Continue current strategy set and monitor strategy-level diagnostics.",
+        new[]
+        {
+            "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+            "CROSS_EXCHANGE_KALSHI_POLYMARKET"
+        });
+    var singleMarketDescription = new StrategyDescriptor(
+        "BUY_YES_AND_BUY_NO",
+        "Rare",
+        "In binary markets, YES ask + NO ask is usually >= 1 due to spread and buffers.",
+        new[] { "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", "CROSS_EXCHANGE_KALSHI_POLYMARKET", "CrossMarket semantic pairs" });
+    var multiOutcomeGroupDiagnostics = new MultiOutcomeGroupDiagnosticsSnapshot(0, 0, 0, 0, 0, 0m, 0, "NotEvaluatedInThisCycle");
+    var diag = new OpportunityDiagnosticsSnapshot(
+        Guid.NewGuid().ToString("N"),
+        DateTime.UtcNow,
+        marketsScanned,
+        (int)Math.Min(int.MaxValue, s.BatchBooksLoaded),
+        scanStats.BothAsks,
+        scanStats.Candidates,
+        scanStats.PositiveEdgeFound,
+        scanStats.PositiveEdgeFound,
+        scanStats.Executed,
+        nearMissTop.Count,
+        scanStats.BestEdgeSeen ?? 0m,
+        scanStats.BestEdgeSeen ?? 0m,
+        edges.Count == 0 ? 0m : edges.Average(),
+        edges.Count == 0 ? 0m : edges.Average(),
+        nearMissTop.Count == 0 ? 0m : nearMissTop.Min(x => x.GrossCost),
+        nearMissTop.Count == 0 ? 0m : nearMissTop.Min(x => x.NetCost),
+        options.SingleMarketFees,
+        options.SingleMarketSlippage,
+        0m,
+        skipReasonList,
+        new[]
+        {
+            new StrategyBreakdownItem(
+                "BUY_YES_AND_BUY_NO",
+                marketsScanned,
+                scanStats.Candidates,
+                scanStats.PositiveEdgeFound,
+                scanStats.PositiveEdgeFound,
+                scanStats.Executed,
+                scanStats.BestEdgeSeen ?? 0m,
+                scanStats.BestEdgeSeen ?? 0m,
+                edges.Count == 0 ? 0m : edges.Average(),
+                nearMissTop.Count,
+                skipReasonList.FirstOrDefault()?.Reason ?? "None")
+        },
+        (long)(DateTime.UtcNow-scanStart).TotalMilliseconds,
+        nearMissTop,
+        thresholdSimulation,
+        strategyRecommendation,
+        singleMarketDescription,
+        multiOutcomeGroupDiagnostics);
     state.SetOpportunityDiagnostics(diag);
     state.SetScannerStats(new ScannerStatsDto(
         MarketsScanned: marketsScanned,
