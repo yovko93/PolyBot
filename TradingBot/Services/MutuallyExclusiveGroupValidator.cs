@@ -69,7 +69,7 @@ public class MutuallyExclusiveGroupValidator
     private static bool IsAllowlistMatch(VerifiedMultiOutcomeGroupConfig config, IReadOnlyList<BasketArbLeg> legs)
     {
         var marketIds = legs.Select(x => x.MarketId).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var conditionIds = legs.Select(x => x.ConditionId).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var conditionIds = legs.Select(x => x.TokenId).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (config.MarketIds.Count > 0 && !config.MarketIds.All(marketIds.Contains)) return false;
         if (config.ConditionIds.Count > 0 && !config.ConditionIds.All(conditionIds.Contains)) return false;
         return true;
