@@ -289,7 +289,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         {
             lastError = ex.Message;
             uiLogger.LogError("scanner", $"{{\"event\":\"scan_error\",\"message\":\"{ex.Message.Replace("\"", "'")}\"}}");
-            SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, 0, started, lastError, new SingleMarketScanStats(0,0,0,0,0,0,0,0), filtering, lastDiscoverySummary, rollingOffset, options.ScanBatchSize, discoveredMarkets.Count, discoveryStartedAt, discoveryCompletedAt, emptyCycles, options.MarketScanLimit, 0, options.MaxMarketsToDiscover, options, "Error");
+            SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, 0, started, lastError, new SingleMarketScanStats(0,0,0,0,0,0,0,0), filtering, lastDiscoverySummary, rollingOffset, options.ScanBatchSize, discoveredMarkets.Count, discoveryStartedAt, discoveryCompletedAt, emptyCycles, options.MarketScanLimit, 0, options.MaxMarketsToDiscover, options, "Error", new MultiOutcomeGroupArbEngine.MultiOutcomeScanReport(0, 0, 0, 0, 0, 0, 0m, string.Empty, "Error"));
         }
 
         await Task.Delay(options.ScanIntervalMs, stoppingToken);
