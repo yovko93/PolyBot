@@ -32,6 +32,14 @@ public class Market
     public bool? archived { get; set; }
     [JsonProperty("accepting_orders")]
     public bool? accepting_orders { get; set; }
+    [JsonProperty("acceptingOrders")]
+    public bool? acceptingOrders { get; set; }
+    [JsonProperty("enableOrderBook")]
+    public bool? enableOrderBook { get; set; }
+    [JsonProperty("endDate")]
+    public string? endDate { get; set; }
+    [JsonProperty("endDateIso")]
+    public string? endDateIso { get; set; }
     [JsonProperty("liquidity")]
     public decimal? liquidity { get; set; }
     [JsonProperty("volume24hr")]

@@ -4,7 +4,27 @@ using TradingBot.Options;
 
 namespace TradingBot.Services;
 
-public record MarketDiscoverySummary(int MarketsDiscovered, int PagesFetched, int DuplicatesRemoved, int InactiveSkipped, int ActiveMarketsAvailable);
+public record MarketDiscoverySummary(
+    int MarketsDiscovered,
+    int PagesFetched,
+    int DuplicatesRemoved,
+    int InactiveSkipped,
+    int ActiveMarketsAvailable,
+    int RawLoadedTotal,
+    int UniqueMarketsTotal,
+    int SkippedClosed,
+    int SkippedArchived,
+    int SkippedInactive,
+    int SkippedMissingTokenIds,
+    int SkippedMissingOutcomes,
+    int SkippedPastEndDate,
+    int SkippedInvalidShape,
+    int SkippedUnknownStatus,
+    bool DiscoveryHealthy,
+    string PaginationMode,
+    string? LastPaginationCursor,
+    string? LastDiscoveryWarning,
+    DateTime LastDiscoveryCompletedAtUtc);
 
 public class MarketDataService
 {
@@ -24,7 +44,18 @@ public class MarketDataService
         var softLimit = options.MaxMarketsToDiscover;
         var pages = 0;
         var duplicates = 0;
-        var inactive = 0;
+        var rawLoadedTotal = 0;
+        var skippedClosed = 0;
+        var skippedArchived = 0;
+        var skippedInactive = 0;
+        var skippedMissingTokenIds = 0;
+        var skippedMissingOutcomes = 0;
+        var skippedPastEndDate = 0;
+        var skippedInvalidShape = 0;
+        var skippedUnknownStatus = 0;
+        var sampled = 0;
+        var paginationMode = "offset";
+        string? lastWarning = null;
 
         for (var offset = 0; offset < cap; offset += pageSize)
         {
@@ -57,16 +88,33 @@ public class MarketDataService
             }
 
             pages++;
+            rawLoadedTotal += batch.Count;
             if (options.LogDiscoveryPages)
-                Console.WriteLine($"[DISCOVERY] Page={pages} Count={batch.Count} TotalSoFar={allMarkets.Count + batch.Count}");
+                Console.WriteLine($"[DISCOVERY] Page={pages} Limit={pageSize} Offset={offset} Cursor=<none> Count={batch.Count} RawTotal={rawLoadedTotal} UniqueTotal={seen.Count} ActiveTotal={allMarkets.Count} InactiveSkipped={skippedClosed + skippedArchived + skippedInactive + skippedMissingTokenIds + skippedMissingOutcomes + skippedPastEndDate + skippedInvalidShape + skippedUnknownStatus}");
             if (batch.Count == 0) break;
 
             foreach (var market in batch)
             {
                 if (market is null) continue;
-                if (market.active != true || market.closed == true || market.archived == true || market.accepting_orders != true)
+                var (isTradable, skipReason) = IsTradablePolymarketMarket(market);
+                if (options.LogRawMarketSamples && sampled < options.RawMarketSampleCount)
                 {
-                    inactive++;
+                    sampled++;
+                    Console.WriteLine($"[DISCOVERY_SAMPLE] id={market.id} conditionId={market.conditionId} q=\"{(market.question ?? string.Empty).Replace("\"", "'")}\" active={Format(market.active)} closed={Format(market.closed)} archived={Format(market.archived)} accepting_orders={Format(market.accepting_orders)} tokens={market.clobTokenIds?.Count ?? 0} outcomes={market.outcomes?.Count ?? 0} endDate={market.endDate ?? market.endDateIso} included={isTradable} reason={skipReason ?? "Included"}");
+                }
+                if (!isTradable)
+                {
+                    switch (skipReason)
+                    {
+                        case "Closed": skippedClosed++; break;
+                        case "Archived": skippedArchived++; break;
+                        case "Inactive": skippedInactive++; break;
+                        case "MissingTokenIds": skippedMissingTokenIds++; break;
+                        case "MissingOutcomes": skippedMissingOutcomes++; break;
+                        case "PastEndDate": skippedPastEndDate++; break;
+                        case "InvalidShape": skippedInvalidShape++; break;
+                        default: skippedUnknownStatus++; break;
+                    }
                     continue;
                 }
 
@@ -79,7 +127,7 @@ public class MarketDataService
 
                 if (market.liquidityNum < options.MinLiquidity || market.volume24hrNum < options.MinVolume24h)
                 {
-                    inactive++;
+                    skippedInactive++;
                     continue;
                 }
 
@@ -91,9 +139,35 @@ public class MarketDataService
             if (allMarkets.Count >= cap) break;
         }
 
+        var inactive = skippedClosed + skippedArchived + skippedInactive + skippedMissingTokenIds + skippedMissingOutcomes + skippedPastEndDate + skippedInvalidShape + skippedUnknownStatus;
+        if (allMarkets.Count == 0)
+        {
+            lastWarning = "No active markets discovered. This usually means pagination/filtering/model mapping is wrong or API returned only inactive markets.";
+            Console.WriteLine($"[DISCOVERY_WARNING] {lastWarning}");
+        }
         if (options.LogDiscoveryPages)
-            Console.WriteLine($"[DISCOVERY] Completed ActiveMarkets={allMarkets.Count} Pages={pages}");
-        var summary = new MarketDiscoverySummary(allMarkets.Count, pages, duplicates, inactive, allMarkets.Count);
+            Console.WriteLine($"[DISCOVERY] Completed Raw={rawLoadedTotal} Unique={seen.Count} Active={allMarkets.Count} Pages={pages} SkippedClosed={skippedClosed} SkippedArchived={skippedArchived} SkippedInactive={skippedInactive} SkippedMissingTokenIds={skippedMissingTokenIds} SkippedMissingOutcomes={skippedMissingOutcomes} SkippedPastEndDate={skippedPastEndDate} SkippedInvalidShape={skippedInvalidShape} SkippedUnknownStatus={skippedUnknownStatus}");
+        var summary = new MarketDiscoverySummary(allMarkets.Count, pages, duplicates, inactive, allMarkets.Count, rawLoadedTotal, seen.Count, skippedClosed, skippedArchived, skippedInactive, skippedMissingTokenIds, skippedMissingOutcomes, skippedPastEndDate, skippedInvalidShape, skippedUnknownStatus, allMarkets.Count > 0, paginationMode, null, lastWarning, DateTime.UtcNow);
         return (allMarkets, summary);
+    }
+
+    private static string Format(bool? value) => value.HasValue ? value.Value.ToString().ToLowerInvariant() : "null";
+
+    public static (bool IsTradable, string? SkipReason) IsTradablePolymarketMarket(Market market)
+    {
+        if (market.closed == true) return (false, "Closed");
+        if (market.archived == true) return (false, "Archived");
+        if (market.active == false) return (false, "Inactive");
+        if (market.clobTokenIds is null || market.clobTokenIds.Count < 2) return (false, "MissingTokenIds");
+        if (market.outcomes is null || market.outcomes.Count < 2) return (false, "MissingOutcomes");
+        if (TryReadEndDateUtc(market, out var endDateUtc) && endDateUtc < DateTime.UtcNow) return (false, "PastEndDate");
+        return (true, null);
+    }
+
+    private static bool TryReadEndDateUtc(Market market, out DateTime endDateUtc)
+    {
+        endDateUtc = default;
+        var raw = market.endDateIso ?? market.endDate;
+        return !string.IsNullOrWhiteSpace(raw) && DateTime.TryParse(raw, out endDateUtc);
     }
 }
