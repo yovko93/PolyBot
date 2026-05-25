@@ -28,6 +28,8 @@ public class TradingBotOptions
     public bool LogEmptyOpportunityCycles { get; set; } = false;
     public bool LogExecutableRankingOnlyWhenNotEmpty { get; set; } = true;
     public bool LogDiscoveryPages { get; set; } = false;
+    public bool LogRawMarketSamples { get; set; } = false;
+    [Range(1, 50)] public int RawMarketSampleCount { get; set; } = 3;
     [Range(1, int.MaxValue)] public int MarketScanLimit { get; set; } = 1000;
     public bool LogPrefetchSummary { get; set; } = true;
     [Range(100, int.MaxValue)] public int OrderbookRequestTimeoutMs { get; set; } = 3000;
@@ -37,6 +39,9 @@ public class TradingBotOptions
     public bool ShowZeroEdgeOpportunities { get; set; } = false;
     public bool LogScanSummary { get; set; } = true;
     public bool LogPrefetchDetails { get; set; } = false;
+    public bool LogCompactScanSummary { get; set; } = true;
+    public bool LogEveryScanCycle { get; set; } = true;
+    public bool LogEmptyExecutableRanking { get; set; } = false;
     public bool LogOnlyExecutableOpportunities { get; set; } = false;
     public bool EnableLiveExecution { get; set; } = false;
     public bool EnablePaperTrading { get; set; } = true;

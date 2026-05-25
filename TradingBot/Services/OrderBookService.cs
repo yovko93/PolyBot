@@ -34,6 +34,7 @@ public class OrderBookService : IOrderBookProvider
     }
 
     public bool DisableSingleBookHttpFallback { get; set; } = false;
+    public bool LogPrefetchDetails { get; set; } = false;
 
     public async Task<BinaryOrderBookSnapshot?> GetBinarySnapshotAsync(
         Market market,
@@ -180,10 +181,11 @@ public class OrderBookService : IOrderBookProvider
             }
         }
 
-        Console.WriteLine($"[PREFETCH] Binary snapshots loaded: {snapshotsLoaded}/{validMarkets.Count}");
-        Console.WriteLine(
-    $"[PREFETCH] Markets={validMarkets.Count}, Tokens={tokenIds.Count}, Books={books.Count}, Snapshots={snapshotsLoaded}"
-);
+        if (LogPrefetchDetails)
+        {
+            Console.WriteLine($"[PREFETCH] Binary snapshots loaded: {snapshotsLoaded}/{validMarkets.Count}");
+            Console.WriteLine($"[PREFETCH] Markets={validMarkets.Count}, Tokens={tokenIds.Count}, Books={books.Count}, Snapshots={snapshotsLoaded}");
+        }
     }
 
     public OrderBookServiceStats GetStats()
