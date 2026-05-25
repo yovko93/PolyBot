@@ -91,8 +91,13 @@ public class MultiOutcomeArbitrageOptions
 {
     public bool Enabled { get; set; } = true;
     public bool AllowVerifiedGroups { get; set; } = true;
-    public bool AllowHighConfidenceGroups { get; set; } = true;
+    public bool AllowHighConfidenceGroups { get; set; } = false;
     public bool AllowCandidateGroupsForExecution { get; set; } = false;
+    public bool AllowGenericGroupsForExecution { get; set; } = false;
+    public bool AllowlistOnlyExecution { get; set; } = true;
+    public decimal MaxEdgePerBasket { get; set; } = 0.20m;
+    public decimal MaxExpectedProfitRatio { get; set; } = 0.50m;
+    public decimal SuspiciousMinCostPerBasket { get; set; } = 0.01m;
     public int MinOutcomes { get; set; } = 2;
     public int MaxOutcomes { get; set; } = 50;
     public decimal MinMultiOutcomeEdge { get; set; } = 0.001m;
