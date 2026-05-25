@@ -195,7 +195,7 @@ public class SingleMarketOrderBookArbEngine
 
             if (edge < _minEdgePerShare)
             {
-                return new SingleMarketScanResult(true,true,false,false,adjustedCost,book.Question,edge,OpportunitySkipReason.InsufficientLiquidity.ToString(),null);
+                return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,OpportunitySkipReason.NegativeEdge.ToString(),null);
             }
 
             var quantity = executableQuantity;
@@ -205,7 +205,7 @@ public class SingleMarketOrderBookArbEngine
                 return new SingleMarketScanResult(
                     BookOk: true,
                     BothAsks: true,
-                    Candidate: false,
+                    Candidate: true,
                     Executed: false,
                     AdjustedCost: adjustedCost,
                     Question: book.Question,

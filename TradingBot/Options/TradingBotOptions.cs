@@ -30,7 +30,10 @@ public class TradingBotOptions
     public bool LogDiscoveryPages { get; set; } = false;
     public bool LogRawMarketSamples { get; set; } = false;
     [Range(1, 50)] public int RawMarketSampleCount { get; set; } = 3;
-    [Range(1, int.MaxValue)] public int MarketScanLimit { get; set; } = 1000;
+    [Range(0, int.MaxValue)] public int MarketScanLimit { get; set; } = 1000;
+    public bool UseAllDiscoveredMarkets { get; set; } = true;
+    [Range(0, int.MaxValue)] public int MaxMarketsInPool { get; set; } = 0;
+    [Range(0, int.MaxValue)] public int PriorityPoolLimit { get; set; } = 0;
     public bool LogPrefetchSummary { get; set; } = true;
     [Range(100, int.MaxValue)] public int OrderbookRequestTimeoutMs { get; set; } = 3000;
     [Range(1, int.MaxValue)] public int RateLimitBackoffMs { get; set; } = 1500;
@@ -72,4 +75,7 @@ public class DiagnosticsOptions
     public bool LogNearMissSummary { get; set; } = true;
     public bool LogNearMissDetails { get; set; } = false;
     public bool EnableThresholdSimulation { get; set; } = true;
+    public bool LogInsufficientLiquiditySamples { get; set; } = true;
+    public int InsufficientLiquiditySampleCount { get; set; } = 10;
+    public bool EnableNearMissDiagnostics { get; set; } = true;
 }

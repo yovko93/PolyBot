@@ -57,7 +57,7 @@ public class MarketDataService
         var paginationMode = "offset";
         string? lastWarning = null;
 
-        for (var offset = 0; offset < cap; offset += pageSize)
+        for (var offset = 0; offset < cap;)
         {
             if (ct.IsCancellationRequested) break;
             if (softLimit > 0 && allMarkets.Count >= softLimit) break;
@@ -92,6 +92,7 @@ public class MarketDataService
             if (options.LogDiscoveryPages)
                 Console.WriteLine($"[DISCOVERY] Page={pages} Limit={pageSize} Offset={offset} Cursor=<none> Count={batch.Count} RawTotal={rawLoadedTotal} UniqueTotal={seen.Count} ActiveTotal={allMarkets.Count} InactiveSkipped={skippedClosed + skippedArchived + skippedInactive + skippedMissingTokenIds + skippedMissingOutcomes + skippedPastEndDate + skippedInvalidShape + skippedUnknownStatus}");
             if (batch.Count == 0) break;
+            var effectivePageSize = Math.Min(pageSize, batch.Count);
 
             foreach (var market in batch)
             {
@@ -137,6 +138,7 @@ public class MarketDataService
             }
 
             if (allMarkets.Count >= cap) break;
+            offset += Math.Max(1, effectivePageSize);
         }
 
         var inactive = skippedClosed + skippedArchived + skippedInactive + skippedMissingTokenIds + skippedMissingOutcomes + skippedPastEndDate + skippedInvalidShape + skippedUnknownStatus;
