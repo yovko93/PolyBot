@@ -28,6 +28,7 @@ public class TradingBotOptions
     public bool LogEmptyOpportunityCycles { get; set; } = false;
     public bool LogExecutableRankingOnlyWhenNotEmpty { get; set; } = true;
     public bool LogDiscoveryPages { get; set; } = false;
+    public bool LogDiscoverySummary { get; set; } = true;
     public bool LogRawMarketSamples { get; set; } = false;
     [Range(1, 50)] public int RawMarketSampleCount { get; set; } = 3;
     [Range(0, int.MaxValue)] public int MarketScanLimit { get; set; } = 1000;
@@ -69,7 +70,8 @@ public class DiagnosticsOptions
     public bool EnableOpportunityDiagnostics { get; set; } = true;
     public bool TrackNearMisses { get; set; } = true;
     public int NearMissTopN { get; set; } = 25;
-    public decimal NearMissMaxNegativeEdge { get; set; } = 0.02m;
+    public decimal NearMissMaxNegativeNetEdge { get; set; } = 0.02m;
+    public bool IncludeRawEdgeBreakdown { get; set; } = true;
     public bool IncludeNegativeEdgeInDiagnostics { get; set; } = true;
     public bool IncludeNegativeEdgeInMainOpportunities { get; set; } = false;
     public bool LogNearMissSummary { get; set; } = true;

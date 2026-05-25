@@ -129,14 +129,17 @@ public class SingleMarketOrderBookArbEngine
                             book.YesAsk.Price,
                             book.NoAsk.Price,
                             rawCost,
+                            1m - rawCost,
                             _feeBuffer,
                             _slippageBuffer,
+                            0m,
                             adjustedCost,
                             edge,
                             0m,
                             0m,
-                            Math.Abs(edge),
                             OpportunitySkipReason.NegativeEdge.ToString(),
+                            Math.Max(0m, rawCost - 1m),
+                            Math.Max(0m, adjustedCost - 1m),
                             0)
                         : null);
             }
