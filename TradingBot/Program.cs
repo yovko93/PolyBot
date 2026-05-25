@@ -105,12 +105,15 @@ await apiTask;
 
 static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, TradingBotOptions options, OpportunityFilteringOptions filtering, CancellationToken stoppingToken)
 {
+    var scannerInstanceId = Guid.NewGuid().ToString("N");
+    var scannerStartedAt = DateTime.UtcNow;
+    Console.WriteLine($"[SCANNER] Background scanner started InstanceId={scannerInstanceId}");
     using var http = new HttpClient();
     http.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0");
     http.Timeout = TimeSpan.FromSeconds(options.ExternalApiTimeoutSeconds);
 
     var marketService = new MarketDataService(http);
-    var orderbookService = new OrderBookService(http) { DisableSingleBookHttpFallback = true };
+    var orderbookService = new OrderBookService(http) { DisableSingleBookHttpFallback = true, LogPrefetchDetails = options.LogPrefetchDetails };
     var crossOptions = new CrossExchangeOptions();
     options.GetType();
     var feeOptions = new ExchangeFeesOptions();
@@ -151,6 +154,13 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var kalshiBookService = new KalshiOrderbookService(kalshiHttp, kalshiOptions);
     var discoveredMarkets = new List<Market>();
     var rollingOffset = 0;
+    var scanId = 0L;
+    var fullCoverageCompletedCount = 0;
+    var cyclesCompletedSinceDiscovery = 0;
+    var totalMarketsScannedSinceStart = 0L;
+    var duplicateBatchWarnings = 0;
+    var lastBatchFingerprint = "";
+    var repeatedBatchCount = 0;
     var lastDiscoveryAt = default(DateTime);
     var discoveryStartedAt = default(DateTime);
     var discoveryCompletedAt = default(DateTime);
@@ -180,6 +190,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 lastDiscoverySummary = discovery.Summary;
                 lastDiscoveryAt = DateTime.UtcNow;
                 discoveryCompletedAt = lastDiscoveryAt;
+                cyclesCompletedSinceDiscovery = 0;
                 if (options.LogPrefetchSummary)
                     Console.WriteLine($"[DISCOVERY] marketsDiscovered={lastDiscoverySummary.MarketsDiscovered}, pagesFetched={lastDiscoverySummary.PagesFetched}, duplicatesRemoved={lastDiscoverySummary.DuplicatesRemoved}, inactiveSkipped={lastDiscoverySummary.InactiveSkipped}, activeMarketsAvailable={lastDiscoverySummary.ActiveMarketsAvailable}, rawLoadedTotal={lastDiscoverySummary.RawLoadedTotal}, uniqueMarketsTotal={lastDiscoverySummary.UniqueMarketsTotal}, skippedClosed={lastDiscoverySummary.SkippedClosed}, skippedArchived={lastDiscoverySummary.SkippedArchived}, skippedMissingTokenIds={lastDiscoverySummary.SkippedMissingTokenIds}, skippedInvalidShape={lastDiscoverySummary.SkippedInvalidShape}");
             }
@@ -188,7 +199,15 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             var scanPool = discoveredMarkets.Take(effectiveMarketLimit).ToList();
             var batchSize = options.Mode == "AllAtOnce" ? scanPool.Count : Math.Min(options.ScanBatchSize, scanPool.Count);
             batchSize = Math.Min(batchSize, options.MaxOrderbooksPerCycle);
+            var currentRollingOffsetBefore = rollingOffset;
             var filtered = BuildRollingBatch(scanPool, ref rollingOffset, batchSize, options);
+            var currentRollingOffsetAfter = rollingOffset;
+            var batchStartIndex = filtered.Count == 0 ? 0 : currentRollingOffsetBefore;
+            var batchEndIndex = filtered.Count == 0 ? 0 : ((currentRollingOffsetBefore + filtered.Count - 1) % Math.Max(1, scanPool.Count));
+            if (scanPool.Count > 0 && currentRollingOffsetAfter < currentRollingOffsetBefore) fullCoverageCompletedCount++;
+            cyclesCompletedSinceDiscovery++;
+            totalMarketsScannedSinceStart += filtered.Count;
+            scanId++;
             var orderbookSemaphore = new SemaphoreSlim(options.MaxConcurrentOrderbookRequests);
             await orderbookService.PrefetchBinarySnapshotsAsync(filtered);
             var scanStats = await singleMarketArb.ScanAsync(filtered!, paper, orderbookSemaphore);
@@ -210,6 +229,16 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             }
             var cycleTop = monitor.GetTopCycleRecords(200,false);
             var executableCount = cycleTop.Count(x=>x.IsExecutable);
+            var batchMarketIds = filtered.Select(x => x.id ?? "").Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+            var distinctMarketIdsInBatch = batchMarketIds.Distinct(StringComparer.Ordinal).Count();
+            var batchFingerprint = string.Join("|", batchMarketIds);
+            if (batchFingerprint == lastBatchFingerprint) repeatedBatchCount++; else repeatedBatchCount = 1;
+            lastBatchFingerprint = batchFingerprint;
+            if (repeatedBatchCount >= 3)
+            {
+                duplicateBatchWarnings++;
+                Console.WriteLine($"[SCAN_WARNING] Same market batch repeated {repeatedBatchCount} times. Rolling cursor may be stuck. Range={batchStartIndex}-{batchEndIndex}");
+            }
             if (executableCount > 0)
             {
                 if (!options.LogOnlyExecutableOpportunities) monitor.PrintCycleRanking(top: 10, executableOnly: false);
@@ -219,8 +248,15 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             else
             {
                 emptyCycles++;
-                if (options.LogEmptyOpportunityCycles || options.LogNoOpportunityCycles)
+                if (options.LogEmptyExecutableRanking && (options.LogEmptyOpportunityCycles || options.LogNoOpportunityCycles))
                     Console.WriteLine($"[SCAN] Markets={filtered.Count} Books={scanStats.BookOk} Candidates={scanStats.Candidates} Positive={scanStats.PositiveEdgeFound} Executable=0 BestEdge={scanStats.BestEdgeSeen ?? 0m:0.####} NearMiss={scanStats.NearMisses?.Count ?? 0} DurationMs={(long)(DateTime.UtcNow - started).TotalMilliseconds}");
+            }
+            if (options.LogCompactScanSummary && options.LogEveryScanCycle)
+            {
+                var coveragePercent = scanPool.Count == 0 ? 0 : Math.Min(100m, (decimal)Math.Min(scanPool.Count, cyclesCompletedSinceDiscovery * Math.Max(1, batchSize)) / scanPool.Count * 100m);
+                var estimatedCyclesToFullCoverage = batchSize == 0 ? 0 : (int)Math.Ceiling(scanPool.Count / (double)batchSize);
+                var topSkipReason = scanStats.SkipReasons?.OrderByDescending(x => x.Value).FirstOrDefault().Key ?? "None";
+                Console.WriteLine($"[SCAN] Id={scanId} Pool={scanPool.Count} Batch={batchSize} Range={batchStartIndex}-{batchEndIndex} NextOffset={currentRollingOffsetAfter} Coverage={coveragePercent:0.0}% Markets={filtered.Count} Tokens={filtered.Count*2} Books={scanStats.BookOk} Snapshots={filtered.Count} Candidates={scanStats.Candidates} Positive={scanStats.PositiveEdgeFound} Executable={scanStats.Executed} BestEdge={scanStats.BestEdgeSeen ?? 0m:0.####} NearMiss={scanStats.NearMisses?.Count ?? 0} TopSkip={topSkipReason} FirstMarket={filtered.FirstOrDefault()?.id ?? "-"} LastMarket={filtered.LastOrDefault()?.id ?? "-"} DistinctMarketIds={distinctMarketIdsInBatch} DurationMs={(long)(DateTime.UtcNow - started).TotalMilliseconds}");
             }
             monitor.FlushCsv();
             SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, filtered.Count, started, null, scanStats, filtering, lastDiscoverySummary, rollingOffset, options.ScanBatchSize, discoveredMarkets.Count, discoveryStartedAt, discoveryCompletedAt, emptyCycles, options.MarketScanLimit, effectiveMarketLimit, options.MaxMarketsToDiscover, options);

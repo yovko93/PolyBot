@@ -39,6 +39,9 @@ public class TradingBotOptions
     public bool ShowZeroEdgeOpportunities { get; set; } = false;
     public bool LogScanSummary { get; set; } = true;
     public bool LogPrefetchDetails { get; set; } = false;
+    public bool LogCompactScanSummary { get; set; } = true;
+    public bool LogEveryScanCycle { get; set; } = true;
+    public bool LogEmptyExecutableRanking { get; set; } = false;
     public bool LogOnlyExecutableOpportunities { get; set; } = false;
     public bool EnableLiveExecution { get; set; } = false;
     public bool EnablePaperTrading { get; set; } = true;
