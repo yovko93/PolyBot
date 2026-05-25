@@ -179,3 +179,5 @@ public record ScannerStatsDto(
 public record TerminalLogEntryDto(string Id,DateTime Timestamp,string Level,string Source,string Message,long Sequence);
 public record EquityPointDto(DateTime Timestamp, decimal Equity, long Sequence);
 public record BotControlStateDto(bool IsPaused, string Reason, DateTime UpdatedAtUtc, long Sequence);
+
+public record MultiOutcomeDiagnosticsDto(int CandidateGroupsCount,int VerifiedGroupsCount,int RejectedGroupsCount,int ExecutableGroupsCount,Dictionary<string,int> RejectedByReason,IReadOnlyList<string> TopRejectedSamples,IReadOnlyList<string> TopCandidateGroupsForVerification,int AllowlistLoadedCount,IReadOnlyList<string> MissingVerifiedGroups,string LastScanId,DateTime Timestamp,long Sequence);

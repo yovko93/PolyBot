@@ -65,6 +65,8 @@ public class TradingBotOptions
     public DiagnosticsOptions Diagnostics { get; set; } = new();
     public MultiOutcomeArbitrageOptions MultiOutcomeArbitrage { get; set; } = new();
     public MultiOutcomeLoggingOptions Logging { get; set; } = new();
+    public MultiOutcomeReviewOptions MultiOutcomeReview { get; set; } = new();
+    public RuntimeStateOptions RuntimeState { get; set; } = new();
 }
 
 public class DiagnosticsOptions
@@ -114,4 +116,31 @@ public class MultiOutcomeLoggingOptions
 {
     public bool LogMultiOutcomeSummary { get; set; } = true;
     public bool LogMultiOutcomeDetailsOnlyWhenExecutable { get; set; } = true;
+    public bool LogRejectedMultiOutcomeCandidates { get; set; } = false;
+    public int RejectedCandidateSampleSize { get; set; } = 5;
+    public bool LogRejectedCandidateSummary { get; set; } = true;
+    public bool LogRejectedMultiOutcomeSummary { get; set; } = true;
+    public int RejectedMultiOutcomeSampleSize { get; set; } = 5;
+    public bool LogBookCacheMissDetails { get; set; } = false;
+    public int BookCacheMissSampleSize { get; set; } = 5;
+}
+
+
+public class MultiOutcomeReviewOptions
+{
+    public bool Enabled { get; set; } = true;
+    public int TopCandidateGroupsForReview { get; set; } = 50;
+    public int MinDetectedMarkets { get; set; } = 2;
+    public string SortBy { get; set; } = "BestNetEdge";
+    public bool ExportCandidates { get; set; } = true;
+    public int ExportIntervalMinutes { get; set; } = 10;
+    public string ExportPath { get; set; } = "exports/multi-outcome-candidates-latest.json";
+}
+
+public class RuntimeStateOptions
+{
+    public int MaxRejectedMultiOutcomeSamples { get; set; } = 100;
+    public int MaxCandidateGroupsForReview { get; set; } = 50;
+    public int MaxMultiOutcomeDiagnosticsHistory { get; set; } = 100;
+    public int MaxRecentLogs { get; set; } = 500;
 }
