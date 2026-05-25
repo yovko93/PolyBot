@@ -105,7 +105,6 @@ public class MultiOutcomeGroupArbEngine
 
         if (!validation.IsValidForNoBasketArbitrage)
         {
-            Console.WriteLine($"[MULTI_CANDIDATE_REJECTED] Group={groupKey} Reason={validation.RejectionReason}");
             return GroupScanResult.Empty(groupKey, snapshots.Count, validation.VerificationStatus, validation.RejectionReason);
         }
 
@@ -488,14 +487,18 @@ public class MultiOutcomeGroupArbEngine
         var scannedGroups = results.Length;
         var evaluated = results.Count(x => x.Evaluated);
         var executable = results.Count(x => x.NoBasketExecuted);
-        var best = results.OrderByDescending(x => x.NoBasketEdge ?? decimal.MinValue).FirstOrDefault();
-        return new MultiOutcomeScanReport(scannedGroups, evaluated, results.Count(x=>x.VerificationStatus=="Verified"), results.Count(x=>x.VerificationStatus=="HighConfidence"), results.Count(x=>x.VerificationStatus=="Candidate"), executable, best?.NoBasketEdge ?? 0m, best?.GroupKey ?? "", results.GroupBy(x=>x.SkipReason).OrderByDescending(g=>g.Count()).FirstOrDefault()?.Key ?? "None");
+        var verified = results.Count(x=>x.VerificationStatus=="Verified");
+        var bestCandidate = results.Where(x=>x.VerificationStatus!="Verified").OrderByDescending(x => x.NoBasketEdge ?? decimal.MinValue).FirstOrDefault();
+        var bestVerified = results.Where(x=>x.VerificationStatus=="Verified").OrderByDescending(x => x.NoBasketEdge ?? decimal.MinValue).FirstOrDefault();
+        var rejectedByReason = results.Where(x=>x.VerificationStatus!="Verified").GroupBy(x=>x.SkipReason).ToDictionary(g=>g.Key,g=>g.Count());
+        return new MultiOutcomeScanReport(scannedGroups, evaluated, verified, results.Count(x=>x.VerificationStatus=="HighConfidence"), results.Count(x=>x.VerificationStatus=="Candidate"), executable, bestCandidate?.NoBasketEdge ?? 0m, bestVerified?.NoBasketEdge ?? 0m, results.Where(x=>x.NoBasketExecuted).OrderByDescending(x=>x.NoBasketEdge ?? decimal.MinValue).FirstOrDefault()?.NoBasketEdge ?? 0m, bestVerified?.GroupKey ?? "", rejectedByReason.OrderByDescending(g=>g.Value).FirstOrDefault().Key ?? "None", rejectedByReason, results.Where(x=>x.VerificationStatus!="Verified").Take(25).Select(x=>$"{x.GroupKey}:{x.SkipReason}").ToArray());
     }
 
     private static void PrintSummary(MultiOutcomeScanReport report)
     {
         var rejected = report.GroupsDetected - report.GroupsVerified;
-        Console.WriteLine($"[MULTI_SCAN] CandidateGroups={report.GroupsDetected} VerifiedGroups={report.GroupsVerified} RejectedGroups={rejected} Executable={report.ExecutableGroups} TopReject={report.TopSkipReason}");
+        var reasonSummary = string.Join(",", report.RejectedByReason.Select(x => $"{x.Key}:{x.Value}"));
+        Console.WriteLine($"[MULTI_SCAN] Candidates={report.GroupsDetected} Verified={report.GroupsVerified} Rejected={rejected} Executable={report.ExecutableGroups} BestCandidateEdge={report.BestCandidateEdge:0.####} BestVerifiedEdge={report.BestVerifiedEdge:0.####} BestExecutableEdge={report.BestExecutableEdge:0.####} TopReject={report.TopSkipReason} RejectedByReason={{{reasonSummary}}}");
     }
 
     private static OutcomeGroupInfo? ExtractGroup(string? question)
@@ -732,5 +735,5 @@ public class MultiOutcomeGroupArbEngine
             new(groupKey, marketsInGroup, false, false, null, null, false, false, null, false, verificationStatus, skipReason);
     }
 
-    public record MultiOutcomeScanReport(int GroupsDetected, int GroupsEvaluated, int GroupsVerified, int GroupsHighConfidence, int GroupsCandidate, int ExecutableGroups, decimal BestNetEdge, string BestGroupKey, string TopSkipReason);
+    public record MultiOutcomeScanReport(int GroupsDetected, int GroupsEvaluated, int GroupsVerified, int GroupsHighConfidence, int GroupsCandidate, int ExecutableGroups, decimal BestCandidateEdge, decimal BestVerifiedEdge, decimal BestExecutableEdge, string BestGroupKey, string TopSkipReason, IReadOnlyDictionary<string,int> RejectedByReason, IReadOnlyList<string> TopRejectedSamples);
 }

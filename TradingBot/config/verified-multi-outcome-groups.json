@@ -1,12 +1,16 @@
 [
   {
     "enabled": true,
-    "groupKey": "winner:fifa world cup 2026|kind:generic",
+    "groupKey": "winner:2026 fifa world cup|kind:generic",
     "title": "2026 FIFA World Cup Winner",
     "verificationStatus": "Verified",
     "groupType": "MutuallyExclusiveWinner",
     "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-    "marketIds": ["market_id_1","market_id_2","market_id_3"],
-    "settlementNotes": "Exactly one listed team can win the tournament. Outcomes are mutually exclusive."
+    "marketIds": [],
+    "conditionIds": [],
+    "requiredOutcomeCount": null,
+    "settlementNotes": "Exactly one listed team can win the tournament. All markets must resolve against the same tournament winner.",
+    "verifiedBy": "manual",
+    "verifiedAt": "2026-05-25"
   }
 ]
