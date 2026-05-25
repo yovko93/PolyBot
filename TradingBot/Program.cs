@@ -214,6 +214,21 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             var orderbookSemaphore = new SemaphoreSlim(options.MaxConcurrentOrderbookRequests);
             await orderbookService.PrefetchBinarySnapshotsAsync(filtered);
             var scanStats = await singleMarketArb.ScanAsync(filtered!, paper, orderbookSemaphore);
+
+            MultiOutcomeGroupArbEngine.MultiOutcomeScanReport multiOutcomeReport = new(0,0,0,0,0,0,0m,"","NotEvaluated");
+            if (options.MultiOutcomeArbitrage.Enabled)
+            {
+                var multiEngine = new MultiOutcomeGroupArbEngine(
+                    orderbookService,
+                    minEdgePerShare: options.MultiOutcomeArbitrage.MinMultiOutcomeEdge,
+                    feeBufferPerLeg: options.SingleMarketFees,
+                    slippageBufferPerLeg: options.MultiOutcomeArbitrage.SlippageBufferPerLeg,
+                    enableYesBasket: false,
+                    monitor: monitor,
+                    decisionService: executionDecisionService);
+                multiOutcomeReport = await multiEngine.ScanAsync(filtered!, paper, orderbookSemaphore, stoppingToken);
+            }
+
             var pairs = pairLoader.Load();
             foreach (var pair in pairs.Where(x=>x.Enabled && x.RiskLevel == MarketPairRiskLevel.Verified))
             {
@@ -262,7 +277,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 Console.WriteLine($"[SCAN] Id={scanId} Pool={scanPool.Count} Batch={batchSize} Range={batchStartIndex}-{batchEndIndex} NextOffset={currentRollingOffsetAfter} Coverage={coveragePercent:0.0}% Markets={filtered.Count} Tokens={filtered.Count*2} Books={scanStats.BookOk} Snapshots={filtered.Count} Candidates={scanStats.Candidates} Positive={scanStats.PositiveEdgeFound} Executable={scanStats.Executed} BestEdge={(scanStats.Candidates>0 && scanStats.BestEdgeSeen.HasValue ? scanStats.BestEdgeSeen.Value.ToString("0.####") : "N/A")} NearMiss={scanStats.NearMisses?.Count ?? 0} TopSkip={topSkipReason} FirstMarket={filtered.FirstOrDefault()?.id ?? "-"} LastMarket={filtered.LastOrDefault()?.id ?? "-"} DistinctMarketIds={distinctMarketIdsInBatch} DurationMs={(long)(DateTime.UtcNow - started).TotalMilliseconds}");
             }
             monitor.FlushCsv();
-            SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, filtered.Count, started, null, scanStats, filtering, lastDiscoverySummary, rollingOffset, options.ScanBatchSize, discoveredMarkets.Count, discoveryStartedAt, discoveryCompletedAt, emptyCycles, options.MarketScanLimit, effectiveMarketLimit, options.MaxMarketsToDiscover, options, poolLimitReason);
+            SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, filtered.Count, started, null, scanStats, filtering, lastDiscoverySummary, rollingOffset, options.ScanBatchSize, discoveredMarkets.Count, discoveryStartedAt, discoveryCompletedAt, emptyCycles, options.MarketScanLimit, effectiveMarketLimit, options.MaxMarketsToDiscover, options, poolLimitReason, multiOutcomeReport);
             await PushUiUpdates(state, hub, uiLogger);
             uiLogger.LogInfo("scanner", $"{{\"event\":\"scan_end\",\"durationMs\":{(long)(DateTime.UtcNow - started).TotalMilliseconds},\"marketsScanned\":{filtered.Count},\"detected\":{cycleTop.Count},\"executable\":{executableCount}}}");
         }
@@ -274,7 +289,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         {
             lastError = ex.Message;
             uiLogger.LogError("scanner", $"{{\"event\":\"scan_error\",\"message\":\"{ex.Message.Replace("\"", "'")}\"}}");
-            SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, 0, started, lastError, new SingleMarketScanStats(0,0,0,0,0,0,0,0), filtering, lastDiscoverySummary, rollingOffset, options.ScanBatchSize, discoveredMarkets.Count, discoveryStartedAt, discoveryCompletedAt, emptyCycles, options.MarketScanLimit, 0, options.MaxMarketsToDiscover, options, "Error");
+            SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, 0, started, lastError, new SingleMarketScanStats(0,0,0,0,0,0,0,0), filtering, lastDiscoverySummary, rollingOffset, options.ScanBatchSize, discoveredMarkets.Count, discoveryStartedAt, discoveryCompletedAt, emptyCycles, options.MarketScanLimit, 0, options.MaxMarketsToDiscover, options, "Error", new MultiOutcomeGroupArbEngine.MultiOutcomeScanReport(0, 0, 0, 0, 0, 0, 0m, string.Empty, "Error"));
         }
 
         await Task.Delay(options.ScanIntervalMs, stoppingToken);
@@ -318,7 +333,7 @@ static List<Market> BuildRollingBatch(List<Market> markets, ref int offset, int 
     return result;
 }
 
-static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, PaperPositionBook pb, string executionJournalPath, ExecutionPolicy p, OrderBookService obs, PaperTradingEngine paper, int marketsScanned, DateTime scanStart, string? lastError, SingleMarketScanStats scanStats, OpportunityFilteringOptions filtering, MarketDiscoverySummary discovery, int rollingOffset, int batchSize, int totalDiscovered, DateTime discoveryStartedAt, DateTime discoveryCompletedAt, int emptyCycles, int configuredMarketScanLimit, int effectiveMarketLimit, int configuredMaxMarketsToDiscover, TradingBotOptions options, string poolLimitReason)
+static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, PaperPositionBook pb, string executionJournalPath, ExecutionPolicy p, OrderBookService obs, PaperTradingEngine paper, int marketsScanned, DateTime scanStart, string? lastError, SingleMarketScanStats scanStats, OpportunityFilteringOptions filtering, MarketDiscoverySummary discovery, int rollingOffset, int batchSize, int totalDiscovered, DateTime discoveryStartedAt, DateTime discoveryCompletedAt, int emptyCycles, int configuredMarketScanLimit, int effectiveMarketLimit, int configuredMaxMarketsToDiscover, TradingBotOptions options, string poolLimitReason, MultiOutcomeGroupArbEngine.MultiOutcomeScanReport multiOutcomeReport)
 {
     var top = monitor.GetTopCycleRecords(200, executableOnly: false);
     var skippedPositive = top.Count(x => !x.IsExecutable && x.EdgePerShare > 0 && x.ExpectedProfit > 0);
@@ -361,7 +376,7 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
         "Rare",
         "In binary markets, YES ask + NO ask is usually >= 1 due to spread and buffers.",
         new[] { "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", "CROSS_EXCHANGE_KALSHI_POLYMARKET", "CrossMarket semantic pairs" });
-    var multiOutcomeGroupDiagnostics = new MultiOutcomeGroupDiagnosticsSnapshot(0, 0, 0, 0, 0, 0m, 0, "NotEvaluatedInThisCycle");
+    var multiOutcomeGroupDiagnostics = new MultiOutcomeGroupDiagnosticsSnapshot(multiOutcomeReport.GroupsDetected, 0, 0, multiOutcomeReport.GroupsEvaluated, 0, multiOutcomeReport.BestNetEdge, multiOutcomeReport.ExecutableGroups, multiOutcomeReport.TopSkipReason);
     var diag = new OpportunityDiagnosticsSnapshot(
         Guid.NewGuid().ToString("N"),
         DateTime.UtcNow,
