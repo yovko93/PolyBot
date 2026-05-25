@@ -1,5 +1,6 @@
 import type { BotControlState, BotStatus, Opportunity, OpportunityDiagnostics, PaperPosition, RiskState, ScannerStats, TerminalLogEntry, TradeLogEntry } from '../types/models';
 import { BotSignalR } from './botSignalR';
+import { keepLatest, UIDataLimits } from '../constants/uiDataLimits';
 
 const BASE_URL = ((import.meta as any).env.VITE_API_BASE_URL ?? 'http://localhost:5000').replace(/\/$/, '');
 const POLLING_INTERVAL_MS = Number((import.meta as any).env.VITE_BOT_POLLING_INTERVAL_MS ?? 3000);
@@ -44,7 +45,7 @@ export const getBotHealth = async (signal?: AbortSignal): Promise<boolean> => {
 export const getBotStatus = async (signal?: AbortSignal): Promise<BotStatus> => mapStatus(await request('/status', signal));
 export const getOpportunities = async (signal?: AbortSignal): Promise<Opportunity[]> => (await safeRequest<any[]>('/opportunities', [], signal)).filter(shouldDisplayOpportunity).map(mapOpportunity);
 export const getPositions = async (signal?: AbortSignal): Promise<PaperPosition[]> => (await safeRequest<any[]>('/positions', [], signal)).map(mapPosition);
-export const getTradeLogs = async (signal?: AbortSignal): Promise<TradeLogEntry[]> => (await safeRequest<any[]>('/trade-log', [], signal)).map(mapTrade);
+export const getTradeLogs = async (signal?: AbortSignal): Promise<TradeLogEntry[]> => keepLatest((await safeRequest<any[]>(`/trade-log?limit=${UIDataLimits.MaxTradeLogRows}`, [], signal)).map(mapTrade), UIDataLimits.MaxTradeLogRows);
 export const getScannerStats = async (signal?: AbortSignal): Promise<ScannerStats | null> => {
   const stats = await safeRequest<any | null>('/scanner-stats', null, signal);
   return stats ? mapScanner(stats) : null;
@@ -53,8 +54,8 @@ export const getRisk = async (signal?: AbortSignal): Promise<RiskState | null> =
   const risk = await safeRequest<any | null>('/risk', null, signal);
   return risk ? mapRisk(risk) : null;
 };
-export const getTerminalLogs = async (signal?: AbortSignal): Promise<TerminalLogEntry[]> => (await safeRequest<any[]>('/logs/recent', [], signal)).map(mapLog);
-export const getEquity = async (signal?: AbortSignal): Promise<Array<{ timestamp: string; equity: number }>> => (await safeRequest<any[]>('/equity', [], signal)).map(mapEquity);
+export const getTerminalLogs = async (signal?: AbortSignal): Promise<TerminalLogEntry[]> => keepLatest((await safeRequest<any[]>(`/logs/recent?limit=${UIDataLimits.MaxRecentLogs}`, [], signal)).map(mapLog), UIDataLimits.MaxRecentLogs);
+export const getEquity = async (signal?: AbortSignal): Promise<Array<{ timestamp: string; equity: number }>> => keepLatest((await safeRequest<any[]>(`/equity?limit=${UIDataLimits.MaxChartPoints}`, [], signal)).map(mapEquity), UIDataLimits.MaxChartPoints);
 export const getControls = async (signal?: AbortSignal): Promise<BotControlState> => mapControls(await request('/controls', signal));
 export const getOpportunityDiagnostics = async (signal?: AbortSignal): Promise<OpportunityDiagnostics | null> => safeRequest<any | null>('/opportunity-diagnostics', null, signal);
 export const pauseScanner = async (): Promise<BotControlState> => mapControls(await request('/controls/pause', undefined, { method: 'POST' }));
@@ -75,30 +76,50 @@ type BotEventHandlers = {
   onControls: (x: BotControlState) => void;
 };
 
+
+const memoryDiag = (globalThis as any).__botMemoryDiagnostics ?? ((globalThis as any).__botMemoryDiagnostics = {
+  activeSignalRConnections: 0,
+  activePollingIntervals: 0,
+  registeredEventHandlers: 0,
+});
+
 export const subscribeToBotEvents = async (handlers: BotEventHandlers): Promise<() => void> => {
-  const hub = new BotSignalR(HUB);
+  let activeSignalRConnections = 0;
+  let activePollingIntervals = 0;
+  let registeredEventHandlers = 0;
+  const hub = BotSignalR.getOrCreate(HUB);
   let polling: ReturnType<typeof setInterval> | null = null;
   let closed = false;
+  let inFlight = false;
+  let pollController: AbortController | null = null;
 
   const pollSnapshot = async () => {
+    if (inFlight || closed) return;
+    inFlight = true;
+    pollController?.abort();
+    pollController = new AbortController();
     try {
       const [status, opportunities, positions, trades, scanner, risk, logs, equity, controls] = await Promise.all([
-        getBotStatus(), getOpportunities(), getPositions(), getTradeLogs(), getScannerStats(), getRisk(), getTerminalLogs(), getEquity(), getControls()
+        getBotStatus(pollController.signal), getOpportunities(pollController.signal), getPositions(pollController.signal), getTradeLogs(pollController.signal), getScannerStats(pollController.signal), getRisk(pollController.signal), getTerminalLogs(pollController.signal), getEquity(pollController.signal), getControls(pollController.signal)
       ]);
       handlers.onStatus(status); handlers.onOpportunities(opportunities); handlers.onPositions(positions); handlers.onTrades(trades);
       if (scanner) handlers.onScanner(scanner); if (risk) handlers.onRisk(risk);
-      logs.slice(-50).forEach(handlers.onLog); handlers.onEquity(equity);
+      logs.slice(-50).forEach(handlers.onLog); handlers.onEquity(keepLatest(equity, UIDataLimits.MaxChartPoints));
       handlers.onControls(controls);
     } catch {
       handlers.onConnectionState('DISCONNECTED');
+    } finally {
+      inFlight = false;
     }
   };
 
   const ensurePolling = () => {
     if (polling || closed) return;
     polling = setInterval(() => { void pollSnapshot(); }, POLLING_INTERVAL_MS);
+    activePollingIntervals += 1;
+    memoryDiag.activePollingIntervals = activePollingIntervals;
   };
-  const stopPolling = () => { if (polling) { clearInterval(polling); polling = null; } };
+  const stopPolling = () => { if (polling) { clearInterval(polling); polling = null; activePollingIntervals = Math.max(0, activePollingIntervals - 1); memoryDiag.activePollingIntervals = activePollingIntervals; } };
 
   hub.onState((s) => { handlers.onConnectionState(s); if (s === 'CONNECTED') { stopPolling(); } else { ensurePolling(); } });
   const unsubs = [
@@ -114,13 +135,20 @@ export const subscribeToBotEvents = async (handlers: BotEventHandlers): Promise<
     hub.on('heartbeat', (d: any) => handlers.onHeartbeat(d?.timestamp ?? new Date().toISOString())),
     hub.on('controlsUpdated', (d) => handlers.onControls(mapControls(d)))
   ];
+  registeredEventHandlers = unsubs.length;
+  memoryDiag.registeredEventHandlers = registeredEventHandlers;
 
-  try { await hub.start(); stopPolling(); } catch { ensurePolling(); }
+  try { await hub.start(); activeSignalRConnections = 1; memoryDiag.activeSignalRConnections = activeSignalRConnections; stopPolling(); } catch { ensurePolling(); }
 
   return () => {
     closed = true;
     stopPolling();
+    pollController?.abort();
     unsubs.forEach((u) => u());
+    registeredEventHandlers = 0;
+    memoryDiag.registeredEventHandlers = registeredEventHandlers;
+    activeSignalRConnections = 0;
+    memoryDiag.activeSignalRConnections = activeSignalRConnections;
     void hub.stop();
   };
 };

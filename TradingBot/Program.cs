@@ -44,18 +44,25 @@ var listenUrl = options.ListenUrl;
 app.MapHealthChecks("/health");
 app.MapGet("/api/bot/health", () => Results.Ok(new { ok = true, service = "PolyBot", timestamp = DateTime.UtcNow }));
 app.MapGet("/api/bot/status", (BotRuntimeState s) => s.Status);
-app.MapGet("/api/bot/opportunities", (BotRuntimeState s, IOptions<OpportunityFilteringOptions> f, bool? includeNegativeEdge, bool? debug) =>
+app.MapGet("/api/bot/opportunities", (BotRuntimeState s, IOptions<OpportunityFilteringOptions> f, bool? includeNegativeEdge, bool? debug, int? limit) =>
 {
+    var cappedLimit = Math.Clamp(limit ?? 100, 1, 500);
     var include = (includeNegativeEdge ?? false) || (debug ?? false) || f.Value.EnableDebugNegativeEdgeView;
-    return s.Opportunities().Where(o => include || OpportunityVisibilityFilter.IsVisibleOpportunity(o, f.Value)).ToArray();
+    return s.Opportunities().Where(o => include || OpportunityVisibilityFilter.IsVisibleOpportunity(o, f.Value)).TakeLast(cappedLimit).ToArray();
 });
 app.MapGet("/api/bot/positions", (BotRuntimeState s) => s.Positions());
-app.MapGet("/api/bot/trade-log", (BotRuntimeState s) => s.Trades());
+app.MapGet("/api/bot/trade-log", (BotRuntimeState s, int? limit) => s.Trades().TakeLast(Math.Clamp(limit ?? 300, 1, 1000)).ToArray());
 app.MapGet("/api/bot/scanner-stats", (BotRuntimeState s) => s.ScannerStats);
-app.MapGet("/api/bot/opportunity-diagnostics", (BotRuntimeState s) => s.OpportunityDiagnostics);
+app.MapGet("/api/bot/opportunity-diagnostics", (BotRuntimeState s, int? nearMissLimit) =>
+{
+    var d = s.OpportunityDiagnostics;
+    if (d is null) return Results.Ok(null);
+    var capped = Math.Clamp(nearMissLimit ?? 25, 1, 100);
+    return Results.Ok(d with { NearMissTopN = d.NearMissTopN.Take(capped).ToArray() });
+});
 app.MapGet("/api/bot/risk", (BotRuntimeState s, IRiskManager risk) => Results.Ok(new { runtime = s.Risk, executionRisk = risk.GetRiskSnapshot() }));
-app.MapGet("/api/bot/execution-audit", (ExecutionAuditLog audit) => audit.List());
-app.MapGet("/api/bot/execution-plans", (BotRuntimeState s) => s.Trades().TakeLast(100));
+app.MapGet("/api/bot/execution-audit", (ExecutionAuditLog audit, int? limit) => audit.List(Math.Clamp(limit ?? 300, 1, 1000)));
+app.MapGet("/api/bot/execution-plans", (BotRuntimeState s, int? limit) => s.Trades().TakeLast(Math.Clamp(limit ?? 100, 1, 500)).ToArray());
 app.MapGet("/api/bot/controls", (BotRuntimeState s) => s.Controls);
 app.MapPost("/api/bot/controls/pause", async (BotRuntimeState s, IHubContext<BotHub> hub) =>
 {
@@ -75,8 +82,8 @@ app.MapPost("/api/bot/controls/resume", async (BotRuntimeState s, IHubContext<Bo
     await hub.Clients.All.SendAsync("botStatusUpdated", s.Status);
     return Results.Ok(s.Controls);
 });
-app.MapGet("/api/bot/logs/recent", (BotRuntimeState s) => s.Logs());
-app.MapGet("/api/bot/equity", (BotRuntimeState s) => s.Equity());
+app.MapGet("/api/bot/logs/recent", (BotRuntimeState s, int? limit) => s.Logs().TakeLast(Math.Clamp(limit ?? 300, 1, 1000)).ToArray());
+app.MapGet("/api/bot/equity", (BotRuntimeState s, int? limit) => s.Equity().TakeLast(Math.Clamp(limit ?? 500, 1, 1000)).ToArray());
 app.MapHub<BotHub>("/hubs/bot");
 
 var apiTask = app.RunAsync(listenUrl);
@@ -300,14 +307,14 @@ static async Task PushUiUpdates(BotRuntimeState state, IHubContext<BotHub> hub, 
 {
     try
     {
-        await hub.Clients.All.SendAsync("opportunitiesUpdated", state.Opportunities());
-        await hub.Clients.All.SendAsync("tradeLogUpdated", state.Trades());
+        await hub.Clients.All.SendAsync("opportunitiesUpdated", state.Opportunities().TakeLast(100).ToArray());
+        await hub.Clients.All.SendAsync("tradeLogUpdated", state.Trades().TakeLast(300).ToArray());
         await hub.Clients.All.SendAsync("positionsUpdated", state.Positions());
         await hub.Clients.All.SendAsync("scannerStatsUpdated", state.ScannerStats);
         await hub.Clients.All.SendAsync("riskUpdated", state.Risk);
         await hub.Clients.All.SendAsync("controlsUpdated", state.Controls);
         await hub.Clients.All.SendAsync("botStatusUpdated", state.Status);
-        await hub.Clients.All.SendAsync("equityUpdated", state.Equity());
+        await hub.Clients.All.SendAsync("equityUpdated", state.Equity().TakeLast(500).ToArray());
     }
     catch (Exception ex)
     {

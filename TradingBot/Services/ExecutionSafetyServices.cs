@@ -52,17 +52,22 @@ public sealed class RiskManager(IOptions<ExecutionOptions> options) : IRiskManag
 public sealed class ExecutionAuditLog
 {
     private readonly ConcurrentQueue<ExecutionAuditEntry> _entries = new();
-    public void Add(string eventType, string opportunityId, string message){ _entries.Enqueue(new ExecutionAuditEntry(DateTime.UtcNow,eventType,opportunityId,message)); while(_entries.Count>500) _entries.TryDequeue(out _); }
-    public ExecutionAuditEntry[] List() => _entries.ToArray();
+    public void Add(string eventType, string opportunityId, string message){ _entries.Enqueue(new ExecutionAuditEntry(DateTime.UtcNow,eventType,opportunityId,message)); while(_entries.Count>1000) _entries.TryDequeue(out _); }
+    public ExecutionAuditEntry[] List(int limit = 300) => _entries.TakeLast(Math.Clamp(limit, 1, 1000)).ToArray();
 }
 
 public sealed class DuplicateExecutionGuard
 {
     private readonly ConcurrentDictionary<string, DateTime> _cache = new();
+    private const int MaxCacheSize = 10_000;
     public bool TryMark(string opportunityId, TimeSpan ttl)
     {
         var now = DateTime.UtcNow;
         foreach (var kv in _cache.Where(x => x.Value < now)) _cache.TryRemove(kv.Key, out _);
+        if (_cache.Count > MaxCacheSize)
+        {
+            foreach (var kv in _cache.OrderBy(x => x.Value).Take(_cache.Count - MaxCacheSize)) _cache.TryRemove(kv.Key, out _);
+        }
         return _cache.TryAdd(opportunityId, now.Add(ttl));
     }
 }
