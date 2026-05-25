@@ -154,7 +154,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var lastDiscoveryAt = default(DateTime);
     var discoveryStartedAt = default(DateTime);
     var discoveryCompletedAt = default(DateTime);
-    var lastDiscoverySummary = new MarketDiscoverySummary(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,false,"unknown",null,null,default);
+    var lastDiscoverySummary = new MarketDiscoverySummary();
     var emptyCycles = 0;
     while (!stoppingToken.IsCancellationRequested)
     {

@@ -5,26 +5,26 @@ using TradingBot.Options;
 namespace TradingBot.Services;
 
 public record MarketDiscoverySummary(
-    int MarketsDiscovered,
-    int PagesFetched,
-    int DuplicatesRemoved,
-    int InactiveSkipped,
-    int ActiveMarketsAvailable,
-    int RawLoadedTotal,
-    int UniqueMarketsTotal,
-    int SkippedClosed,
-    int SkippedArchived,
-    int SkippedInactive,
-    int SkippedMissingTokenIds,
-    int SkippedMissingOutcomes,
-    int SkippedPastEndDate,
-    int SkippedInvalidShape,
-    int SkippedUnknownStatus,
-    bool DiscoveryHealthy,
-    string PaginationMode,
-    string? LastPaginationCursor,
-    string? LastDiscoveryWarning,
-    DateTime LastDiscoveryCompletedAtUtc);
+    int MarketsDiscovered = 0,
+    int PagesFetched = 0,
+    int DuplicatesRemoved = 0,
+    int InactiveSkipped = 0,
+    int ActiveMarketsAvailable = 0,
+    int RawLoadedTotal = 0,
+    int UniqueMarketsTotal = 0,
+    int SkippedClosed = 0,
+    int SkippedArchived = 0,
+    int SkippedInactive = 0,
+    int SkippedMissingTokenIds = 0,
+    int SkippedMissingOutcomes = 0,
+    int SkippedPastEndDate = 0,
+    int SkippedInvalidShape = 0,
+    int SkippedUnknownStatus = 0,
+    bool DiscoveryHealthy = false,
+    string PaginationMode = "offset",
+    string? LastPaginationCursor = null,
+    string? LastDiscoveryWarning = null,
+    DateTime LastDiscoveryCompletedAtUtc = default);
 
 public class MarketDataService
 {
@@ -118,7 +118,7 @@ public class MarketDataService
                     continue;
                 }
 
-                var key = $"{market.conditionId}|{market.id}|{string.Join(',', market.clobTokenIds ?? new List<string>())}";
+                var key = BuildDedupKey(market);
                 if (!seen.Add(key))
                 {
                     duplicates++;
@@ -158,10 +158,21 @@ public class MarketDataService
         if (market.closed == true) return (false, "Closed");
         if (market.archived == true) return (false, "Archived");
         if (market.active == false) return (false, "Inactive");
+        if (market.accepting_orders == false || market.acceptingOrders == false) return (false, "Inactive");
         if (market.clobTokenIds is null || market.clobTokenIds.Count < 2) return (false, "MissingTokenIds");
         if (market.outcomes is null || market.outcomes.Count < 2) return (false, "MissingOutcomes");
         if (TryReadEndDateUtc(market, out var endDateUtc) && endDateUtc < DateTime.UtcNow) return (false, "PastEndDate");
         return (true, null);
+    }
+
+    private static string BuildDedupKey(Market market)
+    {
+        if (!string.IsNullOrWhiteSpace(market.conditionId))
+            return $"condition:{market.conditionId}";
+        if (!string.IsNullOrWhiteSpace(market.id))
+            return $"market:{market.id}";
+        var tokenKey = string.Join(",", (market.clobTokenIds ?? new List<string>()).OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+        return $"tokens:{tokenKey}";
     }
 
     private static bool TryReadEndDateUtc(Market market, out DateTime endDateUtc)
