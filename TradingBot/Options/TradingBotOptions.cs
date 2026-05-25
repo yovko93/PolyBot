@@ -119,6 +119,10 @@ public class MultiOutcomeLoggingOptions
     public bool LogRejectedMultiOutcomeCandidates { get; set; } = false;
     public int RejectedCandidateSampleSize { get; set; } = 5;
     public bool LogRejectedCandidateSummary { get; set; } = true;
+    public bool LogRejectedMultiOutcomeSummary { get; set; } = true;
+    public int RejectedMultiOutcomeSampleSize { get; set; } = 5;
+    public bool LogBookCacheMissDetails { get; set; } = false;
+    public int BookCacheMissSampleSize { get; set; } = 5;
 }
 
 
@@ -138,4 +142,5 @@ public class RuntimeStateOptions
     public int MaxRejectedMultiOutcomeSamples { get; set; } = 100;
     public int MaxCandidateGroupsForReview { get; set; } = 50;
     public int MaxMultiOutcomeDiagnosticsHistory { get; set; } = 100;
+    public int MaxRecentLogs { get; set; } = 500;
 }

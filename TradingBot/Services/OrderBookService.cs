@@ -21,6 +21,10 @@ public class OrderBookService : IOrderBookProvider
 
     private long _bookCacheMissLogs;
     private long _singleRequestCallerLogs;
+    private long _bookCacheMisses;
+    private readonly System.Collections.Concurrent.ConcurrentQueue<string> _bookCacheMissSamples = new();
+    public bool LogBookCacheMissDetails { get; set; } = false;
+    public int BookCacheMissSampleSize { get; set; } = 5;
 
     private readonly Dictionary<string, (DateTime Time, ClobOrderBook? Book)> _bookCache = new();
     private readonly Dictionary<string, (DateTime Time, BinaryOrderBookSnapshot? Snapshot)> _snapshotCache = new();
@@ -198,7 +202,8 @@ public class OrderBookService : IOrderBookProvider
             SnapshotCacheHits: Interlocked.Read(ref _snapshotCacheHits),
             Timeouts: Interlocked.Read(ref _timeouts),
             HttpErrors: Interlocked.Read(ref _httpErrors),
-            ParseErrors: Interlocked.Read(ref _parseErrors)
+            ParseErrors: Interlocked.Read(ref _parseErrors),
+            BookCacheMisses: Interlocked.Read(ref _bookCacheMisses)
         );
     }
 
@@ -214,6 +219,8 @@ public class OrderBookService : IOrderBookProvider
         Interlocked.Exchange(ref _parseErrors, 0);
         Interlocked.Exchange(ref _bookCacheMissLogs, 0);
         Interlocked.Exchange(ref _singleRequestCallerLogs, 0);
+        Interlocked.Exchange(ref _bookCacheMisses, 0);
+        while (_bookCacheMissSamples.TryDequeue(out _)) { }
     }
 
     public async Task<ClobOrderBook?> GetOrderBookAsync(
@@ -236,15 +243,12 @@ public class OrderBookService : IOrderBookProvider
 
         if (DisableSingleBookHttpFallback)
         {
-            if (Interlocked.Increment(ref _bookCacheMissLogs) <= 20)
+            Interlocked.Increment(ref _bookCacheMisses);
+            _bookCacheMissSamples.Enqueue(tokenId);
+            while (_bookCacheMissSamples.Count > 100) _bookCacheMissSamples.TryDequeue(out _);
+            if (LogBookCacheMissDetails && Interlocked.Increment(ref _bookCacheMissLogs) <= 20)
             {
-                var trace = new StackTrace();
-                var caller = trace.GetFrame(1)?.GetMethod();
-
-                Console.WriteLine(
-                    $"[BOOK CACHE MISS - HTTP DISABLED] " +
-                    $"{caller?.DeclaringType?.Name}.{caller?.Name} | token_id={tokenId}"
-                );
+                Console.WriteLine($"[BOOK CACHE MISS - HTTP DISABLED] caller=OrderBookService.GetOrderBookAsync | token_id={tokenId}");
             }
 
             return null;
@@ -607,6 +611,12 @@ public class OrderBookService : IOrderBookProvider
             out result
         );
     }
+    public IReadOnlyList<string> GetBookCacheMissSamples(int limit)
+    {
+        var capped = Math.Clamp(limit, 1, 50);
+        return _bookCacheMissSamples.Distinct().Take(capped).ToArray();
+    }
+
 }
 
 public class ClobOrderBook

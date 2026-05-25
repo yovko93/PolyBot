@@ -31,7 +31,7 @@ public class BotRuntimeState
     public void ReplaceTrades(IEnumerable<TradeLogEntryDto> items){while(_trades.TryDequeue(out _)){} foreach(var i in items) _trades.Enqueue(i); Trim(_trades,500);}    
     public void AddPosition(PaperPositionDto p){_positions.Enqueue(p); Trim(_positions,200);}    
     public void ReplacePositions(IEnumerable<PaperPositionDto> items){while(_positions.TryDequeue(out _)){} foreach(var i in items) _positions.Enqueue(i); Trim(_positions,200);}    
-    public void AddLog(TerminalLogEntryDto l){_logs.Enqueue(l); Trim(_logs,1000);}    
+    public void AddLog(TerminalLogEntryDto l){_logs.Enqueue(l); Trim(_logs,500);}    
     public void AddEquity(EquityPointDto e){_equity.Enqueue(e); Trim(_equity,1000);}    
     public OpportunityDto[] Opportunities()=>_opps.ToArray();
     public TradeLogEntryDto[] Trades()=>_trades.ToArray();

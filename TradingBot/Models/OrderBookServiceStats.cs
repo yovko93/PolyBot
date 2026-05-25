@@ -8,5 +8,6 @@ public record OrderBookServiceStats(
     long SnapshotCacheHits,
     long Timeouts,
     long HttpErrors,
-    long ParseErrors
+    long ParseErrors,
+    long BookCacheMisses
 );

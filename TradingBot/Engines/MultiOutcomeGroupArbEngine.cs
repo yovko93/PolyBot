@@ -19,6 +19,9 @@ public class MultiOutcomeGroupArbEngine
     private readonly RequoteExecutionGate? _requoteGate;
     private readonly ExecutionDecisionService? _decisionService;
     private readonly MutuallyExclusiveGroupValidator _validator;
+    private readonly bool _logRejectedSummary;
+    private readonly bool _logRejectedCandidates;
+    private readonly int _rejectedSampleSize;
 
     // Used only by requote gate. The main execution decision still belongs to PaperTradingEngine.
     private readonly decimal _requoteMinExpectedProfit;
@@ -32,7 +35,10 @@ public class MultiOutcomeGroupArbEngine
         OpportunityMonitor? monitor = null,
         RequoteExecutionGate? requoteGate = null,
         ExecutionDecisionService? decisionService = null,
-        decimal requoteMinExpectedProfit = 0.25m)
+        decimal requoteMinExpectedProfit = 0.25m,
+        bool logRejectedCandidates = false,
+        bool logRejectedSummary = true,
+        int rejectedSampleSize = 5)
     {
         _orderBooks = orderBooks;
         _minEdgePerShare = minEdgePerShare;
@@ -44,6 +50,9 @@ public class MultiOutcomeGroupArbEngine
         _decisionService = decisionService;
         _requoteMinExpectedProfit = requoteMinExpectedProfit;
         _validator = new MutuallyExclusiveGroupValidator(new TradingBot.Options.MultiOutcomeArbitrageOptions());
+        _logRejectedCandidates = logRejectedCandidates;
+        _logRejectedSummary = logRejectedSummary;
+        _rejectedSampleSize = Math.Clamp(rejectedSampleSize, 1, 25);
     }
 
     public async Task<MultiOutcomeScanReport> ScanAsync(
@@ -68,7 +77,7 @@ public class MultiOutcomeGroupArbEngine
         var report = BuildReport(results);
         if (report.GroupsVerified == 0 && report.ExecutableGroups > 0) report = report with { ExecutableGroups = 0 };
 
-        PrintSummary(report);
+        PrintSummary(report, _logRejectedSummary, _logRejectedCandidates, _rejectedSampleSize);
         return report;
     }
 
@@ -491,14 +500,23 @@ public class MultiOutcomeGroupArbEngine
         var bestCandidate = results.Where(x=>x.VerificationStatus!="Verified").OrderByDescending(x => x.NoBasketEdge ?? decimal.MinValue).FirstOrDefault();
         var bestVerified = results.Where(x=>x.VerificationStatus=="Verified").OrderByDescending(x => x.NoBasketEdge ?? decimal.MinValue).FirstOrDefault();
         var rejectedByReason = results.Where(x=>x.VerificationStatus!="Verified").GroupBy(x=>x.SkipReason).ToDictionary(g=>g.Key,g=>g.Count());
-        return new MultiOutcomeScanReport(scannedGroups, evaluated, verified, results.Count(x=>x.VerificationStatus=="HighConfidence"), results.Count(x=>x.VerificationStatus=="Candidate"), executable, bestCandidate?.NoBasketEdge ?? 0m, bestVerified?.NoBasketEdge ?? 0m, results.Where(x=>x.NoBasketExecuted).OrderByDescending(x=>x.NoBasketEdge ?? decimal.MinValue).FirstOrDefault()?.NoBasketEdge ?? 0m, bestVerified?.GroupKey ?? "", rejectedByReason.OrderByDescending(g=>g.Value).FirstOrDefault().Key ?? "None", rejectedByReason, results.Where(x=>x.VerificationStatus!="Verified").Take(25).Select(x=>$"{x.GroupKey}:{x.SkipReason}").ToArray());
+        return new MultiOutcomeScanReport(scannedGroups, evaluated, verified, results.Count(x=>x.VerificationStatus=="HighConfidence"), results.Count(x=>x.VerificationStatus=="Candidate"), executable, bestCandidate?.NoBasketEdge ?? 0m, bestVerified?.NoBasketEdge ?? 0m, results.Where(x=>x.NoBasketExecuted).OrderByDescending(x=>x.NoBasketEdge ?? decimal.MinValue).FirstOrDefault()?.NoBasketEdge ?? 0m, bestVerified?.GroupKey ?? "", rejectedByReason.OrderByDescending(g=>g.Value).FirstOrDefault().Key ?? "None", rejectedByReason, results.Where(x=>x.VerificationStatus!="Verified").Select(x=>new RejectedSample(x.GroupKey,x.SkipReason)).Take(25).ToArray());
     }
 
-    private static void PrintSummary(MultiOutcomeScanReport report)
+    private static void PrintSummary(MultiOutcomeScanReport report, bool logSummary, bool logSamples, int sampleSize)
     {
         var rejected = report.GroupsDetected - report.GroupsVerified;
         var reasonSummary = string.Join(",", report.RejectedByReason.Select(x => $"{x.Key}:{x.Value}"));
-        Console.WriteLine($"[MULTI_SCAN] Candidates={report.GroupsDetected} Verified={report.GroupsVerified} Rejected={rejected} Executable={report.ExecutableGroups} BestCandidateEdge={report.BestCandidateEdge:0.####} BestVerifiedEdge={report.BestVerifiedEdge:0.####} BestExecutableEdge={report.BestExecutableEdge:0.####} TopReject={report.TopSkipReason} RejectedByReason={{{reasonSummary}}}");
+        if (logSummary)
+            Console.WriteLine($"[MULTI_SCAN] Candidates={report.GroupsDetected} Verified={report.GroupsVerified} Rejected={rejected} Executable={report.ExecutableGroups} TopReject={report.TopSkipReason} RejectedByReason={{{reasonSummary}}}");
+        if (logSamples)
+        {
+            foreach (var grp in report.TopRejectedSamples.GroupBy(x => x.Reason))
+            {
+                var examples = string.Join(", ", grp.Select(x => x.GroupKey).Take(sampleSize));
+                Console.WriteLine($"[MULTI_REJECTED_SAMPLE] Reason={grp.Key} Count={grp.Count()} Examples=[{examples}]");
+            }
+        }
     }
 
     private static OutcomeGroupInfo? ExtractGroup(string? question)
@@ -735,5 +753,6 @@ public class MultiOutcomeGroupArbEngine
             new(groupKey, marketsInGroup, false, false, null, null, false, false, null, false, verificationStatus, skipReason);
     }
 
-    public record MultiOutcomeScanReport(int GroupsDetected, int GroupsEvaluated, int GroupsVerified, int GroupsHighConfidence, int GroupsCandidate, int ExecutableGroups, decimal BestCandidateEdge, decimal BestVerifiedEdge, decimal BestExecutableEdge, string BestGroupKey, string TopSkipReason, IReadOnlyDictionary<string,int> RejectedByReason, IReadOnlyList<string> TopRejectedSamples);
+    public record MultiOutcomeScanReport(int GroupsDetected, int GroupsEvaluated, int GroupsVerified, int GroupsHighConfidence, int GroupsCandidate, int ExecutableGroups, decimal BestCandidateEdge, decimal BestVerifiedEdge, decimal BestExecutableEdge, string BestGroupKey, string TopSkipReason, IReadOnlyDictionary<string,int> RejectedByReason, IReadOnlyList<RejectedSample> TopRejectedSamples);
+    public record RejectedSample(string GroupKey, string Reason);
 }
