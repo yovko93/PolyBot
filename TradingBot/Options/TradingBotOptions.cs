@@ -63,6 +63,8 @@ public class TradingBotOptions
     [Range(1000, int.MaxValue)] public int HeartbeatIntervalMs { get; set; } = 3000;
     [Range(1, int.MaxValue)] public int ExternalApiTimeoutSeconds { get; set; } = 10;
     public DiagnosticsOptions Diagnostics { get; set; } = new();
+    public MultiOutcomeArbitrageOptions MultiOutcomeArbitrage { get; set; } = new();
+    public MultiOutcomeLoggingOptions Logging { get; set; } = new();
 }
 
 public class DiagnosticsOptions
@@ -80,4 +82,31 @@ public class DiagnosticsOptions
     public bool LogInsufficientLiquiditySamples { get; set; } = true;
     public int InsufficientLiquiditySampleCount { get; set; } = 10;
     public bool EnableNearMissDiagnostics { get; set; } = true;
+    public bool EnableMultiOutcomeNearMisses { get; set; } = true;
+    public int MultiOutcomeNearMissTopN { get; set; } = 25;
+    public decimal MultiOutcomeNearMissMaxNegativeEdge { get; set; } = 0.05m;
+}
+
+public class MultiOutcomeArbitrageOptions
+{
+    public bool Enabled { get; set; } = true;
+    public bool AllowVerifiedGroups { get; set; } = true;
+    public bool AllowHighConfidenceGroups { get; set; } = true;
+    public bool AllowCandidateGroupsForExecution { get; set; } = false;
+    public int MinOutcomes { get; set; } = 2;
+    public int MaxOutcomes { get; set; } = 50;
+    public decimal MinMultiOutcomeEdge { get; set; } = 0.001m;
+    public decimal MinExpectedProfit { get; set; } = 0.10m;
+    public decimal MaxNotionalPerGroup { get; set; } = 100m;
+    public decimal SlippageBufferPerLeg { get; set; } = 0.0005m;
+    public decimal SafetyBufferPerGroup { get; set; } = 0.001m;
+    public bool RequireAllNoPrices { get; set; } = true;
+    public bool RequireAllMarketsActive { get; set; } = true;
+    public decimal MinExecutableQty { get; set; } = 1m;
+}
+
+public class MultiOutcomeLoggingOptions
+{
+    public bool LogMultiOutcomeSummary { get; set; } = true;
+    public bool LogMultiOutcomeDetailsOnlyWhenExecutable { get; set; } = true;
 }

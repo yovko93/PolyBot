@@ -44,7 +44,7 @@ public class MultiOutcomeGroupArbEngine
         _requoteMinExpectedProfit = requoteMinExpectedProfit;
     }
 
-    public async Task ScanAsync(
+    public async Task<MultiOutcomeScanReport> ScanAsync(
         List<Market> markets,
         PaperTradingEngine paper,
         SemaphoreSlim semaphore,
@@ -63,7 +63,10 @@ public class MultiOutcomeGroupArbEngine
 
         var results = await Task.WhenAll(tasks);
 
-        PrintSummary(results);
+        var report = BuildReport(results);
+
+        PrintSummary(report);
+        return report;
     }
 
     private static List<IGrouping<string, GroupedMarket>> BuildGroups(List<Market> markets)
@@ -92,7 +95,7 @@ public class MultiOutcomeGroupArbEngine
         var snapshots = await LoadSnapshotsAsync(groupMarkets, semaphore, ct);
 
         if (snapshots.Count < 2)
-            return GroupScanResult.Empty(groupKey, snapshots.Count);
+            return GroupScanResult.Empty(groupKey, snapshots.Count, "Candidate", "MissingLeg");
 
         var noResult = await EvaluateNoBasketAsync(
             groupKey,
@@ -114,7 +117,11 @@ public class MultiOutcomeGroupArbEngine
             NoBasketGuaranteedPayout: noResult.GuaranteedPayout,
             YesBasketCandidate: yesResult.Candidate,
             YesBasketExecuted: yesResult.Executed,
-            YesBasketCost: yesResult.Cost
+            YesBasketCost: yesResult.Cost,
+            Evaluated: true,
+            VerificationStatus: "HighConfidence",
+            SkipReason: noResult.Executed ? "Executable" : (noResult.Candidate ? "NegativeEdge" : "MissingNoAsk"),
+            NoBasketEdge: noResult.Edge
         );
     }
 
@@ -464,56 +471,18 @@ public class MultiOutcomeGroupArbEngine
         Console.WriteLine();
     }
 
-    private static void PrintSummary(GroupScanResult[] results)
+    private static MultiOutcomeScanReport BuildReport(GroupScanResult[] results)
     {
         var scannedGroups = results.Length;
-        var totalMarketsInGroups = results.Sum(x => x.MarketsInGroup);
+        var evaluated = results.Count(x => x.Evaluated);
+        var executable = results.Count(x => x.NoBasketExecuted);
+        var best = results.OrderByDescending(x => x.NoBasketEdge ?? decimal.MinValue).FirstOrDefault();
+        return new MultiOutcomeScanReport(scannedGroups, evaluated, results.Count(x=>x.VerificationStatus=="Verified"), results.Count(x=>x.VerificationStatus=="HighConfidence"), results.Count(x=>x.VerificationStatus=="Candidate"), executable, best?.NoBasketEdge ?? 0m, best?.GroupKey ?? "", results.GroupBy(x=>x.SkipReason).OrderByDescending(g=>g.Count()).FirstOrDefault()?.Key ?? "None");
+    }
 
-        var noCandidates = results.Count(x => x.NoBasketCandidate);
-        var noExecuted = results.Count(x => x.NoBasketExecuted);
-
-        var yesCandidates = results.Count(x => x.YesBasketCandidate);
-        var yesExecuted = results.Count(x => x.YesBasketExecuted);
-
-        var topNo = results
-            .Where(x => x.NoBasketCost.HasValue && x.NoBasketGuaranteedPayout.HasValue)
-            .OrderByDescending(x => x.NoBasketGuaranteedPayout!.Value - x.NoBasketCost!.Value)
-            .Take(10)
-            .ToList();
-
-        Console.WriteLine();
-        Console.WriteLine("========== MULTI-OUTCOME GROUP SCAN ==========");
-        Console.WriteLine($"Groups found: {scannedGroups}");
-        Console.WriteLine($"Markets in groups: {totalMarketsInGroups}");
-        Console.WriteLine($"NO basket candidates: {noCandidates}");
-        Console.WriteLine($"NO basket executed: {noExecuted}");
-
-        if (yesCandidates > 0 || yesExecuted > 0)
-        {
-            Console.WriteLine($"YES basket candidates: {yesCandidates}");
-            Console.WriteLine($"YES basket executed: {yesExecuted}");
-        }
-
-        //if (topNo.Count > 0)
-        //{
-        //    Console.WriteLine();
-        //    Console.WriteLine("Top closest NO baskets:");
-
-        //    foreach (var item in topNo)
-        //    {
-        //        var edge = item.NoBasketGuaranteedPayout!.Value - item.NoBasketCost!.Value;
-
-        //        Console.WriteLine("----------------------------------------");
-        //        Console.WriteLine($"Group: {item.GroupKey}");
-        //        Console.WriteLine($"Outcomes: {item.MarketsInGroup}");
-        //        Console.WriteLine($"NO cost: {item.NoBasketCost.Value:0.####}");
-        //        Console.WriteLine($"Guaranteed payout: {item.NoBasketGuaranteedPayout.Value:0.####}");
-        //        Console.WriteLine($"Edge: {edge:0.####}");
-        //    }
-        //}
-
-        Console.WriteLine("==============================================");
-        Console.WriteLine();
+    private static void PrintSummary(MultiOutcomeScanReport report)
+    {
+        Console.WriteLine($"[MULTI_SCAN] Groups={report.GroupsDetected} Verified={report.GroupsVerified} Evaluated={report.GroupsEvaluated} Executable={report.ExecutableGroups} BestNetEdge={report.BestNetEdge:0.####} BestGroup={report.BestGroupKey} TopSkip={report.TopSkipReason}");
     }
 
     private static OutcomeGroupInfo? ExtractGroup(string? question)
@@ -710,7 +679,8 @@ public class MultiOutcomeGroupArbEngine
         bool Candidate,
         bool Executed,
         decimal? Cost,
-        decimal? GuaranteedPayout)
+        decimal? GuaranteedPayout,
+        decimal? Edge = null)
     {
         public static BasketResult Empty =>
             new(false, false, null, null);
@@ -724,7 +694,8 @@ public class MultiOutcomeGroupArbEngine
                 Candidate: candidate,
                 Executed: executed,
                 Cost: opportunity.CostPerShare,
-                GuaranteedPayout: opportunity.GuaranteedPayoutPerShare
+                GuaranteedPayout: opportunity.GuaranteedPayoutPerShare,
+                Edge: opportunity.EdgePerShare
             );
         }
     }
@@ -738,19 +709,15 @@ public class MultiOutcomeGroupArbEngine
         decimal? NoBasketGuaranteedPayout,
         bool YesBasketCandidate,
         bool YesBasketExecuted,
-        decimal? YesBasketCost)
+        decimal? YesBasketCost,
+        bool Evaluated,
+        string VerificationStatus,
+        string SkipReason,
+        decimal? NoBasketEdge = null)
     {
-        public static GroupScanResult Empty(string groupKey, int marketsInGroup) =>
-            new(
-                groupKey,
-                marketsInGroup,
-                false,
-                false,
-                null,
-                null,
-                false,
-                false,
-                null
-            );
+        public static GroupScanResult Empty(string groupKey, int marketsInGroup, string verificationStatus, string skipReason) =>
+            new(groupKey, marketsInGroup, false, false, null, null, false, false, null, false, verificationStatus, skipReason);
     }
+
+    public record MultiOutcomeScanReport(int GroupsDetected, int GroupsEvaluated, int GroupsVerified, int GroupsHighConfidence, int GroupsCandidate, int ExecutableGroups, decimal BestNetEdge, string BestGroupKey, string TopSkipReason);
 }
