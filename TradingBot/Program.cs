@@ -151,7 +151,9 @@ logger.LogInfo("startup", $"[CONFIG] Scanner Mode={options.Mode} MarketScanLimit
 logger.LogInfo("startup", $"[CONFIG] MultiOutcome FeePerLeg={options.MultiOutcomeArbitrage.FeePerLeg} SlippagePerLeg={options.MultiOutcomeArbitrage.SlippageBufferPerLeg} SafetyPerGroup={options.MultiOutcomeArbitrage.SafetyBufferPerGroup} MinNetEdgePerBasket={options.MultiOutcomeArbitrage.MinMultiOutcomeEdge} MinExpectedProfit={options.MultiOutcomeArbitrage.MinExpectedProfit} EnableSensitivityDiagnostics={options.MultiOutcomeArbitrage.EnableSensitivityDiagnostics}");
 var activeProfileName = options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile;
 if (!options.MultiOutcomeArbitrage.CostProfiles.Profiles.TryGetValue(activeProfileName, out var activeProfileCfg)) activeProfileCfg = options.MultiOutcomeArbitrage.CostProfiles.Profiles["Conservative"];
-Console.WriteLine($"[COST_PROFILE] Active={activeProfileName} FeePerLeg={activeProfileCfg.FeePerLeg} SlippagePerLeg={activeProfileCfg.SlippageBufferPerLeg} Safety={activeProfileCfg.SafetyBufferPerGroup}");
+if (options.EnableLiveExecution && activeProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))
+    throw new InvalidOperationException("RawOnly cost profile cannot be active in live mode.");
+Console.WriteLine($"[COST_PROFILE] Active={activeProfileName} FeeModel={activeProfileCfg.FeeModel} FeePerLeg={activeProfileCfg.FeePerLeg} SlippagePerLeg={activeProfileCfg.SlippageBufferPerLeg} Safety={activeProfileCfg.SafetyBufferPerGroup}");
 
 _ = Task.Run(async () =>
 {
@@ -451,7 +453,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     recommendedActions.Add("Review candidate groups with higher gross edge.");
                     recommendedActions.Add("Check whether FeePerLeg config is realistic.");
                     var screenerPath = Path.Combine(contentRootPath, "exports/verified-basket-screener-latest.json");
-                    var snapshot = new VerifiedBasketScreener.Snapshot(options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile, DateTime.UtcNow, verifiedScreenResults, rankedScreen, recommendedActions);
+                    var snapshot = VerifiedBasketScreener.BuildSnapshot(options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile, verifiedScreenResults, recommendedActions);
                     VerifiedBasketScreener.Export(screenerPath, snapshot);
                     state.SetVerifiedBasketScreener(new VerifiedBasketScreenerDto(snapshot.ActiveCostProfile, snapshot.Timestamp, snapshot.VerifiedGroups.Cast<object>().ToArray(), snapshot.Ranking.Cast<object>().ToArray(), snapshot.RecommendedActions));
                     if (options.Logging.LogVerifiedBasketRanking && rankedScreen.Count > 0)
