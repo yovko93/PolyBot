@@ -160,19 +160,20 @@ public sealed class CostProfilesOptions
             ActiveProfile = "Conservative",
             Profiles = new Dictionary<string, CostProfileConfig>(StringComparer.OrdinalIgnoreCase)
             {
-                ["Conservative"] = new(0.001m, 0.0005m, 0.001m),
-                ["Realistic"] = new(0.0005m, 0.00025m, 0.001m),
-                ["PaperZeroFees"] = new(0m, 0.0005m, 0.001m),
-                ["RawOnly"] = new(0m, 0m, 0m)
+                ["Conservative"] = new("FixedPerLeg", 0.001m, 0.0005m, 0.001m),
+                ["PolymarketApprox"] = new("NoneOrExternalized", 0m, 0.0005m, 0.001m),
+                ["OrderbookOnly"] = new("None", 0m, 0m, 0.001m),
+                ["RawOnly"] = new("None", 0m, 0m, 0m)
             }
         };
     }
 }
 
-public sealed record CostProfileConfig(decimal FeePerLeg, decimal SlippageBufferPerLeg, decimal SafetyBufferPerGroup);
+public sealed record CostProfileConfig(string FeeModel, decimal FeePerLeg, decimal SlippageBufferPerLeg, decimal SafetyBufferPerGroup);
 
 public class MultiOutcomeLoggingOptions
 {
+    public bool LogVerifiedBasketDetails { get; set; } = false;
     public bool LogMultiOutcomeSummary { get; set; } = true;
     public bool LogMultiOutcomeDetailsOnlyWhenExecutable { get; set; } = true;
     public bool LogRejectedMultiOutcomeCandidates { get; set; } = false;
@@ -189,7 +190,10 @@ public class MultiOutcomeLoggingOptions
     public bool LogVerifiedBasketOnlyOnChangeRanking { get; set; } = true;
     public bool LogScanConfigEachCycle { get; set; } = false;
     public bool LogVerifiedBasketDetailsOnChangeOnly { get; set; } = true;
-    public int LogVerifiedBasketDetailsEveryNCycles { get; set; } = 25;
+    public int LogVerifiedBasketDetailsEveryNCycles { get; set; } = 50;
+    public int LogProfileComparisonEveryNCycles { get; set; } = 10;
+    public bool LogProfileComparisonSummary { get; set; } = true;
+    public bool LogNearExecutableOnlyOnChange { get; set; } = true;
     public int LogCandidateScanEveryNCycles { get; set; } = 10;
     public int LogVerifiedScanEveryNCycles { get; set; } = 5;
     public int LogVerifiedGroupPricingEveryNCycles { get; set; } = 25;
