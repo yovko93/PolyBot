@@ -5,15 +5,15 @@ public sealed class VerifiedBasketFormulaService
     public static VerifiedBasketFormulaResult Evaluate(IReadOnlyList<ResolvedNoAsk> pricedLegs, decimal feePerLeg, decimal slippagePerLeg, decimal safetyBufferPerGroup, bool requireAllPrices = true)
     {
         var warnings = new List<string>();
-        if (pricedLegs.Count < 2) return new(false, "InsufficientResolvedMarkets", warnings, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-        if (pricedLegs.Any(x => !x.NoAsk.HasValue)) return new(false, "MissingNoAsk", warnings, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        if (pricedLegs.Count < 2) return new(false, "InsufficientResolvedMarkets", warnings, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        if (pricedLegs.Any(x => !x.NoAsk.HasValue)) return new(false, "MissingNoAsk", warnings, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         var asks = pricedLegs.Select(x => x.NoAsk!.Value).ToList();
-        if (asks.Any(x => x < 0m || x > 1m)) return new(false, "InvalidPriceNormalization", warnings, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        if (asks.Any(x => x < 0m || x > 1m)) return new(false, "InvalidPriceNormalization", warnings, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         var legs = asks.Count;
         var guaranteed = legs - 1m;
-        if (legs > 2 && guaranteed == 1m) return new(false, "InvalidGuaranteedPayoutFormula", warnings, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        if (legs > 2 && guaranteed == 1m) return new(false, "InvalidGuaranteedPayoutFormula", warnings, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         var noAskSum = asks.Sum();
-        if (noAskSum > legs) return new(false, "InvalidBasketCost", warnings, guaranteed, noAskSum, asks.Min(), asks.Max(), asks.Average(), 0, 0, 0, 0);
+        if (noAskSum > legs) return new(false, "InvalidBasketCost", warnings, guaranteed, noAskSum, asks.Min(), asks.Max(), asks.Average(), 0, 0, 0, 0, 0);
         var gross = guaranteed - noAskSum;
         var fees = feePerLeg * legs;
         var slip = slippagePerLeg * legs;
