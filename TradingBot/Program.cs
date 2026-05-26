@@ -294,21 +294,25 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, "Rejected", "InsufficientResolvedMarkets", null, 0, 0, g.MissingMarketIds.Take(5).ToArray(), g.MissingConditionIds.Take(5).ToArray()));
                             continue;
                         }
-                        if (options.MultiOutcomeArbitrage.VerifiedGroupOrderbookPrefetchEnabled) await orderbookService.PrefetchBinarySnapshotsAsync(markets, stoppingToken);
-                        var snapshots = new List<BinaryOrderBookSnapshot>();
-                        foreach (var m in markets)
+                        if (options.MultiOutcomeArbitrage.VerifiedGroupOrderbookPrefetchEnabled)
+                            await orderbookService.PrefetchBinarySnapshotsAsync(markets.Take(options.MultiOutcomeArbitrage.MaxVerifiedGroupOrderbookRequestsPerCycle).ToList(), stoppingToken);
+                        var resolvedNoAsks = new List<ResolvedNoAsk>();
+                        foreach (var m in markets.Take(options.MultiOutcomeArbitrage.MaxVerifiedGroupOrderbookRequestsPerCycle))
                         {
                             var s = await orderbookService.GetBinarySnapshotAsync(m, stoppingToken);
-                            if (s is not null) snapshots.Add(s);
+                            resolvedNoAsks.Add(VerifiedGroupPricingService.ResolveNoAsk(m, s, DateTime.UtcNow, options.MultiOutcomeArbitrage.VerifiedGroupOrderbookMaxAgeMs));
                         }
-                        var missingNoAsk = snapshots.Count(x => x.NoAsk is null);
-                        if (missingNoAsk > 0)
+                        var missingNoAskLegs = resolvedNoAsks.Where(x => !x.NoAsk.HasValue).ToList();
+                        var noAskResolvedCount = resolvedNoAsks.Count - missingNoAskLegs.Count;
+                        if (missingNoAskLegs.Count > 0)
                         {
                             skipReason = "MissingNoAsk";
-                            groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, "VerifiedResolved", "MissingNoAsk", null, missingNoAsk, 0, Array.Empty<string>(), Array.Empty<string>()));
+                            Console.WriteLine($"[VERIFIED_GROUP_PRICING] Group={g.GroupKey} Legs={resolvedNoAsks.Count} NoAskResolved={noAskResolvedCount} MissingNoAsk={missingNoAskLegs.Count} MissingLiquidity=0 TopReason=MissingNoAsk");
+                            Console.WriteLine($"[VERIFIED_GROUP_MISSING_NO_ASK] Group={g.GroupKey} Missing={missingNoAskLegs.Count} Samples=[{string.Join(", ", missingNoAskLegs.Take(5).Select(x => $"{x.MarketId}:{x.FailureReason}"))}]");
+                            groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, "VerifiedResolved", "MissingNoAsk", null, missingNoAskLegs.Count, 0, missingNoAskLegs.Select(x => x.MarketId).Take(5).ToArray(), Array.Empty<string>()));
                             continue;
                         }
-                        var total = snapshots.Sum(x => x.NoAsk!.Price);
+                        var total = resolvedNoAsks.Sum(x => x.NoAsk!.Value);
                         var edge = 1m - total;
                         var isExec = edge > options.MultiOutcomeArbitrage.MinMultiOutcomeEdge;
                         if (isExec) verifiedExecutable++;

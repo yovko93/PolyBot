@@ -127,6 +127,10 @@ public class MultiOutcomeArbitrageOptions
     public bool AllowPartialVerifiedGroupEvaluation { get; set; } = true;
     public int MinResolvedMarketsForVerifiedGroup { get; set; } = 2;
     public bool RequireExactOutcomeCount { get; set; } = false;
+    public bool VerifiedGroupUseOrderbookCache { get; set; } = true;
+    public bool VerifiedGroupAllowHttpFetchOnCacheMiss { get; set; } = true;
+    public int VerifiedGroupOrderbookMaxAgeMs { get; set; } = 5000;
+    public int MaxVerifiedGroupOrderbookRequestsPerCycle { get; set; } = 200;
 }
 
 public class MultiOutcomeLoggingOptions
