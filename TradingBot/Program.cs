@@ -302,7 +302,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     monitor: monitor,
                     decisionService: executionDecisionService,
                     logRejectedCandidates: options.Logging.LogRejectedMultiOutcomeCandidates,
-                    logRejectedSummary: options.Logging.LogRejectedMultiOutcomeSummary || options.Logging.LogRejectedCandidateSummary,
+                    logRejectedSummary: false,
                     rejectedSampleSize: options.Logging.RejectedMultiOutcomeSampleSize > 0 ? options.Logging.RejectedMultiOutcomeSampleSize : options.Logging.RejectedCandidateSampleSize,
                     validator: multiOutcomeValidator);
                 multiOutcomeReport = await multiEngine.ScanAsync(filtered!, paper, orderbookSemaphore, stoppingToken);
@@ -376,6 +376,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             var missingIds = missingNoAskLegs.Select(x => x.MarketId).ToHashSet(StringComparer.OrdinalIgnoreCase);
                             var suggestedMarketIds = markets.Where(x => !missingIds.Contains(x.id) && x.active != false).Select(x => x.id).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
                             var suggestedConditionIds = markets.Where(x => !missingIds.Contains(x.id) && x.active != false && !string.IsNullOrWhiteSpace(x.conditionId)).Select(x => x.conditionId!).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                            var suggestion = options.MultiOutcomeReview.IncludeSuggestedPrunedAllowlist ? new { enabled = true, groupKey = g.GroupKey, title = g.Title, verificationStatus = "Verified", groupType = "MutuallyExclusiveWinner", allowedStrategy = "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", marketIds = suggestedMarketIds, conditionIds = suggestedConditionIds, requiredOutcomeCount = suggestedMarketIds.Length, requireExactOutcomeCount = false, suggestionReason = "MissingNoAsk legs excluded" } : null;
                             verifiedPricingExport.Add(new
                             {
                                 groupKey = g.GroupKey,
@@ -384,9 +385,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 missingNoAskCount = missingNoAskLegs.Count,
                                 pricedLegs = pricedLegs.Select(x => new { marketId = x.MarketId, conditionId = x.ConditionId, noAsk = x.NoAsk, noAskQuantity = x.NoAskQuantity, noAskSource = x.Source, yesBid = x.YesBid, yesBidQuantity = x.YesBidQuantity, noTokenId = x.NoTokenId, priceResolutionFailureReason = x.FailureReason }).ToArray(),
                                 missingPriceLegs = missingNoAskLegs.Select(x => new { marketId = x.MarketId, conditionId = x.ConditionId, noAsk = x.NoAsk, noAskQuantity = x.NoAskQuantity, noAskSource = x.Source, yesBid = x.YesBid, yesBidQuantity = x.YesBidQuantity, noTokenId = x.NoTokenId, priceResolutionFailureReason = x.FailureReason }).ToArray(),
-                                suggestedPrunedAllowlistTemplate = options.MultiOutcomeReview.IncludeSuggestedPrunedAllowlist ? new { enabled = true, groupKey = g.GroupKey, title = g.Title, verificationStatus = "Verified", groupType = "MutuallyExclusiveWinner", allowedStrategy = "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", marketIds = suggestedMarketIds, conditionIds = suggestedConditionIds, requiredOutcomeCount = suggestedMarketIds.Length, requireExactOutcomeCount = false } : null
+                                suggestedPrunedAllowlistTemplate = suggestion
                             });
-                            Console.WriteLine($"[VERIFIED_GROUP_PRICING_SUGGESTION] Group={g.GroupKey} MissingNoAsk={missingNoAskLegs.Count} SuggestedPrunedLegs={suggestedMarketIds.Length}");
+                            if (shouldLogPricing) Console.WriteLine($"[VERIFIED_GROUP_PRICING_SUGGESTION] Group={g.GroupKey} MissingNoAsk={missingNoAskLegs.Count} SuggestedPrunedLegs={suggestedMarketIds.Length}");
                             groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, "VerifiedResolved", "MissingNoAsk", null, missingNoAskLegs.Count, 0, missingNoAskLegs.Select(x => x.MarketId).Take(5).ToArray(), Array.Empty<string>()));
                             continue;
                         }
@@ -467,7 +468,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var missingNoAskTotal = groupDiagnostics.Sum(x => x.MissingNoAskCount);
                     var noAskResolvedTotal = verifiedPricingExport.Sum(x => int.Parse(System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(x)).RootElement.GetProperty("noAskResolvedCount").ToString()));
                     var bestPricing = pricingDiagnostics.Where(x=>x.SkipReason!="MissingNoAsk").OrderByDescending(x=>x.NetEdge).FirstOrDefault();
-                    Console.WriteLine($"[MULTI_CANDIDATE_SCAN] Candidates={multiOutcomeReport.GroupsDetected} Rejected={Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified)} TopReject={multiOutcomeReport.TopSkipReason}");
+                    var candidateReasons = string.Join(",", multiOutcomeReport.RejectedByReason.Select(x => $"{x.Key}:{x.Value}"));
+                    Console.WriteLine($"[MULTI_CANDIDATE_SCAN] Candidates={multiOutcomeReport.GroupsDetected} Rejected={Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified)} TopReject={multiOutcomeReport.TopSkipReason} RejectedByReason={{{candidateReasons}}}");
                     Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Evaluated={verifiedEvaluated} Executable={verifiedExecutable} Mismatch={verifiedMismatch} BestGross={(bestPricing is null ? "N/A" : bestPricing.GrossEdge)} BestNet={(bestPricing is null ? "N/A" : bestPricing.NetEdge)} BestGroup={(bestPricing is null ? "N/A" : bestPricing.GroupKey)} Classification={(bestPricing is not null && bestPricing.GrossEdge > 0m && bestPricing.NetEdge <= 0m ? "RawPositiveNetNegative" : "FarFromExecutable")}");
 
                     var triageRows = resolved.Select(g =>
@@ -476,7 +478,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         var pd = pricingDiagnostics.FirstOrDefault(x => x.GroupKey == g.GroupKey);
                         var hasSuggestedPrune = verifiedPricingExport.Any(x => System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(x)).RootElement.TryGetProperty("suggestedPrunedAllowlistTemplate", out var tpl) && tpl.ValueKind == System.Text.Json.JsonValueKind.Object && System.Text.Json.JsonSerializer.Serialize(x).Contains($"\"groupKey\":\"{g.GroupKey}\""));
                         var missing = gd?.MissingNoAskCount ?? 0;
-                        var classification = (missing > 0 || hasSuggestedPrune)
+                        var classification = (pd?.SkipReason == "FormulaOrNormalizationError" || pd?.SkipReason == "InvalidGuaranteedPayoutFormula")
+                            ? "FormulaError"
+                            : (missing > 0 || hasSuggestedPrune || ((pd?.Legs ?? g.ResolvedMarkets.Count) - missing) < (pd?.Legs ?? g.ResolvedMarkets.Count) || (pd?.SkipReason == "MissingNoAsk"))
                             ? "NeedsPruning"
                             : pd?.SkipReason == "Executable"
                             ? "Executable"
@@ -488,7 +492,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             "Executable" => "KeepEnabled",
                             "RawPositiveNetNegative" => "KeepForMonitoring",
                             "HopelessNegative" => "DisableUntilBetterPricing",
-                            "MissingPrices" => "PruneMissingNoAskLegs",
+                            "NeedsPruning" => "PruneMissingNoAskLegs",
                             _ => "NeedsManualReview"
                         };
                         return new
@@ -541,6 +545,18 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     File.WriteAllText(suggestedPath, System.Text.Json.JsonSerializer.Serialize(new
                     {
                         metadata = new { note = "Suggested only. Does not overwrite config/verified-multi-outcome-groups.json.", generatedAtUtc = DateTime.UtcNow },
+                        groups = triageRows.Select(t => new
+                        {
+                            t.groupKey,
+                            recommendedEnabled = t.recommendedConfigAction is "KeepEnabled" or "KeepForMonitoring",
+                            t.classification,
+                            t.recommendedConfigAction,
+                            suggestionReason = t.classification == "NeedsPruning" ? "MissingNoAsk legs excluded" : t.reason,
+                            suggestedAllowlistTemplate = verifiedPricingExport.Select(x => System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(x)).RootElement)
+                                .Where(e => e.TryGetProperty("groupKey", out var gk) && gk.GetString() == t.groupKey)
+                                .Select(e => e.TryGetProperty("suggestedPrunedAllowlistTemplate", out var tpl) ? tpl : default)
+                                .FirstOrDefault()
+                        }).ToArray(),
                         keepEnabledGroups = triageRows.Where(x => x.recommendedConfigAction is "KeepEnabled" or "KeepForMonitoring").Select(x => x.groupKey).ToArray(),
                         disableRecommendedGroups = triageRows.Where(x => x.recommendedConfigAction == "DisableUntilBetterPricing").Select(x => x.groupKey).ToArray(),
                         needsPruningGroups = triageRows.Where(x => x.recommendedConfigAction == "PruneMissingNoAskLegs").Select(x => x.groupKey).ToArray(),

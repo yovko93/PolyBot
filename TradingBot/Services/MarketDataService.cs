@@ -168,6 +168,11 @@ public class MarketDataService
             if (allMarkets.Count >= cap) { safetyCapReached = true; break; }
             offset += Math.Max(1, effectivePageSize);
         }
+        if (!discoveryCompleted && string.IsNullOrWhiteSpace(stoppedReason) && (safetyCapReached || pages >= expectedMaxPages || rawLoadedTotal >= cap))
+        {
+            safetyCapReached = true;
+            stoppedReason = "SafetyCapReached";
+        }
 
         var inactive = skippedClosed + skippedArchived + skippedInactive + skippedMissingTokenIds + skippedMissingOutcomes + skippedPastEndDate + skippedInvalidShape + skippedUnknownStatus;
         if (allMarkets.Count == 0)
