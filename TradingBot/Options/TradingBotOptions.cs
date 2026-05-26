@@ -110,6 +110,12 @@ public class MultiOutcomeArbitrageOptions
     public bool RequireAllNoPrices { get; set; } = true;
     public bool RequireAllMarketsActive { get; set; } = true;
     public decimal MinExecutableQty { get; set; } = 1m;
+    public bool EvaluateVerifiedGroupsAgainstFullPool { get; set; } = true;
+    public bool VerifiedGroupOrderbookPrefetchEnabled { get; set; } = true;
+    public int MaxVerifiedGroupsPerCycle { get; set; } = 10;
+    public int MaxVerifiedGroupLegs { get; set; } = 100;
+    public bool LogVerifiedGroupMismatchDetails { get; set; } = true;
+    public int VerifiedGroupMismatchSampleSize { get; set; } = 5;
 }
 
 public class MultiOutcomeLoggingOptions

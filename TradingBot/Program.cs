@@ -191,6 +191,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var emptyCycles = 0;
     var exportService = new MultiOutcomeCandidateExportService(options.MultiOutcomeReview, contentRootPath);
     var multiOutcomeValidator = new MutuallyExclusiveGroupValidator(options.MultiOutcomeArbitrage, contentRootPath);
+    var verifiedResolver = new VerifiedMultiOutcomeGroupResolver();
+    Console.WriteLine($"[ALLOWLIST] Loaded verified multi-outcome groups: {multiOutcomeValidator.LoadedAllowlistCount}");
     while (!stoppingToken.IsCancellationRequested)
     {
         var started = DateTime.UtcNow;
@@ -259,6 +261,54 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 var boundedCandidates = exportService.BuildBoundedCandidates(multiOutcomeReport.CandidateGroupsForReview, options.MultiOutcomeReview.TopCandidateGroupsForReview, options.MultiOutcomeReview.MaxMarketsPerCandidateGroup, includeMarkets: true);
                 state.SetMultiOutcomeCandidates(boundedCandidates);
                 exportService.ExportIfDue(multiOutcomeReport.CandidateGroupsForReview);
+
+                if (options.MultiOutcomeArbitrage.EvaluateVerifiedGroupsAgainstFullPool)
+                {
+                    var allByMarketId = discoveredMarkets.Where(m => !string.IsNullOrWhiteSpace(m.id)).ToDictionary(m => m.id, StringComparer.OrdinalIgnoreCase);
+                    var resolved = verifiedResolver.ResolveVerifiedGroups(multiOutcomeValidator.GetAllowlistedGroups(), allByMarketId, options.MultiOutcomeArbitrage);
+                    var verifiedMismatch = resolved.Count(x => x.ValidationStatus != "VerifiedGroupResolved");
+                    var verifiedResolved = resolved.Count - verifiedMismatch;
+                    var verifiedEvaluated = 0;
+                    var verifiedExecutable = 0;
+                    var skipReason = "None";
+                    var groupDiagnostics = new List<VerifiedGroupDiagnosticDto>();
+                    foreach (var g in resolved)
+                    {
+                        if (g.ValidationStatus != "VerifiedGroupResolved")
+                        {
+                            if (options.MultiOutcomeArbitrage.LogVerifiedGroupMismatchDetails)
+                            {
+                                Console.WriteLine($"[VERIFY_GROUP_MISMATCH] Group={g.GroupKey} RequiredMarkets={g.MarketIds.Count} FoundMarkets={g.ResolvedMarkets.Count} MissingMarkets={g.MissingMarketIds.Count} Source=FullDiscoveredPool MissingSample=[{string.Join(",", g.MissingMarketIds.Take(options.MultiOutcomeArbitrage.VerifiedGroupMismatchSampleSize))}] FoundSample=[{string.Join(",", g.ResolvedMarkets.Select(x=>x.id).Take(options.MultiOutcomeArbitrage.VerifiedGroupMismatchSampleSize))}]");
+                            }
+                            groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, g.ValidationStatus, g.RejectionReason, null, 0, 0, g.MissingMarketIds.Take(5).ToArray(), g.MissingConditionIds.Take(5).ToArray()));
+                            continue;
+                        }
+                        verifiedEvaluated++;
+                        var markets = g.ResolvedMarkets.Take(options.MultiOutcomeArbitrage.MaxVerifiedGroupLegs).ToList();
+                        if (options.MultiOutcomeArbitrage.VerifiedGroupOrderbookPrefetchEnabled) await orderbookService.PrefetchBinarySnapshotsAsync(markets, stoppingToken);
+                        var snapshots = new List<BinaryOrderBookSnapshot>();
+                        foreach (var m in markets)
+                        {
+                            var s = await orderbookService.GetBinarySnapshotAsync(m, stoppingToken);
+                            if (s is not null) snapshots.Add(s);
+                        }
+                        var missingNoAsk = snapshots.Count(x => x.NoAsk is null);
+                        if (missingNoAsk > 0)
+                        {
+                            skipReason = "MissingNoAsk";
+                            groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, "VerifiedResolved", "MissingNoAsk", null, missingNoAsk, 0, Array.Empty<string>(), Array.Empty<string>()));
+                            continue;
+                        }
+                        var total = snapshots.Sum(x => x.NoAsk!.Price);
+                        var edge = 1m - total;
+                        var isExec = edge > options.MultiOutcomeArbitrage.MinMultiOutcomeEdge;
+                        if (isExec) verifiedExecutable++;
+                        skipReason = isExec ? "Executable" : "NegativeEdge";
+                        groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, "VerifiedResolved", skipReason, edge, 0, 0, Array.Empty<string>(), Array.Empty<string>()));
+                    }
+                    Console.WriteLine($"[MULTI_SCAN] AutoCandidates={multiOutcomeReport.GroupsDetected} AutoRejected={Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified)} VerifiedConfigured={multiOutcomeValidator.LoadedAllowlistCount} VerifiedResolved={verifiedResolved} VerifiedEvaluated={verifiedEvaluated} VerifiedExecutable={verifiedExecutable} VerifiedMismatch={verifiedMismatch} BestVerifiedEdge={groupDiagnostics.Where(x=>x.BestEdge.HasValue).Select(x=>x.BestEdge!.Value).DefaultIfEmpty(0m).Max()} TopReject={skipReason}");
+                    state.SetMultiOutcomeDiagnostics(new MultiOutcomeDiagnosticsDto(multiOutcomeReport.GroupsDetected,multiOutcomeReport.GroupsVerified,Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified),multiOutcomeReport.ExecutableGroups,multiOutcomeReport.RejectedByReason.ToDictionary(k=>k.Key,v=>v.Value),multiOutcomeReport.TopRejectedSamples.Take(25).Select(x=>$"{x.GroupKey}:{x.Reason}").ToArray(),Array.Empty<string>(),multiOutcomeValidator.LoadedAllowlistCount,Array.Empty<string>(),Guid.NewGuid().ToString("N"),DateTime.UtcNow,state.NextSeq(),multiOutcomeValidator.LoadedAllowlistCount,verifiedResolved,verifiedMismatch,verifiedEvaluated,verifiedExecutable,groupDiagnostics,skipReason));
+                }
             }
 
             var pairs = pairLoader.Load();
@@ -412,7 +462,8 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
         new[] { "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", "CROSS_EXCHANGE_KALSHI_POLYMARKET", "CrossMarket semantic pairs" });
     var multiOutcomeGroupDiagnostics = new MultiOutcomeGroupDiagnosticsSnapshot(multiOutcomeReport.GroupsDetected, 0, 0, multiOutcomeReport.GroupsEvaluated, 0, multiOutcomeReport.BestVerifiedEdge, multiOutcomeReport.ExecutableGroups, multiOutcomeReport.TopSkipReason);
     var rejectedGroupsCount = Math.Max(0, multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified);
-    state.SetMultiOutcomeDiagnostics(new MultiOutcomeDiagnosticsDto(multiOutcomeReport.GroupsDetected,multiOutcomeReport.GroupsVerified,rejectedGroupsCount,multiOutcomeReport.ExecutableGroups,multiOutcomeReport.RejectedByReason.ToDictionary(k=>k.Key,v=>v.Value),multiOutcomeReport.TopRejectedSamples.Take(25).Select(x=>$"{x.GroupKey}:{x.Reason}").ToArray(),Array.Empty<string>(),0,Array.Empty<string>(),Guid.NewGuid().ToString("N"),DateTime.UtcNow,state.NextSeq()));
+    if (state.MultiOutcomeDiagnostics is null)
+        state.SetMultiOutcomeDiagnostics(new MultiOutcomeDiagnosticsDto(multiOutcomeReport.GroupsDetected,multiOutcomeReport.GroupsVerified,rejectedGroupsCount,multiOutcomeReport.ExecutableGroups,multiOutcomeReport.RejectedByReason.ToDictionary(k=>k.Key,v=>v.Value),multiOutcomeReport.TopRejectedSamples.Take(25).Select(x=>$"{x.GroupKey}:{x.Reason}").ToArray(),Array.Empty<string>(),0,Array.Empty<string>(),Guid.NewGuid().ToString("N"),DateTime.UtcNow,state.NextSeq()));
     var diag = new OpportunityDiagnosticsSnapshot(
         Guid.NewGuid().ToString("N"),
         DateTime.UtcNow,

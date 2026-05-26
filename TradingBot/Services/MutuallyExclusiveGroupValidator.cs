@@ -45,6 +45,7 @@ public class MutuallyExclusiveGroupValidator
 
     public int LoadedAllowlistCount => _verifiedGroups.Count;
     public IReadOnlyCollection<string> AllowlistKeys => _verifiedGroups.Keys.ToList();
+    public IReadOnlyList<VerifiedMultiOutcomeGroupConfig> GetAllowlistedGroups() => _verifiedGroups.Values.ToList();
 
     public GroupValidationResult Validate(string groupKey, string groupKind, IReadOnlyList<BasketArbLeg> legs)
     {
