@@ -77,6 +77,22 @@ app.MapGet("/api/bot/multi-outcome-candidates", (BotRuntimeState s, int? limit, 
     }).ToArray();
     return Results.Ok(stripped);
 });
+app.MapGet("/api/bot/multi-outcome-review-report", (BotRuntimeState s, int? limit, int? minScore, bool? includeDoNotVerify) =>
+{
+    var capped = Math.Clamp(limit ?? 20, 1, 200);
+    var score = minScore ?? 0;
+    var includeRejected = includeDoNotVerify ?? false;
+    var filtered = s.MultiOutcomeReviewReport.Where(x =>
+    {
+        var node = System.Text.Json.JsonSerializer.SerializeToNode(x)!.AsObject();
+        var candidateScore = node["candidateQualityScore"]?.GetValue<int>() ?? int.MinValue;
+        var action = node["recommendedAction"]?.GetValue<string>() ?? string.Empty;
+        if (candidateScore < score) return false;
+        if (!includeRejected && (action == "DoNotVerify" || action == "LikelyFalsePositive")) return false;
+        return true;
+    }).Take(capped).ToArray();
+    return Results.Ok(filtered);
+});
 app.MapGet("/api/bot/risk", (BotRuntimeState s, IRiskManager risk) => Results.Ok(new { runtime = s.Risk, executionRisk = risk.GetRiskSnapshot() }));
 app.MapGet("/api/bot/execution-audit", (ExecutionAuditLog audit, int? limit) => audit.List(Math.Clamp(limit ?? 300, 1, 1000)));
 app.MapGet("/api/bot/execution-plans", (BotRuntimeState s, int? limit) => s.Trades().TakeLast(Math.Clamp(limit ?? 100, 1, 500)).ToArray());
@@ -195,6 +211,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var lastDiscoverySummary = new MarketDiscoverySummary();
     var emptyCycles = 0;
     var verifiedBasketCycle = 0;
+    var verifiedBasketRankingCycle = 0;
+    var lastRankingFingerprint = string.Empty;
     var verifiedBasketLastFingerprint = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     var verifiedBasketLastExecutable = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
     var exportService = new MultiOutcomeCandidateExportService(options.MultiOutcomeReview, contentRootPath);
@@ -233,7 +251,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             var configuredPoolLimit = options.UseAllDiscoveredMarkets ? options.MaxMarketsInPool : (options.MaxMarketsInPool > 0 ? options.MaxMarketsInPool : options.MarketScanLimit);
             var effectiveMarketLimit = configuredPoolLimit <= 0 ? discoveredMarkets.Count : Math.Min(configuredPoolLimit, discoveredMarkets.Count);
             var poolLimitReason = effectiveMarketLimit < discoveredMarkets.Count ? "ConfiguredMaxMarketsToScan" : "AllDiscoveredMarkets";
-            Console.WriteLine($"[SCAN_CONFIG] ActiveMarkets={discoveredMarkets.Count} PoolLimit={effectiveMarketLimit} Reason={poolLimitReason}");
+            if (options.Logging.LogScanConfigEachCycle) Console.WriteLine($"[SCAN_CONFIG] ActiveMarkets={discoveredMarkets.Count} PoolLimit={effectiveMarketLimit} Reason={poolLimitReason}");
             var scanPool = discoveredMarkets.Take(effectiveMarketLimit).ToList();
             var batchSize = options.Mode == "AllAtOnce" ? scanPool.Count : Math.Min(options.ScanBatchSize, scanPool.Count);
             batchSize = Math.Min(batchSize, options.MaxOrderbooksPerCycle);
@@ -267,7 +285,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     validator: multiOutcomeValidator);
                 multiOutcomeReport = await multiEngine.ScanAsync(filtered!, paper, orderbookSemaphore, stoppingToken);
                 var boundedCandidates = exportService.BuildBoundedCandidates(multiOutcomeReport.CandidateGroupsForReview, options.MultiOutcomeReview.TopCandidateGroupsForReview, options.MultiOutcomeReview.MaxMarketsPerCandidateGroup, includeMarkets: true);
+                var reviewReport = exportService.BuildReviewReport(multiOutcomeReport.CandidateGroupsForReview, options.MultiOutcomeReview.AllowUnpricedLegsInTemplate);
                 state.SetMultiOutcomeCandidates(boundedCandidates);
+                state.SetMultiOutcomeReviewReport(reviewReport);
                 exportService.ExportIfDue(multiOutcomeReport.CandidateGroupsForReview);
 
                 if (options.MultiOutcomeArbitrage.EvaluateVerifiedGroupsAgainstFullPool)
@@ -402,7 +422,16 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var snapshot = new VerifiedBasketScreener.Snapshot(options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile, DateTime.UtcNow, verifiedScreenResults, rankedScreen, recommendedActions);
                     VerifiedBasketScreener.Export(screenerPath, snapshot);
                     state.SetVerifiedBasketScreener(new VerifiedBasketScreenerDto(snapshot.ActiveCostProfile, snapshot.Timestamp, snapshot.VerifiedGroups.Cast<object>().ToArray(), snapshot.Ranking.Cast<object>().ToArray(), snapshot.RecommendedActions));
-                    if (options.Logging.LogVerifiedBasketRanking && rankedScreen.Count > 0) Console.WriteLine($"[VERIFIED_BASKET_RANKING] Count={rankedScreen.Count} BestGrossEdge={rankedScreen[0].GrossEdge} BestNetEdge={rankedScreen[0].ActiveProfileNetEdge} BestGroup={rankedScreen[0].GroupKey} Classification={rankedScreen[0].Classification}");
+                    if (options.Logging.LogVerifiedBasketRanking && rankedScreen.Count > 0)
+                    {
+                        verifiedBasketRankingCycle++;
+                        var rankingFingerprint = $"{rankedScreen.Count}|{rankedScreen[0].GrossEdge}|{rankedScreen[0].ActiveProfileNetEdge}|{rankedScreen[0].GroupKey}|{rankedScreen[0].Classification}";
+                        var shouldLogRanking = !options.Logging.LogVerifiedBasketOnlyOnChangeRanking
+                            || rankingFingerprint != lastRankingFingerprint
+                            || (options.Logging.LogVerifiedBasketRankingEveryNCycles > 0 && verifiedBasketRankingCycle % options.Logging.LogVerifiedBasketRankingEveryNCycles == 0);
+                        lastRankingFingerprint = rankingFingerprint;
+                        if (shouldLogRanking) Console.WriteLine($"[VERIFIED_BASKET_RANKING] Count={rankedScreen.Count} BestGrossEdge={rankedScreen[0].GrossEdge} BestNetEdge={rankedScreen[0].ActiveProfileNetEdge} BestGroup={rankedScreen[0].GroupKey} Classification={rankedScreen[0].Classification}");
+                    }
                     var bestVerifiedEdge = groupDiagnostics.Where(x=>x.BestEdge.HasValue).Select(x=>x.BestEdge!.Value).Cast<decimal?>().DefaultIfEmpty(null).Max();
                     var missingNoAskTotal = groupDiagnostics.Sum(x => x.MissingNoAskCount);
                     var noAskResolvedTotal = verifiedPricingExport.Sum(x => int.Parse(System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(x)).RootElement.GetProperty("noAskResolvedCount").ToString()));
