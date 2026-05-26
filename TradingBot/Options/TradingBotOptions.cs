@@ -130,10 +130,11 @@ public class MultiOutcomeReviewOptions
 {
     public bool Enabled { get; set; } = true;
     public int TopCandidateGroupsForReview { get; set; } = 50;
+    public int MaxMarketsPerCandidateGroup { get; set; } = 100;
     public int MinDetectedMarkets { get; set; } = 2;
     public string SortBy { get; set; } = "BestNetEdge";
     public bool ExportCandidates { get; set; } = true;
-    public int ExportIntervalMinutes { get; set; } = 10;
+    public int ExportIntervalMinutes { get; set; } = 5;
     public string ExportPath { get; set; } = "exports/multi-outcome-candidates-latest.json";
 }
 
