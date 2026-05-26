@@ -62,6 +62,7 @@ app.MapGet("/api/bot/opportunity-diagnostics", (BotRuntimeState s, int? nearMiss
     return Results.Ok(d with { NearMissTopN = d.NearMissTopN.Take(capped).ToArray() });
 });
 app.MapGet("/api/bot/multi-outcome-diagnostics", (BotRuntimeState s) => Results.Ok(s.MultiOutcomeDiagnostics));
+app.MapGet("/api/bot/verified-basket-screener", (BotRuntimeState s) => Results.Ok(s.VerifiedBasketScreener));
 app.MapGet("/api/bot/multi-outcome-candidates", (BotRuntimeState s, int? limit, bool? includeMarkets) =>
 {
     var capped = Math.Clamp(limit ?? 25, 1, 200);
@@ -112,6 +113,9 @@ logger.LogSuccess("startup", $"Bot API listening on {listenUrl}");
 logger.LogSuccess("startup", $"ExecutionMode={options.ExecutionMode}; EnablePaperTrading={options.EnablePaperTrading}; EnableLiveExecution={options.EnableLiveExecution}");
 logger.LogInfo("startup", $"[CONFIG] Scanner Mode={options.Mode} MarketScanLimit={options.MarketScanLimit} MaxMarketsToDiscover={options.MaxMarketsToDiscover} ScanBatchSize={options.ScanBatchSize} MaxOrderbooksPerCycle={options.MaxOrderbooksPerCycle} MaxConcurrentOrderbookRequests={options.MaxConcurrentOrderbookRequests} LogEmptyOpportunityCycles={options.LogEmptyOpportunityCycles}");
 logger.LogInfo("startup", $"[CONFIG] MultiOutcome FeePerLeg={options.MultiOutcomeArbitrage.FeePerLeg} SlippagePerLeg={options.MultiOutcomeArbitrage.SlippageBufferPerLeg} SafetyPerGroup={options.MultiOutcomeArbitrage.SafetyBufferPerGroup} MinNetEdgePerBasket={options.MultiOutcomeArbitrage.MinMultiOutcomeEdge} MinExpectedProfit={options.MultiOutcomeArbitrage.MinExpectedProfit} EnableSensitivityDiagnostics={options.MultiOutcomeArbitrage.EnableSensitivityDiagnostics}");
+var activeProfileName = options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile;
+if (!options.MultiOutcomeArbitrage.CostProfiles.Profiles.TryGetValue(activeProfileName, out var activeProfileCfg)) activeProfileCfg = options.MultiOutcomeArbitrage.CostProfiles.Profiles["Conservative"];
+Console.WriteLine($"[COST_PROFILE] Active={activeProfileName} FeePerLeg={activeProfileCfg.FeePerLeg} SlippagePerLeg={activeProfileCfg.SlippageBufferPerLeg} Safety={activeProfileCfg.SafetyBufferPerGroup}");
 
 _ = Task.Run(async () =>
 {
@@ -279,6 +283,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var pricingDiagnostics = new List<VerifiedGroupPricingDto>();
                     var basketCostDiagnostics = new List<VerifiedBasketCostBreakdownDto>();
                     var verifiedPricingExport = new List<object>();
+                    var verifiedScreenResults = new List<VerifiedBasketScreener.ScreenResult>();
                     foreach (var g in resolved)
                     {
                         if (g.ValidationStatus != "VerifiedGroupResolved")
@@ -334,8 +339,12 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, "VerifiedResolved", "MissingNoAsk", null, missingNoAskLegs.Count, 0, missingNoAskLegs.Select(x => x.MarketId).Take(5).ToArray(), Array.Empty<string>()));
                             continue;
                         }
-                        var formula = VerifiedBasketFormulaService.Evaluate(resolvedNoAsks, options.MultiOutcomeArbitrage.FeePerLeg, options.MultiOutcomeArbitrage.SlippageBufferPerLeg, options.MultiOutcomeArbitrage.SafetyBufferPerGroup, options.MultiOutcomeArbitrage.RequireAllNoPrices);
-                        var breakdown = VerifiedBasketDiagnostics.Compute(g.GroupKey, resolvedNoAsks.Count, formula, options.MultiOutcomeArbitrage.FeePerLeg, options.MultiOutcomeArbitrage.SlippageBufferPerLeg, options.MultiOutcomeArbitrage.NearExecutableCostReductionThreshold, options.MultiOutcomeArbitrage.FarFromExecutableCostReductionThreshold);
+                        var activeCostProfileName = options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile;
+                        if (!options.MultiOutcomeArbitrage.CostProfiles.Profiles.TryGetValue(activeCostProfileName, out var activeCostProfile)) activeCostProfile = options.MultiOutcomeArbitrage.CostProfiles.Profiles["Conservative"];
+                        var formula = VerifiedBasketFormulaService.Evaluate(resolvedNoAsks, activeCostProfile.FeePerLeg, activeCostProfile.SlippageBufferPerLeg, activeCostProfile.SafetyBufferPerGroup, options.MultiOutcomeArbitrage.RequireAllNoPrices);
+                        var breakdown = VerifiedBasketDiagnostics.Compute(g.GroupKey, resolvedNoAsks.Count, formula, activeCostProfile.FeePerLeg, activeCostProfile.SlippageBufferPerLeg, options.MultiOutcomeArbitrage.NearExecutableCostReductionThreshold, options.MultiOutcomeArbitrage.FarFromExecutableCostReductionThreshold);
+                        var screen = VerifiedBasketScreener.Evaluate(g.GroupKey, resolvedNoAsks, options.MultiOutcomeArbitrage);
+                        verifiedScreenResults.Add(screen);
                         basketCostDiagnostics.Add(new VerifiedBasketCostBreakdownDto(g.GroupKey, resolvedNoAsks.Count, formula.GuaranteedPayout, formula.NoAskSum, formula.GrossEdge, formula.Fees, formula.Slippage, formula.SafetyBuffer, formula.NetEdge, breakdown.CurrentTotalCosts, breakdown.CostReductionNeeded, breakdown.Classification, breakdown.DominantCostComponent, new VerifiedBasketSensitivityDto(breakdown.SensitivityScenarios.Actual, breakdown.SensitivityScenarios.ZeroFees, breakdown.SensitivityScenarios.ZeroSlippage, breakdown.SensitivityScenarios.ZeroFeesZeroSlippage, breakdown.SensitivityScenarios.RawOnly, breakdown.SensitivityScenarios.HalfFeesHalfSlippage), new VerifiedBasketBreakEvenDto(formula.GrossEdge, breakdown.CurrentTotalCosts, breakdown.CostReductionNeeded, breakdown.BreakEvenFeeLimit, breakdown.BreakEvenSlippageLimit)));
                         var currentExec = formula.NetEdge > options.MultiOutcomeArbitrage.MinMultiOutcomeEdge;
                         var fingerprint = $"{formula.GrossEdge}|{formula.Fees}|{formula.Slippage}|{formula.SafetyBuffer}|{formula.NetEdge}";
@@ -383,6 +392,17 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             suggestedPrunedAllowlistTemplate = (object?)null
                         });
                     }
+                    var rankedScreen = verifiedScreenResults.OrderByDescending(x => x.ActiveProfileNetEdge).ToList();
+                    var recommendedActions = new List<string>();
+                    if (rankedScreen.Count <= 1) recommendedActions.Add("Add more verified groups; only one allowlisted group exists.");
+                    if (rankedScreen.Any(x => x.GrossEdge > 0 && x.ActiveProfileNetEdge <= 0)) recommendedActions.Add("FIFA basket has raw edge but not enough after costs.");
+                    recommendedActions.Add("Review candidate groups with higher gross edge.");
+                    recommendedActions.Add("Check whether FeePerLeg config is realistic.");
+                    var screenerPath = Path.Combine(contentRootPath, "exports/verified-basket-screener-latest.json");
+                    var snapshot = new VerifiedBasketScreener.Snapshot(options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile, DateTime.UtcNow, verifiedScreenResults, rankedScreen, recommendedActions);
+                    VerifiedBasketScreener.Export(screenerPath, snapshot);
+                    state.SetVerifiedBasketScreener(new VerifiedBasketScreenerDto(snapshot.ActiveCostProfile, snapshot.Timestamp, snapshot.VerifiedGroups.Cast<object>().ToArray(), snapshot.Ranking.Cast<object>().ToArray(), snapshot.RecommendedActions));
+                    if (options.Logging.LogVerifiedBasketRanking && rankedScreen.Count > 0) Console.WriteLine($"[VERIFIED_BASKET_RANKING] Count={rankedScreen.Count} BestGrossEdge={rankedScreen[0].GrossEdge} BestNetEdge={rankedScreen[0].ActiveProfileNetEdge} BestGroup={rankedScreen[0].GroupKey} Classification={rankedScreen[0].Classification}");
                     var bestVerifiedEdge = groupDiagnostics.Where(x=>x.BestEdge.HasValue).Select(x=>x.BestEdge!.Value).Cast<decimal?>().DefaultIfEmpty(null).Max();
                     var missingNoAskTotal = groupDiagnostics.Sum(x => x.MissingNoAskCount);
                     var noAskResolvedTotal = verifiedPricingExport.Sum(x => int.Parse(System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(x)).RootElement.GetProperty("noAskResolvedCount").ToString()));
