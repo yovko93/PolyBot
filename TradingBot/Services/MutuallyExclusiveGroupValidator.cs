@@ -60,13 +60,13 @@ public class MutuallyExclusiveGroupValidator
         var independent = events.Count > 1;
 
         if (!_verifiedGroups.TryGetValue(groupKey, out var allowlisted))
-            return Reject("UnverifiedGroup", containsSpread, containsTotal, containsNested, independent, !sameEvent, warnings);
+            return Reject("AutoCandidateUnverified", containsSpread, containsTotal, containsNested, independent, !sameEvent, warnings);
 
         if (allowlisted.MarketIds.Count == 0 && allowlisted.ConditionIds.Count == 0)
             return new GroupValidationResult(false, "ConfiguredButIncomplete", 0m, "VerifiedGroupIncomplete", "MutuallyExclusiveWinner", true, true, false, containsNested, independent, containsSpread, containsTotal, !sameEvent, warnings);
 
         if (!IsAllowlistMatch(allowlisted, legs))
-            return Reject("VerifiedGroupMarketMismatch", containsSpread, containsTotal, containsNested, independent, !sameEvent, warnings);
+            return Reject("AutoCandidatePartialOverlap", containsSpread, containsTotal, containsNested, independent, !sameEvent, warnings);
 
         if (groupKind.Equals("generic", StringComparison.OrdinalIgnoreCase) && !_options.AllowGenericGroupsForExecution)
             return Reject("GenericGroupNotExecutable", containsSpread, containsTotal, containsNested, independent, !sameEvent, warnings);

@@ -75,6 +75,7 @@ public class MarketDiscoveryOptions
     public int MaxRetriesPerPage { get; set; } = 3;
     public int RetryBackoffMs { get; set; } = 1000;
     public bool ContinueWithPartialDiscoveryOnError { get; set; } = true;
+    public bool TreatSafetyCapAsWarning { get; set; } = false;
 }
 
 public class DiagnosticsOptions
@@ -136,6 +137,15 @@ public class MultiOutcomeArbitrageOptions
     public int VerifiedGroupOrderbookMaxAgeMs { get; set; } = 5000;
     public int MaxVerifiedGroupOrderbookRequestsPerCycle { get; set; } = 200;
     public CostProfilesOptions CostProfiles { get; set; } = CostProfilesOptions.CreateDefault();
+    public VerifiedGroupTriageOptions VerifiedGroupTriage { get; set; } = new();
+}
+
+public class VerifiedGroupTriageOptions
+{
+    public decimal HopelessGrossEdgeThreshold { get; set; } = -0.25m;
+    public decimal NearExecutableCostReductionThreshold { get; set; } = 0.01m;
+    public bool KeepRawPositiveGroups { get; set; } = true;
+    public bool RecommendDisableHopelessGroups { get; set; } = true;
 }
 
 public sealed class CostProfilesOptions
@@ -178,6 +188,11 @@ public class MultiOutcomeLoggingOptions
     public int LogVerifiedBasketRankingEveryNCycles { get; set; } = 10;
     public bool LogVerifiedBasketOnlyOnChangeRanking { get; set; } = true;
     public bool LogScanConfigEachCycle { get; set; } = false;
+    public bool LogVerifiedBasketDetailsOnChangeOnly { get; set; } = true;
+    public int LogVerifiedBasketDetailsEveryNCycles { get; set; } = 25;
+    public int LogCandidateScanEveryNCycles { get; set; } = 10;
+    public int LogVerifiedScanEveryNCycles { get; set; } = 5;
+    public int LogVerifiedGroupPricingEveryNCycles { get; set; } = 25;
 }
 
 
@@ -196,6 +211,9 @@ public class MultiOutcomeReviewOptions
     public string ExportVerifiedPricingPath { get; set; } = "exports/verified-group-pricing-latest.json";
     public bool IncludeSuggestedPrunedAllowlist { get; set; } = true;
     public bool AllowUnpricedLegsInTemplate { get; set; } = false;
+    public string ExportVerifiedTriagePath { get; set; } = "exports/verified-group-triage-latest.json";
+    public string ExportNextGroupsToVerifyPath { get; set; } = "exports/next-groups-to-verify-latest.json";
+    public string ExportSuggestedVerifiedGroupsPath { get; set; } = "exports/verified-multi-outcome-groups-suggested.json";
 }
 
 public class RuntimeStateOptions

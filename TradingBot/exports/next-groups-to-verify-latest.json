@@ -1,0 +1,248 @@
+[
+  {
+    "groupKey": "winner:2026 busan mayoral election|kind:person",
+    "title": "winner:2026 busan mayoral election|kind:person",
+    "detectedMarketsCount": 4,
+    "pricedLegs": 4,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:2026 busan mayoral election|kind:person",
+      "title": "winner:2026 busan mayoral election|kind:person",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "679162",
+        "679157",
+        "679156",
+        "679154"
+      ],
+      "conditionIds": [
+        "0x9a108beb3347ff75d7deefc2b61a42897275cf436282027e3e019f1bd1ae902a",
+        "0xe3b7f338805e6218cc48883337066d12600b37450ff67ecd867dd2380d75ce00",
+        "0x7159c9392022c0d7c2190a7a34f9f2c0bded82596f7c22f343c38929b764c252",
+        "0x8fe6708a0eb52edb74a042f9bfff14cdd8d14d5c2505bc625f060ec8d1f64f44"
+      ],
+      "requiredOutcomeCount": 4,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-05-26"
+    }
+  },
+  {
+    "groupKey": "winner:2026 women s french open|kind:generic",
+    "title": "winner:2026 women s french open|kind:generic",
+    "detectedMarketsCount": 2,
+    "pricedLegs": 2,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:2026 women s french open|kind:generic",
+      "title": "winner:2026 women s french open|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "1087798",
+        "1087763"
+      ],
+      "conditionIds": [
+        "0xbacfd7a02f0b4a70ab12110fbc47c54296f5597a641547f45998f8dabeccb3eb",
+        "0xc8e467fbf7e96bd9bdf64ced89bbc8f6ad0ecf2c78391ee8e778b6f6e6194ee7"
+      ],
+      "requiredOutcomeCount": 2,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-05-26"
+    }
+  },
+  {
+    "groupKey": "winner:2026 roland garros men s singles|kind:generic",
+    "title": "winner:2026 roland garros men s singles|kind:generic",
+    "detectedMarketsCount": 2,
+    "pricedLegs": 2,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:2026 roland garros men s singles|kind:generic",
+      "title": "winner:2026 roland garros men s singles|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "1920464",
+        "1920456"
+      ],
+      "conditionIds": [
+        "0x431588150ce3babe78d8d03e8eb68fdd5924d33ec011effe30e9ed5237d140c7",
+        "0x7f8e9f66726ced43cf171b2522917da9351f8ff70e30dd24171bcf2f1b5f1241"
+      ],
+      "requiredOutcomeCount": 2,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-05-26"
+    }
+  },
+  {
+    "groupKey": "winner:2026 world series|kind:generic",
+    "title": "winner:2026 world series|kind:generic",
+    "detectedMarketsCount": 3,
+    "pricedLegs": 3,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:2026 world series|kind:generic",
+      "title": "winner:2026 world series|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "1235565",
+        "1235562",
+        "1235564"
+      ],
+      "conditionIds": [
+        "0xa5f1c7110b05fde645258c7c9e58d3ddbec94631db35b22f7a02db94d4571a29",
+        "0x7c6d624563d7efee94f7ef54da8d35fd794b3cde9ead02df0d413d6ad3886570",
+        "0x9e238daa4cc2b89379314f5c1873e3c0d07d26bf2eb69a3d618a7b5d13b165a0"
+      ],
+      "requiredOutcomeCount": 3,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-05-26"
+    }
+  },
+  {
+    "groupKey": "winner:most seats in 2026 armenian national assembly election|kind:person",
+    "title": "winner:most seats in 2026 armenian national assembly election|kind:person",
+    "detectedMarketsCount": 3,
+    "pricedLegs": 3,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:most seats in 2026 armenian national assembly election|kind:person",
+      "title": "winner:most seats in 2026 armenian national assembly election|kind:person",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "942048",
+        "942042",
+        "942047"
+      ],
+      "conditionIds": [
+        "0xf5b5255c6e5e96ac3cb2ed9e1a54754ed9f1d7c874a609e2b534b17378a447b7",
+        "0x28a5449552f62f685ae27710d2e2b898b1c3d43ba4e1ffb3f1ecb8bad0536225",
+        "0xc1e6e7ddb5bc4119391c57f62bc3f2ed1fdf1d2b02cbba15df7782a988fe74b4"
+      ],
+      "requiredOutcomeCount": 3,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-05-26"
+    }
+  },
+  {
+    "groupKey": "winner:group k in 2026 fifa world cup|kind:generic",
+    "title": "winner:group k in 2026 fifa world cup|kind:generic",
+    "detectedMarketsCount": 2,
+    "pricedLegs": 2,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:group k in 2026 fifa world cup|kind:generic",
+      "title": "winner:group k in 2026 fifa world cup|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "840174",
+        "840172"
+      ],
+      "conditionIds": [
+        "0x881c23cb7b27ca775bfc550550ee94e6dc980a1b4dff7ca7f6f5f24e95bff060",
+        "0xeb188213dda8c13a4783822755d725a5ac3fa80f5c38879762e395cac46873df"
+      ],
+      "requiredOutcomeCount": 2,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-05-26"
+    }
+  },
+  {
+    "groupKey": "winner:group f in 2026 fifa world cup|kind:generic",
+    "title": "winner:group f in 2026 fifa world cup|kind:generic",
+    "detectedMarketsCount": 2,
+    "pricedLegs": 2,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:group f in 2026 fifa world cup|kind:generic",
+      "title": "winner:group f in 2026 fifa world cup|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "839435",
+        "839434"
+      ],
+      "conditionIds": [
+        "0xde6e8331eaaf0b212f688a04f6c4ff5f895ab633a467cb3e9f3da48fce7c6801",
+        "0x9ad73ff7534b1051e2dad167a0b1617ae20f64f20770ae8bf89a59a7a7290669"
+      ],
+      "requiredOutcomeCount": 2,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-05-26"
+    }
+  }
+]

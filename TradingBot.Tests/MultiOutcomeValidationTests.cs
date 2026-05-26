@@ -15,7 +15,7 @@ public class MultiOutcomeValidationTests
         var v = new MutuallyExclusiveGroupValidator(new MultiOutcomeArbitrageOptions());
         var r = v.Validate("colon-event:spread|kind:generic","generic", [Leg("Spread: Knicks (-1.5)"),Leg("Spread: Knicks (-2.5)"),Leg("Spread: Knicks (-3.5)")]);
         Assert.False(r.IsValidForNoBasketArbitrage);
-        Assert.Equal("UnverifiedGroup", r.RejectionReason);
+        Assert.Equal("AutoCandidateUnverified", r.RejectionReason);
     }
 
     [Fact]

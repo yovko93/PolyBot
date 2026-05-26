@@ -12,7 +12,7 @@ public class MultiOutcomeReviewAssistantTests
     private static MultiOutcomeGroupArbEngine.CandidateGroupReview G(string key, string title, string kind, int count, params string[] qs)
     {
         var markets = qs.Select((q, i) => new Market { id = $"m{i}", conditionId = $"c{i}", question = q, active = true, closed = false }).ToArray();
-        return new(key, title, kind, count, "Candidate", "UnverifiedGroup", 0.95m, 0.05m, 0.01m, 1m, new[] { "w" }, markets);
+        return new(key, title, kind, count, "Candidate", "AutoCandidateUnverified", 0.95m, 0.05m, 0.01m, 1m, new[] { "w" }, markets);
     }
 
     [Fact] public void Winner_group_gets_positive_score() { var svc = new MultiOutcomeCandidateExportService(new(), Path.GetTempPath()); var r = svc.BuildReviewReport(new[] { G("winner:2026 nba finals", "winner", "winner", 5, "Will X win finals?") }); var n=JsonSerializer.SerializeToNode(r[0])!.AsObject(); Assert.True(n["candidateQualityScore"]!.GetValue<int>() > 0); }

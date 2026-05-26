@@ -168,6 +168,11 @@ public class MarketDataService
             if (allMarkets.Count >= cap) { safetyCapReached = true; break; }
             offset += Math.Max(1, effectivePageSize);
         }
+        if (!discoveryCompleted && string.IsNullOrWhiteSpace(stoppedReason) && (safetyCapReached || pages >= expectedMaxPages || rawLoadedTotal >= cap))
+        {
+            safetyCapReached = true;
+            stoppedReason = "SafetyCapReached";
+        }
 
         var inactive = skippedClosed + skippedArchived + skippedInactive + skippedMissingTokenIds + skippedMissingOutcomes + skippedPastEndDate + skippedInvalidShape + skippedUnknownStatus;
         if (allMarkets.Count == 0)
@@ -180,10 +185,10 @@ public class MarketDataService
         if (safetyCapReached && string.IsNullOrWhiteSpace(stoppedReason))
         {
             stoppedReason = "SafetyCapReached";
-            Console.WriteLine($"[DISCOVERY] Stopped at configured safety cap Pages={pages} Raw={rawLoadedTotal}");
+            Console.WriteLine($"[DISCOVERY] StoppedAtConfiguredPageCap Pages={pages} Raw={rawLoadedTotal} Active={allMarkets.Count} Reason=SafetyCapReached");
         }
         var healthy = allMarkets.Count > 0 && (discoveryCompleted || safetyCapReached) && (string.IsNullOrWhiteSpace(stoppedReason) || stoppedReason == "SafetyCapReached");
-        if (!healthy)
+        if (!healthy || (safetyCapReached && options.MarketDiscovery.TreatSafetyCapAsWarning))
             Console.WriteLine($"[DISCOVERY_WARNING] Discovery incomplete. PagesFetched={pages} Raw={rawLoadedTotal} Active={allMarkets.Count} Reason={stoppedReason ?? "Unknown"}");
         var summary = new MarketDiscoverySummary(allMarkets.Count, pages, duplicates, inactive, allMarkets.Count, rawLoadedTotal, seen.Count, skippedClosed, skippedArchived, skippedInactive, skippedMissingTokenIds, skippedMissingOutcomes, skippedPastEndDate, skippedInvalidShape, skippedUnknownStatus, healthy, paginationMode, null, lastWarning, DateTime.UtcNow, discoveryCompleted, stoppedReason, lastError, expectedMaxPages, safetyCapReached);
         return (allMarkets, summary);
