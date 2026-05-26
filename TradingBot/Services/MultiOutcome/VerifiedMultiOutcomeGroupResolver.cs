@@ -8,7 +8,8 @@ public sealed class VerifiedMultiOutcomeGroupResolver
     public IReadOnlyList<ResolvedVerifiedGroup> ResolveVerifiedGroups(
         IReadOnlyList<VerifiedMultiOutcomeGroupConfig> allowlist,
         IReadOnlyDictionary<string, Market> allDiscoveredMarkets,
-        MultiOutcomeArbitrageOptions options)
+        MultiOutcomeArbitrageOptions options,
+        bool discoveryHealthy = true)
     {
         var byCondition = allDiscoveredMarkets.Values
             .Where(m => !string.IsNullOrWhiteSpace(m.conditionId))
@@ -40,9 +41,9 @@ public sealed class VerifiedMultiOutcomeGroupResolver
             var status = "VerifiedGroupResolved";
             var reason = "VerifiedGroupResolved";
             if (resolvedMarkets.Count == 0) { status = "Rejected"; reason = "VerifiedGroupNotFoundInDiscoveredPool"; }
-            else if (missingMarkets.Count > 0) { status = "Rejected"; reason = "VerifiedGroupMarketMismatch"; }
+            else if (missingMarkets.Count > 0) { status = "Rejected"; reason = discoveryHealthy ? "VerifiedGroupMarketMismatch" : "VerifiedGroupMissingBecauseDiscoveryIncomplete"; }
             else if (missingConditions.Count > 0) { status = "Rejected"; reason = "VerifiedGroupConditionMismatch"; }
-            else if (item.RequiredOutcomeCount.HasValue && resolvedMarkets.Count != item.RequiredOutcomeCount.Value) { status = "Rejected"; reason = "VerifiedGroupOutcomeCountMismatch"; }
+            else if (item.RequiredOutcomeCount.HasValue && resolvedMarkets.Count != item.RequiredOutcomeCount.Value && options.RequireExactOutcomeCount) { status = "Rejected"; reason = "VerifiedGroupOutcomeCountMismatch"; }
 
             output.Add(new ResolvedVerifiedGroup(item.GroupKey, item.Title ?? item.GroupKey, item.MarketIds, item.ConditionIds, resolvedMarkets, missingMarkets, missingConditions, status, reason));
         }

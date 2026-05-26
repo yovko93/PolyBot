@@ -67,6 +67,14 @@ public class TradingBotOptions
     public MultiOutcomeLoggingOptions Logging { get; set; } = new();
     public MultiOutcomeReviewOptions MultiOutcomeReview { get; set; } = new();
     public RuntimeStateOptions RuntimeState { get; set; } = new();
+    public MarketDiscoveryOptions MarketDiscovery { get; set; } = new();
+}
+public class MarketDiscoveryOptions
+{
+    public int RequestTimeoutMs { get; set; } = 15000;
+    public int MaxRetriesPerPage { get; set; } = 3;
+    public int RetryBackoffMs { get; set; } = 1000;
+    public bool ContinueWithPartialDiscoveryOnError { get; set; } = true;
 }
 
 public class DiagnosticsOptions
@@ -116,6 +124,9 @@ public class MultiOutcomeArbitrageOptions
     public int MaxVerifiedGroupLegs { get; set; } = 100;
     public bool LogVerifiedGroupMismatchDetails { get; set; } = true;
     public int VerifiedGroupMismatchSampleSize { get; set; } = 5;
+    public bool AllowPartialVerifiedGroupEvaluation { get; set; } = true;
+    public int MinResolvedMarketsForVerifiedGroup { get; set; } = 2;
+    public bool RequireExactOutcomeCount { get; set; } = false;
 }
 
 public class MultiOutcomeLoggingOptions

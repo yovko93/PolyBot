@@ -265,7 +265,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 if (options.MultiOutcomeArbitrage.EvaluateVerifiedGroupsAgainstFullPool)
                 {
                     var allByMarketId = discoveredMarkets.Where(m => !string.IsNullOrWhiteSpace(m.id)).ToDictionary(m => m.id, StringComparer.OrdinalIgnoreCase);
-                    var resolved = verifiedResolver.ResolveVerifiedGroups(multiOutcomeValidator.GetAllowlistedGroups(), allByMarketId, options.MultiOutcomeArbitrage);
+                    var resolved = verifiedResolver.ResolveVerifiedGroups(multiOutcomeValidator.GetAllowlistedGroups(), allByMarketId, options.MultiOutcomeArbitrage, lastDiscoverySummary.DiscoveryHealthy);
                     var verifiedMismatch = resolved.Count(x => x.ValidationStatus != "VerifiedGroupResolved");
                     var verifiedResolved = resolved.Count - verifiedMismatch;
                     var verifiedEvaluated = 0;
@@ -283,8 +283,17 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, g.ValidationStatus, g.RejectionReason, null, 0, 0, g.MissingMarketIds.Take(5).ToArray(), g.MissingConditionIds.Take(5).ToArray()));
                             continue;
                         }
+                        if (g.MissingMarketIds.Count > 0 && options.MultiOutcomeArbitrage.AllowPartialVerifiedGroupEvaluation && !options.MultiOutcomeArbitrage.RequireExactOutcomeCount)
+                        {
+                            Console.WriteLine($"[VERIFY_GROUP_PARTIAL] Group={g.GroupKey} Expected={g.MarketIds.Count} Resolved={g.ResolvedMarkets.Count} Missing={g.MissingMarketIds.Count} EvaluatingPartial=true");
+                        }
                         verifiedEvaluated++;
                         var markets = g.ResolvedMarkets.Take(options.MultiOutcomeArbitrage.MaxVerifiedGroupLegs).ToList();
+                        if (markets.Count < options.MultiOutcomeArbitrage.MinResolvedMarketsForVerifiedGroup)
+                        {
+                            groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, "Rejected", "InsufficientResolvedMarkets", null, 0, 0, g.MissingMarketIds.Take(5).ToArray(), g.MissingConditionIds.Take(5).ToArray()));
+                            continue;
+                        }
                         if (options.MultiOutcomeArbitrage.VerifiedGroupOrderbookPrefetchEnabled) await orderbookService.PrefetchBinarySnapshotsAsync(markets, stoppingToken);
                         var snapshots = new List<BinaryOrderBookSnapshot>();
                         foreach (var m in markets)
