@@ -11,6 +11,7 @@ public class BotRuntimeState
     public TradingBot.Models.OpportunityDiagnosticsSnapshot? OpportunityDiagnostics { get; private set; }
     public MultiOutcomeDiagnosticsDto? MultiOutcomeDiagnostics { get; private set; }
     public object[] MultiOutcomeCandidates { get; private set; } = Array.Empty<object>();
+    public object[] MultiOutcomeReviewReport { get; private set; } = Array.Empty<object>();
     public VerifiedBasketScreenerDto? VerifiedBasketScreener { get; private set; }
     public RiskStateDto Risk { get; private set; } = new(100,5,0.003m,0.25m,300,0,5,0,100,new(),true,true,true,true,DateTime.UtcNow,0);
     public BotControlStateDto Controls { get; private set; } = new(false, "RUNNING", DateTime.UtcNow, 0);
@@ -27,6 +28,7 @@ public class BotRuntimeState
     public void SetOpportunityDiagnostics(TradingBot.Models.OpportunityDiagnosticsSnapshot? d){lock(_gate) OpportunityDiagnostics=d;}
     public void SetMultiOutcomeDiagnostics(MultiOutcomeDiagnosticsDto? d){lock(_gate) MultiOutcomeDiagnostics=d;}
     public void SetMultiOutcomeCandidates(IEnumerable<object> items){lock(_gate) MultiOutcomeCandidates = items.ToArray();}
+    public void SetMultiOutcomeReviewReport(IEnumerable<object> items){lock(_gate) MultiOutcomeReviewReport = items.ToArray();}
     public void SetVerifiedBasketScreener(VerifiedBasketScreenerDto? d){lock(_gate) VerifiedBasketScreener=d;}
     public void SetControls(BotControlStateDto c){lock(_gate) Controls=c;}
     public void AddOpportunity(OpportunityDto o){_opps.Enqueue(o); Trim(_opps,500);}    

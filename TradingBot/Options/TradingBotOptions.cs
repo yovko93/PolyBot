@@ -177,6 +177,7 @@ public class MultiOutcomeLoggingOptions
     public bool LogVerifiedBasketRanking { get; set; } = true;
     public int LogVerifiedBasketRankingEveryNCycles { get; set; } = 10;
     public bool LogVerifiedBasketOnlyOnChangeRanking { get; set; } = true;
+    public bool LogScanConfigEachCycle { get; set; } = false;
 }
 
 
@@ -190,9 +191,11 @@ public class MultiOutcomeReviewOptions
     public bool ExportCandidates { get; set; } = true;
     public int ExportIntervalMinutes { get; set; } = 5;
     public string ExportPath { get; set; } = "exports/multi-outcome-candidates-latest.json";
+    public string ExportReviewPath { get; set; } = "exports/multi-outcome-review-report-latest.json";
     public bool ExportVerifiedPricing { get; set; } = true;
     public string ExportVerifiedPricingPath { get; set; } = "exports/verified-group-pricing-latest.json";
     public bool IncludeSuggestedPrunedAllowlist { get; set; } = true;
+    public bool AllowUnpricedLegsInTemplate { get; set; } = false;
 }
 
 public class RuntimeStateOptions

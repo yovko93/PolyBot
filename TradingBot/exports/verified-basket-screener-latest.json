@@ -1,0 +1,553 @@
+{
+  "ActiveCostProfile": "Conservative",
+  "Timestamp": "2026-05-26T20:51:25.0629117Z",
+  "VerifiedGroups": [
+    {
+      "GroupKey": "winner:2026 fifa world cup|kind:generic",
+      "Legs": 36,
+      "GuaranteedPayout": 35,
+      "NoAskSum": 34.982,
+      "GrossEdge": 0.018,
+      "ActiveProfileNetEdge": -0.0370,
+      "ExecutableQty": 0,
+      "ExpectedProfit": -0.0370,
+      "DominantCost": "Fees",
+      "Classification": "RawPositiveNetNegative",
+      "BestProfile": "RawOnly",
+      "ProfileResults": [
+        {
+          "ProfileName": "Conservative",
+          "Fees": 0.036,
+          "Slippage": 0.0180,
+          "Safety": 0.001,
+          "NetEdge": -0.0370,
+          "ExpectedProfit": -0.0370,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "Realistic",
+          "Fees": 0.0180,
+          "Slippage": 0.00900,
+          "Safety": 0.001,
+          "NetEdge": -0.01000,
+          "ExpectedProfit": -0.01000,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "PaperZeroFees",
+          "Fees": 0,
+          "Slippage": 0.0180,
+          "Safety": 0.001,
+          "NetEdge": -0.0010,
+          "ExpectedProfit": -0.0010,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "RawOnly",
+          "Fees": 0,
+          "Slippage": 0,
+          "Safety": 0,
+          "NetEdge": 0.018,
+          "ExpectedProfit": 0.018,
+          "WouldBeExecutable": true
+        }
+      ],
+      "TopMissingReason": "None",
+      "EvaluatedAt": "2026-05-26T20:51:23.880783Z",
+      "CostReductionNeeded": 0.0370
+    },
+    {
+      "GroupKey": "winner:2028 democratic presidential nomination|kind:person",
+      "Legs": 9,
+      "GuaranteedPayout": 8,
+      "NoAskSum": 8.926,
+      "GrossEdge": -0.926,
+      "ActiveProfileNetEdge": -0.9405,
+      "ExecutableQty": 0,
+      "ExpectedProfit": -0.9405,
+      "DominantCost": "Fees",
+      "Classification": "FarFromExecutable",
+      "BestProfile": "RawOnly",
+      "ProfileResults": [
+        {
+          "ProfileName": "Conservative",
+          "Fees": 0.009,
+          "Slippage": 0.0045,
+          "Safety": 0.001,
+          "NetEdge": -0.9405,
+          "ExpectedProfit": -0.9405,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "Realistic",
+          "Fees": 0.0045,
+          "Slippage": 0.00225,
+          "Safety": 0.001,
+          "NetEdge": -0.93375,
+          "ExpectedProfit": -0.93375,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "PaperZeroFees",
+          "Fees": 0,
+          "Slippage": 0.0045,
+          "Safety": 0.001,
+          "NetEdge": -0.9315,
+          "ExpectedProfit": -0.9315,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "RawOnly",
+          "Fees": 0,
+          "Slippage": 0,
+          "Safety": 0,
+          "NetEdge": -0.926,
+          "ExpectedProfit": -0.926,
+          "WouldBeExecutable": false
+        }
+      ],
+      "TopMissingReason": "None",
+      "EvaluatedAt": "2026-05-26T20:51:24.1450049Z",
+      "CostReductionNeeded": 0.9405
+    },
+    {
+      "GroupKey": "winner:2028 republican presidential nomination|kind:person",
+      "Legs": 5,
+      "GuaranteedPayout": 4,
+      "NoAskSum": 4.607,
+      "GrossEdge": -0.607,
+      "ActiveProfileNetEdge": -0.6155,
+      "ExecutableQty": 0,
+      "ExpectedProfit": -0.6155,
+      "DominantCost": "Fees",
+      "Classification": "FarFromExecutable",
+      "BestProfile": "RawOnly",
+      "ProfileResults": [
+        {
+          "ProfileName": "Conservative",
+          "Fees": 0.005,
+          "Slippage": 0.0025,
+          "Safety": 0.001,
+          "NetEdge": -0.6155,
+          "ExpectedProfit": -0.6155,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "Realistic",
+          "Fees": 0.0025,
+          "Slippage": 0.00125,
+          "Safety": 0.001,
+          "NetEdge": -0.61175,
+          "ExpectedProfit": -0.61175,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "PaperZeroFees",
+          "Fees": 0,
+          "Slippage": 0.0025,
+          "Safety": 0.001,
+          "NetEdge": -0.6105,
+          "ExpectedProfit": -0.6105,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "RawOnly",
+          "Fees": 0,
+          "Slippage": 0,
+          "Safety": 0,
+          "NetEdge": -0.607,
+          "ExpectedProfit": -0.607,
+          "WouldBeExecutable": false
+        }
+      ],
+      "TopMissingReason": "None",
+      "EvaluatedAt": "2026-05-26T20:51:24.2749962Z",
+      "CostReductionNeeded": 0.6155
+    },
+    {
+      "GroupKey": "winner:2028 us presidential election|kind:person",
+      "Legs": 7,
+      "GuaranteedPayout": 6,
+      "NoAskSum": 6.748,
+      "GrossEdge": -0.748,
+      "ActiveProfileNetEdge": -0.7595,
+      "ExecutableQty": 0,
+      "ExpectedProfit": -0.7595,
+      "DominantCost": "Fees",
+      "Classification": "FarFromExecutable",
+      "BestProfile": "RawOnly",
+      "ProfileResults": [
+        {
+          "ProfileName": "Conservative",
+          "Fees": 0.007,
+          "Slippage": 0.0035,
+          "Safety": 0.001,
+          "NetEdge": -0.7595,
+          "ExpectedProfit": -0.7595,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "Realistic",
+          "Fees": 0.0035,
+          "Slippage": 0.00175,
+          "Safety": 0.001,
+          "NetEdge": -0.75425,
+          "ExpectedProfit": -0.75425,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "PaperZeroFees",
+          "Fees": 0,
+          "Slippage": 0.0035,
+          "Safety": 0.001,
+          "NetEdge": -0.7525,
+          "ExpectedProfit": -0.7525,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "RawOnly",
+          "Fees": 0,
+          "Slippage": 0,
+          "Safety": 0,
+          "NetEdge": -0.748,
+          "ExpectedProfit": -0.748,
+          "WouldBeExecutable": false
+        }
+      ],
+      "TopMissingReason": "None",
+      "EvaluatedAt": "2026-05-26T20:51:24.5371069Z",
+      "CostReductionNeeded": 0.7595
+    },
+    {
+      "GroupKey": "winner:2026 brazilian presidential election|kind:person",
+      "Legs": 9,
+      "GuaranteedPayout": 8,
+      "NoAskSum": 8.341,
+      "GrossEdge": -0.341,
+      "ActiveProfileNetEdge": -0.3555,
+      "ExecutableQty": 0,
+      "ExpectedProfit": -0.3555,
+      "DominantCost": "Fees",
+      "Classification": "FarFromExecutable",
+      "BestProfile": "RawOnly",
+      "ProfileResults": [
+        {
+          "ProfileName": "Conservative",
+          "Fees": 0.009,
+          "Slippage": 0.0045,
+          "Safety": 0.001,
+          "NetEdge": -0.3555,
+          "ExpectedProfit": -0.3555,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "Realistic",
+          "Fees": 0.0045,
+          "Slippage": 0.00225,
+          "Safety": 0.001,
+          "NetEdge": -0.34875,
+          "ExpectedProfit": -0.34875,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "PaperZeroFees",
+          "Fees": 0,
+          "Slippage": 0.0045,
+          "Safety": 0.001,
+          "NetEdge": -0.3465,
+          "ExpectedProfit": -0.3465,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "RawOnly",
+          "Fees": 0,
+          "Slippage": 0,
+          "Safety": 0,
+          "NetEdge": -0.341,
+          "ExpectedProfit": -0.341,
+          "WouldBeExecutable": false
+        }
+      ],
+      "TopMissingReason": "None",
+      "EvaluatedAt": "2026-05-26T20:51:24.9906771Z",
+      "CostReductionNeeded": 0.3555
+    }
+  ],
+  "Ranking": [
+    {
+      "GroupKey": "winner:2026 fifa world cup|kind:generic",
+      "Legs": 36,
+      "GuaranteedPayout": 35,
+      "NoAskSum": 34.982,
+      "GrossEdge": 0.018,
+      "ActiveProfileNetEdge": -0.0370,
+      "ExecutableQty": 0,
+      "ExpectedProfit": -0.0370,
+      "DominantCost": "Fees",
+      "Classification": "RawPositiveNetNegative",
+      "BestProfile": "RawOnly",
+      "ProfileResults": [
+        {
+          "ProfileName": "Conservative",
+          "Fees": 0.036,
+          "Slippage": 0.0180,
+          "Safety": 0.001,
+          "NetEdge": -0.0370,
+          "ExpectedProfit": -0.0370,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "Realistic",
+          "Fees": 0.0180,
+          "Slippage": 0.00900,
+          "Safety": 0.001,
+          "NetEdge": -0.01000,
+          "ExpectedProfit": -0.01000,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "PaperZeroFees",
+          "Fees": 0,
+          "Slippage": 0.0180,
+          "Safety": 0.001,
+          "NetEdge": -0.0010,
+          "ExpectedProfit": -0.0010,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "RawOnly",
+          "Fees": 0,
+          "Slippage": 0,
+          "Safety": 0,
+          "NetEdge": 0.018,
+          "ExpectedProfit": 0.018,
+          "WouldBeExecutable": true
+        }
+      ],
+      "TopMissingReason": "None",
+      "EvaluatedAt": "2026-05-26T20:51:23.880783Z",
+      "CostReductionNeeded": 0.0370
+    },
+    {
+      "GroupKey": "winner:2026 brazilian presidential election|kind:person",
+      "Legs": 9,
+      "GuaranteedPayout": 8,
+      "NoAskSum": 8.341,
+      "GrossEdge": -0.341,
+      "ActiveProfileNetEdge": -0.3555,
+      "ExecutableQty": 0,
+      "ExpectedProfit": -0.3555,
+      "DominantCost": "Fees",
+      "Classification": "FarFromExecutable",
+      "BestProfile": "RawOnly",
+      "ProfileResults": [
+        {
+          "ProfileName": "Conservative",
+          "Fees": 0.009,
+          "Slippage": 0.0045,
+          "Safety": 0.001,
+          "NetEdge": -0.3555,
+          "ExpectedProfit": -0.3555,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "Realistic",
+          "Fees": 0.0045,
+          "Slippage": 0.00225,
+          "Safety": 0.001,
+          "NetEdge": -0.34875,
+          "ExpectedProfit": -0.34875,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "PaperZeroFees",
+          "Fees": 0,
+          "Slippage": 0.0045,
+          "Safety": 0.001,
+          "NetEdge": -0.3465,
+          "ExpectedProfit": -0.3465,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "RawOnly",
+          "Fees": 0,
+          "Slippage": 0,
+          "Safety": 0,
+          "NetEdge": -0.341,
+          "ExpectedProfit": -0.341,
+          "WouldBeExecutable": false
+        }
+      ],
+      "TopMissingReason": "None",
+      "EvaluatedAt": "2026-05-26T20:51:24.9906771Z",
+      "CostReductionNeeded": 0.3555
+    },
+    {
+      "GroupKey": "winner:2028 republican presidential nomination|kind:person",
+      "Legs": 5,
+      "GuaranteedPayout": 4,
+      "NoAskSum": 4.607,
+      "GrossEdge": -0.607,
+      "ActiveProfileNetEdge": -0.6155,
+      "ExecutableQty": 0,
+      "ExpectedProfit": -0.6155,
+      "DominantCost": "Fees",
+      "Classification": "FarFromExecutable",
+      "BestProfile": "RawOnly",
+      "ProfileResults": [
+        {
+          "ProfileName": "Conservative",
+          "Fees": 0.005,
+          "Slippage": 0.0025,
+          "Safety": 0.001,
+          "NetEdge": -0.6155,
+          "ExpectedProfit": -0.6155,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "Realistic",
+          "Fees": 0.0025,
+          "Slippage": 0.00125,
+          "Safety": 0.001,
+          "NetEdge": -0.61175,
+          "ExpectedProfit": -0.61175,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "PaperZeroFees",
+          "Fees": 0,
+          "Slippage": 0.0025,
+          "Safety": 0.001,
+          "NetEdge": -0.6105,
+          "ExpectedProfit": -0.6105,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "RawOnly",
+          "Fees": 0,
+          "Slippage": 0,
+          "Safety": 0,
+          "NetEdge": -0.607,
+          "ExpectedProfit": -0.607,
+          "WouldBeExecutable": false
+        }
+      ],
+      "TopMissingReason": "None",
+      "EvaluatedAt": "2026-05-26T20:51:24.2749962Z",
+      "CostReductionNeeded": 0.6155
+    },
+    {
+      "GroupKey": "winner:2028 us presidential election|kind:person",
+      "Legs": 7,
+      "GuaranteedPayout": 6,
+      "NoAskSum": 6.748,
+      "GrossEdge": -0.748,
+      "ActiveProfileNetEdge": -0.7595,
+      "ExecutableQty": 0,
+      "ExpectedProfit": -0.7595,
+      "DominantCost": "Fees",
+      "Classification": "FarFromExecutable",
+      "BestProfile": "RawOnly",
+      "ProfileResults": [
+        {
+          "ProfileName": "Conservative",
+          "Fees": 0.007,
+          "Slippage": 0.0035,
+          "Safety": 0.001,
+          "NetEdge": -0.7595,
+          "ExpectedProfit": -0.7595,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "Realistic",
+          "Fees": 0.0035,
+          "Slippage": 0.00175,
+          "Safety": 0.001,
+          "NetEdge": -0.75425,
+          "ExpectedProfit": -0.75425,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "PaperZeroFees",
+          "Fees": 0,
+          "Slippage": 0.0035,
+          "Safety": 0.001,
+          "NetEdge": -0.7525,
+          "ExpectedProfit": -0.7525,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "RawOnly",
+          "Fees": 0,
+          "Slippage": 0,
+          "Safety": 0,
+          "NetEdge": -0.748,
+          "ExpectedProfit": -0.748,
+          "WouldBeExecutable": false
+        }
+      ],
+      "TopMissingReason": "None",
+      "EvaluatedAt": "2026-05-26T20:51:24.5371069Z",
+      "CostReductionNeeded": 0.7595
+    },
+    {
+      "GroupKey": "winner:2028 democratic presidential nomination|kind:person",
+      "Legs": 9,
+      "GuaranteedPayout": 8,
+      "NoAskSum": 8.926,
+      "GrossEdge": -0.926,
+      "ActiveProfileNetEdge": -0.9405,
+      "ExecutableQty": 0,
+      "ExpectedProfit": -0.9405,
+      "DominantCost": "Fees",
+      "Classification": "FarFromExecutable",
+      "BestProfile": "RawOnly",
+      "ProfileResults": [
+        {
+          "ProfileName": "Conservative",
+          "Fees": 0.009,
+          "Slippage": 0.0045,
+          "Safety": 0.001,
+          "NetEdge": -0.9405,
+          "ExpectedProfit": -0.9405,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "Realistic",
+          "Fees": 0.0045,
+          "Slippage": 0.00225,
+          "Safety": 0.001,
+          "NetEdge": -0.93375,
+          "ExpectedProfit": -0.93375,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "PaperZeroFees",
+          "Fees": 0,
+          "Slippage": 0.0045,
+          "Safety": 0.001,
+          "NetEdge": -0.9315,
+          "ExpectedProfit": -0.9315,
+          "WouldBeExecutable": false
+        },
+        {
+          "ProfileName": "RawOnly",
+          "Fees": 0,
+          "Slippage": 0,
+          "Safety": 0,
+          "NetEdge": -0.926,
+          "ExpectedProfit": -0.926,
+          "WouldBeExecutable": false
+        }
+      ],
+      "TopMissingReason": "None",
+      "EvaluatedAt": "2026-05-26T20:51:24.1450049Z",
+      "CostReductionNeeded": 0.9405
+    }
+  ],
+  "RecommendedActions": [
+    "FIFA basket has raw edge but not enough after costs.",
+    "Review candidate groups with higher gross edge.",
+    "Check whether FeePerLeg config is realistic."
+  ]
+}

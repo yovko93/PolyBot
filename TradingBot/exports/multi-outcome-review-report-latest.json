@@ -4,12 +4,14 @@
     "title": "winner:2026 fifa world cup|kind:generic",
     "kind": "generic",
     "detectedMarketsCount": 42,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "VerifiedGroupMarketMismatch",
-    "estimatedNoBasketCost": null,
+    "pricedLegs": 42,
+    "missingPrices": 0,
     "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
+    "estimatedNetEdgeConservative": null,
+    "estimatedNetEdgeRawOnly": null,
+    "candidateQualityScore": 110,
+    "recommendedAction": "AlreadyVerified",
+    "rejectionReason": "VerifiedGroupMarketMismatch",
     "warnings": [
       "Not manually verified",
       "Execution disabled until allowlisted with explicit marketIds or conditionIds"
@@ -393,19 +395,24 @@
         "archived": false,
         "endDate": "2026-07-20T00:00:00Z"
       }
-    ]
+    ],
+    "suggestedAllowlistTemplate": null,
+    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
+    "alreadyAllowlisted": true
   },
   {
     "groupKey": "winner:2028 democratic presidential nomination|kind:person",
     "title": "winner:2028 democratic presidential nomination|kind:person",
     "kind": "person",
     "detectedMarketsCount": 9,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "VerifiedGroupMarketMismatch",
-    "estimatedNoBasketCost": null,
+    "pricedLegs": 9,
+    "missingPrices": 0,
     "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
+    "estimatedNetEdgeConservative": null,
+    "estimatedNetEdgeRawOnly": null,
+    "candidateQualityScore": 110,
+    "recommendedAction": "AlreadyVerified",
+    "rejectionReason": "VerifiedGroupMarketMismatch",
     "warnings": [
       "Not manually verified",
       "Execution disabled until allowlisted with explicit marketIds or conditionIds"
@@ -492,19 +499,178 @@
         "archived": false,
         "endDate": "2028-11-07T00:00:00Z"
       }
-    ]
+    ],
+    "suggestedAllowlistTemplate": null,
+    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
+    "alreadyAllowlisted": true
+  },
+  {
+    "groupKey": "winner:2028 us presidential election|kind:person",
+    "title": "winner:2028 us presidential election|kind:person",
+    "kind": "person",
+    "detectedMarketsCount": 7,
+    "pricedLegs": 7,
+    "missingPrices": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "estimatedNetEdgeRawOnly": null,
+    "candidateQualityScore": 110,
+    "recommendedAction": "AlreadyVerified",
+    "rejectionReason": "VerifiedGroupMarketMismatch",
+    "warnings": [
+      "Not manually verified",
+      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
+    ],
+    "markets": [
+      {
+        "marketId": "561258",
+        "conditionId": "0xa9549c44687993a9a154347c6907092341459b927efaa3f2b49009ca2c4e40a1",
+        "question": "Will Jamie Dimon win the 2028 US Presidential Election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2028-11-07T00:00:00Z"
+      },
+      {
+        "marketId": "561249",
+        "conditionId": "0x01dffa7abae7e5d9b7fb44b06d537c5ac932e2ca422ab4b53366672f5e2dc7d6",
+        "question": "Will Greg Abbott win the 2028 US Presidential Election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2028-11-07T00:00:00Z"
+      },
+      {
+        "marketId": "561252",
+        "conditionId": "0xe2bdf6c18c8ab5ad5d3be5f95dd749e88d1dee7ac7c4dbf5101013a5c055e3df",
+        "question": "Will Dwayne \u0027The Rock\u0027 Johnson win the 2028 US Presidential Election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2028-11-07T00:00:00Z"
+      },
+      {
+        "marketId": "561229",
+        "conditionId": "0x7ad403c3508f8e3912940fd1a913f227591145ca0614074208e0b962d5fcc422",
+        "question": "Will JD Vance win the 2028 US Presidential Election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2028-11-07T00:00:00Z"
+      },
+      {
+        "marketId": "561260",
+        "conditionId": "0x32903694997a5c09afee30904970f9fab2a5fb4ec45f572f194341185574f1a4",
+        "question": "Will Thomas Massie win the 2028 US Presidential Election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2028-11-07T00:00:00Z"
+      },
+      {
+        "marketId": "561235",
+        "conditionId": "0xe29b33ef5bf351c8a22bfd79f8b58e62649d54ceee6f9735387cef79f52fecae",
+        "question": "Will Wes Moore win the 2028 US Presidential Election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2028-11-07T00:00:00Z"
+      },
+      {
+        "marketId": "561240",
+        "conditionId": "0x66b906b8205f48a26beb8e553bbb1e7954e87e4f6e1d539823441221d1806e8f",
+        "question": "Will Stephen Smith win the 2028 US Presidential Election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2028-11-07T00:00:00Z"
+      }
+    ],
+    "suggestedAllowlistTemplate": null,
+    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
+    "alreadyAllowlisted": true
+  },
+  {
+    "groupKey": "winner:2026 peruvian presidential election|kind:person",
+    "title": "winner:2026 peruvian presidential election|kind:person",
+    "kind": "person",
+    "detectedMarketsCount": 5,
+    "pricedLegs": 5,
+    "missingPrices": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "estimatedNetEdgeRawOnly": null,
+    "candidateQualityScore": 110,
+    "recommendedAction": "AlreadyVerified",
+    "rejectionReason": "VerifiedGroupMarketMismatch",
+    "warnings": [
+      "Not manually verified",
+      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
+    ],
+    "markets": [
+      {
+        "marketId": "947289",
+        "conditionId": "0x2cd24d17f5680dc6e7b7d67c712a223ae85550745597e81bd2d2b8d073443951",
+        "question": "Will Roberto S\u00E1nchez Palomino win the 2026 Peruvian presidential election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-07T00:00:00Z"
+      },
+      {
+        "marketId": "947269",
+        "conditionId": "0xc4c3dbcc37a957a817599b0bf9fb5bd6b62b19210b0f527fec57cb75c7ed150a",
+        "question": "Will Keiko Fujimori win the 2026 Peruvian presidential election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-07T00:00:00Z"
+      },
+      {
+        "marketId": "947287",
+        "conditionId": "0x28d4cee5a4bb01e0a7b1a39f8a23b2af657d9cf06d1e0ed8443c6b09329b9be3",
+        "question": "Will Marisol P\u00E9rez Tello win the 2026 Peruvian presidential election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-07T00:00:00Z"
+      },
+      {
+        "marketId": "947268",
+        "conditionId": "0xae6d3d20bc8f742922dc40880cd8a8671c10385a9912fa7cd670fba0643dfe96",
+        "question": "Will Rafael L\u00F3pez Aliaga win the 2026 Peruvian presidential election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-07T00:00:00Z"
+      },
+      {
+        "marketId": "947283",
+        "conditionId": "0x974dcbcce5e8186e0e273065a60675bc17617897c395eca60478d0c49f80718f",
+        "question": "Will Carlos Esp\u00E1 win the 2026 Peruvian presidential election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-07T00:00:00Z"
+      }
+    ],
+    "suggestedAllowlistTemplate": null,
+    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
+    "alreadyAllowlisted": true
   },
   {
     "groupKey": "winner:2026 brazilian presidential election|kind:person",
     "title": "winner:2026 brazilian presidential election|kind:person",
     "kind": "person",
     "detectedMarketsCount": 9,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "VerifiedGroupMarketMismatch",
-    "estimatedNoBasketCost": null,
+    "pricedLegs": 9,
+    "missingPrices": 0,
     "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
+    "estimatedNetEdgeConservative": null,
+    "estimatedNetEdgeRawOnly": null,
+    "candidateQualityScore": 110,
+    "recommendedAction": "AlreadyVerified",
+    "rejectionReason": "VerifiedGroupMarketMismatch",
     "warnings": [
       "Not manually verified",
       "Execution disabled until allowlisted with explicit marketIds or conditionIds"
@@ -591,100 +757,554 @@
         "archived": false,
         "endDate": "2026-10-04T00:00:00Z"
       }
-    ]
+    ],
+    "suggestedAllowlistTemplate": null,
+    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
+    "alreadyAllowlisted": true
   },
   {
-    "groupKey": "winner:2028 us presidential election|kind:person",
-    "title": "winner:2028 us presidential election|kind:person",
-    "kind": "person",
-    "detectedMarketsCount": 7,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "VerifiedGroupMarketMismatch",
-    "estimatedNoBasketCost": null,
+    "groupKey": "winner:2026 women s us open|kind:generic",
+    "title": "winner:2026 women s us open|kind:generic",
+    "kind": "generic",
+    "detectedMarketsCount": 3,
+    "pricedLegs": 3,
+    "missingPrices": 0,
     "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
+    "estimatedNetEdgeConservative": null,
+    "estimatedNetEdgeRawOnly": null,
+    "candidateQualityScore": 90,
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "rejectionReason": "UnverifiedGroup",
     "warnings": [
       "Not manually verified",
       "Execution disabled until allowlisted with explicit marketIds or conditionIds"
     ],
     "markets": [
       {
-        "marketId": "561258",
-        "conditionId": "0xa9549c44687993a9a154347c6907092341459b927efaa3f2b49009ca2c4e40a1",
-        "question": "Will Jamie Dimon win the 2028 US Presidential Election?",
+        "marketId": "1088662",
+        "conditionId": "0x4b408f8e5e035d5498751ff0048fca5fc472ce1f774d703b3e9f323590ebe3a6",
+        "question": "Will Barbora Krejcikova win the 2026 Women\u2019s US Open?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-09-13T00:00:00Z"
+      },
+      {
+        "marketId": "1088680",
+        "conditionId": "0xdaba177a8a9e34e55a1663bf89f7bc20e94829bbf5f254832d778d574fb29b54",
+        "question": "Will Anastasia Potapova win the 2026 Women\u2019s US Open?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-09-13T00:00:00Z"
+      },
+      {
+        "marketId": "1088679",
+        "conditionId": "0xaed5fc200c5322ecf7e4d09fc8287de5325c3c64b15c1e85af9f945abdb7aaeb",
+        "question": "Will Tereza Valentova win the 2026 Women\u2019s US Open?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-09-13T00:00:00Z"
+      }
+    ],
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:2026 women s us open|kind:generic",
+      "title": "winner:2026 women s us open|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "1088662",
+        "1088680",
+        "1088679"
+      ],
+      "conditionIds": [
+        "0x4b408f8e5e035d5498751ff0048fca5fc472ce1f774d703b3e9f323590ebe3a6",
+        "0xdaba177a8a9e34e55a1663bf89f7bc20e94829bbf5f254832d778d574fb29b54",
+        "0xaed5fc200c5322ecf7e4d09fc8287de5325c3c64b15c1e85af9f945abdb7aaeb"
+      ],
+      "requiredOutcomeCount": 3,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-05-26"
+    },
+    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
+    "alreadyAllowlisted": false
+  },
+  {
+    "groupKey": "winner:2028 republican presidential nomination|kind:person",
+    "title": "winner:2028 republican presidential nomination|kind:person",
+    "kind": "person",
+    "detectedMarketsCount": 4,
+    "pricedLegs": 4,
+    "missingPrices": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "estimatedNetEdgeRawOnly": null,
+    "candidateQualityScore": 90,
+    "recommendedAction": "AlreadyVerified",
+    "rejectionReason": "VerifiedGroupMarketMismatch",
+    "warnings": [
+      "Not manually verified",
+      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
+    ],
+    "markets": [
+      {
+        "marketId": "561983",
+        "conditionId": "0x214093035e429b91df322bd20c55d9f611f741f67472a63f7623a9afc0cffa57",
+        "question": "Will Greg Abbott win the 2028 Republican presidential nomination?",
         "active": true,
         "closed": false,
         "archived": false,
         "endDate": "2028-11-07T00:00:00Z"
       },
       {
-        "marketId": "561249",
-        "conditionId": "0x01dffa7abae7e5d9b7fb44b06d537c5ac932e2ca422ab4b53366672f5e2dc7d6",
-        "question": "Will Greg Abbott win the 2028 US Presidential Election?",
+        "marketId": "561998",
+        "conditionId": "0x4f02b9cf70e514964fcb9aa2f7873d2b0d1aa0986da096cce7e6687e78da00f3",
+        "question": "Will Ivanka Trump win the 2028 Republican presidential nomination?",
         "active": true,
         "closed": false,
         "archived": false,
         "endDate": "2028-11-07T00:00:00Z"
       },
       {
-        "marketId": "561252",
-        "conditionId": "0xe2bdf6c18c8ab5ad5d3be5f95dd749e88d1dee7ac7c4dbf5101013a5c055e3df",
-        "question": "Will Dwayne \u0027The Rock\u0027 Johnson win the 2028 US Presidential Election?",
+        "marketId": "561992",
+        "conditionId": "0x61a1278884fa70d68d4bcaaf72fad55bbdb063cac28c6947472ca91635fab10f",
+        "question": "Will Katie Britt win the 2028 Republican presidential nomination?",
         "active": true,
         "closed": false,
         "archived": false,
         "endDate": "2028-11-07T00:00:00Z"
       },
       {
-        "marketId": "561229",
-        "conditionId": "0x7ad403c3508f8e3912940fd1a913f227591145ca0614074208e0b962d5fcc422",
-        "question": "Will JD Vance win the 2028 US Presidential Election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561260",
-        "conditionId": "0x32903694997a5c09afee30904970f9fab2a5fb4ec45f572f194341185574f1a4",
-        "question": "Will Thomas Massie win the 2028 US Presidential Election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561235",
-        "conditionId": "0xe29b33ef5bf351c8a22bfd79f8b58e62649d54ceee6f9735387cef79f52fecae",
-        "question": "Will Wes Moore win the 2028 US Presidential Election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561240",
-        "conditionId": "0x66b906b8205f48a26beb8e553bbb1e7954e87e4f6e1d539823441221d1806e8f",
-        "question": "Will Stephen Smith win the 2028 US Presidential Election?",
+        "marketId": "562005",
+        "conditionId": "0x24258776d0a926b4550b0f213267b95ba0a7741fc972d0b3c2b5f6bf8ced2c50",
+        "question": "Will Thomas Massie win the 2028 Republican presidential nomination?",
         "active": true,
         "closed": false,
         "archived": false,
         "endDate": "2028-11-07T00:00:00Z"
       }
-    ]
+    ],
+    "suggestedAllowlistTemplate": null,
+    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
+    "alreadyAllowlisted": true
+  },
+  {
+    "groupKey": "winner:2026 nba finals|kind:generic",
+    "title": "winner:2026 nba finals|kind:generic",
+    "kind": "generic",
+    "detectedMarketsCount": 3,
+    "pricedLegs": 3,
+    "missingPrices": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "estimatedNetEdgeRawOnly": null,
+    "candidateQualityScore": 90,
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "rejectionReason": "UnverifiedGroup",
+    "warnings": [
+      "Not manually verified",
+      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
+    ],
+    "markets": [
+      {
+        "marketId": "553858",
+        "conditionId": "0x713641f745d71f6ec61f906237ffca3c8583f251e49384429a63ceb0ccdb2d37",
+        "question": "Will the New York Knicks win the 2026 NBA Finals?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-07-01T00:00:00Z"
+      },
+      {
+        "marketId": "553866",
+        "conditionId": "0xb6b3d7a2037b3faa7e1306d741840d453432902d73cc9a146a035e40271eae73",
+        "question": "Will the San Antonio Spurs win the 2026 NBA Finals?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-07-01T00:00:00Z"
+      },
+      {
+        "marketId": "553856",
+        "conditionId": "0x22e7b5e35423e76842dd3a5e1a21d13793811080d5e7b2896d0c001bd5e97d54",
+        "question": "Will the Oklahoma City Thunder win the 2026 NBA Finals?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-07-01T00:00:00Z"
+      }
+    ],
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:2026 nba finals|kind:generic",
+      "title": "winner:2026 nba finals|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "553858",
+        "553866",
+        "553856"
+      ],
+      "conditionIds": [
+        "0x713641f745d71f6ec61f906237ffca3c8583f251e49384429a63ceb0ccdb2d37",
+        "0xb6b3d7a2037b3faa7e1306d741840d453432902d73cc9a146a035e40271eae73",
+        "0x22e7b5e35423e76842dd3a5e1a21d13793811080d5e7b2896d0c001bd5e97d54"
+      ],
+      "requiredOutcomeCount": 3,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-05-26"
+    },
+    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
+    "alreadyAllowlisted": false
+  },
+  {
+    "groupKey": "winner:2027 french presidential election|kind:person",
+    "title": "winner:2027 french presidential election|kind:person",
+    "kind": "person",
+    "detectedMarketsCount": 2,
+    "pricedLegs": 2,
+    "missingPrices": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "estimatedNetEdgeRawOnly": null,
+    "candidateQualityScore": 90,
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "rejectionReason": "UnverifiedGroup",
+    "warnings": [
+      "Not manually verified",
+      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
+    ],
+    "markets": [
+      {
+        "marketId": "679049",
+        "conditionId": "0x06ea9c02b4c6a2f7f07f78e21411bd367636564edb27c72cd038b556aada1a64",
+        "question": "Will Mathilde Panot win the 2027 French presidential election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2027-04-30T00:00:00Z"
+      },
+      {
+        "marketId": "679025",
+        "conditionId": "0x4c799a8378d60f34f055cf5c61fc3f6f1a6e7abe5d5384ef37961c506eab867c",
+        "question": "Will Fran\u00E7ois Ruffin win the 2027 French presidential election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2027-04-30T00:00:00Z"
+      }
+    ],
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:2027 french presidential election|kind:person",
+      "title": "winner:2027 french presidential election|kind:person",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "679049",
+        "679025"
+      ],
+      "conditionIds": [
+        "0x06ea9c02b4c6a2f7f07f78e21411bd367636564edb27c72cd038b556aada1a64",
+        "0x4c799a8378d60f34f055cf5c61fc3f6f1a6e7abe5d5384ef37961c506eab867c"
+      ],
+      "requiredOutcomeCount": 2,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-05-26"
+    },
+    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
+    "alreadyAllowlisted": false
+  },
+  {
+    "groupKey": "winner:2026 colombian presidential election|kind:person",
+    "title": "winner:2026 colombian presidential election|kind:person",
+    "kind": "person",
+    "detectedMarketsCount": 3,
+    "pricedLegs": 3,
+    "missingPrices": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "estimatedNetEdgeRawOnly": null,
+    "candidateQualityScore": 90,
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "rejectionReason": "UnverifiedGroup",
+    "warnings": [
+      "Not manually verified",
+      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
+    ],
+    "markets": [
+      {
+        "marketId": "569368",
+        "conditionId": "0x0fb006e0c06caa4db12f7e30ec8c2483d658f83eb57b2ee8eb478e39beca3dfd",
+        "question": "Will Ivan Cepeda Castro win the 2026 Colombian presidential election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-21T14:00:00Z"
+      },
+      {
+        "marketId": "569366",
+        "conditionId": "0xfbe85201ab2b4acff01cd5a3639039fc813d3448c64db081f70926bd9b9e74e9",
+        "question": "Will Abelardo de la Espriella  win the 2026 Colombian presidential election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-21T14:00:00Z"
+      },
+      {
+        "marketId": "569373",
+        "conditionId": "0xd6591e966aebf061547ef34cdf3494ed318969887c8b7fb53f10ed5d5461a547",
+        "question": "Will Paloma Valencia win the 2026 Colombian presidential election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-21T14:00:00Z"
+      }
+    ],
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:2026 colombian presidential election|kind:person",
+      "title": "winner:2026 colombian presidential election|kind:person",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "569368",
+        "569366",
+        "569373"
+      ],
+      "conditionIds": [
+        "0x0fb006e0c06caa4db12f7e30ec8c2483d658f83eb57b2ee8eb478e39beca3dfd",
+        "0xfbe85201ab2b4acff01cd5a3639039fc813d3448c64db081f70926bd9b9e74e9",
+        "0xd6591e966aebf061547ef34cdf3494ed318969887c8b7fb53f10ed5d5461a547"
+      ],
+      "requiredOutcomeCount": 3,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-05-26"
+    },
+    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
+    "alreadyAllowlisted": false
+  },
+  {
+    "groupKey": "winner:1st round of 2026 colombian presidential election|kind:person",
+    "title": "winner:1st round of 2026 colombian presidential election|kind:person",
+    "kind": "person",
+    "detectedMarketsCount": 3,
+    "pricedLegs": 3,
+    "missingPrices": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "estimatedNetEdgeRawOnly": null,
+    "candidateQualityScore": 90,
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "rejectionReason": "UnverifiedGroup",
+    "warnings": [
+      "Not manually verified",
+      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
+    ],
+    "markets": [
+      {
+        "marketId": "569342",
+        "conditionId": "0x04e73caf81ef64ce0c612699049d295e18dfe9bdd60d898fd3d8a64cac723661",
+        "question": "Will Paloma Valencia win the 1st round of the 2026 Colombian presidential election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-05-31T16:00:00Z"
+      },
+      {
+        "marketId": "569344",
+        "conditionId": "0xb611b3a7173f69e412b55561ed265d849e36693c248ff620d0e981c5b3f2e325",
+        "question": "Will Abelardo de la Espriella win the 1st round of the 2026 Colombian presidential election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-05-31T16:00:00Z"
+      },
+      {
+        "marketId": "569343",
+        "conditionId": "0xc00920db6f5e84821a61bd31578499bbc9bd125949572b589b7a9e4b0f13bad3",
+        "question": "Will Iv\u00E1n Cepeda Castro win the 1st round of the 2026 Colombian presidential election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-05-31T16:00:00Z"
+      }
+    ],
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:1st round of 2026 colombian presidential election|kind:person",
+      "title": "winner:1st round of 2026 colombian presidential election|kind:person",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "569342",
+        "569344",
+        "569343"
+      ],
+      "conditionIds": [
+        "0x04e73caf81ef64ce0c612699049d295e18dfe9bdd60d898fd3d8a64cac723661",
+        "0xb611b3a7173f69e412b55561ed265d849e36693c248ff620d0e981c5b3f2e325",
+        "0xc00920db6f5e84821a61bd31578499bbc9bd125949572b589b7a9e4b0f13bad3"
+      ],
+      "requiredOutcomeCount": 3,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-05-26"
+    },
+    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
+    "alreadyAllowlisted": false
+  },
+  {
+    "groupKey": "winner:nba western conference finals|kind:generic",
+    "title": "winner:nba western conference finals|kind:generic",
+    "kind": "generic",
+    "detectedMarketsCount": 2,
+    "pricedLegs": 2,
+    "missingPrices": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "estimatedNetEdgeRawOnly": null,
+    "candidateQualityScore": 90,
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "rejectionReason": "UnverifiedGroup",
+    "warnings": [
+      "Not manually verified",
+      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
+    ],
+    "markets": [
+      {
+        "marketId": "564210",
+        "conditionId": "0x4cf389adc069a4d713e1ddb6348c96afd6df78e6bf676c7dce1780135186d90e",
+        "question": "Will the Oklahoma City Thunder win the NBA Western Conference Finals?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-16T00:00:00Z"
+      },
+      {
+        "marketId": "564218",
+        "conditionId": "0xe3e8574f967e628750dff67c641944a84da281ced40ffe7c76e42649e89a6887",
+        "question": "Will the San Antonio Spurs win the NBA Western Conference Finals?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-16T00:00:00Z"
+      }
+    ],
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:nba western conference finals|kind:generic",
+      "title": "winner:nba western conference finals|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "564210",
+        "564218"
+      ],
+      "conditionIds": [
+        "0x4cf389adc069a4d713e1ddb6348c96afd6df78e6bf676c7dce1780135186d90e",
+        "0xe3e8574f967e628750dff67c641944a84da281ced40ffe7c76e42649e89a6887"
+      ],
+      "requiredOutcomeCount": 2,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-05-26"
+    },
+    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
+    "alreadyAllowlisted": false
+  },
+  {
+    "groupKey": "winner:2026 world series|kind:generic",
+    "title": "winner:2026 world series|kind:generic",
+    "kind": "generic",
+    "detectedMarketsCount": 2,
+    "pricedLegs": 2,
+    "missingPrices": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "estimatedNetEdgeRawOnly": null,
+    "candidateQualityScore": 90,
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "rejectionReason": "UnverifiedGroup",
+    "warnings": [
+      "Not manually verified",
+      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
+    ],
+    "markets": [
+      {
+        "marketId": "1235574",
+        "conditionId": "0x20ad75028f28b5bced0e807f25289a57ea8060ddd716a60bafb9eba1cf0e58e9",
+        "question": "Will the San Francisco Giants win the 2026 World Series?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-10-31T23:55:00Z"
+      },
+      {
+        "marketId": "1235567",
+        "conditionId": "0x728ed3e64f1f6b67d9b3dcd545ae574aaf0dfd3b0fb6df433d0c07c253981ec0",
+        "question": "Will the St. Louis Cardinals win the 2026 World Series?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-10-31T23:55:00Z"
+      }
+    ],
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:2026 world series|kind:generic",
+      "title": "winner:2026 world series|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "1235574",
+        "1235567"
+      ],
+      "conditionIds": [
+        "0x20ad75028f28b5bced0e807f25289a57ea8060ddd716a60bafb9eba1cf0e58e9",
+        "0x728ed3e64f1f6b67d9b3dcd545ae574aaf0dfd3b0fb6df433d0c07c253981ec0"
+      ],
+      "requiredOutcomeCount": 2,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-05-26"
+    },
+    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
+    "alreadyAllowlisted": false
   },
   {
     "groupKey": "colon-event:roland garros atp|kind:generic",
     "title": "colon-event:roland garros atp|kind:generic",
     "kind": "generic",
     "detectedMarketsCount": 5,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "UnverifiedGroup",
-    "estimatedNoBasketCost": null,
+    "pricedLegs": 5,
+    "missingPrices": 0,
     "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
+    "estimatedNetEdgeConservative": null,
+    "estimatedNetEdgeRawOnly": null,
+    "candidateQualityScore": -140,
+    "recommendedAction": "LikelyFalsePositive",
+    "rejectionReason": "IndependentMatches",
     "warnings": [
       "Not manually verified",
       "Execution disabled until allowlisted with explicit marketIds or conditionIds"
@@ -735,82 +1355,24 @@
         "archived": false,
         "endDate": "2026-06-03T09:00:00Z"
       }
-    ]
-  },
-  {
-    "groupKey": "winner:2026 peruvian presidential election|kind:person",
-    "title": "winner:2026 peruvian presidential election|kind:person",
-    "kind": "person",
-    "detectedMarketsCount": 5,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "VerifiedGroupMarketMismatch",
-    "estimatedNoBasketCost": null,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
     ],
-    "markets": [
-      {
-        "marketId": "947289",
-        "conditionId": "0x2cd24d17f5680dc6e7b7d67c712a223ae85550745597e81bd2d2b8d073443951",
-        "question": "Will Roberto S\u00E1nchez Palomino win the 2026 Peruvian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-07T00:00:00Z"
-      },
-      {
-        "marketId": "947269",
-        "conditionId": "0xc4c3dbcc37a957a817599b0bf9fb5bd6b62b19210b0f527fec57cb75c7ed150a",
-        "question": "Will Keiko Fujimori win the 2026 Peruvian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-07T00:00:00Z"
-      },
-      {
-        "marketId": "947287",
-        "conditionId": "0x28d4cee5a4bb01e0a7b1a39f8a23b2af657d9cf06d1e0ed8443c6b09329b9be3",
-        "question": "Will Marisol P\u00E9rez Tello win the 2026 Peruvian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-07T00:00:00Z"
-      },
-      {
-        "marketId": "947268",
-        "conditionId": "0xae6d3d20bc8f742922dc40880cd8a8671c10385a9912fa7cd670fba0643dfe96",
-        "question": "Will Rafael L\u00F3pez Aliaga win the 2026 Peruvian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-07T00:00:00Z"
-      },
-      {
-        "marketId": "947283",
-        "conditionId": "0x974dcbcce5e8186e0e273065a60675bc17617897c395eca60478d0c49f80718f",
-        "question": "Will Carlos Esp\u00E1 win the 2026 Peruvian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-07T00:00:00Z"
-      }
-    ]
+    "suggestedAllowlistTemplate": null,
+    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
+    "alreadyAllowlisted": false
   },
   {
     "groupKey": "colon-event:spread|kind:generic",
     "title": "colon-event:spread|kind:generic",
     "kind": "generic",
     "detectedMarketsCount": 5,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "UnverifiedGroup",
-    "estimatedNoBasketCost": null,
+    "pricedLegs": 5,
+    "missingPrices": 0,
     "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
+    "estimatedNetEdgeConservative": null,
+    "estimatedNetEdgeRawOnly": null,
+    "candidateQualityScore": -140,
+    "recommendedAction": "DoNotVerify",
+    "rejectionReason": "DangerousMarketPattern",
     "warnings": [
       "Not manually verified",
       "Execution disabled until allowlisted with explicit marketIds or conditionIds"
@@ -861,253 +1423,24 @@
         "archived": false,
         "endDate": "2026-05-27T00:30:00Z"
       }
-    ]
-  },
-  {
-    "groupKey": "winner:2028 republican presidential nomination|kind:person",
-    "title": "winner:2028 republican presidential nomination|kind:person",
-    "kind": "person",
-    "detectedMarketsCount": 4,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "VerifiedGroupMarketMismatch",
-    "estimatedNoBasketCost": null,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
     ],
-    "markets": [
-      {
-        "marketId": "561983",
-        "conditionId": "0x214093035e429b91df322bd20c55d9f611f741f67472a63f7623a9afc0cffa57",
-        "question": "Will Greg Abbott win the 2028 Republican presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561998",
-        "conditionId": "0x4f02b9cf70e514964fcb9aa2f7873d2b0d1aa0986da096cce7e6687e78da00f3",
-        "question": "Will Ivanka Trump win the 2028 Republican presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561992",
-        "conditionId": "0x61a1278884fa70d68d4bcaaf72fad55bbdb063cac28c6947472ca91635fab10f",
-        "question": "Will Katie Britt win the 2028 Republican presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "562005",
-        "conditionId": "0x24258776d0a926b4550b0f213267b95ba0a7741fc972d0b3c2b5f6bf8ced2c50",
-        "question": "Will Thomas Massie win the 2028 Republican presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      }
-    ]
-  },
-  {
-    "groupKey": "winner:2026 women s us open|kind:generic",
-    "title": "winner:2026 women s us open|kind:generic",
-    "kind": "generic",
-    "detectedMarketsCount": 3,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "UnverifiedGroup",
-    "estimatedNoBasketCost": null,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "1088662",
-        "conditionId": "0x4b408f8e5e035d5498751ff0048fca5fc472ce1f774d703b3e9f323590ebe3a6",
-        "question": "Will Barbora Krejcikova win the 2026 Women\u2019s US Open?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-09-13T00:00:00Z"
-      },
-      {
-        "marketId": "1088680",
-        "conditionId": "0xdaba177a8a9e34e55a1663bf89f7bc20e94829bbf5f254832d778d574fb29b54",
-        "question": "Will Anastasia Potapova win the 2026 Women\u2019s US Open?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-09-13T00:00:00Z"
-      },
-      {
-        "marketId": "1088679",
-        "conditionId": "0xaed5fc200c5322ecf7e4d09fc8287de5325c3c64b15c1e85af9f945abdb7aaeb",
-        "question": "Will Tereza Valentova win the 2026 Women\u2019s US Open?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-09-13T00:00:00Z"
-      }
-    ]
-  },
-  {
-    "groupKey": "winner:2026 nba finals|kind:generic",
-    "title": "winner:2026 nba finals|kind:generic",
-    "kind": "generic",
-    "detectedMarketsCount": 3,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "UnverifiedGroup",
-    "estimatedNoBasketCost": null,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "553858",
-        "conditionId": "0x713641f745d71f6ec61f906237ffca3c8583f251e49384429a63ceb0ccdb2d37",
-        "question": "Will the New York Knicks win the 2026 NBA Finals?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-01T00:00:00Z"
-      },
-      {
-        "marketId": "553866",
-        "conditionId": "0xb6b3d7a2037b3faa7e1306d741840d453432902d73cc9a146a035e40271eae73",
-        "question": "Will the San Antonio Spurs win the 2026 NBA Finals?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-01T00:00:00Z"
-      },
-      {
-        "marketId": "553856",
-        "conditionId": "0x22e7b5e35423e76842dd3a5e1a21d13793811080d5e7b2896d0c001bd5e97d54",
-        "question": "Will the Oklahoma City Thunder win the 2026 NBA Finals?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-01T00:00:00Z"
-      }
-    ]
-  },
-  {
-    "groupKey": "winner:2026 colombian presidential election|kind:person",
-    "title": "winner:2026 colombian presidential election|kind:person",
-    "kind": "person",
-    "detectedMarketsCount": 3,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "UnverifiedGroup",
-    "estimatedNoBasketCost": null,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "569368",
-        "conditionId": "0x0fb006e0c06caa4db12f7e30ec8c2483d658f83eb57b2ee8eb478e39beca3dfd",
-        "question": "Will Ivan Cepeda Castro win the 2026 Colombian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-21T14:00:00Z"
-      },
-      {
-        "marketId": "569366",
-        "conditionId": "0xfbe85201ab2b4acff01cd5a3639039fc813d3448c64db081f70926bd9b9e74e9",
-        "question": "Will Abelardo de la Espriella  win the 2026 Colombian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-21T14:00:00Z"
-      },
-      {
-        "marketId": "569373",
-        "conditionId": "0xd6591e966aebf061547ef34cdf3494ed318969887c8b7fb53f10ed5d5461a547",
-        "question": "Will Paloma Valencia win the 2026 Colombian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-21T14:00:00Z"
-      }
-    ]
-  },
-  {
-    "groupKey": "winner:1st round of 2026 colombian presidential election|kind:person",
-    "title": "winner:1st round of 2026 colombian presidential election|kind:person",
-    "kind": "person",
-    "detectedMarketsCount": 3,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "UnverifiedGroup",
-    "estimatedNoBasketCost": null,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "569342",
-        "conditionId": "0x04e73caf81ef64ce0c612699049d295e18dfe9bdd60d898fd3d8a64cac723661",
-        "question": "Will Paloma Valencia win the 1st round of the 2026 Colombian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-05-31T16:00:00Z"
-      },
-      {
-        "marketId": "569344",
-        "conditionId": "0xb611b3a7173f69e412b55561ed265d849e36693c248ff620d0e981c5b3f2e325",
-        "question": "Will Abelardo de la Espriella win the 1st round of the 2026 Colombian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-05-31T16:00:00Z"
-      },
-      {
-        "marketId": "569343",
-        "conditionId": "0xc00920db6f5e84821a61bd31578499bbc9bd125949572b589b7a9e4b0f13bad3",
-        "question": "Will Iv\u00E1n Cepeda Castro win the 1st round of the 2026 Colombian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-05-31T16:00:00Z"
-      }
-    ]
+    "suggestedAllowlistTemplate": null,
+    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
+    "alreadyAllowlisted": false
   },
   {
     "groupKey": "colon-event:roland garros wta|kind:generic",
     "title": "colon-event:roland garros wta|kind:generic",
     "kind": "generic",
     "detectedMarketsCount": 2,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "UnverifiedGroup",
-    "estimatedNoBasketCost": null,
+    "pricedLegs": 2,
+    "missingPrices": 0,
     "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
+    "estimatedNetEdgeConservative": null,
+    "estimatedNetEdgeRawOnly": null,
+    "candidateQualityScore": -160,
+    "recommendedAction": "LikelyFalsePositive",
+    "rejectionReason": "IndependentMatches",
     "warnings": [
       "Not manually verified",
       "Execution disabled until allowlisted with explicit marketIds or conditionIds"
@@ -1131,114 +1464,9 @@
         "archived": false,
         "endDate": "2026-05-31T09:00:00Z"
       }
-    ]
-  },
-  {
-    "groupKey": "winner:2027 french presidential election|kind:person",
-    "title": "winner:2027 french presidential election|kind:person",
-    "kind": "person",
-    "detectedMarketsCount": 2,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "UnverifiedGroup",
-    "estimatedNoBasketCost": null,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
     ],
-    "markets": [
-      {
-        "marketId": "679049",
-        "conditionId": "0x06ea9c02b4c6a2f7f07f78e21411bd367636564edb27c72cd038b556aada1a64",
-        "question": "Will Mathilde Panot win the 2027 French presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2027-04-30T00:00:00Z"
-      },
-      {
-        "marketId": "679025",
-        "conditionId": "0x4c799a8378d60f34f055cf5c61fc3f6f1a6e7abe5d5384ef37961c506eab867c",
-        "question": "Will Fran\u00E7ois Ruffin win the 2027 French presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2027-04-30T00:00:00Z"
-      }
-    ]
-  },
-  {
-    "groupKey": "winner:nba western conference finals|kind:generic",
-    "title": "winner:nba western conference finals|kind:generic",
-    "kind": "generic",
-    "detectedMarketsCount": 2,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "UnverifiedGroup",
-    "estimatedNoBasketCost": null,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "564210",
-        "conditionId": "0x4cf389adc069a4d713e1ddb6348c96afd6df78e6bf676c7dce1780135186d90e",
-        "question": "Will the Oklahoma City Thunder win the NBA Western Conference Finals?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-16T00:00:00Z"
-      },
-      {
-        "marketId": "564218",
-        "conditionId": "0xe3e8574f967e628750dff67c641944a84da281ced40ffe7c76e42649e89a6887",
-        "question": "Will the San Antonio Spurs win the NBA Western Conference Finals?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-16T00:00:00Z"
-      }
-    ]
-  },
-  {
-    "groupKey": "winner:2026 world series|kind:generic",
-    "title": "winner:2026 world series|kind:generic",
-    "kind": "generic",
-    "detectedMarketsCount": 2,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "UnverifiedGroup",
-    "estimatedNoBasketCost": null,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "1235574",
-        "conditionId": "0x20ad75028f28b5bced0e807f25289a57ea8060ddd716a60bafb9eba1cf0e58e9",
-        "question": "Will the San Francisco Giants win the 2026 World Series?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-31T23:55:00Z"
-      },
-      {
-        "marketId": "1235567",
-        "conditionId": "0x728ed3e64f1f6b67d9b3dcd545ae574aaf0dfd3b0fb6df433d0c07c253981ec0",
-        "question": "Will the St. Louis Cardinals win the 2026 World Series?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-31T23:55:00Z"
-      }
-    ]
+    "suggestedAllowlistTemplate": null,
+    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
+    "alreadyAllowlisted": false
   }
 ]
