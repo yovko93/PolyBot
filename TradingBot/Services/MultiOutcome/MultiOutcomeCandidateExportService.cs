@@ -8,6 +8,7 @@ public sealed class MultiOutcomeCandidateExportService
 {
     private readonly MultiOutcomeReviewOptions _options;
     private readonly string _absolutePath;
+    private readonly string _verifiedPricingAbsolutePath;
     private DateTime _lastExportAtUtc = DateTime.MinValue;
     private bool _hasLoggedNoCandidates;
 
@@ -17,6 +18,9 @@ public sealed class MultiOutcomeCandidateExportService
         _absolutePath = Path.IsPathRooted(options.ExportPath)
             ? options.ExportPath
             : Path.GetFullPath(Path.Combine(contentRootPath, options.ExportPath));
+        _verifiedPricingAbsolutePath = Path.IsPathRooted(options.ExportVerifiedPricingPath)
+            ? options.ExportVerifiedPricingPath
+            : Path.GetFullPath(Path.Combine(contentRootPath, options.ExportVerifiedPricingPath));
 
         if (_options.ExportCandidates)
             Console.WriteLine($"[MULTI_REVIEW] Candidate export enabled Path={_absolutePath}");
@@ -25,6 +29,7 @@ public sealed class MultiOutcomeCandidateExportService
     }
 
     public string ExportPathAbsolute => _absolutePath;
+    public string VerifiedPricingExportPathAbsolute => _verifiedPricingAbsolutePath;
 
     public IReadOnlyList<object> BuildBoundedCandidates(IReadOnlyList<MultiOutcomeGroupArbEngine.CandidateGroupReview> groups, int topGroups, int maxMarkets, bool includeMarkets)
     {
@@ -106,5 +111,12 @@ public sealed class MultiOutcomeCandidateExportService
         _lastExportAtUtc = now;
         _hasLoggedNoCandidates = false;
         Console.WriteLine($"[MULTI_REVIEW] Candidate export written Groups={payload.Count} Path={_absolutePath}");
+    }
+
+    public void ExportVerifiedPricing(IReadOnlyList<object> payload)
+    {
+        if (!_options.ExportVerifiedPricing) return;
+        Directory.CreateDirectory(Path.GetDirectoryName(_verifiedPricingAbsolutePath)!);
+        File.WriteAllText(_verifiedPricingAbsolutePath, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
     }
 }

@@ -26,4 +26,21 @@ public class VerifiedGroupPricingServiceTests
         Assert.Equal(55, r.NoAskQuantity);
         Assert.Equal("DerivedFromYesBid", r.Source);
     }
+
+    [Fact]
+    public void Missing_no_token_id_returns_specific_reason()
+    {
+        var m = new Market { id = "m1", conditionId = "c1", outcomes = new() { "Yes" }, clobTokenIds = new() { "y" } };
+        var r = VerifiedGroupPricingService.ResolveNoAsk(m, null, DateTime.UtcNow, 5000);
+        Assert.Equal("MissingNoTokenId", r.FailureReason);
+    }
+
+    [Fact]
+    public void Missing_yes_bid_and_no_ask_returns_missing_yes_bid_for_derived()
+    {
+        var m = new Market { id = "m1", conditionId = "c1", outcomes = new() { "Yes", "No" }, clobTokenIds = new() { "y", "n" } };
+        var s = new BinaryOrderBookSnapshot("m1", "q", "y", "n", null, null, null, null);
+        var r = VerifiedGroupPricingService.ResolveNoAsk(m, s, DateTime.UtcNow, 5000);
+        Assert.Equal("MissingYesBidForDerivedNoAsk", r.FailureReason);
+    }
 }

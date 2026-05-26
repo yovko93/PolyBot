@@ -272,6 +272,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var verifiedExecutable = 0;
                     var skipReason = "None";
                     var groupDiagnostics = new List<VerifiedGroupDiagnosticDto>();
+                    var verifiedPricingExport = new List<object>();
                     foreach (var g in resolved)
                     {
                         if (g.ValidationStatus != "VerifiedGroupResolved")
@@ -309,6 +310,21 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             skipReason = "MissingNoAsk";
                             Console.WriteLine($"[VERIFIED_GROUP_PRICING] Group={g.GroupKey} Legs={resolvedNoAsks.Count} NoAskResolved={noAskResolvedCount} MissingNoAsk={missingNoAskLegs.Count} MissingLiquidity=0 TopReason=MissingNoAsk");
                             Console.WriteLine($"[VERIFIED_GROUP_MISSING_NO_ASK] Group={g.GroupKey} Missing={missingNoAskLegs.Count} Samples=[{string.Join(", ", missingNoAskLegs.Take(5).Select(x => $"{x.MarketId}:{x.FailureReason}"))}]");
+                            var pricedLegs = resolvedNoAsks.Where(x => x.NoAsk.HasValue).ToList();
+                            var missingIds = missingNoAskLegs.Select(x => x.MarketId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                            var suggestedMarketIds = markets.Where(x => !missingIds.Contains(x.id) && x.active != false).Select(x => x.id).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                            var suggestedConditionIds = markets.Where(x => !missingIds.Contains(x.id) && x.active != false && !string.IsNullOrWhiteSpace(x.conditionId)).Select(x => x.conditionId!).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                            verifiedPricingExport.Add(new
+                            {
+                                groupKey = g.GroupKey,
+                                totalLegs = resolvedNoAsks.Count,
+                                noAskResolvedCount = pricedLegs.Count,
+                                missingNoAskCount = missingNoAskLegs.Count,
+                                pricedLegs = pricedLegs.Select(x => new { marketId = x.MarketId, conditionId = x.ConditionId, noAsk = x.NoAsk, noAskQuantity = x.NoAskQuantity, noAskSource = x.Source, yesBid = x.YesBid, yesBidQuantity = x.YesBidQuantity, noTokenId = x.NoTokenId, priceResolutionFailureReason = x.FailureReason }).ToArray(),
+                                missingPriceLegs = missingNoAskLegs.Select(x => new { marketId = x.MarketId, conditionId = x.ConditionId, noAsk = x.NoAsk, noAskQuantity = x.NoAskQuantity, noAskSource = x.Source, yesBid = x.YesBid, yesBidQuantity = x.YesBidQuantity, noTokenId = x.NoTokenId, priceResolutionFailureReason = x.FailureReason }).ToArray(),
+                                suggestedPrunedAllowlistTemplate = options.MultiOutcomeReview.IncludeSuggestedPrunedAllowlist ? new { enabled = true, groupKey = g.GroupKey, title = g.Title, verificationStatus = "Verified", groupType = "MutuallyExclusiveWinner", allowedStrategy = "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", marketIds = suggestedMarketIds, conditionIds = suggestedConditionIds, requiredOutcomeCount = suggestedMarketIds.Length, requireExactOutcomeCount = false } : null
+                            });
+                            Console.WriteLine($"[VERIFIED_GROUP_PRICING_SUGGESTION] Group={g.GroupKey} MissingNoAsk={missingNoAskLegs.Count} SuggestedPrunedLegs={suggestedMarketIds.Length}");
                             groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, "VerifiedResolved", "MissingNoAsk", null, missingNoAskLegs.Count, 0, missingNoAskLegs.Select(x => x.MarketId).Take(5).ToArray(), Array.Empty<string>()));
                             continue;
                         }
@@ -318,8 +334,22 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         if (isExec) verifiedExecutable++;
                         skipReason = isExec ? "Executable" : "NegativeEdge";
                         groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, "VerifiedResolved", skipReason, edge, 0, 0, Array.Empty<string>(), Array.Empty<string>()));
+                        verifiedPricingExport.Add(new
+                        {
+                            groupKey = g.GroupKey,
+                            totalLegs = resolvedNoAsks.Count,
+                            noAskResolvedCount = resolvedNoAsks.Count,
+                            missingNoAskCount = 0,
+                            pricedLegs = resolvedNoAsks.Select(x => new { marketId = x.MarketId, conditionId = x.ConditionId, noAsk = x.NoAsk, noAskQuantity = x.NoAskQuantity, noAskSource = x.Source, yesBid = x.YesBid, yesBidQuantity = x.YesBidQuantity, noTokenId = x.NoTokenId, priceResolutionFailureReason = x.FailureReason }).ToArray(),
+                            missingPriceLegs = Array.Empty<object>(),
+                            suggestedPrunedAllowlistTemplate = (object?)null
+                        });
                     }
-                    Console.WriteLine($"[MULTI_SCAN] AutoCandidates={multiOutcomeReport.GroupsDetected} AutoRejected={Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified)} VerifiedConfigured={multiOutcomeValidator.LoadedAllowlistCount} VerifiedResolved={verifiedResolved} VerifiedEvaluated={verifiedEvaluated} VerifiedExecutable={verifiedExecutable} VerifiedMismatch={verifiedMismatch} BestVerifiedEdge={groupDiagnostics.Where(x=>x.BestEdge.HasValue).Select(x=>x.BestEdge!.Value).DefaultIfEmpty(0m).Max()} TopReject={skipReason}");
+                    var bestVerifiedEdge = groupDiagnostics.Where(x=>x.BestEdge.HasValue).Select(x=>x.BestEdge!.Value).Cast<decimal?>().DefaultIfEmpty(null).Max();
+                    var missingNoAskTotal = groupDiagnostics.Sum(x => x.MissingNoAskCount);
+                    var noAskResolvedTotal = verifiedPricingExport.Sum(x => int.Parse(System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(x)).RootElement.GetProperty("noAskResolvedCount").ToString()));
+                    Console.WriteLine($"[MULTI_SCAN] AutoCandidates={multiOutcomeReport.GroupsDetected} AutoRejected={Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified)} VerifiedConfigured={multiOutcomeValidator.LoadedAllowlistCount} VerifiedResolved={verifiedResolved} VerifiedEvaluated={verifiedEvaluated} VerifiedExecutable={verifiedExecutable} VerifiedNoAskResolved={noAskResolvedTotal} VerifiedMissingNoAsk={missingNoAskTotal} VerifiedMismatch={verifiedMismatch} BestVerifiedEdge={(bestVerifiedEdge.HasValue ? bestVerifiedEdge.Value.ToString() : "N/A")} TopReject={skipReason}");
+                    exportService.ExportVerifiedPricing(verifiedPricingExport);
                     state.SetMultiOutcomeDiagnostics(new MultiOutcomeDiagnosticsDto(multiOutcomeReport.GroupsDetected,multiOutcomeReport.GroupsVerified,Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified),multiOutcomeReport.ExecutableGroups,multiOutcomeReport.RejectedByReason.ToDictionary(k=>k.Key,v=>v.Value),multiOutcomeReport.TopRejectedSamples.Take(25).Select(x=>$"{x.GroupKey}:{x.Reason}").ToArray(),Array.Empty<string>(),multiOutcomeValidator.LoadedAllowlistCount,Array.Empty<string>(),Guid.NewGuid().ToString("N"),DateTime.UtcNow,state.NextSeq(),multiOutcomeValidator.LoadedAllowlistCount,verifiedResolved,verifiedMismatch,verifiedEvaluated,verifiedExecutable,groupDiagnostics,skipReason));
                 }
             }

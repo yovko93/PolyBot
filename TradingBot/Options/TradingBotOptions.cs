@@ -157,6 +157,9 @@ public class MultiOutcomeReviewOptions
     public bool ExportCandidates { get; set; } = true;
     public int ExportIntervalMinutes { get; set; } = 5;
     public string ExportPath { get; set; } = "exports/multi-outcome-candidates-latest.json";
+    public bool ExportVerifiedPricing { get; set; } = true;
+    public string ExportVerifiedPricingPath { get; set; } = "exports/verified-group-pricing-latest.json";
+    public bool IncludeSuggestedPrunedAllowlist { get; set; } = true;
 }
 
 public class RuntimeStateOptions
