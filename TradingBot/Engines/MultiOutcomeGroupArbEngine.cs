@@ -534,7 +534,7 @@ public class MultiOutcomeGroupArbEngine
         var rejected = report.GroupsDetected - report.GroupsVerified;
         var reasonSummary = string.Join(",", report.RejectedByReason.Select(x => $"{x.Key}:{x.Value}"));
         if (logSummary)
-            Console.WriteLine($"[MULTI_SCAN] Candidates={report.GroupsDetected} Verified={report.GroupsVerified} ConfiguredIncomplete={report.ConfiguredIncompleteGroups} Rejected={rejected} Executable={report.ExecutableGroups} TopReject={report.TopSkipReason} RejectedByReason={{{reasonSummary}}}");
+            Console.WriteLine($"[MULTI_CANDIDATE_SCAN] Candidates={report.GroupsDetected} Rejected={rejected} TopReject={report.TopSkipReason} RejectedByReason={{{reasonSummary}}}");
         if (logSamples)
         {
             foreach (var grp in report.TopRejectedSamples.GroupBy(x => x.Reason))

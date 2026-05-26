@@ -436,7 +436,67 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var missingNoAskTotal = groupDiagnostics.Sum(x => x.MissingNoAskCount);
                     var noAskResolvedTotal = verifiedPricingExport.Sum(x => int.Parse(System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(x)).RootElement.GetProperty("noAskResolvedCount").ToString()));
                     var bestPricing = pricingDiagnostics.Where(x=>x.SkipReason!="MissingNoAsk").OrderByDescending(x=>x.NetEdge).FirstOrDefault();
-                    Console.WriteLine($"[MULTI_SCAN] AutoCandidates={multiOutcomeReport.GroupsDetected} AutoRejected={Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified)} VerifiedConfigured={multiOutcomeValidator.LoadedAllowlistCount} VerifiedResolved={verifiedResolved} VerifiedEvaluated={verifiedEvaluated} VerifiedExecutable={verifiedExecutable} VerifiedNoAskResolved={noAskResolvedTotal} VerifiedMissingNoAsk={missingNoAskTotal} VerifiedMismatch={verifiedMismatch} BestVerifiedNetEdgePerBasket={(bestPricing is null ? "N/A" : bestPricing.NetEdge)} BestVerifiedNoAskSum={(bestPricing is null ? "N/A" : bestPricing.NoAskSum)} BestVerifiedGuaranteedPayout={(bestPricing is null ? "N/A" : bestPricing.GuaranteedPayout)} TopReject={skipReason}");
+                    Console.WriteLine($"[MULTI_CANDIDATE_SCAN] Candidates={multiOutcomeReport.GroupsDetected} Rejected={Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified)} TopReject={multiOutcomeReport.TopSkipReason}");
+                    Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Evaluated={verifiedEvaluated} Executable={verifiedExecutable} Mismatch={verifiedMismatch} BestGross={(bestPricing is null ? "N/A" : bestPricing.GrossEdge)} BestNet={(bestPricing is null ? "N/A" : bestPricing.NetEdge)} BestGroup={(bestPricing is null ? "N/A" : bestPricing.GroupKey)} Classification={(bestPricing is not null && bestPricing.GrossEdge > 0m && bestPricing.NetEdge <= 0m ? "RawPositiveNetNegative" : "FarFromExecutable")}");
+
+                    var triageRows = pricingDiagnostics.Select(pd =>
+                    {
+                        var gd = groupDiagnostics.FirstOrDefault(x => x.GroupKey == pd.GroupKey);
+                        var missing = gd?.MissingNoAskCount ?? 0;
+                        var classification = pd.SkipReason == "Executable"
+                            ? "Executable"
+                            : missing > 0 ? "MissingPrices"
+                            : pd.GrossEdge > 0m && pd.NetEdge <= 0m ? "RawPositiveNetNegative"
+                            : pd.GrossEdge < options.MultiOutcomeArbitrage.VerifiedGroupTriage.HopelessGrossEdgeThreshold ? "HopelessNegative"
+                            : "FarFromExecutable";
+                        var action = classification switch
+                        {
+                            "Executable" => "KeepEnabled",
+                            "RawPositiveNetNegative" => "KeepForMonitoring",
+                            "HopelessNegative" => "DisableUntilBetterPricing",
+                            "MissingPrices" => "PruneMissingNoAskLegs",
+                            _ => "NeedsManualReview"
+                        };
+                        return new
+                        {
+                            groupKey = pd.GroupKey,
+                            enabled = true,
+                            resolved = true,
+                            evaluated = true,
+                            executable = pd.SkipReason == "Executable",
+                            legs = pd.Legs,
+                            noAskResolved = pd.Legs - missing,
+                            missingNoAsk = missing,
+                            guaranteedPayout = pd.GuaranteedPayout,
+                            noAskSum = pd.NoAskSum,
+                            grossEdge = pd.GrossEdge,
+                            netEdgeConservative = pd.NetEdge,
+                            netEdgeRawOnly = pd.GrossEdge,
+                            netEdgeZeroFeesZeroSlippage = pd.GrossEdge,
+                            expectedProfit = pd.ExpectedProfit,
+                            topReject = pd.SkipReason,
+                            classification,
+                            recommendation = action,
+                            recommendedConfigAction = action
+                        };
+                    }).ToArray();
+                    var triagePath = Path.Combine(contentRootPath, options.MultiOutcomeReview.ExportVerifiedTriagePath);
+                    Directory.CreateDirectory(Path.GetDirectoryName(triagePath)!);
+                    File.WriteAllText(triagePath, System.Text.Json.JsonSerializer.Serialize(triageRows, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+                    var nextGroups = reviewReport.Take(10).ToArray();
+                    var nextPath = Path.Combine(contentRootPath, options.MultiOutcomeReview.ExportNextGroupsToVerifyPath);
+                    Directory.CreateDirectory(Path.GetDirectoryName(nextPath)!);
+                    File.WriteAllText(nextPath, System.Text.Json.JsonSerializer.Serialize(nextGroups, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+                    var suggestedPath = Path.Combine(contentRootPath, options.MultiOutcomeReview.ExportSuggestedVerifiedGroupsPath);
+                    File.WriteAllText(suggestedPath, System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        metadata = new { note = "Suggested only. Does not overwrite config/verified-multi-outcome-groups.json.", generatedAtUtc = DateTime.UtcNow },
+                        keepEnabledGroups = triageRows.Where(x => x.recommendedConfigAction is "KeepEnabled" or "KeepForMonitoring").Select(x => x.groupKey).ToArray(),
+                        disableRecommendedGroups = triageRows.Where(x => x.recommendedConfigAction == "DisableUntilBetterPricing").Select(x => x.groupKey).ToArray(),
+                        needsPruningGroups = triageRows.Where(x => x.recommendedConfigAction == "PruneMissingNoAskLegs").Select(x => x.groupKey).ToArray(),
+                        nextGroupsToVerify = nextGroups
+                    }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+                    Console.WriteLine($"[VERIFIED_GROUP_PORTFOLIO] Total={multiOutcomeValidator.LoadedAllowlistCount} Keep={triageRows.Count(x => x.recommendedConfigAction is \"KeepEnabled\" or \"KeepForMonitoring\")} DisableRecommended={triageRows.Count(x => x.recommendedConfigAction == \"DisableUntilBetterPricing\")} NeedsPruning={triageRows.Count(x => x.recommendedConfigAction == \"PruneMissingNoAskLegs\")} Executable={verifiedExecutable} Best={(bestPricing?.GroupKey ?? "N/A")}");
                     exportService.ExportVerifiedPricing(verifiedPricingExport);
                     state.SetMultiOutcomeDiagnostics(new MultiOutcomeDiagnosticsDto(multiOutcomeReport.GroupsDetected,multiOutcomeReport.GroupsVerified,Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified),multiOutcomeReport.ExecutableGroups,multiOutcomeReport.RejectedByReason.ToDictionary(k=>k.Key,v=>v.Value),multiOutcomeReport.TopRejectedSamples.Take(25).Select(x=>$"{x.GroupKey}:{x.Reason}").ToArray(),Array.Empty<string>(),multiOutcomeValidator.LoadedAllowlistCount,Array.Empty<string>(),Guid.NewGuid().ToString("N"),DateTime.UtcNow,state.NextSeq(),multiOutcomeValidator.LoadedAllowlistCount,verifiedResolved,verifiedMismatch,verifiedEvaluated,verifiedExecutable,groupDiagnostics,skipReason,pricingDiagnostics,basketCostDiagnostics));
                 }
