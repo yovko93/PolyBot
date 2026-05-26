@@ -5,11 +5,10 @@ namespace TradingBot.Services.MultiOutcome;
 
 public sealed class VerifiedBasketScreener
 {
-    public sealed record QuantityScenarioResult(decimal Qty, bool DepthUnavailable, decimal WeightedAverageNoAskPerLeg, decimal TotalBasketCost, decimal GrossEdgePerBasket, decimal TotalFees, decimal TotalSlippage, decimal NetEdgePerBasket, decimal ExpectedProfit, string LimitingLeg, decimal MaxExecutableQty);
-    public sealed record ProfileResult(string ProfileName, string FeeModel, decimal Fees, decimal Slippage, decimal Safety, decimal NetEdge, decimal ExpectedProfit, bool WouldBeExecutable);
-    public sealed record ScreenResult(string GroupKey, int Legs, decimal GuaranteedPayout, decimal NoAskSum, decimal GrossEdge, decimal ActiveProfileNetEdge, decimal ExecutableQty, decimal ExpectedProfit, string DominantCost, string Classification, string BestProfile, IReadOnlyList<ProfileResult> ProfileResults, IReadOnlyList<QuantityScenarioResult> QuantityResults, string TopMissingReason, DateTime EvaluatedAt, decimal CostReductionNeeded, bool NearExecutable);
-    public sealed record ProfileComparisonSummary(string BestConservative, string BestPolymarketApprox, string BestOrderbookOnly, string BestRaw);
-    public sealed record Snapshot(string ActiveCostProfile, DateTime Timestamp, IReadOnlyList<ScreenResult> VerifiedGroups, IReadOnlyList<ScreenResult> Ranking, IReadOnlyList<ScreenResult> NearExecutableBaskets, ProfileComparisonSummary ProfileComparison, IReadOnlyList<string> RecommendedActions);
+    public sealed record QuantityScenarioResult(decimal Qty, bool DepthAvailable, string DepthMode, decimal WeightedAverageNoAskPerLeg, decimal NoAskSumAtQty, decimal GrossEdgePerBasket, decimal NetEdgePerBasket, decimal ExpectedProfit, string LimitingLeg, decimal MaxExecutableQty);
+    public sealed record ProfileResult(string ProfileName, string FeeModel, decimal Fees, decimal Slippage, decimal Safety, decimal NetEdge, decimal ExpectedProfit, bool WouldBeExecutable, bool DiagnosticsOnly);
+    public sealed record ScreenResult(string GroupKey, int Legs, decimal GuaranteedPayout, decimal NoAskSum, decimal GrossEdge, decimal ActiveProfileNetEdge, decimal ExecutableQty, decimal ExpectedProfit, string DominantCost, string Classification, string BestProfile, IReadOnlyList<ProfileResult> ProfileResults, IReadOnlyList<QuantityScenarioResult> QuantityScenarios, string TopMissingReason, DateTime EvaluatedAt, decimal CostReductionNeeded, bool NearExecutable, string RecommendedAction, IReadOnlyList<string> DiagnosticsOnlyPositiveProfiles);
+    public sealed record Snapshot(DateTime Timestamp, string ActiveProfile, IReadOnlyList<string> Profiles, ScreenResult? BestByActiveProfile, ScreenResult? BestByRawEdge, ScreenResult? BestByConservative, ScreenResult? BestByPolymarketApprox, ScreenResult? BestByRaw, ScreenResult? BestNearExecutable, IReadOnlyList<ScreenResult> NearExecutableBaskets, IReadOnlyList<ScreenResult> VerifiedBaskets, IReadOnlyList<object> UnresolvedConfiguredGroups);
 
     public static ScreenResult Evaluate(string groupKey, IReadOnlyList<ResolvedNoAsk> legs, MultiOutcomeArbitrageOptions options)
     {
@@ -19,7 +18,8 @@ public sealed class VerifiedBasketScreener
         foreach (var kv in options.CostProfiles.Profiles)
         {
             var f = VerifiedBasketFormulaService.Evaluate(noAskForActive, kv.Value.FeePerLeg, kv.Value.SlippageBufferPerLeg, kv.Value.SafetyBufferPerGroup);
-            results.Add(new ProfileResult(kv.Key, kv.Value.FeeModel, f.Fees, f.Slippage, f.SafetyBuffer, f.NetEdge, f.NetEdge, f.NetEdge > options.MinMultiOutcomeEdge));
+            var diagnosticsOnly = !kv.Key.Equals(options.CostProfiles.ActiveProfile, StringComparison.OrdinalIgnoreCase);
+            results.Add(new ProfileResult(kv.Key, kv.Value.FeeModel, f.Fees, f.Slippage, f.SafetyBuffer, f.NetEdge, f.NetEdge, f.NetEdge > options.MinMultiOutcomeEdge, diagnosticsOnly));
         }
 
         var active = results.First(x => string.Equals(x.ProfileName, options.CostProfiles.ActiveProfile, StringComparison.OrdinalIgnoreCase));
@@ -28,9 +28,14 @@ public sealed class VerifiedBasketScreener
         var breakdown = VerifiedBasketDiagnostics.Compute(groupKey, legs.Count, formula, activeCfg.FeePerLeg, activeCfg.SlippageBufferPerLeg, options.NearExecutableCostReductionThreshold, options.FarFromExecutableCostReductionThreshold);
         var bestProfile = results.OrderByDescending(x => x.NetEdge).First().ProfileName;
         var poly = results.FirstOrDefault(x => x.ProfileName.Equals("PolymarketApprox", StringComparison.OrdinalIgnoreCase));
-        var nearExecutable = formula.GrossEdge > 0m && formula.NetEdge <= 0m && ((poly?.NetEdge ?? decimal.MinValue) > 0m || breakdown.CostReductionNeeded <= 0.005m);
-
-        return new ScreenResult(groupKey, legs.Count, formula.GuaranteedPayout, formula.NoAskSum, formula.GrossEdge, formula.NetEdge, formula.NetEdge > options.MinMultiOutcomeEdge ? 1m : 0m, formula.NetEdge, breakdown.DominantCostComponent, breakdown.Classification, bestProfile, results, quantityScenarios, "None", DateTime.UtcNow, breakdown.CostReductionNeeded, nearExecutable);
+        var raw = results.FirstOrDefault(x => x.ProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase));
+        var nearExecutable = formula.NetEdge <= 0m && (((poly?.NetEdge ?? decimal.MinValue) > 0m) || ((raw?.NetEdge ?? decimal.MinValue) > 0m) || breakdown.CostReductionNeeded <= 0.005m);
+        var diagPositive = results.Where(x => x.DiagnosticsOnly && x.NetEdge > 0m).Select(x => x.ProfileName).ToArray();
+        var recommendedAction = nearExecutable ? "NearExecutableReviewCosts"
+            : formula.GrossEdge > 0m ? "Monitor"
+            : formula.GrossEdge < 0m ? "DisableUntilBetterPricing"
+            : "NotActionable";
+        return new ScreenResult(groupKey, legs.Count, formula.GuaranteedPayout, formula.NoAskSum, formula.GrossEdge, formula.NetEdge, formula.NetEdge > options.MinMultiOutcomeEdge ? 1m : 0m, formula.NetEdge, breakdown.DominantCostComponent, breakdown.Classification, bestProfile, results, quantityScenarios, "None", DateTime.UtcNow, breakdown.CostReductionNeeded, nearExecutable, recommendedAction, diagPositive);
     }
 
     private static List<QuantityScenarioResult> BuildQuantityResults(IReadOnlyList<ResolvedNoAsk> legs, MultiOutcomeArbitrageOptions options)
@@ -45,21 +50,20 @@ public sealed class VerifiedBasketScreener
             var noAskSum = legs.Where(x => x.NoAsk.HasValue).Sum(x => x.NoAsk!.Value);
             var guaranteed = legs.Count - 1m;
             var gross = guaranteed - noAskSum;
-            var fees = active.FeePerLeg * legs.Count;
-            var slippage = active.SlippageBufferPerLeg * legs.Count;
-            var net = gross - fees - slippage - active.SafetyBufferPerGroup;
-            results.Add(new QuantityScenarioResult(qty, false, weighted, noAskSum, gross, fees, slippage, net, net * qty, legs.FirstOrDefault(x => (x.NoAskQuantity ?? decimal.MaxValue) == maxQty)?.MarketId ?? "None", maxQty));
+            var net = gross - (active.FeePerLeg * legs.Count) - (active.SlippageBufferPerLeg * legs.Count) - active.SafetyBufferPerGroup;
+            results.Add(new QuantityScenarioResult(qty, false, "BestAskOnly", weighted, noAskSum, gross, net, net * qty, legs.FirstOrDefault(x => (x.NoAskQuantity ?? decimal.MaxValue) == maxQty)?.MarketId ?? "None", maxQty));
         }
         return results;
     }
 
-    public static Snapshot BuildSnapshot(string activeProfile, IReadOnlyList<ScreenResult> groups, IReadOnlyList<string> recommendedActions)
+    public static Snapshot BuildSnapshot(string activeProfile, IReadOnlyList<ScreenResult> groups, IReadOnlyList<object> unresolvedConfiguredGroups)
     {
-        var ranking = groups.OrderByDescending(x => x.ActiveProfileNetEdge).ThenByDescending(x => x.GrossEdge).ThenBy(x => x.CostReductionNeeded).ThenByDescending(x => x.ExecutableQty).ToList();
+        var ranking = groups.OrderByDescending(x => x.ActiveProfileNetEdge)
+            .ThenByDescending(x => x.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("PolymarketApprox", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue)
+            .ThenByDescending(x => x.GrossEdge).ThenByDescending(x => x.ExecutableQty).ThenBy(x => x.Legs).ThenBy(x => x.GroupKey, StringComparer.OrdinalIgnoreCase).ToList();
         var near = groups.Where(x => x.NearExecutable).ToList();
-        string Best(string profile) => groups.OrderByDescending(x => x.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals(profile, StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue).ThenBy(x => x.CostReductionNeeded).FirstOrDefault()?.GroupKey ?? "N/A";
-        var pc = new ProfileComparisonSummary(Best("Conservative"), Best("PolymarketApprox"), Best("OrderbookOnly"), Best("RawOnly"));
-        return new Snapshot(activeProfile, DateTime.UtcNow, groups, ranking, near, pc, recommendedActions);
+        ScreenResult? BestBy(string profile) => groups.OrderByDescending(x => x.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals(profile, StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue).ThenBy(x => x.CostReductionNeeded).FirstOrDefault();
+        return new Snapshot(DateTime.UtcNow, activeProfile, groups.SelectMany(x => x.ProfileResults.Select(p => p.ProfileName)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToArray(), ranking.FirstOrDefault(), groups.OrderByDescending(x => x.GrossEdge).FirstOrDefault(), BestBy("Conservative"), BestBy("PolymarketApprox"), BestBy("RawOnly"), near.OrderByDescending(x => x.GrossEdge).FirstOrDefault(), near, ranking, unresolvedConfiguredGroups);
     }
 
     public static void Export(string path, Snapshot snapshot)

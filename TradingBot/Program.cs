@@ -63,6 +63,7 @@ app.MapGet("/api/bot/opportunity-diagnostics", (BotRuntimeState s, int? nearMiss
 });
 app.MapGet("/api/bot/multi-outcome-diagnostics", (BotRuntimeState s) => Results.Ok(s.MultiOutcomeDiagnostics));
 app.MapGet("/api/bot/verified-basket-screener", (BotRuntimeState s) => Results.Ok(s.VerifiedBasketScreener));
+app.MapGet("/api/bot/verified-basket-opportunity-screener", (BotRuntimeState s) => Results.Ok(s.VerifiedBasketScreener));
 app.MapGet("/api/bot/multi-outcome-candidates", (BotRuntimeState s, int? limit, bool? includeMarkets) =>
 {
     var capped = Math.Clamp(limit ?? 25, 1, 200);
@@ -153,7 +154,13 @@ var activeProfileName = options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile
 if (!options.MultiOutcomeArbitrage.CostProfiles.Profiles.TryGetValue(activeProfileName, out var activeProfileCfg)) activeProfileCfg = options.MultiOutcomeArbitrage.CostProfiles.Profiles["Conservative"];
 if (options.EnableLiveExecution && activeProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))
     throw new InvalidOperationException("RawOnly cost profile cannot be active in live mode.");
-Console.WriteLine($"[COST_PROFILE] Active={activeProfileName} FeeModel={activeProfileCfg.FeeModel} FeePerLeg={activeProfileCfg.FeePerLeg} SlippagePerLeg={activeProfileCfg.SlippageBufferPerLeg} Safety={activeProfileCfg.SafetyBufferPerGroup}");
+var profileNames = string.Join(",", options.MultiOutcomeArbitrage.CostProfiles.Profiles.Keys.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+Console.WriteLine($"[COST_PROFILES] Active={activeProfileName} Profiles=[{profileNames}]");
+foreach (var p in options.MultiOutcomeArbitrage.CostProfiles.Profiles.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
+{
+    var diagnosticsOnly = !p.Key.Equals(activeProfileName, StringComparison.OrdinalIgnoreCase);
+    Console.WriteLine($"[COST_PROFILE] Name={p.Key} FeeModel={p.Value.FeeModel} FeePerLeg={p.Value.FeePerLeg} SlippagePerLeg={p.Value.SlippageBufferPerLeg} Safety={p.Value.SafetyBufferPerGroup} DiagnosticsOnly={diagnosticsOnly.ToString().ToLowerInvariant()}");
+}
 
 _ = Task.Run(async () =>
 {
@@ -411,7 +418,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             || (options.Logging.LogVerifiedBasketEveryNCycles > 0 && verifiedBasketCycle % options.Logging.LogVerifiedBasketEveryNCycles == 0);
                         verifiedBasketLastFingerprint[g.GroupKey] = fingerprint;
                         verifiedBasketLastExecutable[g.GroupKey] = currentExec;
-                        if (shouldLog)
+                        if (shouldLog && options.Logging.LogVerifiedBasketDetails)
                         {
                             Console.WriteLine($"[VERIFIED_BASKET_EDGE] Group={g.GroupKey} Legs={resolvedNoAsks.Count} GuaranteedPayout={formula.GuaranteedPayout} NoAskSum={formula.NoAskSum} MinNoAsk={formula.MinNoAsk} MaxNoAsk={formula.MaxNoAsk} AverageNoAsk={formula.AverageNoAsk} GrossEdge={formula.GrossEdge} Fees={formula.Fees} Slippage={formula.Slippage} Safety={formula.SafetyBuffer} NetEdge={formula.NetEdge} ExecutableQty=1 ExpectedProfit={formula.NetEdge} formulaVersion=v2");
                             Console.WriteLine($"[VERIFIED_BASKET_COSTS] Group={g.GroupKey} GrossEdge={breakdown.GrossEdge} Fees={breakdown.Fees} Slippage={breakdown.Slippage} Safety={breakdown.Safety} NetEdge={breakdown.NetEdge} DominantCost={breakdown.DominantCostComponent} BreakEvenFeeLimit={breakdown.BreakEvenFeeLimit} BreakEvenSlippageLimit={breakdown.BreakEvenSlippageLimit} RequiredCostReduction={breakdown.CostReductionNeeded}");
@@ -455,14 +462,15 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     recommendedActions.Add("Review candidate groups with higher gross edge.");
                     recommendedActions.Add("Check whether FeePerLeg config is realistic.");
                     var screenerPath = Path.Combine(contentRootPath, "exports/verified-basket-opportunity-screener-latest.json");
-                    var snapshot = VerifiedBasketScreener.BuildSnapshot(options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile, verifiedScreenResults, recommendedActions);
+                    var unresolvedConfiguredGroups = resolved.Where(x => x.ValidationStatus != "VerifiedGroupResolved").Take(5).Select(x => (object)new { x.GroupKey, Reason = x.RejectionReason, x.ValidationStatus }).ToArray();
+                    var snapshot = VerifiedBasketScreener.BuildSnapshot(options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile, verifiedScreenResults, unresolvedConfiguredGroups);
                     VerifiedBasketScreener.Export(screenerPath, snapshot);
-                    state.SetVerifiedBasketScreener(new VerifiedBasketScreenerDto(snapshot.ActiveCostProfile, snapshot.Timestamp, snapshot.VerifiedGroups.Cast<object>().ToArray(), snapshot.Ranking.Cast<object>().ToArray(), snapshot.RecommendedActions));
+                    state.SetVerifiedBasketScreener(new VerifiedBasketScreenerDto(snapshot.ActiveProfile, snapshot.Timestamp, snapshot.VerifiedBaskets.Cast<object>().Take(100).ToArray(), snapshot.VerifiedBaskets.Cast<object>().Take(100).ToArray(), snapshot.NearExecutableBaskets.Cast<object>().Take(25).ToArray(), snapshot.Profiles, snapshot.BestByActiveProfile, snapshot.BestByRawEdge, snapshot.BestByConservative, snapshot.BestByPolymarketApprox, snapshot.BestByRaw, snapshot.BestNearExecutable, snapshot.UnresolvedConfiguredGroups));
                     profileComparisonCycle++;
                     var shouldLogProfileComparison = options.Logging.LogProfileComparisonEveryNCycles > 0 && profileComparisonCycle % options.Logging.LogProfileComparisonEveryNCycles == 0;
-                    if (shouldLogProfileComparison)
+                    if (options.Logging.LogProfileComparisonSummary && shouldLogProfileComparison)
                     {
-                        foreach (var row in snapshot.VerifiedGroups.Take(5))
+                        foreach (var row in snapshot.VerifiedBaskets.Take(5))
                         {
                             var c = row.ProfileResults.FirstOrDefault(x => x.ProfileName.Equals("Conservative", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? 0m;
                             var p = row.ProfileResults.FirstOrDefault(x => x.ProfileName.Equals("PolymarketApprox", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? 0m;
@@ -470,6 +478,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             var r = row.ProfileResults.FirstOrDefault(x => x.ProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? 0m;
                             Console.WriteLine($"[PROFILE_COMPARISON] Group={row.GroupKey} Gross={row.GrossEdge} Conservative={c} PolymarketApprox={p} OrderbookOnly={o} RawOnly={r}");
                         }
+                        var bestCons = snapshot.BestByConservative?.ActiveProfileNetEdge ?? 0m;
+                        var bestPolySum = snapshot.VerifiedBaskets.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("PolymarketApprox", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue).DefaultIfEmpty(decimal.MinValue).Max();
+                        var bestRawSum = snapshot.VerifiedBaskets.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue).DefaultIfEmpty(decimal.MinValue).Max();
+                        Console.WriteLine($"[PROFILE_COMPARISON_SUMMARY] Verified={snapshot.VerifiedBaskets.Count} NearExecutable={snapshot.NearExecutableBaskets.Count} BestConservative={bestCons} BestPolymarketApprox={bestPolySum} BestRaw={bestRawSum}");
                     }
                     var nearFingerprint = string.Join("|", snapshot.NearExecutableBaskets.OrderBy(x => x.GroupKey).Select(x => $"{x.GroupKey}:{x.ActiveProfileNetEdge}:{x.CostReductionNeeded}"));
                     var shouldLogNear = !options.Logging.LogNearExecutableOnlyOnChange || nearFingerprint != nearExecutableFingerprint;
@@ -479,7 +491,14 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         foreach (var row in snapshot.NearExecutableBaskets)
                         {
                             var p = row.ProfileResults.FirstOrDefault(x => x.ProfileName.Equals("PolymarketApprox", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? 0m;
-                            Console.WriteLine($"[NEAR_EXECUTABLE_VERIFIED_BASKET] Group={row.GroupKey} ConservativeNet={row.ActiveProfileNetEdge} PolymarketApproxNet={p} RequiredCostReduction={row.CostReductionNeeded}");
+                            var raw = row.ProfileResults.FirstOrDefault(x => x.ProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? 0m;
+                            Console.WriteLine($"[NEAR_EXECUTABLE_VERIFIED_BASKET] Group={row.GroupKey} ConservativeNet={row.ActiveProfileNetEdge} PolymarketApproxNet={p} RawOnly={raw} RequiredCostReduction={row.CostReductionNeeded}");
+                            var q1 = row.QuantityScenarios.FirstOrDefault(x => x.Qty == 1m)?.NetEdgePerBasket ?? 0m;
+                            var q5 = row.QuantityScenarios.FirstOrDefault(x => x.Qty == 5m)?.NetEdgePerBasket ?? q1;
+                            var q10 = row.QuantityScenarios.FirstOrDefault(x => x.Qty == 10m)?.NetEdgePerBasket ?? q1;
+                            var mode = row.QuantityScenarios.FirstOrDefault()?.DepthMode ?? "BestAskOnly";
+                            var lim = row.QuantityScenarios.FirstOrDefault()?.LimitingLeg ?? "None";
+                            Console.WriteLine($"[QUANTITY_SCENARIOS] Group={row.GroupKey} Qty1={q1} Qty5={q5} Qty10={q10} DepthMode={mode} LimitingLeg={lim}");
                         }
                     }
                     if (options.Logging.LogVerifiedBasketRanking && rankedScreen.Count > 0)
@@ -498,10 +517,12 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var bestPricing = pricingDiagnostics.Where(x=>x.SkipReason!="MissingNoAsk").OrderByDescending(x=>x.NetEdge).FirstOrDefault();
                     var candidateReasons = string.Join(",", multiOutcomeReport.RejectedByReason.Select(x => $"{x.Key}:{x.Value}"));
                     Console.WriteLine($"[MULTI_CANDIDATE_SCAN] Candidates={multiOutcomeReport.GroupsDetected} Rejected={Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified)} TopReject={multiOutcomeReport.TopSkipReason} RejectedByReason={{{candidateReasons}}}");
-                    var bestConservativeNet = snapshot.Ranking.FirstOrDefault()?.ActiveProfileNetEdge;
-                    var bestPoly = snapshot.VerifiedGroups.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("PolymarketApprox", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue).DefaultIfEmpty(decimal.MinValue).Max();
-                    var bestRaw = snapshot.VerifiedGroups.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue).DefaultIfEmpty(decimal.MinValue).Max();
-                    Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Evaluated={verifiedEvaluated} Executable={verifiedExecutable} Mismatch={verifiedMismatch} BestConservativeNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestPolymarketApproxNet={bestPoly} BestRaw={bestRaw}");
+                    var bestConservativeNet = snapshot.BestByConservative?.ActiveProfileNetEdge;
+                    var bestPoly = snapshot.VerifiedBaskets.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("PolymarketApprox", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue).DefaultIfEmpty(decimal.MinValue).Max();
+                    var bestRaw = snapshot.VerifiedBaskets.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue).DefaultIfEmpty(decimal.MinValue).Max();
+                    var unresolved = Math.Max(0, multiOutcomeValidator.LoadedAllowlistCount - verifiedResolved);
+                    Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} Evaluated={verifiedEvaluated} Executable={verifiedExecutable} Mismatch={verifiedMismatch} BestConservativeNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestPolymarketApproxNet={bestPoly} BestRaw={bestRaw}");
+                    foreach (var ug in unresolvedConfiguredGroups.Take(3)) Console.WriteLine($"[VERIFIED_UNRESOLVED_SAMPLE] {System.Text.Json.JsonSerializer.Serialize(ug)}");
 
                     var triageRows = resolved.Select(g =>
                     {

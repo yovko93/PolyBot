@@ -35,7 +35,7 @@ public class VerifiedBasketScreenerTests
         var o = new MultiOutcomeArbitrageOptions();
         var legs = new[] { 0.666m, 0.666m, 0.666m }.Select((v,i)=>new ResolvedNoAsk($"m{i}", null, v, 7m, "book", null, null, null, DateTime.UtcNow, false, null)).ToList();
         var r = VerifiedBasketScreener.Evaluate("g", legs, o);
-        var q5 = r.QuantityResults.First(x=>x.Qty==5m);
+        var q5 = r.QuantityScenarios.First(x=>x.Qty==5m);
         Assert.Equal(q5.NetEdgePerBasket * 5m, q5.ExpectedProfit);
     }
 
@@ -56,7 +56,29 @@ public class VerifiedBasketScreenerTests
         var b = new[] { 0.6655m, 0.6665m, 0.666m }.Select((v,i)=>new ResolvedNoAsk($"b{i}", null, v, 100m, "book", null, null, null, DateTime.UtcNow, false, null)).ToList();
         var ra = VerifiedBasketScreener.Evaluate("A", a, o);
         var rb = VerifiedBasketScreener.Evaluate("B", b, o);
-        var snap = VerifiedBasketScreener.BuildSnapshot("Conservative", new[] { ra, rb }, Array.Empty<string>());
-        Assert.NotEmpty(snap.Ranking);
+        var snap = VerifiedBasketScreener.BuildSnapshot("Conservative", new[] { ra, rb }, Array.Empty<object>());
+        Assert.NotEmpty(snap.VerifiedBaskets);
+    }
+
+    [Fact]
+    public void Cost_profile_defaults_include_all_profiles()
+    {
+        var c = CostProfilesOptions.CreateDefault();
+        Assert.Contains("Conservative", c.Profiles.Keys);
+        Assert.Contains("PolymarketApprox", c.Profiles.Keys);
+        Assert.Contains("OrderbookOnly", c.Profiles.Keys);
+        Assert.Contains("RawOnly", c.Profiles.Keys);
+    }
+
+    [Fact]
+    public void Export_file_is_created()
+    {
+        var o = new MultiOutcomeArbitrageOptions();
+        var legs = new[] { 0.666m, 0.666m, 0.666m }.Select((v,i)=>new ResolvedNoAsk($"m{i}", null, v, 100m, "book", null, null, null, DateTime.UtcNow, false, null)).ToList();
+        var r = VerifiedBasketScreener.Evaluate("g", legs, o);
+        var snap = VerifiedBasketScreener.BuildSnapshot("Conservative", new[] { r }, new object[] { new { GroupKey = "x", Reason = "MissingMarkets" } });
+        var path = Path.Combine(Path.GetTempPath(), $"verified-basket-opportunity-screener-{Guid.NewGuid():N}.json");
+        VerifiedBasketScreener.Export(path, snap);
+        Assert.True(File.Exists(path));
     }
 }
