@@ -8,6 +8,24 @@ namespace TradingBot.Services.MultiOutcome;
 
 public sealed class MultiOutcomeCandidateExportService
 {
+    private sealed record ReviewRow(
+        string groupKey,
+        string title,
+        string kind,
+        int detectedMarketsCount,
+        int pricedLegs,
+        int missingPrices,
+        decimal? estimatedGrossEdge,
+        decimal? estimatedNetEdgeConservative,
+        decimal? estimatedNetEdgeRawOnly,
+        int candidateQualityScore,
+        string recommendedAction,
+        string rejectionReason,
+        IReadOnlyList<string> warnings,
+        IReadOnlyList<object> markets,
+        object? suggestedAllowlistTemplate,
+        string copyInstructions,
+        bool alreadyAllowlisted);
     private readonly MultiOutcomeReviewOptions _options;
     private readonly string _absolutePath;
     private readonly string _reviewAbsolutePath;
@@ -56,7 +74,7 @@ public sealed class MultiOutcomeCandidateExportService
     {
         var allowlistedKeys = LoadAllowlistedKeys();
         var rows = groups.Select(g => EvaluateCandidate(g, allowlistedKeys, allowUnpricedLegsInTemplate)).OrderByDescending(x => x.candidateQualityScore).ThenByDescending(x => x.estimatedNetEdgeConservative ?? decimal.MinValue).ToArray();
-        return rows;
+        return rows.Cast<object>().ToArray();
     }
 
     private static object ToMarketNode(Market m) => new
@@ -70,7 +88,7 @@ public sealed class MultiOutcomeCandidateExportService
         endDate = m.endDate ?? m.endDateIso
     };
 
-    private object EvaluateCandidate(MultiOutcomeGroupArbEngine.CandidateGroupReview g, HashSet<string> allowlistedKeys, bool allowUnpricedLegsInTemplate)
+    private ReviewRow EvaluateCandidate(MultiOutcomeGroupArbEngine.CandidateGroupReview g, HashSet<string> allowlistedKeys, bool allowUnpricedLegsInTemplate)
     {
         var markets = (g.Markets ?? Array.Empty<Market>()).ToArray();
         var dangerous = LooksDangerous(g.GroupKey, g.Title, markets);
@@ -102,26 +120,24 @@ public sealed class MultiOutcomeCandidateExportService
         else action = "NeedsHumanReview";
 
         var template = action == "SafeCandidateForManualVerification" ? BuildTemplate(g, markets, allowUnpricedLegsInTemplate) : null;
-        return new
-        {
-            groupKey = g.GroupKey,
-            title = g.Title,
-            kind = g.Kind,
-            detectedMarketsCount = g.DetectedMarketsCount,
+        return new ReviewRow(
+            g.GroupKey,
+            g.Title,
+            g.Kind,
+            g.DetectedMarketsCount,
             pricedLegs,
             missingPrices,
-            estimatedGrossEdge = gross,
-            estimatedNetEdgeConservative = net,
-            estimatedNetEdgeRawOnly = rawOnly,
-            candidateQualityScore = score,
-            recommendedAction = action,
-            rejectionReason = rejection ?? g.RejectionReason,
-            warnings = g.Warnings,
-            markets = markets.Select(ToMarketNode).ToArray(),
-            suggestedAllowlistTemplate = template,
-            copyInstructions = "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
-            alreadyAllowlisted = already
-        };
+            gross,
+            net,
+            rawOnly,
+            score,
+            action,
+            rejection ?? g.RejectionReason,
+            g.Warnings,
+            markets.Select(ToMarketNode).Cast<object>().ToArray(),
+            template,
+            "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
+            already);
     }
 
     private static object BuildTemplate(MultiOutcomeGroupArbEngine.CandidateGroupReview g, Market[] markets, bool allowUnpricedLegsInTemplate)
