@@ -1,4 +1,4 @@
-import type { BotControlState, BotStatus, Opportunity, OpportunityDiagnostics, PaperPosition, RiskState, ScannerStats, TerminalLogEntry, TradeLogEntry } from '../types/models';
+import type { BotControlState, BotStatus, MultiOutcomeDiagnostics, Opportunity, OpportunityDiagnostics, PaperPosition, RiskState, ScannerStats, TerminalLogEntry, TradeLogEntry } from '../types/models';
 import { BotSignalR } from './botSignalR';
 import { keepLatest, UIDataLimits } from '../constants/uiDataLimits';
 
@@ -58,6 +58,7 @@ export const getTerminalLogs = async (signal?: AbortSignal): Promise<TerminalLog
 export const getEquity = async (signal?: AbortSignal): Promise<Array<{ timestamp: string; equity: number }>> => keepLatest((await safeRequest<any[]>(`/equity?limit=${UIDataLimits.MaxChartPoints}`, [], signal)).map(mapEquity), UIDataLimits.MaxChartPoints);
 export const getControls = async (signal?: AbortSignal): Promise<BotControlState> => mapControls(await request('/controls', signal));
 export const getOpportunityDiagnostics = async (signal?: AbortSignal): Promise<OpportunityDiagnostics | null> => safeRequest<any | null>('/opportunity-diagnostics', null, signal);
+export const getMultiOutcomeDiagnostics = async (signal?: AbortSignal): Promise<MultiOutcomeDiagnostics | null> => safeRequest<any | null>('/multi-outcome-diagnostics', null, signal);
 export const pauseScanner = async (): Promise<BotControlState> => mapControls(await request('/controls/pause', undefined, { method: 'POST' }));
 export const resumeScanner = async (): Promise<BotControlState> => mapControls(await request('/controls/resume', undefined, { method: 'POST' }));
 
