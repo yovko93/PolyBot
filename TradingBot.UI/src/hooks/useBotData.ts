@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { API, HUB, getBotHealth, getBotStatus, getControls, getEquity, getMultiOutcomeDiagnostics, getOpportunities, getPositions, getRisk, getScannerStats, getTerminalLogs, getTradeLogs, pauseScanner, resumeScanner, subscribeToBotEvents } from '../services/botApi';
+import { API, HUB, getBotHealth, getBotStatus, getControls, getEquity, getMultiOutcomeDiagnostics, getOpportunities, getPositions, getRisk, getScannerStats, getTerminalLogs, getTradeLogs, getVerifiedBasketScreener, pauseScanner, resumeScanner, subscribeToBotEvents } from '../services/botApi';
 import { keepLatest, UIDataLimits } from '../constants/uiDataLimits';
 
 export function useBotData() {
   const [status, setStatus] = useState<any>(null); const [opps, setOpps] = useState<any[]>([]); const [positions, setPositions] = useState<any[]>([]); const [trades, setTrades] = useState<any[]>([]); const [risk, setRisk] = useState<any>(null); const [scanner, setScanner] = useState<any>(null); const [logs, setLogs] = useState<any[]>([]); const [equity, setEquity] = useState<any[]>([]); const [controls, setControls] = useState<any>(null);
   const [multiOutcomeDiagnostics, setMultiOutcomeDiagnostics] = useState<any>(null);
+  const [verifiedBasketScreener, setVerifiedBasketScreener] = useState<any>(null);
   const [connectionStatus, setConnectionStatus] = useState('DISCONNECTED'); const [lastUpdated, setLastUpdated] = useState(''); const [lastHeartbeat, setLastHeartbeat] = useState(''); const [source, setSource] = useState('SNAPSHOT'); const [lastRestError, setLastRestError] = useState(''); const [lastEvent, setLastEvent] = useState('');
   const seenEvents = useRef(new Set<string>());
 
@@ -14,8 +15,8 @@ export function useBotData() {
       try {
         const healthy = await getBotHealth(ac.signal);
         if (!healthy) setLastRestError('backend health endpoint unavailable');
-        const [s, o, p, t, sc, r, l, eq, c, md] = await Promise.all([getBotStatus(ac.signal), getOpportunities(ac.signal), getPositions(ac.signal), getTradeLogs(ac.signal), getScannerStats(ac.signal), getRisk(ac.signal), getTerminalLogs(ac.signal), getEquity(ac.signal), getControls(ac.signal), getMultiOutcomeDiagnostics(ac.signal)]);
-        setStatus(s); setMultiOutcomeDiagnostics(md); setOpps(keepLatest(o, UIDataLimits.MaxOpportunities)); setPositions(p); setTrades(keepLatest(t, UIDataLimits.MaxTradeLogRows)); setScanner(sc); setRisk(r); setLogs(keepLatest(l, UIDataLimits.MaxRecentLogs)); setEquity(keepLatest(eq, UIDataLimits.MaxChartPoints)); setControls(c); setConnectionStatus(healthy ? 'CONNECTED' : 'DEGRADED'); setSource('SNAPSHOT'); setLastUpdated(new Date().toISOString());
+        const [s, o, p, t, sc, r, l, eq, c, md, vbs] = await Promise.all([getBotStatus(ac.signal), getOpportunities(ac.signal), getPositions(ac.signal), getTradeLogs(ac.signal), getScannerStats(ac.signal), getRisk(ac.signal), getTerminalLogs(ac.signal), getEquity(ac.signal), getControls(ac.signal), getMultiOutcomeDiagnostics(ac.signal), getVerifiedBasketScreener(ac.signal)]);
+        setStatus(s); setMultiOutcomeDiagnostics(md); setVerifiedBasketScreener(vbs); setOpps(keepLatest(o, UIDataLimits.MaxOpportunities)); setPositions(p); setTrades(keepLatest(t, UIDataLimits.MaxTradeLogRows)); setScanner(sc); setRisk(r); setLogs(keepLatest(l, UIDataLimits.MaxRecentLogs)); setEquity(keepLatest(eq, UIDataLimits.MaxChartPoints)); setControls(c); setConnectionStatus(healthy ? 'CONNECTED' : 'DEGRADED'); setSource('SNAPSHOT'); setLastUpdated(new Date().toISOString());
       } catch (e: any) { setLastRestError(String(e)); setConnectionStatus('DISCONNECTED'); }
 
       cleanup = await subscribeToBotEvents({
@@ -38,5 +39,5 @@ export function useBotData() {
     return () => { ac.abort(); cleanup(); };
   }, []);
 
-  return useMemo(() => ({ API, HUB, status, opps, positions, trades, risk, scanner, logs, equity, controls, multiOutcomeDiagnostics, connectionStatus, lastHeartbeat, lastUpdated, source, lastRestError, lastEvent, pauseScanner, resumeScanner }), [status, opps, positions, trades, risk, scanner, logs, equity, controls, multiOutcomeDiagnostics, connectionStatus, lastHeartbeat, lastUpdated, source, lastRestError, lastEvent]);
+  return useMemo(() => ({ API, HUB, status, opps, positions, trades, risk, scanner, logs, equity, controls, multiOutcomeDiagnostics, verifiedBasketScreener, connectionStatus, lastHeartbeat, lastUpdated, source, lastRestError, lastEvent, pauseScanner, resumeScanner }), [status, opps, positions, trades, risk, scanner, logs, equity, controls, multiOutcomeDiagnostics, verifiedBasketScreener, connectionStatus, lastHeartbeat, lastUpdated, source, lastRestError, lastEvent]);
 }

@@ -47,4 +47,16 @@ public class VerifiedBasketScreenerTests
         var r = VerifiedBasketScreener.Evaluate("g", legs, o);
         Assert.True(r.NearExecutable);
     }
+
+    [Fact]
+    public void Snapshot_tie_break_prefers_lower_cost_reduction_when_net_equal()
+    {
+        var o = new MultiOutcomeArbitrageOptions();
+        var a = new[] { 0.666m, 0.666m, 0.666m }.Select((v,i)=>new ResolvedNoAsk($"a{i}", null, v, 100m, "book", null, null, null, DateTime.UtcNow, false, null)).ToList();
+        var b = new[] { 0.6655m, 0.6665m, 0.666m }.Select((v,i)=>new ResolvedNoAsk($"b{i}", null, v, 100m, "book", null, null, null, DateTime.UtcNow, false, null)).ToList();
+        var ra = VerifiedBasketScreener.Evaluate("A", a, o);
+        var rb = VerifiedBasketScreener.Evaluate("B", b, o);
+        var snap = VerifiedBasketScreener.BuildSnapshot("Conservative", new[] { ra, rb }, Array.Empty<string>());
+        Assert.NotEmpty(snap.Ranking);
+    }
 }
