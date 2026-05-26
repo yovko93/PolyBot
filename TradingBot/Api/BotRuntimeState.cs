@@ -10,6 +10,7 @@ public class BotRuntimeState
     public ScannerStatsDto ScannerStats { get; private set; } = new(0,0,0,0,0,0,0,0,0,0,0,0,DateTime.UtcNow,DateTime.UtcNow,null,0,0,0,0,0,0,0,DateTime.UtcNow,DateTime.UtcNow,0,0,0,0,0,0,0,0,0,0,0,0,null,0,0,0,0,0,0,0,null,0);
     public TradingBot.Models.OpportunityDiagnosticsSnapshot? OpportunityDiagnostics { get; private set; }
     public MultiOutcomeDiagnosticsDto? MultiOutcomeDiagnostics { get; private set; }
+    public object[] MultiOutcomeCandidates { get; private set; } = Array.Empty<object>();
     public RiskStateDto Risk { get; private set; } = new(100,5,0.003m,0.25m,300,0,5,0,100,new(),true,true,true,true,DateTime.UtcNow,0);
     public BotControlStateDto Controls { get; private set; } = new(false, "RUNNING", DateTime.UtcNow, 0);
     private readonly ConcurrentQueue<OpportunityDto> _opps = new();
@@ -24,6 +25,7 @@ public class BotRuntimeState
     public void SetRisk(RiskStateDto r){lock(_gate) Risk=r;}
     public void SetOpportunityDiagnostics(TradingBot.Models.OpportunityDiagnosticsSnapshot? d){lock(_gate) OpportunityDiagnostics=d;}
     public void SetMultiOutcomeDiagnostics(MultiOutcomeDiagnosticsDto? d){lock(_gate) MultiOutcomeDiagnostics=d;}
+    public void SetMultiOutcomeCandidates(IEnumerable<object> items){lock(_gate) MultiOutcomeCandidates = items.ToArray();}
     public void SetControls(BotControlStateDto c){lock(_gate) Controls=c;}
     public void AddOpportunity(OpportunityDto o){_opps.Enqueue(o); Trim(_opps,500);}    
     public void ReplaceOpportunities(IEnumerable<OpportunityDto> items){while(_opps.TryDequeue(out _)){} foreach(var i in items) _opps.Enqueue(i); Trim(_opps,500);}    

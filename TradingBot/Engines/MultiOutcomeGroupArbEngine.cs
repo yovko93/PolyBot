@@ -22,6 +22,7 @@ public class MultiOutcomeGroupArbEngine
     private readonly bool _logRejectedSummary;
     private readonly bool _logRejectedCandidates;
     private readonly int _rejectedSampleSize;
+    private readonly bool _logRejectedSamplesOnlyInDebug;
 
     // Used only by requote gate. The main execution decision still belongs to PaperTradingEngine.
     private readonly decimal _requoteMinExpectedProfit;
@@ -38,7 +39,9 @@ public class MultiOutcomeGroupArbEngine
         decimal requoteMinExpectedProfit = 0.25m,
         bool logRejectedCandidates = false,
         bool logRejectedSummary = true,
-        int rejectedSampleSize = 5)
+        int rejectedSampleSize = 5,
+        bool logRejectedSamplesOnlyInDebug = true,
+        MutuallyExclusiveGroupValidator? validator = null)
     {
         _orderBooks = orderBooks;
         _minEdgePerShare = minEdgePerShare;
@@ -49,10 +52,11 @@ public class MultiOutcomeGroupArbEngine
         _requoteGate = requoteGate;
         _decisionService = decisionService;
         _requoteMinExpectedProfit = requoteMinExpectedProfit;
-        _validator = new MutuallyExclusiveGroupValidator(new TradingBot.Options.MultiOutcomeArbitrageOptions());
+        _validator = validator ?? new MutuallyExclusiveGroupValidator(new TradingBot.Options.MultiOutcomeArbitrageOptions());
         _logRejectedCandidates = logRejectedCandidates;
         _logRejectedSummary = logRejectedSummary;
         _rejectedSampleSize = Math.Clamp(rejectedSampleSize, 1, 25);
+        _logRejectedSamplesOnlyInDebug = logRejectedSamplesOnlyInDebug;
     }
 
     public async Task<MultiOutcomeScanReport> ScanAsync(
@@ -77,7 +81,7 @@ public class MultiOutcomeGroupArbEngine
         var report = BuildReport(results);
         if (report.GroupsVerified == 0 && report.ExecutableGroups > 0) report = report with { ExecutableGroups = 0 };
 
-        PrintSummary(report, _logRejectedSummary, _logRejectedCandidates, _rejectedSampleSize);
+        PrintSummary(report, _logRejectedSummary, _logRejectedCandidates && !_logRejectedSamplesOnlyInDebug, _rejectedSampleSize);
         return report;
     }
 
@@ -108,13 +112,13 @@ public class MultiOutcomeGroupArbEngine
         var snapshots = await LoadSnapshotsAsync(groupMarkets, semaphore, ct);
 
         if (snapshots.Count < 2)
-            return GroupScanResult.Empty(groupKey, snapshots.Count, "Candidate", "MissingLeg");
+            return GroupScanResult.Empty(groupKey, groupKind, snapshots.Select(x => x.Market).ToList(), snapshots.Count, "Candidate", "MissingLeg");
 
         var validation = _validator.Validate(groupKey, groupKind, snapshots.Select(x=>new BasketArbLeg(x.Snapshot.MarketId,x.Snapshot.MarketId,x.Snapshot.Question,"NO",x.Snapshot.NoAsk?.Price ?? 0m,x.Snapshot.NoAsk?.Size ?? 0m)).ToList());
 
         if (!validation.IsValidForNoBasketArbitrage)
         {
-            return GroupScanResult.Empty(groupKey, snapshots.Count, validation.VerificationStatus, validation.RejectionReason);
+            return GroupScanResult.Empty(groupKey, groupKind, snapshots.Select(x => x.Market).ToList(), snapshots.Count, validation.VerificationStatus, validation.RejectionReason);
         }
 
         var noResult = await EvaluateNoBasketAsync(
@@ -141,7 +145,9 @@ public class MultiOutcomeGroupArbEngine
             Evaluated: true,
             VerificationStatus: "Verified",
             SkipReason: noResult.Executed ? "Executable" : (noResult.Candidate ? "NegativeEdge" : "MissingNoAsk"),
-            NoBasketEdge: noResult.Edge
+            NoBasketEdge: noResult.Edge,
+            Kind: groupKind,
+            Markets: snapshots.Select(x => x.Market).ToList()
         );
     }
 
@@ -500,7 +506,27 @@ public class MultiOutcomeGroupArbEngine
         var bestCandidate = results.Where(x=>x.VerificationStatus!="Verified").OrderByDescending(x => x.NoBasketEdge ?? decimal.MinValue).FirstOrDefault();
         var bestVerified = results.Where(x=>x.VerificationStatus=="Verified").OrderByDescending(x => x.NoBasketEdge ?? decimal.MinValue).FirstOrDefault();
         var rejectedByReason = results.Where(x=>x.VerificationStatus!="Verified").GroupBy(x=>x.SkipReason).ToDictionary(g=>g.Key,g=>g.Count());
-        return new MultiOutcomeScanReport(scannedGroups, evaluated, verified, results.Count(x=>x.VerificationStatus=="HighConfidence"), results.Count(x=>x.VerificationStatus=="Candidate"), executable, bestCandidate?.NoBasketEdge ?? 0m, bestVerified?.NoBasketEdge ?? 0m, results.Where(x=>x.NoBasketExecuted).OrderByDescending(x=>x.NoBasketEdge ?? decimal.MinValue).FirstOrDefault()?.NoBasketEdge ?? 0m, bestVerified?.GroupKey ?? "", rejectedByReason.OrderByDescending(g=>g.Value).FirstOrDefault().Key ?? "None", rejectedByReason, results.Where(x=>x.VerificationStatus!="Verified").Select(x=>new RejectedSample(x.GroupKey,x.SkipReason)).Take(25).ToArray());
+        var configuredIncomplete = results.Count(x => x.VerificationStatus == "ConfiguredButIncomplete" || x.SkipReason == "VerifiedGroupIncomplete");
+        var rejected = results.Where(x=>x.VerificationStatus!="Verified").Select(x=>new RejectedSample(x.GroupKey,x.SkipReason)).ToArray();
+        var candidatesForReview = results
+            .Where(x => x.VerificationStatus != "Verified")
+            .Select(x => new CandidateGroupReview(
+                x.GroupKey,
+                x.GroupKey,
+                x.Kind,
+                x.MarketsInGroup,
+                x.VerificationStatus,
+                x.SkipReason,
+                x.NoBasketCost,
+                x.NoBasketGuaranteedPayout.HasValue && x.NoBasketCost.HasValue ? x.NoBasketGuaranteedPayout.Value - x.NoBasketCost.Value : null,
+                x.NoBasketEdge,
+                x.NoBasketGuaranteedPayout,
+                x.VerificationStatus == "ConfiguredButIncomplete"
+                    ? new[] { "Allowlist entry is configured but incomplete (no marketIds/conditionIds)." }
+                    : new[] { "Not manually verified", "Execution disabled until allowlisted with explicit marketIds or conditionIds" },
+                x.Markets))
+            .ToArray();
+        return new MultiOutcomeScanReport(scannedGroups, evaluated, verified, results.Count(x=>x.VerificationStatus=="HighConfidence"), results.Count(x=>x.VerificationStatus=="Candidate"), executable, configuredIncomplete, bestCandidate?.NoBasketEdge ?? 0m, bestVerified?.NoBasketEdge ?? 0m, results.Where(x=>x.NoBasketExecuted).OrderByDescending(x=>x.NoBasketEdge ?? decimal.MinValue).FirstOrDefault()?.NoBasketEdge ?? 0m, bestVerified?.GroupKey ?? "", rejectedByReason.OrderByDescending(g=>g.Value).FirstOrDefault().Key ?? "None", rejectedByReason, rejected.Take(25).ToArray(), candidatesForReview);
     }
 
     private static void PrintSummary(MultiOutcomeScanReport report, bool logSummary, bool logSamples, int sampleSize)
@@ -508,7 +534,7 @@ public class MultiOutcomeGroupArbEngine
         var rejected = report.GroupsDetected - report.GroupsVerified;
         var reasonSummary = string.Join(",", report.RejectedByReason.Select(x => $"{x.Key}:{x.Value}"));
         if (logSummary)
-            Console.WriteLine($"[MULTI_SCAN] Candidates={report.GroupsDetected} Verified={report.GroupsVerified} Rejected={rejected} Executable={report.ExecutableGroups} TopReject={report.TopSkipReason} RejectedByReason={{{reasonSummary}}}");
+            Console.WriteLine($"[MULTI_SCAN] Candidates={report.GroupsDetected} Verified={report.GroupsVerified} ConfiguredIncomplete={report.ConfiguredIncompleteGroups} Rejected={rejected} Executable={report.ExecutableGroups} TopReject={report.TopSkipReason} RejectedByReason={{{reasonSummary}}}");
         if (logSamples)
         {
             foreach (var grp in report.TopRejectedSamples.GroupBy(x => x.Reason))
@@ -747,12 +773,15 @@ public class MultiOutcomeGroupArbEngine
         bool Evaluated,
         string VerificationStatus,
         string SkipReason,
-        decimal? NoBasketEdge = null)
+        decimal? NoBasketEdge = null,
+        string Kind = "generic",
+        IReadOnlyList<Market>? Markets = null)
     {
-        public static GroupScanResult Empty(string groupKey, int marketsInGroup, string verificationStatus, string skipReason) =>
-            new(groupKey, marketsInGroup, false, false, null, null, false, false, null, false, verificationStatus, skipReason);
+        public static GroupScanResult Empty(string groupKey, string kind, IReadOnlyList<Market> markets, int marketsInGroup, string verificationStatus, string skipReason) =>
+            new(groupKey, marketsInGroup, false, false, null, null, false, false, null, false, verificationStatus, skipReason, null, kind, markets);
     }
 
-    public record MultiOutcomeScanReport(int GroupsDetected, int GroupsEvaluated, int GroupsVerified, int GroupsHighConfidence, int GroupsCandidate, int ExecutableGroups, decimal BestCandidateEdge, decimal BestVerifiedEdge, decimal BestExecutableEdge, string BestGroupKey, string TopSkipReason, IReadOnlyDictionary<string,int> RejectedByReason, IReadOnlyList<RejectedSample> TopRejectedSamples);
+    public record MultiOutcomeScanReport(int GroupsDetected, int GroupsEvaluated, int GroupsVerified, int GroupsHighConfidence, int GroupsCandidate, int ExecutableGroups, int ConfiguredIncompleteGroups, decimal BestCandidateEdge, decimal BestVerifiedEdge, decimal BestExecutableEdge, string BestGroupKey, string TopSkipReason, IReadOnlyDictionary<string,int> RejectedByReason, IReadOnlyList<RejectedSample> TopRejectedSamples, IReadOnlyList<CandidateGroupReview> CandidateGroupsForReview);
     public record RejectedSample(string GroupKey, string Reason);
+    public record CandidateGroupReview(string GroupKey, string Title, string Kind, int DetectedMarketsCount, string VerificationStatus, string RejectionReason, decimal? EstimatedNoBasketCost, decimal? EstimatedGrossEdge, decimal? EstimatedNetEdge, decimal? GuaranteedPayoutIfVerified, IReadOnlyList<string> Warnings, IReadOnlyList<Market>? Markets);
 }
