@@ -67,6 +67,14 @@ public class TradingBotOptions
     public MultiOutcomeLoggingOptions Logging { get; set; } = new();
     public MultiOutcomeReviewOptions MultiOutcomeReview { get; set; } = new();
     public RuntimeStateOptions RuntimeState { get; set; } = new();
+    public MarketDiscoveryOptions MarketDiscovery { get; set; } = new();
+}
+public class MarketDiscoveryOptions
+{
+    public int RequestTimeoutMs { get; set; } = 15000;
+    public int MaxRetriesPerPage { get; set; } = 3;
+    public int RetryBackoffMs { get; set; } = 1000;
+    public bool ContinueWithPartialDiscoveryOnError { get; set; } = true;
 }
 
 public class DiagnosticsOptions
@@ -110,6 +118,19 @@ public class MultiOutcomeArbitrageOptions
     public bool RequireAllNoPrices { get; set; } = true;
     public bool RequireAllMarketsActive { get; set; } = true;
     public decimal MinExecutableQty { get; set; } = 1m;
+    public bool EvaluateVerifiedGroupsAgainstFullPool { get; set; } = true;
+    public bool VerifiedGroupOrderbookPrefetchEnabled { get; set; } = true;
+    public int MaxVerifiedGroupsPerCycle { get; set; } = 10;
+    public int MaxVerifiedGroupLegs { get; set; } = 100;
+    public bool LogVerifiedGroupMismatchDetails { get; set; } = true;
+    public int VerifiedGroupMismatchSampleSize { get; set; } = 5;
+    public bool AllowPartialVerifiedGroupEvaluation { get; set; } = true;
+    public int MinResolvedMarketsForVerifiedGroup { get; set; } = 2;
+    public bool RequireExactOutcomeCount { get; set; } = false;
+    public bool VerifiedGroupUseOrderbookCache { get; set; } = true;
+    public bool VerifiedGroupAllowHttpFetchOnCacheMiss { get; set; } = true;
+    public int VerifiedGroupOrderbookMaxAgeMs { get; set; } = 5000;
+    public int MaxVerifiedGroupOrderbookRequestsPerCycle { get; set; } = 200;
 }
 
 public class MultiOutcomeLoggingOptions
@@ -130,11 +151,15 @@ public class MultiOutcomeReviewOptions
 {
     public bool Enabled { get; set; } = true;
     public int TopCandidateGroupsForReview { get; set; } = 50;
+    public int MaxMarketsPerCandidateGroup { get; set; } = 100;
     public int MinDetectedMarkets { get; set; } = 2;
     public string SortBy { get; set; } = "BestNetEdge";
     public bool ExportCandidates { get; set; } = true;
-    public int ExportIntervalMinutes { get; set; } = 10;
+    public int ExportIntervalMinutes { get; set; } = 5;
     public string ExportPath { get; set; } = "exports/multi-outcome-candidates-latest.json";
+    public bool ExportVerifiedPricing { get; set; } = true;
+    public string ExportVerifiedPricingPath { get; set; } = "exports/verified-group-pricing-latest.json";
+    public bool IncludeSuggestedPrunedAllowlist { get; set; } = true;
 }
 
 public class RuntimeStateOptions

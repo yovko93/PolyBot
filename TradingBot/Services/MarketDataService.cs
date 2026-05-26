@@ -24,7 +24,12 @@ public record MarketDiscoverySummary(
     string PaginationMode = "offset",
     string? LastPaginationCursor = null,
     string? LastDiscoveryWarning = null,
-    DateTime LastDiscoveryCompletedAtUtc = default);
+    DateTime LastDiscoveryCompletedAtUtc = default,
+    bool DiscoveryCompleted = false,
+    string? StoppedReason = null,
+    string? LastDiscoveryError = null,
+    int ExpectedMaxPages = 0,
+    bool SafetyCapReached = false);
 
 public class MarketDataService
 {
@@ -57,6 +62,11 @@ public class MarketDataService
         var paginationMode = "offset";
         string? lastWarning = null;
 
+        var discoveryCompleted = false;
+        string? stoppedReason = null;
+        string? lastError = null;
+        var expectedMaxPages = Math.Max(1, (int)Math.Ceiling(cap / (double)Math.Max(1, pageSize)));
+        var safetyCapReached = false;
         for (var offset = 0; offset < cap;)
         {
             if (ct.IsCancellationRequested) break;
@@ -74,24 +84,42 @@ public class MarketDataService
                 $"&offset={offset}";
 
             List<Market> batch;
-            try
+            batch = new List<Market>();
+            var loaded = false;
+            for (var retry = 0; retry <= Math.Max(0, options.MarketDiscovery.MaxRetriesPerPage); retry++)
             {
-                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                timeoutCts.CancelAfter(TimeSpan.FromMilliseconds(options.OrderbookRequestTimeoutMs));
-                var json = await _http.GetStringAsync(url, timeoutCts.Token);
-                batch = JsonConvert.DeserializeObject<List<Market>>(json) ?? new List<Market>();
+                try
+                {
+                    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    timeoutCts.CancelAfter(TimeSpan.FromMilliseconds(options.MarketDiscovery.RequestTimeoutMs));
+                    var json = await _http.GetStringAsync(url, timeoutCts.Token);
+                    batch = JsonConvert.DeserializeObject<List<Market>>(json) ?? new List<Market>();
+                    loaded = true;
+                    break;
+                }
+                catch (OperationCanceledException ex)
+                {
+                    lastError = ex.Message; stoppedReason = "OperationCanceled";
+                    if (retry < options.MarketDiscovery.MaxRetriesPerPage) await Task.Delay(options.MarketDiscovery.RetryBackoffMs * (retry + 1), ct);
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex.Message; stoppedReason = "RequestError";
+                    if (retry < options.MarketDiscovery.MaxRetriesPerPage) await Task.Delay(options.MarketDiscovery.RetryBackoffMs * (retry + 1), ct);
+                }
             }
-            catch (Exception ex)
+            if (!loaded)
             {
-                Console.WriteLine($"[MARKET DATA ERROR] {ex.Message}");
-                break;
+                Console.WriteLine($"[MARKET DATA ERROR] {lastError}");
+                if (!options.MarketDiscovery.ContinueWithPartialDiscoveryOnError) break;
+                else { break; }
             }
 
             pages++;
             rawLoadedTotal += batch.Count;
             if (options.LogDiscoveryPages)
                 Console.WriteLine($"[DISCOVERY] Page={pages} Limit={pageSize} Offset={offset} Cursor=<none> Count={batch.Count} RawTotal={rawLoadedTotal} UniqueTotal={seen.Count} ActiveTotal={allMarkets.Count} InactiveSkipped={skippedClosed + skippedArchived + skippedInactive + skippedMissingTokenIds + skippedMissingOutcomes + skippedPastEndDate + skippedInvalidShape + skippedUnknownStatus}");
-            if (batch.Count == 0) break;
+            if (batch.Count == 0) { discoveryCompleted = true; break; }
             var effectivePageSize = Math.Min(pageSize, batch.Count);
 
             foreach (var market in batch)
@@ -137,7 +165,7 @@ public class MarketDataService
                 if (allMarkets.Count >= cap) break;
             }
 
-            if (allMarkets.Count >= cap) break;
+            if (allMarkets.Count >= cap) { safetyCapReached = true; break; }
             offset += Math.Max(1, effectivePageSize);
         }
 
@@ -149,7 +177,15 @@ public class MarketDataService
         }
         if (options.LogDiscoveryPages)
             Console.WriteLine($"[DISCOVERY] Completed Raw={rawLoadedTotal} Unique={seen.Count} Active={allMarkets.Count} Pages={pages} SkippedClosed={skippedClosed} SkippedArchived={skippedArchived} SkippedInactive={skippedInactive} SkippedMissingTokenIds={skippedMissingTokenIds} SkippedMissingOutcomes={skippedMissingOutcomes} SkippedPastEndDate={skippedPastEndDate} SkippedInvalidShape={skippedInvalidShape} SkippedUnknownStatus={skippedUnknownStatus}");
-        var summary = new MarketDiscoverySummary(allMarkets.Count, pages, duplicates, inactive, allMarkets.Count, rawLoadedTotal, seen.Count, skippedClosed, skippedArchived, skippedInactive, skippedMissingTokenIds, skippedMissingOutcomes, skippedPastEndDate, skippedInvalidShape, skippedUnknownStatus, allMarkets.Count > 0, paginationMode, null, lastWarning, DateTime.UtcNow);
+        if (safetyCapReached && string.IsNullOrWhiteSpace(stoppedReason))
+        {
+            stoppedReason = "SafetyCapReached";
+            Console.WriteLine($"[DISCOVERY] Stopped at configured safety cap Pages={pages} Raw={rawLoadedTotal}");
+        }
+        var healthy = allMarkets.Count > 0 && (discoveryCompleted || safetyCapReached) && (string.IsNullOrWhiteSpace(stoppedReason) || stoppedReason == "SafetyCapReached");
+        if (!healthy)
+            Console.WriteLine($"[DISCOVERY_WARNING] Discovery incomplete. PagesFetched={pages} Raw={rawLoadedTotal} Active={allMarkets.Count} Reason={stoppedReason ?? "Unknown"}");
+        var summary = new MarketDiscoverySummary(allMarkets.Count, pages, duplicates, inactive, allMarkets.Count, rawLoadedTotal, seen.Count, skippedClosed, skippedArchived, skippedInactive, skippedMissingTokenIds, skippedMissingOutcomes, skippedPastEndDate, skippedInvalidShape, skippedUnknownStatus, healthy, paginationMode, null, lastWarning, DateTime.UtcNow, discoveryCompleted, stoppedReason, lastError, expectedMaxPages, safetyCapReached);
         return (allMarkets, summary);
     }
 

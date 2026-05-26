@@ -28,7 +28,7 @@ public class MultiOutcomeEnhancementsTests
     [Fact]
     public void MultiOutcome_report_has_rejected_reason_summary()
     {
-        var report = new MultiOutcomeGroupArbEngine.MultiOutcomeScanReport(5,0,0,0,5,0,0.1m,0m,0m,"","UnverifiedGroup",new Dictionary<string,int>{{"UnverifiedGroup",5}},new []{ new MultiOutcomeGroupArbEngine.RejectedSample("g1","UnverifiedGroup") });
+        var report = new MultiOutcomeGroupArbEngine.MultiOutcomeScanReport(5,0,0,0,5,0,0,0.1m,0m,0m,"","UnverifiedGroup",new Dictionary<string,int>{{"UnverifiedGroup",5}},new []{ new MultiOutcomeGroupArbEngine.RejectedSample("g1","UnverifiedGroup") }, Array.Empty<MultiOutcomeGroupArbEngine.CandidateGroupReview>());
         Assert.Equal(5, report.RejectedByReason["UnverifiedGroup"]);
     }
 }
