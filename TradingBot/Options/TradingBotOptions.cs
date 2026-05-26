@@ -75,6 +75,7 @@ public class MarketDiscoveryOptions
     public int MaxRetriesPerPage { get; set; } = 3;
     public int RetryBackoffMs { get; set; } = 1000;
     public bool ContinueWithPartialDiscoveryOnError { get; set; } = true;
+    public bool TreatSafetyCapAsWarning { get; set; } = false;
 }
 
 public class DiagnosticsOptions
@@ -191,6 +192,7 @@ public class MultiOutcomeLoggingOptions
     public int LogVerifiedBasketDetailsEveryNCycles { get; set; } = 25;
     public int LogCandidateScanEveryNCycles { get; set; } = 10;
     public int LogVerifiedScanEveryNCycles { get; set; } = 5;
+    public int LogVerifiedGroupPricingEveryNCycles { get; set; } = 25;
 }
 
 

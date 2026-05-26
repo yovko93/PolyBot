@@ -93,6 +93,26 @@ app.MapGet("/api/bot/multi-outcome-review-report", (BotRuntimeState s, int? limi
     }).Take(capped).ToArray();
     return Results.Ok(filtered);
 });
+app.MapGet("/api/bot/verified-group-triage", (IHostEnvironment env, int? limit) =>
+{
+    var path = Path.Combine(env.ContentRootPath, "exports/verified-group-triage-latest.json");
+    if (!File.Exists(path)) return Results.Ok(Array.Empty<object>());
+    var arr = System.Text.Json.JsonSerializer.Deserialize<object[]>(File.ReadAllText(path)) ?? Array.Empty<object>();
+    return Results.Ok(arr.Take(Math.Clamp(limit ?? 25, 1, 200)).ToArray());
+});
+app.MapGet("/api/bot/next-groups-to-verify", (IHostEnvironment env, int? limit) =>
+{
+    var path = Path.Combine(env.ContentRootPath, "exports/next-groups-to-verify-latest.json");
+    if (!File.Exists(path)) return Results.Ok(Array.Empty<object>());
+    var arr = System.Text.Json.JsonSerializer.Deserialize<object[]>(File.ReadAllText(path)) ?? Array.Empty<object>();
+    return Results.Ok(arr.Take(Math.Clamp(limit ?? 10, 1, 100)).ToArray());
+});
+app.MapGet("/api/bot/verified-allowlist-suggestion", (IHostEnvironment env) =>
+{
+    var path = Path.Combine(env.ContentRootPath, "exports/verified-multi-outcome-groups-suggested.json");
+    if (!File.Exists(path)) return Results.Ok(new { items = Array.Empty<object>() });
+    return Results.Text(File.ReadAllText(path), "application/json");
+});
 app.MapGet("/api/bot/risk", (BotRuntimeState s, IRiskManager risk) => Results.Ok(new { runtime = s.Risk, executionRisk = risk.GetRiskSnapshot() }));
 app.MapGet("/api/bot/execution-audit", (ExecutionAuditLog audit, int? limit) => audit.List(Math.Clamp(limit ?? 300, 1, 1000)));
 app.MapGet("/api/bot/execution-plans", (BotRuntimeState s, int? limit) => s.Trades().TakeLast(Math.Clamp(limit ?? 100, 1, 500)).ToArray());
@@ -211,10 +231,12 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var lastDiscoverySummary = new MarketDiscoverySummary();
     var emptyCycles = 0;
     var verifiedBasketCycle = 0;
+    var verifiedPricingCycle = 0;
     var verifiedBasketRankingCycle = 0;
     var lastRankingFingerprint = string.Empty;
     var verifiedBasketLastFingerprint = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     var verifiedBasketLastExecutable = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+    var verifiedPricingLastFingerprint = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     var exportService = new MultiOutcomeCandidateExportService(options.MultiOutcomeReview, contentRootPath);
     var multiOutcomeValidator = new MutuallyExclusiveGroupValidator(options.MultiOutcomeArbitrage, contentRootPath);
     var verifiedResolver = new VerifiedMultiOutcomeGroupResolver();
@@ -339,8 +361,17 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         if (missingNoAskLegs.Count > 0)
                         {
                             skipReason = "MissingNoAsk";
-                            Console.WriteLine($"[VERIFIED_GROUP_PRICING] Group={g.GroupKey} Legs={resolvedNoAsks.Count} NoAskResolved={noAskResolvedCount} MissingNoAsk={missingNoAskLegs.Count} MissingLiquidity=0 TopReason=MissingNoAsk");
-                            Console.WriteLine($"[VERIFIED_GROUP_MISSING_NO_ASK] Group={g.GroupKey} Missing={missingNoAskLegs.Count} Samples=[{string.Join(", ", missingNoAskLegs.Take(5).Select(x => $"{x.MarketId}:{x.FailureReason}"))}]");
+                            verifiedPricingCycle++;
+                            var pricingFingerprint = $"{g.GroupKey}|{resolvedNoAsks.Count}|{noAskResolvedCount}|{missingNoAskLegs.Count}|{string.Join(",", missingNoAskLegs.Select(x => x.MarketId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}";
+                            var shouldLogPricing = !verifiedPricingLastFingerprint.TryGetValue(g.GroupKey, out var prevPricing)
+                                || prevPricing != pricingFingerprint
+                                || (options.Logging.LogVerifiedGroupPricingEveryNCycles > 0 && verifiedPricingCycle % options.Logging.LogVerifiedGroupPricingEveryNCycles == 0);
+                            verifiedPricingLastFingerprint[g.GroupKey] = pricingFingerprint;
+                            if (shouldLogPricing)
+                            {
+                                Console.WriteLine($"[VERIFIED_GROUP_PRICING] Group={g.GroupKey} Legs={resolvedNoAsks.Count} NoAskResolved={noAskResolvedCount} MissingNoAsk={missingNoAskLegs.Count} MissingLiquidity=0 TopReason=MissingNoAsk");
+                                Console.WriteLine($"[VERIFIED_GROUP_MISSING_NO_ASK] Group={g.GroupKey} Missing={missingNoAskLegs.Count} Samples=[{string.Join(", ", missingNoAskLegs.Take(5).Select(x => $"{x.MarketId}:{x.FailureReason}"))}]");
+                            }
                             var pricedLegs = resolvedNoAsks.Where(x => x.NoAsk.HasValue).ToList();
                             var missingIds = missingNoAskLegs.Select(x => x.MarketId).ToHashSet(StringComparer.OrdinalIgnoreCase);
                             var suggestedMarketIds = markets.Where(x => !missingIds.Contains(x.id) && x.active != false).Select(x => x.id).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
@@ -439,15 +470,18 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     Console.WriteLine($"[MULTI_CANDIDATE_SCAN] Candidates={multiOutcomeReport.GroupsDetected} Rejected={Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified)} TopReject={multiOutcomeReport.TopSkipReason}");
                     Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Evaluated={verifiedEvaluated} Executable={verifiedExecutable} Mismatch={verifiedMismatch} BestGross={(bestPricing is null ? "N/A" : bestPricing.GrossEdge)} BestNet={(bestPricing is null ? "N/A" : bestPricing.NetEdge)} BestGroup={(bestPricing is null ? "N/A" : bestPricing.GroupKey)} Classification={(bestPricing is not null && bestPricing.GrossEdge > 0m && bestPricing.NetEdge <= 0m ? "RawPositiveNetNegative" : "FarFromExecutable")}");
 
-                    var triageRows = pricingDiagnostics.Select(pd =>
+                    var triageRows = resolved.Select(g =>
                     {
-                        var gd = groupDiagnostics.FirstOrDefault(x => x.GroupKey == pd.GroupKey);
+                        var gd = groupDiagnostics.FirstOrDefault(x => x.GroupKey == g.GroupKey);
+                        var pd = pricingDiagnostics.FirstOrDefault(x => x.GroupKey == g.GroupKey);
+                        var hasSuggestedPrune = verifiedPricingExport.Any(x => System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(x)).RootElement.TryGetProperty("suggestedPrunedAllowlistTemplate", out var tpl) && tpl.ValueKind == System.Text.Json.JsonValueKind.Object && System.Text.Json.JsonSerializer.Serialize(x).Contains($"\"groupKey\":\"{g.GroupKey}\""));
                         var missing = gd?.MissingNoAskCount ?? 0;
-                        var classification = pd.SkipReason == "Executable"
+                        var classification = (missing > 0 || hasSuggestedPrune)
+                            ? "NeedsPruning"
+                            : pd?.SkipReason == "Executable"
                             ? "Executable"
-                            : missing > 0 ? "MissingPrices"
-                            : pd.GrossEdge > 0m && pd.NetEdge <= 0m ? "RawPositiveNetNegative"
-                            : pd.GrossEdge < options.MultiOutcomeArbitrage.VerifiedGroupTriage.HopelessGrossEdgeThreshold ? "HopelessNegative"
+                            : (pd?.GrossEdge ?? decimal.MinValue) > 0m && (pd?.NetEdge ?? 0m) <= 0m ? "RawPositiveNetNegative"
+                            : (pd?.GrossEdge ?? 0m) < options.MultiOutcomeArbitrage.VerifiedGroupTriage.HopelessGrossEdgeThreshold ? "HopelessNegative"
                             : "FarFromExecutable";
                         var action = classification switch
                         {
@@ -459,31 +493,47 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         };
                         return new
                         {
-                            groupKey = pd.GroupKey,
+                            groupKey = g.GroupKey,
                             enabled = true,
-                            resolved = true,
-                            evaluated = true,
-                            executable = pd.SkipReason == "Executable",
-                            legs = pd.Legs,
-                            noAskResolved = pd.Legs - missing,
+                            resolved = g.ValidationStatus == "VerifiedGroupResolved",
+                            evaluated = gd is not null,
+                            executable = pd?.SkipReason == "Executable",
+                            legs = pd?.Legs ?? g.ResolvedMarkets.Count,
+                            noAskResolved = (pd?.Legs ?? g.ResolvedMarkets.Count) - missing,
                             missingNoAsk = missing,
-                            guaranteedPayout = pd.GuaranteedPayout,
-                            noAskSum = pd.NoAskSum,
-                            grossEdge = pd.GrossEdge,
-                            netEdgeConservative = pd.NetEdge,
-                            netEdgeRawOnly = pd.GrossEdge,
-                            netEdgeZeroFeesZeroSlippage = pd.GrossEdge,
-                            expectedProfit = pd.ExpectedProfit,
-                            topReject = pd.SkipReason,
+                            guaranteedPayout = pd?.GuaranteedPayout ?? 0m,
+                            noAskSum = pd?.NoAskSum ?? 0m,
+                            grossEdge = pd?.GrossEdge ?? 0m,
+                            netEdgeConservative = pd?.NetEdge ?? 0m,
+                            netEdgeRawOnly = pd?.GrossEdge ?? 0m,
+                            topReject = pd?.SkipReason ?? gd?.SkipReason ?? g.RejectionReason,
                             classification,
-                            recommendation = action,
-                            recommendedConfigAction = action
+                            recommendedConfigAction = action,
+                            reason = gd?.SkipReason ?? g.RejectionReason
                         };
                     }).ToArray();
                     var triagePath = Path.Combine(contentRootPath, options.MultiOutcomeReview.ExportVerifiedTriagePath);
                     Directory.CreateDirectory(Path.GetDirectoryName(triagePath)!);
                     File.WriteAllText(triagePath, System.Text.Json.JsonSerializer.Serialize(triageRows, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
-                    var nextGroups = reviewReport.Take(10).ToArray();
+                    var nextGroups = reviewReport
+                        .Select(x => System.Text.Json.JsonSerializer.SerializeToNode(x)!.AsObject())
+                        .Where(n => (n["recommendedAction"]?.GetValue<string>() ?? "") == "SafeCandidateForManualVerification")
+                        .Take(10)
+                        .Select(n => new
+                        {
+                            groupKey = n["groupKey"]?.GetValue<string>() ?? "",
+                            title = n["title"]?.GetValue<string>() ?? "",
+                            detectedMarketsCount = n["detectedMarketsCount"]?.GetValue<int>() ?? 0,
+                            pricedLegs = n["pricedLegs"]?.GetValue<int>() ?? 0,
+                            missingNoAsk = n["missingPrices"]?.GetValue<int>() ?? 0,
+                            estimatedGrossEdge = n["estimatedGrossEdge"]?.GetValue<decimal?>(),
+                            estimatedNetEdgeConservative = n["estimatedNetEdgeConservative"]?.GetValue<decimal?>(),
+                            rawOnlyEdge = n["estimatedNetEdgeRawOnly"]?.GetValue<decimal?>(),
+                            candidateQualityScore = n["candidateQualityScore"]?.GetValue<int>() ?? 0,
+                            safetyClassification = "SafeForManualVerification",
+                            recommendedAction = n["recommendedAction"]?.GetValue<string>() ?? "",
+                            suggestedAllowlistTemplate = n["suggestedAllowlistTemplate"]
+                        }).ToArray<object>();
                     var nextPath = Path.Combine(contentRootPath, options.MultiOutcomeReview.ExportNextGroupsToVerifyPath);
                     Directory.CreateDirectory(Path.GetDirectoryName(nextPath)!);
                     File.WriteAllText(nextPath, System.Text.Json.JsonSerializer.Serialize(nextGroups, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
