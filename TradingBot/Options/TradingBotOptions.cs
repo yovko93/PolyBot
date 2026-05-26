@@ -135,7 +135,31 @@ public class MultiOutcomeArbitrageOptions
     public bool VerifiedGroupAllowHttpFetchOnCacheMiss { get; set; } = true;
     public int VerifiedGroupOrderbookMaxAgeMs { get; set; } = 5000;
     public int MaxVerifiedGroupOrderbookRequestsPerCycle { get; set; } = 200;
+    public CostProfilesOptions CostProfiles { get; set; } = CostProfilesOptions.CreateDefault();
 }
+
+public sealed class CostProfilesOptions
+{
+    public string ActiveProfile { get; set; } = "Conservative";
+    public Dictionary<string, CostProfileConfig> Profiles { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public static CostProfilesOptions CreateDefault()
+    {
+        return new CostProfilesOptions
+        {
+            ActiveProfile = "Conservative",
+            Profiles = new Dictionary<string, CostProfileConfig>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Conservative"] = new(0.001m, 0.0005m, 0.001m),
+                ["Realistic"] = new(0.0005m, 0.00025m, 0.001m),
+                ["PaperZeroFees"] = new(0m, 0.0005m, 0.001m),
+                ["RawOnly"] = new(0m, 0m, 0m)
+            }
+        };
+    }
+}
+
+public sealed record CostProfileConfig(decimal FeePerLeg, decimal SlippageBufferPerLeg, decimal SafetyBufferPerGroup);
 
 public class MultiOutcomeLoggingOptions
 {
@@ -150,6 +174,9 @@ public class MultiOutcomeLoggingOptions
     public int BookCacheMissSampleSize { get; set; } = 5;
     public int LogVerifiedBasketEveryNCycles { get; set; } = 10;
     public bool LogVerifiedBasketOnlyOnChange { get; set; } = true;
+    public bool LogVerifiedBasketRanking { get; set; } = true;
+    public int LogVerifiedBasketRankingEveryNCycles { get; set; } = 10;
+    public bool LogVerifiedBasketOnlyOnChangeRanking { get; set; } = true;
 }
 
 
