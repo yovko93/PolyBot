@@ -111,7 +111,7 @@ Console.SetOut(new MultiTextWriter(originalOut, msg => logger.LogInfo("console",
 logger.LogSuccess("startup", $"Bot API listening on {listenUrl}");
 logger.LogSuccess("startup", $"ExecutionMode={options.ExecutionMode}; EnablePaperTrading={options.EnablePaperTrading}; EnableLiveExecution={options.EnableLiveExecution}");
 logger.LogInfo("startup", $"[CONFIG] Scanner Mode={options.Mode} MarketScanLimit={options.MarketScanLimit} MaxMarketsToDiscover={options.MaxMarketsToDiscover} ScanBatchSize={options.ScanBatchSize} MaxOrderbooksPerCycle={options.MaxOrderbooksPerCycle} MaxConcurrentOrderbookRequests={options.MaxConcurrentOrderbookRequests} LogEmptyOpportunityCycles={options.LogEmptyOpportunityCycles}");
-logger.LogInfo("startup", $"[CONFIG] MultiOutcome SlippagePerLeg={options.MultiOutcomeArbitrage.SlippageBufferPerLeg} SafetyPerGroup={options.MultiOutcomeArbitrage.SafetyBufferPerGroup} FeeModel={options.SingleMarketFees}");
+logger.LogInfo("startup", $"[CONFIG] MultiOutcome FeePerLeg={options.MultiOutcomeArbitrage.FeePerLeg} SlippagePerLeg={options.MultiOutcomeArbitrage.SlippageBufferPerLeg} SafetyPerGroup={options.MultiOutcomeArbitrage.SafetyBufferPerGroup} MinNetEdgePerBasket={options.MultiOutcomeArbitrage.MinMultiOutcomeEdge} MinExpectedProfit={options.MultiOutcomeArbitrage.MinExpectedProfit} EnableSensitivityDiagnostics={options.MultiOutcomeArbitrage.EnableSensitivityDiagnostics}");
 
 _ = Task.Run(async () =>
 {
@@ -190,6 +190,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var discoveryCompletedAt = default(DateTime);
     var lastDiscoverySummary = new MarketDiscoverySummary();
     var emptyCycles = 0;
+    var verifiedBasketCycle = 0;
+    var verifiedBasketLastFingerprint = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    var verifiedBasketLastExecutable = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
     var exportService = new MultiOutcomeCandidateExportService(options.MultiOutcomeReview, contentRootPath);
     var multiOutcomeValidator = new MutuallyExclusiveGroupValidator(options.MultiOutcomeArbitrage, contentRootPath);
     var verifiedResolver = new VerifiedMultiOutcomeGroupResolver();
@@ -274,6 +277,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var skipReason = "None";
                     var groupDiagnostics = new List<VerifiedGroupDiagnosticDto>();
                     var pricingDiagnostics = new List<VerifiedGroupPricingDto>();
+                    var basketCostDiagnostics = new List<VerifiedBasketCostBreakdownDto>();
                     var verifiedPricingExport = new List<object>();
                     foreach (var g in resolved)
                     {
@@ -330,8 +334,29 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, "VerifiedResolved", "MissingNoAsk", null, missingNoAskLegs.Count, 0, missingNoAskLegs.Select(x => x.MarketId).Take(5).ToArray(), Array.Empty<string>()));
                             continue;
                         }
-                        var formula = VerifiedBasketFormulaService.Evaluate(resolvedNoAsks, options.SingleMarketFees, options.MultiOutcomeArbitrage.SlippageBufferPerLeg, options.MultiOutcomeArbitrage.SafetyBufferPerGroup, options.MultiOutcomeArbitrage.RequireAllNoPrices);
-                        Console.WriteLine($"[VERIFIED_BASKET_EDGE] Group={g.GroupKey} Legs={resolvedNoAsks.Count} GuaranteedPayout={formula.GuaranteedPayout} NoAskSum={formula.NoAskSum} MinNoAsk={formula.MinNoAsk} MaxNoAsk={formula.MaxNoAsk} AverageNoAsk={formula.AverageNoAsk} GrossEdge={formula.GrossEdge} Fees={formula.Fees} Slippage={formula.Slippage} Safety={formula.SafetyBuffer} NetEdge={formula.NetEdge} ExecutableQty=1 ExpectedProfit={formula.NetEdge} formulaVersion=v2");
+                        var formula = VerifiedBasketFormulaService.Evaluate(resolvedNoAsks, options.MultiOutcomeArbitrage.FeePerLeg, options.MultiOutcomeArbitrage.SlippageBufferPerLeg, options.MultiOutcomeArbitrage.SafetyBufferPerGroup, options.MultiOutcomeArbitrage.RequireAllNoPrices);
+                        var breakdown = VerifiedBasketDiagnostics.Compute(g.GroupKey, resolvedNoAsks.Count, formula, options.MultiOutcomeArbitrage.FeePerLeg, options.MultiOutcomeArbitrage.SlippageBufferPerLeg, options.MultiOutcomeArbitrage.NearExecutableCostReductionThreshold, options.MultiOutcomeArbitrage.FarFromExecutableCostReductionThreshold);
+                        basketCostDiagnostics.Add(new VerifiedBasketCostBreakdownDto(g.GroupKey, resolvedNoAsks.Count, formula.GuaranteedPayout, formula.NoAskSum, formula.GrossEdge, formula.Fees, formula.Slippage, formula.SafetyBuffer, formula.NetEdge, breakdown.CurrentTotalCosts, breakdown.CostReductionNeeded, breakdown.Classification, breakdown.DominantCostComponent, new VerifiedBasketSensitivityDto(breakdown.SensitivityScenarios.Actual, breakdown.SensitivityScenarios.ZeroFees, breakdown.SensitivityScenarios.ZeroSlippage, breakdown.SensitivityScenarios.ZeroFeesZeroSlippage, breakdown.SensitivityScenarios.RawOnly, breakdown.SensitivityScenarios.HalfFeesHalfSlippage), new VerifiedBasketBreakEvenDto(formula.GrossEdge, breakdown.CurrentTotalCosts, breakdown.CostReductionNeeded, breakdown.BreakEvenFeeLimit, breakdown.BreakEvenSlippageLimit)));
+                        var currentExec = formula.NetEdge > options.MultiOutcomeArbitrage.MinMultiOutcomeEdge;
+                        var fingerprint = $"{formula.GrossEdge}|{formula.Fees}|{formula.Slippage}|{formula.SafetyBuffer}|{formula.NetEdge}";
+                        verifiedBasketCycle++;
+                        var shouldLog = !options.Logging.LogVerifiedBasketOnlyOnChange
+                            || !verifiedBasketLastFingerprint.TryGetValue(g.GroupKey, out var prev) || prev != fingerprint
+                            || !verifiedBasketLastExecutable.TryGetValue(g.GroupKey, out var prevExec) || prevExec != currentExec
+                            || (options.Logging.LogVerifiedBasketEveryNCycles > 0 && verifiedBasketCycle % options.Logging.LogVerifiedBasketEveryNCycles == 0);
+                        verifiedBasketLastFingerprint[g.GroupKey] = fingerprint;
+                        verifiedBasketLastExecutable[g.GroupKey] = currentExec;
+                        if (shouldLog)
+                        {
+                            Console.WriteLine($"[VERIFIED_BASKET_EDGE] Group={g.GroupKey} Legs={resolvedNoAsks.Count} GuaranteedPayout={formula.GuaranteedPayout} NoAskSum={formula.NoAskSum} MinNoAsk={formula.MinNoAsk} MaxNoAsk={formula.MaxNoAsk} AverageNoAsk={formula.AverageNoAsk} GrossEdge={formula.GrossEdge} Fees={formula.Fees} Slippage={formula.Slippage} Safety={formula.SafetyBuffer} NetEdge={formula.NetEdge} ExecutableQty=1 ExpectedProfit={formula.NetEdge} formulaVersion=v2");
+                            Console.WriteLine($"[VERIFIED_BASKET_COSTS] Group={g.GroupKey} GrossEdge={breakdown.GrossEdge} Fees={breakdown.Fees} Slippage={breakdown.Slippage} Safety={breakdown.Safety} NetEdge={breakdown.NetEdge} DominantCost={breakdown.DominantCostComponent} BreakEvenFeeLimit={breakdown.BreakEvenFeeLimit} BreakEvenSlippageLimit={breakdown.BreakEvenSlippageLimit} RequiredCostReduction={breakdown.CostReductionNeeded}");
+                            Console.WriteLine($"[VERIFIED_FEE_DIAG] Group={g.GroupKey} Legs={resolvedNoAsks.Count} FeeModel=PerLeg FeePerLeg={options.MultiOutcomeArbitrage.FeePerLeg} PercentageFee=0 FixedFee=0 FeeAppliedPerLeg={options.MultiOutcomeArbitrage.FeePerLeg} TotalFees={formula.Fees} Source=Config");
+                            var slipPct = formula.GrossEdge == 0 ? 0 : (formula.Slippage / formula.GrossEdge) * 100m;
+                            Console.WriteLine($"[VERIFIED_SLIPPAGE_DIAG] Group={g.GroupKey} Legs={resolvedNoAsks.Count} SlippagePerLeg={options.MultiOutcomeArbitrage.SlippageBufferPerLeg} TotalSlippage={formula.Slippage} GrossEdge={formula.GrossEdge} SlippageConsumes={slipPct:0.##}% Source=Config");
+                            Console.WriteLine($"[VERIFIED_BREAK_EVEN] Group={g.GroupKey} MaxTotalCosts={formula.GrossEdge} CurrentCosts={breakdown.CurrentTotalCosts} ReductionNeeded={breakdown.CostReductionNeeded} MaxFeePerLegAtCurrentSlippage={breakdown.BreakEvenFeeLimit} MaxSlippagePerLegAtCurrentFees={breakdown.BreakEvenSlippageLimit}");
+                            if (options.MultiOutcomeArbitrage.EnableSensitivityDiagnostics)
+                                Console.WriteLine($"[VERIFIED_SENSITIVITY] Group={g.GroupKey} Actual={breakdown.SensitivityScenarios.Actual} ZeroFees={breakdown.SensitivityScenarios.ZeroFees} ZeroSlippage={breakdown.SensitivityScenarios.ZeroSlippage} ZeroFeesZeroSlippage={breakdown.SensitivityScenarios.ZeroFeesZeroSlippage} RawOnly={breakdown.SensitivityScenarios.RawOnly} HalfCosts={breakdown.SensitivityScenarios.HalfFeesHalfSlippage}");
+                        }
                         if (formula.FormulaWarnings.Count > 0)
                             Console.WriteLine($"[FORMULA_WARNING] {string.Join(" | ", formula.FormulaWarnings)}");
                         if (!formula.IsValid)
@@ -364,7 +389,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var bestPricing = pricingDiagnostics.Where(x=>x.SkipReason!="MissingNoAsk").OrderByDescending(x=>x.NetEdge).FirstOrDefault();
                     Console.WriteLine($"[MULTI_SCAN] AutoCandidates={multiOutcomeReport.GroupsDetected} AutoRejected={Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified)} VerifiedConfigured={multiOutcomeValidator.LoadedAllowlistCount} VerifiedResolved={verifiedResolved} VerifiedEvaluated={verifiedEvaluated} VerifiedExecutable={verifiedExecutable} VerifiedNoAskResolved={noAskResolvedTotal} VerifiedMissingNoAsk={missingNoAskTotal} VerifiedMismatch={verifiedMismatch} BestVerifiedNetEdgePerBasket={(bestPricing is null ? "N/A" : bestPricing.NetEdge)} BestVerifiedNoAskSum={(bestPricing is null ? "N/A" : bestPricing.NoAskSum)} BestVerifiedGuaranteedPayout={(bestPricing is null ? "N/A" : bestPricing.GuaranteedPayout)} TopReject={skipReason}");
                     exportService.ExportVerifiedPricing(verifiedPricingExport);
-                    state.SetMultiOutcomeDiagnostics(new MultiOutcomeDiagnosticsDto(multiOutcomeReport.GroupsDetected,multiOutcomeReport.GroupsVerified,Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified),multiOutcomeReport.ExecutableGroups,multiOutcomeReport.RejectedByReason.ToDictionary(k=>k.Key,v=>v.Value),multiOutcomeReport.TopRejectedSamples.Take(25).Select(x=>$"{x.GroupKey}:{x.Reason}").ToArray(),Array.Empty<string>(),multiOutcomeValidator.LoadedAllowlistCount,Array.Empty<string>(),Guid.NewGuid().ToString("N"),DateTime.UtcNow,state.NextSeq(),multiOutcomeValidator.LoadedAllowlistCount,verifiedResolved,verifiedMismatch,verifiedEvaluated,verifiedExecutable,groupDiagnostics,skipReason,pricingDiagnostics));
+                    state.SetMultiOutcomeDiagnostics(new MultiOutcomeDiagnosticsDto(multiOutcomeReport.GroupsDetected,multiOutcomeReport.GroupsVerified,Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified),multiOutcomeReport.ExecutableGroups,multiOutcomeReport.RejectedByReason.ToDictionary(k=>k.Key,v=>v.Value),multiOutcomeReport.TopRejectedSamples.Take(25).Select(x=>$"{x.GroupKey}:{x.Reason}").ToArray(),Array.Empty<string>(),multiOutcomeValidator.LoadedAllowlistCount,Array.Empty<string>(),Guid.NewGuid().ToString("N"),DateTime.UtcNow,state.NextSeq(),multiOutcomeValidator.LoadedAllowlistCount,verifiedResolved,verifiedMismatch,verifiedEvaluated,verifiedExecutable,groupDiagnostics,skipReason,pricingDiagnostics,basketCostDiagnostics));
                 }
             }
 

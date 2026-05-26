@@ -114,7 +114,11 @@ public class MultiOutcomeArbitrageOptions
     public decimal MinExpectedProfit { get; set; } = 0.10m;
     public decimal MaxNotionalPerGroup { get; set; } = 100m;
     public decimal SlippageBufferPerLeg { get; set; } = 0.0005m;
+    public decimal FeePerLeg { get; set; } = 0.001m;
     public decimal SafetyBufferPerGroup { get; set; } = 0.001m;
+    public decimal NearExecutableCostReductionThreshold { get; set; } = 0.01m;
+    public decimal FarFromExecutableCostReductionThreshold { get; set; } = 0.05m;
+    public bool EnableSensitivityDiagnostics { get; set; } = true;
     public bool RequireAllNoPrices { get; set; } = true;
     public bool RequireAllMarketsActive { get; set; } = true;
     public decimal MinExecutableQty { get; set; } = 1m;
@@ -144,6 +148,8 @@ public class MultiOutcomeLoggingOptions
     public int RejectedMultiOutcomeSampleSize { get; set; } = 5;
     public bool LogBookCacheMissDetails { get; set; } = false;
     public int BookCacheMissSampleSize { get; set; } = 5;
+    public int LogVerifiedBasketEveryNCycles { get; set; } = 10;
+    public bool LogVerifiedBasketOnlyOnChange { get; set; } = true;
 }
 
 

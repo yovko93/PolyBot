@@ -10,3 +10,5 @@ export interface TerminalLogEntry { id: string; timestamp: string; level: 'info'
 export interface BotControlState { isPaused: boolean; reason: string; updatedAtUtc: string; sequence?: number; }
 
 export interface OpportunityDiagnostics { bestEdgeSeen:number; nearMissCount:number; positiveEdgeCount:number; executableCount:number; marketsScanned:number; booksLoaded:number; skipReasons?: Array<{reason:string;count:number}>; strategyBreakdown?: Array<{strategyName:string;bestEdge:number;executableCount:number;nearMissCount:number}>; }
+
+export interface MultiOutcomeDiagnostics { verifiedBasketCostBreakdown?: Array<{ groupKey:string; grossEdge:number; netEdge:number; fees:number; slippage:number; safety:number; costReductionNeeded:number; classification:string }>; }
