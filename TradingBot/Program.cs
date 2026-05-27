@@ -518,10 +518,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     VerifiedBasketScreener.Export(screenerPath, snapshot);
                     foreach (var row in snapshot.VerifiedBaskets)
                     {
-                        var prev = basketStateByGroup.TryGetValue(row.GroupKey, out var pstate) ? pstate : VerifiedBasketState.NotExecutable;
+                        var prevState = basketStateByGroup.TryGetValue(row.GroupKey, out var pstate) ? pstate : VerifiedBasketState.NotExecutable;
                         var cur = stability.Track(row.GroupKey, row, options.RuntimeState.MaxVerifiedBasketEdgeHistoryPerGroup, 3, 0.001m, 0.002m);
                         basketStateByGroup[row.GroupKey] = cur;
-                        if (prev != cur) Console.WriteLine($"[VERIFIED_BASKET_STATE_CHANGE] Group={row.GroupKey} From={prev} To={cur} Reason=Transition");
+                        if (prevState != cur) Console.WriteLine($"[VERIFIED_BASKET_STATE_CHANGE] Group={row.GroupKey} From={prevState} To={cur} Reason=Transition");
                     }
                     stability.Export(Path.Combine(contentRootPath, "exports/verified-basket-edge-history-latest.json"));
                     state.SetVerifiedBasketScreener(new VerifiedBasketScreenerDto(snapshot.ActiveProfile, snapshot.Timestamp, snapshot.VerifiedBaskets.Cast<object>().Take(100).ToArray(), snapshot.VerifiedBaskets.Cast<object>().Take(100).ToArray(), snapshot.NearExecutableBaskets.Cast<object>().Take(25).ToArray(), snapshot.Profiles, snapshot.BestByActiveProfile, snapshot.BestByRawEdge, snapshot.BestByConservative, snapshot.BestByPolymarketApprox, snapshot.BestByRaw, snapshot.BestNearExecutable, snapshot.UnresolvedConfiguredGroups));

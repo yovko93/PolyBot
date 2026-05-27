@@ -1,3 +1,4 @@
+using Xunit;
 using TradingBot.Services;
 using TradingBot.Services.MultiOutcome;
 using TradingBot.Options;
