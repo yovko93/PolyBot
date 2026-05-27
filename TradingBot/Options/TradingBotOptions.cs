@@ -173,6 +173,10 @@ public sealed record CostProfileConfig(string FeeModel, decimal FeePerLeg, decim
 
 public class MultiOutcomeLoggingOptions
 {
+    public bool LogVerifiedMismatchDetails { get; set; } = true;
+    public int LogVerifiedMismatchEveryNCycles { get; set; } = 50;
+    public bool LogVerifiedMismatchOnChangeOnly { get; set; } = true;
+    public bool DebugVerifiedMismatch { get; set; } = false;
     public bool LogVerifiedBasketDetails { get; set; } = false;
     public bool LogMultiOutcomeSummary { get; set; } = true;
     public bool LogMultiOutcomeDetailsOnlyWhenExecutable { get; set; } = true;
@@ -223,6 +227,7 @@ public class MultiOutcomeReviewOptions
 public class RuntimeStateOptions
 {
     public int MaxRejectedMultiOutcomeSamples { get; set; } = 100;
+    public int MaxVerifiedBasketEdgeHistoryPerGroup { get; set; } = 200;
     public int MaxCandidateGroupsForReview { get; set; } = 50;
     public int MaxMultiOutcomeDiagnosticsHistory { get; set; } = 100;
     public int MaxRecentLogs { get; set; } = 500;
