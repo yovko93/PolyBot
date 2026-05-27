@@ -49,6 +49,15 @@ public class TradingBotOptions
     public bool LogOnlyExecutableOpportunities { get; set; } = false;
     public bool EnableLiveExecution { get; set; } = false;
     public bool EnablePaperTrading { get; set; } = true;
+    public bool PaperOnly { get; set; } = true;
+    public bool EnableExperimentalProfilePaper { get; set; } = false;
+    public string ExperimentalPaperProfile { get; set; } = "PolymarketApprox";
+    public bool RequireStableExperimentalSignals { get; set; } = true;
+    public int RequiredConsecutiveExperimentalScans { get; set; } = 5;
+    public decimal MinExperimentalNetEdgePerBasket { get; set; } = 0.001m;
+    public int ExperimentalCooldownMinutes { get; set; } = 60;
+    public bool AllowRawOnlyPaper { get; set; } = false;
+    public bool AllowOrderbookOnlyPaper { get; set; } = false;
     public string ExecutionMode { get; set; } = "PAPER";
     [Range(0.0001, double.MaxValue)] public decimal MinEdgePerShare { get; set; } = 0.003m;
     [Range(0.0, double.MaxValue)] public decimal MinExpectedProfit { get; set; } = 0.25m;
@@ -174,7 +183,7 @@ public sealed record CostProfileConfig(string FeeModel, decimal FeePerLeg, decim
 public class MultiOutcomeLoggingOptions
 {
     public bool LogVerifiedMismatchDetails { get; set; } = true;
-    public int LogVerifiedMismatchEveryNCycles { get; set; } = 50;
+    public int LogVerifiedMismatchEveryNCycles { get; set; } = 100;
     public bool LogVerifiedMismatchOnChangeOnly { get; set; } = true;
     public bool DebugVerifiedMismatch { get; set; } = false;
     public bool LogVerifiedBasketDetails { get; set; } = false;

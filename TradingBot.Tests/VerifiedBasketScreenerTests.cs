@@ -56,7 +56,7 @@ public class VerifiedBasketScreenerTests
         var b = new[] { 0.6655m, 0.6665m, 0.666m }.Select((v,i)=>new ResolvedNoAsk($"b{i}", null, v, 100m, "book", null, null, null, DateTime.UtcNow, false, null)).ToList();
         var ra = VerifiedBasketScreener.Evaluate("A", a, o);
         var rb = VerifiedBasketScreener.Evaluate("B", b, o);
-        var snap = VerifiedBasketScreener.BuildSnapshot("Conservative", new[] { ra, rb }, Array.Empty<object>());
+        var snap = VerifiedBasketScreener.BuildSnapshot("Conservative", "PolymarketApprox", new[] { ra, rb }, Array.Empty<object>());
         Assert.NotEmpty(snap.VerifiedBaskets);
     }
 
@@ -76,7 +76,7 @@ public class VerifiedBasketScreenerTests
         var o = new MultiOutcomeArbitrageOptions();
         var legs = new[] { 0.666m, 0.666m, 0.666m }.Select((v,i)=>new ResolvedNoAsk($"m{i}", null, v, 100m, "book", null, null, null, DateTime.UtcNow, false, null)).ToList();
         var r = VerifiedBasketScreener.Evaluate("g", legs, o);
-        var snap = VerifiedBasketScreener.BuildSnapshot("Conservative", new[] { r }, new object[] { new { GroupKey = "x", Reason = "MissingMarkets" } });
+        var snap = VerifiedBasketScreener.BuildSnapshot("Conservative", "PolymarketApprox", new[] { r }, new object[] { new { GroupKey = "x", Reason = "MissingMarkets" } });
         var path = Path.Combine(Path.GetTempPath(), $"verified-basket-opportunity-screener-{Guid.NewGuid():N}.json");
         VerifiedBasketScreener.Export(path, snap);
         Assert.True(File.Exists(path));

@@ -14,7 +14,7 @@ public class VerifiedStabilityAndAllowlistTests
             new VerifiedBasketScreener.ProfileResult("PolymarketApprox","",0,0,0,net,net,net>0,true),
             new VerifiedBasketScreener.ProfileResult("RawOnly","",0,0,0,net,net,net>0,true)
         };
-        return new(group,2,1,0.99m,0.01m,net,net>0?1:0,net,"","", "Conservative", profiles, new[]{ new VerifiedBasketScreener.QuantityScenarioResult(1,false,"",0,0,0,net,net,"leg",1)}, "", DateTime.UtcNow, 0, near, "", Array.Empty<string>());
+        return new(group,2,1,0.99m,0.01m,net,net>0?1:0,net,"","", "Conservative", profiles, new[]{ new VerifiedBasketScreener.QuantityScenarioResult(1,false,"",0,0,0,net,net,"leg",1)}, "", DateTime.UtcNow, 0, near, "", Array.Empty<string>(), net, VerifiedBasketScreener.ExecutionStatus.NotExecutable);
     }
 
     [Fact] public void One_positive_is_pending_not_stable(){ var t=new VerifiedOpportunityStabilityTracker(); var st=t.Track("g",Row("g",0.003m),200,3,0.001m,0.002m); Assert.Equal(VerifiedBasketState.ExecutablePending, st);}    
