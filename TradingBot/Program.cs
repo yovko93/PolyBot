@@ -426,7 +426,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         var fingerprint = $"{formula.GrossEdge}|{formula.Fees}|{formula.Slippage}|{formula.SafetyBuffer}|{formula.NetEdge}";
                         verifiedBasketCycle++;
                         var shouldLog = !options.Logging.LogVerifiedBasketOnlyOnChange
-                            || !verifiedBasketLastFingerprint.TryGetValue(g.GroupKey, out var prev) || prev != fingerprint
+                            || !verifiedBasketLastFingerprint.TryGetValue(g.GroupKey, out var prevFingerprint) || prevFingerprint != fingerprint
                             || !verifiedBasketLastExecutable.TryGetValue(g.GroupKey, out var prevExec) || prevExec != currentExec
                             || (options.Logging.LogVerifiedBasketEveryNCycles > 0 && verifiedBasketCycle % options.Logging.LogVerifiedBasketEveryNCycles == 0);
                         verifiedBasketLastFingerprint[g.GroupKey] = fingerprint;
