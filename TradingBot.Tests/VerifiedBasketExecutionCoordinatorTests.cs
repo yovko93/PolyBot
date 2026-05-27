@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Options;
+using MsOptions = Microsoft.Extensions.Options.Options;
 using TradingBot.Models;
 using TradingBot.Options;
 using TradingBot.Services;
@@ -9,7 +9,7 @@ namespace TradingBot.Tests;
 public class VerifiedBasketExecutionCoordinatorTests
 {
     private static VerifiedBasketExecutionCoordinator Build(ExecutionOptions? o = null)
-        => new(Options.Create(o ?? new ExecutionOptions { DuplicateCooldownMinutes = 60, PaperOnly = true, PreventDuplicateGroupPositions = true }));
+        => new(MsOptions.Create(o ?? new ExecutionOptions { DuplicateCooldownMinutes = 60, PaperOnly = true, PreventDuplicateGroupPositions = true }));
 
     [Fact]
     public void PreTrade_Approves_ValidVerifiedBasket()
