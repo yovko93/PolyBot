@@ -27,4 +27,7 @@ public sealed class ExecutionOptions
     [Range(-1.0, 1.0)] public decimal MinEdgeAfterFeesAndSlippage { get; set; } = 0.001m;
     public bool AllowPartialFills { get; set; } = false;
     public bool CancelRemainingLegOnPartialFill { get; set; } = true;
+    public bool PaperOnly { get; set; } = true;
+    public bool PreventDuplicateGroupPositions { get; set; } = true;
+    [Range(1, 1440)] public int DuplicateCooldownMinutes { get; set; } = 60;
 }
