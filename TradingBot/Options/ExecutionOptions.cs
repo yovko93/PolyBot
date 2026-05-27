@@ -25,6 +25,11 @@ public sealed class ExecutionOptions
     [Range(0.0, 1.0)] public decimal MaxSlippagePerLeg { get; set; } = 0.003m;
     [Range(1, int.MaxValue)] public int MaxOrderbookAgeMs { get; set; } = 3000;
     [Range(-1.0, 1.0)] public decimal MinEdgeAfterFeesAndSlippage { get; set; } = 0.001m;
+    public bool RequireStableExecutableSignals { get; set; } = true;
+    [Range(1, 20)] public int RequiredConsecutiveExecutableScans { get; set; } = 3;
+    [Range(-1.0, 1.0)] public decimal MinStableNetEdgePerBasket { get; set; } = 0.001m;
+    [Range(0.0, 1.0)] public decimal MaxNetEdgeVolatility { get; set; } = 0.002m;
+    [Range(1, 600)] public int StabilityWindowSeconds { get; set; } = 30;
     public bool AllowPartialFills { get; set; } = false;
     public bool CancelRemainingLegOnPartialFill { get; set; } = true;
     public bool PaperOnly { get; set; } = true;

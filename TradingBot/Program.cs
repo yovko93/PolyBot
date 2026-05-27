@@ -246,6 +246,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var profileComparisonCycle = 0;
     var lastRankingFingerprint = string.Empty;
     var nearExecutableFingerprint = string.Empty;
+    var mismatchCycle = 0;
+    var mismatchFingerprintByGroup = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+    var basketStateByGroup = new Dictionary<string, VerifiedBasketState>(StringComparer.OrdinalIgnoreCase);
+    var stability = new VerifiedOpportunityStabilityTracker();
     var verifiedBasketLastFingerprint = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     var verifiedBasketLastExecutable = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
     var verifiedPricingLastFingerprint = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -344,9 +348,15 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     {
                         if (g.ValidationStatus != "VerifiedGroupResolved")
                         {
-                            if (options.MultiOutcomeArbitrage.LogVerifiedGroupMismatchDetails)
+                            mismatchCycle++;
+                            if (options.Logging.LogVerifiedMismatchDetails)
                             {
-                                Console.WriteLine($"[VERIFY_GROUP_MISMATCH] Group={g.GroupKey} RequiredMarkets={g.MarketIds.Count} FoundMarkets={g.ResolvedMarkets.Count} MissingMarkets={g.MissingMarketIds.Count} Source=FullDiscoveredPool MissingSample=[{string.Join(",", g.MissingMarketIds.Take(options.MultiOutcomeArbitrage.VerifiedGroupMismatchSampleSize))}] FoundSample=[{string.Join(",", g.ResolvedMarkets.Select(x=>x.id).Take(options.MultiOutcomeArbitrage.VerifiedGroupMismatchSampleSize))}]");
+                                var fp = $"{g.MarketIds.Count}|{g.ResolvedMarkets.Count}|{g.MissingMarketIds.Count}";
+                                var changed = !mismatchFingerprintByGroup.TryGetValue(g.GroupKey, out var prev) || prev != fp;
+                                mismatchFingerprintByGroup[g.GroupKey] = fp;
+                                var periodic = options.Logging.LogVerifiedMismatchEveryNCycles > 0 && mismatchCycle % options.Logging.LogVerifiedMismatchEveryNCycles == 0;
+                                var should = options.Logging.DebugVerifiedMismatch || changed || periodic || !options.Logging.LogVerifiedMismatchOnChangeOnly;
+                                if (should) Console.WriteLine($"[VERIFY_GROUP_MISMATCH] Group={g.GroupKey} RequiredMarkets={g.MarketIds.Count} FoundMarkets={g.ResolvedMarkets.Count} MissingMarkets={g.MissingMarketIds.Count} Source=FullDiscoveredPool MissingSample=[{string.Join(",", g.MissingMarketIds.Take(options.MultiOutcomeArbitrage.VerifiedGroupMismatchSampleSize))}] FoundSample=[{string.Join(",", g.ResolvedMarkets.Select(x=>x.id).Take(options.MultiOutcomeArbitrage.VerifiedGroupMismatchSampleSize))}]");
                             }
                             groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, g.ValidationStatus, g.RejectionReason, null, 0, 0, g.MissingMarketIds.Take(5).ToArray(), g.MissingConditionIds.Take(5).ToArray()));
                             continue;
@@ -457,6 +467,13 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "Detected", "Ok", "VerifiedExecutable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
                             verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PromotedToOpportunity", "Ok", "Actionable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
                             Console.WriteLine($"[VERIFIED_ARB_DETECTED] Group={opp.GroupKey} NetEdge={opp.NetEdge} ExpectedProfit={opp.ExpectedProfit}");
+                            var st = stability.State(opp.GroupKey);
+                            if (options.EnablePaperTrading && options.MultiOutcomeArbitrage.Enabled && options.ExecutionMode == "PAPER" && st != VerifiedBasketState.StableExecutable)
+                            {
+                                verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PreTradeBlocked", "Blocked", "WaitingForStableExecutableSignal", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
+                                Console.WriteLine($"[VERIFIED_PRETRADE_BLOCKED] Group={opp.GroupKey} Reason=WaitingForStableExecutableSignal State={st}");
+                                continue;
+                            }
                             var pre = verifiedExecution.Validate(opp, positionBook);
                             preTradeResults.Add(pre);
                             if (!pre.Approved)
@@ -493,8 +510,20 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     recommendedActions.Add("Check whether FeePerLeg config is realistic.");
                     var screenerPath = Path.Combine(contentRootPath, "exports/verified-basket-opportunity-screener-latest.json");
                     var unresolvedConfiguredGroups = resolved.Where(x => x.ValidationStatus != "VerifiedGroupResolved").Take(5).Select(x => (object)new { x.GroupKey, Reason = x.RejectionReason, x.ValidationStatus }).ToArray();
+                    var allowlistHealth = resolved.Select(g => new { groupKey = g.GroupKey, enabled = true, configuredMarketCount = g.MarketIds.Count, resolvedMarketCount = g.ResolvedMarkets.Count, missingMarketCount = g.MissingMarketIds.Count, missingMarketIds = g.MissingMarketIds, foundMarketIds = g.ResolvedMarkets.Select(x=>x.id).ToArray(), validationStatus = g.ValidationStatus, reason = g.RejectionReason, recommendedAction = g.MissingMarketIds.Count == 0 ? "Keep" : (g.ResolvedMarkets.Count < 2 ? "DisableMissingMarkets" : "RefreshFromCandidateExport") }).ToArray();
+                    var healthPath = Path.Combine(contentRootPath, "exports/verified-allowlist-health-latest.json"); Directory.CreateDirectory(Path.GetDirectoryName(healthPath)!); File.WriteAllText(healthPath, System.Text.Json.JsonSerializer.Serialize(allowlistHealth, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
+                    var cleanup = new { metadata = new { generatedAtUtc = DateTime.UtcNow, note = "suggested only" }, groups = allowlistHealth.Select(h => new { h.groupKey, h.enabled, h.configuredMarketCount, h.resolvedMarketCount, h.missingMarketCount, h.missingMarketIds, suggestedEnabled = h.missingMarketCount > 0 ? false : h.enabled, reason = h.missingMarketCount > 0 ? "Missing markets in discovered pool" : "Healthy", suggestedPrunedTemplate = h.resolvedMarketCount >= 2 ? new { groupKey = h.groupKey, marketIds = h.foundMarketIds, requiredOutcomeCount = h.resolvedMarketCount } : null })};
+                    var cleanupPath = Path.Combine(contentRootPath, "exports/verified-allowlist-cleanup-suggested.json"); File.WriteAllText(cleanupPath, System.Text.Json.JsonSerializer.Serialize(cleanup, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
                     var snapshot = VerifiedBasketScreener.BuildSnapshot(options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile, verifiedScreenResults, unresolvedConfiguredGroups);
                     VerifiedBasketScreener.Export(screenerPath, snapshot);
+                    foreach (var row in snapshot.VerifiedBaskets)
+                    {
+                        var prev = basketStateByGroup.TryGetValue(row.GroupKey, out var pstate) ? pstate : VerifiedBasketState.NotExecutable;
+                        var cur = stability.Track(row.GroupKey, row, options.RuntimeState.MaxVerifiedBasketEdgeHistoryPerGroup, 3, 0.001m, 0.002m);
+                        basketStateByGroup[row.GroupKey] = cur;
+                        if (prev != cur) Console.WriteLine($"[VERIFIED_BASKET_STATE_CHANGE] Group={row.GroupKey} From={prev} To={cur} Reason=Transition");
+                    }
+                    stability.Export(Path.Combine(contentRootPath, "exports/verified-basket-edge-history-latest.json"));
                     state.SetVerifiedBasketScreener(new VerifiedBasketScreenerDto(snapshot.ActiveProfile, snapshot.Timestamp, snapshot.VerifiedBaskets.Cast<object>().Take(100).ToArray(), snapshot.VerifiedBaskets.Cast<object>().Take(100).ToArray(), snapshot.NearExecutableBaskets.Cast<object>().Take(25).ToArray(), snapshot.Profiles, snapshot.BestByActiveProfile, snapshot.BestByRawEdge, snapshot.BestByConservative, snapshot.BestByPolymarketApprox, snapshot.BestByRaw, snapshot.BestNearExecutable, snapshot.UnresolvedConfiguredGroups));
                     profileComparisonCycle++;
                     var shouldLogProfileComparison = options.Logging.LogProfileComparisonEveryNCycles > 0 && profileComparisonCycle % options.Logging.LogProfileComparisonEveryNCycles == 0;
