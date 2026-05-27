@@ -32,6 +32,7 @@ builder.Services.AddSingleton<DuplicateExecutionGuard>();
 builder.Services.AddSingleton<PreTradeValidator>();
 builder.Services.AddSingleton<OrderPlanBuilder>();
 builder.Services.AddSingleton<ExecutionAuditLog>();
+builder.Services.AddSingleton<VerifiedBasketExecutionCoordinator>();
 builder.Services.AddSingleton<DryRunLiveExecutor>();
 builder.Services.AddSingleton<BotRuntimeState>();
 builder.Services.AddSingleton<TextWriter>(originalOut);
@@ -115,7 +116,7 @@ app.MapGet("/api/bot/verified-allowlist-suggestion", (IHostEnvironment env) =>
     return Results.Text(File.ReadAllText(path), "application/json");
 });
 app.MapGet("/api/bot/risk", (BotRuntimeState s, IRiskManager risk) => Results.Ok(new { runtime = s.Risk, executionRisk = risk.GetRiskSnapshot() }));
-app.MapGet("/api/bot/execution-audit", (ExecutionAuditLog audit, int? limit) => audit.List(Math.Clamp(limit ?? 300, 1, 1000)));
+app.MapGet("/api/bot/execution-audit", (VerifiedBasketExecutionCoordinator audit, int? limit) => audit.ListAudit(Math.Clamp(limit ?? 300, 1, 1000)));
 app.MapGet("/api/bot/execution-plans", (BotRuntimeState s, int? limit) => s.Trades().TakeLast(Math.Clamp(limit ?? 100, 1, 500)).ToArray());
 app.MapGet("/api/bot/controls", (BotRuntimeState s) => s.Controls);
 app.MapPost("/api/bot/controls/pause", async (BotRuntimeState s, IHubContext<BotHub> hub) =>
@@ -251,6 +252,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var exportService = new MultiOutcomeCandidateExportService(options.MultiOutcomeReview, contentRootPath);
     var multiOutcomeValidator = new MutuallyExclusiveGroupValidator(options.MultiOutcomeArbitrage, contentRootPath);
     var verifiedResolver = new VerifiedMultiOutcomeGroupResolver();
+    var verifiedExecution = app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>();
+    var preTradeResults = new List<VerifiedBasketPreTradeValidationResult>();
+    var promotedVerifiedOpportunities = new List<VerifiedMultiOutcomeOpportunity>();
     Console.WriteLine($"[ALLOWLIST] Loaded verified multi-outcome groups: {multiOutcomeValidator.LoadedAllowlistCount}");
     while (!stoppingToken.IsCancellationRequested)
     {
@@ -440,7 +444,32 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         }
                         var edge = formula.NetEdge;
                         var isExec = edge > options.MultiOutcomeArbitrage.MinMultiOutcomeEdge;
-                        if (isExec) verifiedExecutable++;
+                        if (isExec)
+                        {
+                            verifiedExecutable++;
+                            var qty = Math.Max(options.MultiOutcomeArbitrage.MinExecutableQty, resolvedNoAsks.Min(x => x.NoAskQuantity ?? 0m));
+                            var estimatedCost = qty * formula.NoAskSum;
+                            var expectedProfit = qty * formula.NetEdge;
+                            var legs = resolvedNoAsks.Select(x => new VerifiedMultiOutcomeOpportunityLeg(x.MarketId, x.ConditionId, x.Question, "NO", x.NoTokenId ?? x.MarketId, x.NoAsk ?? 0m, x.NoAskQuantity ?? 0m, x.Source, qty, qty * (x.NoAsk ?? 0m))).ToArray();
+                            var opp = new VerifiedMultiOutcomeOpportunity($"verified-{g.GroupKey}-{DateTime.UtcNow:yyyyMMddHHmmss}", "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", g.GroupKey, g.Title, "Verified", legs.Length, formula.GuaranteedPayout, formula.NoAskSum, formula.GrossEdge, formula.NetEdge, activeCostProfileName, qty, expectedProfit, options.MultiOutcomeArbitrage.MaxNotionalPerGroup, estimatedCost, "PaperExecutable", legs);
+                            promotedVerifiedOpportunities.Add(opp);
+                            verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "Detected", "Ok", "VerifiedExecutable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
+                            verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PromotedToOpportunity", "Ok", "Actionable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
+                            Console.WriteLine($"[VERIFIED_ARB_DETECTED] Group={opp.GroupKey} NetEdge={opp.NetEdge} ExpectedProfit={opp.ExpectedProfit}");
+                            var pre = verifiedExecution.Validate(opp, positionBook);
+                            preTradeResults.Add(pre);
+                            if (!pre.Approved)
+                            {
+                                Console.WriteLine($"[VERIFIED_PRETRADE_REJECTED] Group={opp.GroupKey} Reason={pre.Reason}");
+                            }
+                            else
+                            {
+                                Console.WriteLine($"[VERIFIED_PRETRADE_APPROVED] Group={opp.GroupKey} NetEdge={pre.NetEdge} Qty={pre.Quantity} EstimatedCost={pre.EstimatedCost} ExpectedProfit={pre.ExpectedProfit}");
+                                var opened = verifiedExecution.OpenPaperPosition(opp, pre, positionBook);
+                                if (opened is null) Console.WriteLine($"[PAPER BASKET SKIPPED] Group={opp.GroupKey} Reason=DuplicateOpenPosition");
+                                else Console.WriteLine($"[PAPER BASKET OPENED] Group={opp.GroupKey} Legs={opp.LegsCount} Qty={opp.ExecutableQty} Cost={opp.EstimatedCost} NetEdge={opp.NetEdge} ExpectedProfit={opp.ExpectedProfit}");
+                            }
+                        }
                         skipReason = isExec ? "Executable" : "NegativeEdge";
                         groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, "VerifiedResolved", skipReason, edge, 0, 0, Array.Empty<string>(), Array.Empty<string>()));
                         pricingDiagnostics.Add(new VerifiedGroupPricingDto(g.GroupKey, resolvedNoAsks.Count, formula.GuaranteedPayout, formula.NoAskSum, formula.MinNoAsk, formula.MaxNoAsk, formula.AverageNoAsk, formula.GrossEdge, formula.Fees, formula.Slippage, formula.SafetyBuffer, formula.NetEdge, 1, formula.NetEdge, skipReason, formula.FormulaWarnings));
@@ -515,6 +544,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var missingNoAskTotal = groupDiagnostics.Sum(x => x.MissingNoAskCount);
                     var noAskResolvedTotal = verifiedPricingExport.Sum(x => int.Parse(System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(x)).RootElement.GetProperty("noAskResolvedCount").ToString()));
                     var bestPricing = pricingDiagnostics.Where(x=>x.SkipReason!="MissingNoAsk").OrderByDescending(x=>x.NetEdge).FirstOrDefault();
+                    var snapshotExportPath = Path.Combine(contentRootPath, "exports/verified-executable-opportunities-latest.json");
+                    verifiedExecution.ExportSnapshot(snapshotExportPath, options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile, promotedVerifiedOpportunities, preTradeResults, positionBook.OpenPositions);
                     var candidateReasons = string.Join(",", multiOutcomeReport.RejectedByReason.Select(x => $"{x.Key}:{x.Value}"));
                     Console.WriteLine($"[MULTI_CANDIDATE_SCAN] Candidates={multiOutcomeReport.GroupsDetected} Rejected={Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified)} TopReject={multiOutcomeReport.TopSkipReason} RejectedByReason={{{candidateReasons}}}");
                     var bestConservativeNet = snapshot.BestByConservative?.ActiveProfileNetEdge;
