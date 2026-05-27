@@ -174,10 +174,10 @@ _ = Task.Run(async () =>
     }
 });
 
-await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping);
+await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>(), options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping);
 await apiTask;
 
-static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, TradingBotOptions options, OpportunityFilteringOptions filtering, string contentRootPath, CancellationToken stoppingToken)
+static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, VerifiedBasketExecutionCoordinator verifiedExecution, TradingBotOptions options, OpportunityFilteringOptions filtering, string contentRootPath, CancellationToken stoppingToken)
 {
     var scannerInstanceId = Guid.NewGuid().ToString("N");
     var scannerStartedAt = DateTime.UtcNow;
@@ -252,7 +252,6 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var exportService = new MultiOutcomeCandidateExportService(options.MultiOutcomeReview, contentRootPath);
     var multiOutcomeValidator = new MutuallyExclusiveGroupValidator(options.MultiOutcomeArbitrage, contentRootPath);
     var verifiedResolver = new VerifiedMultiOutcomeGroupResolver();
-    var verifiedExecution = app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>();
     var preTradeResults = new List<VerifiedBasketPreTradeValidationResult>();
     var promotedVerifiedOpportunities = new List<VerifiedMultiOutcomeOpportunity>();
     Console.WriteLine($"[ALLOWLIST] Loaded verified multi-outcome groups: {multiOutcomeValidator.LoadedAllowlistCount}");
@@ -450,7 +449,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             var qty = Math.Max(options.MultiOutcomeArbitrage.MinExecutableQty, resolvedNoAsks.Min(x => x.NoAskQuantity ?? 0m));
                             var estimatedCost = qty * formula.NoAskSum;
                             var expectedProfit = qty * formula.NetEdge;
-                            var legs = resolvedNoAsks.Select(x => new VerifiedMultiOutcomeOpportunityLeg(x.MarketId, x.ConditionId, x.Question, "NO", x.NoTokenId ?? x.MarketId, x.NoAsk ?? 0m, x.NoAskQuantity ?? 0m, x.Source, qty, qty * (x.NoAsk ?? 0m))).ToArray();
+                            var questionByMarket = markets.Where(m => !string.IsNullOrWhiteSpace(m.id)).ToDictionary(m => m.id, m => m.question ?? m.id, StringComparer.OrdinalIgnoreCase);
+                            var legs = resolvedNoAsks.Select(x => new VerifiedMultiOutcomeOpportunityLeg(x.MarketId, x.ConditionId, questionByMarket.TryGetValue(x.MarketId, out var q) ? q : x.MarketId, "NO", x.NoTokenId ?? x.MarketId, x.NoAsk ?? 0m, x.NoAskQuantity ?? 0m, x.Source, qty, qty * (x.NoAsk ?? 0m))).ToArray();
                             var opp = new VerifiedMultiOutcomeOpportunity($"verified-{g.GroupKey}-{DateTime.UtcNow:yyyyMMddHHmmss}", "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", g.GroupKey, g.Title, "Verified", legs.Length, formula.GuaranteedPayout, formula.NoAskSum, formula.GrossEdge, formula.NetEdge, activeCostProfileName, qty, expectedProfit, options.MultiOutcomeArbitrage.MaxNotionalPerGroup, estimatedCost, "PaperExecutable", legs);
                             promotedVerifiedOpportunities.Add(opp);
                             verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "Detected", "Ok", "VerifiedExecutable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
