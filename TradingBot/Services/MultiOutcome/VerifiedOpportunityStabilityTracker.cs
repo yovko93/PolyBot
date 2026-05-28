@@ -3,7 +3,7 @@ using TradingBot.Services.MultiOutcome;
 
 namespace TradingBot.Services;
 
-public enum VerifiedBasketState { NotExecutable, NearExecutable, ExecutablePending, StableExecutable }
+public enum VerifiedBasketState { NotExecutable, NearExecutable, EdgeExecutablePending, EdgeStable, ExecutionReadinessPending, ExecutionStable, PaperOpened, SuppressedDuplicate }
 
 public sealed record VerifiedBasketEdgeSample(DateTime Timestamp, decimal GrossEdge, decimal ConservativeNet, decimal PolymarketApproxNet, decimal RawOnlyNet, bool Executable, string Classification, string TopReject, decimal NoAskSum, string LimitingLeg);
 
@@ -33,7 +33,7 @@ public sealed class VerifiedOpportunityStabilityTracker
 
         var vol = ComputeVolatility(list);
         var st = !positive ? (row.NearExecutable ? VerifiedBasketState.NearExecutable : VerifiedBasketState.NotExecutable)
-            : (c >= requiredConsecutive && vol <= maxVol ? VerifiedBasketState.StableExecutable : VerifiedBasketState.ExecutablePending);
+            : (c >= requiredConsecutive && vol <= maxVol ? VerifiedBasketState.EdgeStable : VerifiedBasketState.EdgeExecutablePending);
         _state[groupKey] = st;
         return st;
     }

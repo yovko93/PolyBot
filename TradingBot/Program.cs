@@ -193,6 +193,7 @@ logger.LogInfo("startup", $"[DIAGNOSTICS] DebuggerSafeMode={options.Diagnostics.
 logger.LogInfo("startup", $"[CONFIG] MultiOutcome FeePerLeg={options.MultiOutcomeArbitrage.FeePerLeg} SlippagePerLeg={options.MultiOutcomeArbitrage.SlippageBufferPerLeg} SafetyPerGroup={options.MultiOutcomeArbitrage.SafetyBufferPerGroup} MinNetEdgePerBasket={options.MultiOutcomeArbitrage.MinMultiOutcomeEdge} MinExpectedProfit={options.MultiOutcomeArbitrage.MinExpectedProfit} EnableSensitivityDiagnostics={options.MultiOutcomeArbitrage.EnableSensitivityDiagnostics}");
 var executionCfg = app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value;
 logger.LogInfo("startup", $"[CONFIG] Execution PaperOnly={executionCfg.PaperOnly.ToString().ToLowerInvariant()} MaxNotionalPerBasket={executionCfg.MaxNotionalPerBasket} MaxOpenBasketPositions={executionCfg.MaxOpenBasketPositions} MaxExposurePerGroup={executionCfg.MaxExposurePerGroup} DuplicateCooldownMinutes={executionCfg.DuplicateCooldownMinutes}");
+logger.LogInfo("startup", $"[CONFIG] ExecutionRisk MaxNotionalPerBasket={executionCfg.MaxNotionalPerBasket} MaxNotionalPerTrade={executionCfg.MaxNotionalPerTrade} MinPlannedNotional={executionCfg.MinPlannedNotional} MinPlannedExpectedProfit={executionCfg.MinPlannedExpectedProfit} MinPlannedBasketQty={executionCfg.MinPlannedBasketQty}");
 var activeProfileName = options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile;
 if (!options.MultiOutcomeArbitrage.CostProfiles.Profiles.TryGetValue(activeProfileName, out var activeProfileCfg)) activeProfileCfg = options.MultiOutcomeArbitrage.CostProfiles.Profiles["Conservative"];
 if (options.EnableLiveExecution && activeProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))
@@ -537,15 +538,32 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "Detected", "Ok", "VerifiedExecutable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
                             verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PromotedToOpportunity", "Ok", "Actionable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
                             var st = stability.State(opp.GroupKey);
-                            if (st == VerifiedBasketState.ExecutablePending)
-                                verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "StabilityPending", "Pending", "WaitingConsecutiveExecutableScans", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
-                            if (st == VerifiedBasketState.StableExecutable)
-                                verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "StabilityAchieved", "Ok", "StableExecutable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
+                            if (st == VerifiedBasketState.EdgeExecutablePending)
+                                verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "EdgeStabilityPending", "Pending", "WaitingConsecutiveExecutableScans", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
+                            if (st == VerifiedBasketState.EdgeStable)
+                                verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "EdgeStable", "Ok", "EdgeStable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
                             Console.WriteLine($"[VERIFIED_ARB_DETECTED] Group={opp.GroupKey} NetEdge={opp.NetEdge} MaxLiquidityQty={maxLiquidityQty} MaxLiquidityExpectedProfit={maxLiquidityExpectedProfit} Status=RequiresSizing");
-                            if (options.EnablePaperTrading && options.MultiOutcomeArbitrage.Enabled && options.ExecutionMode == "PAPER" && st != VerifiedBasketState.StableExecutable)
+                            if (options.EnablePaperTrading && options.MultiOutcomeArbitrage.Enabled && options.ExecutionMode == "PAPER" && st != VerifiedBasketState.EdgeStable)
                             {
                                 verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PreTradeBlocked", "Blocked", "WaitingForStableExecutableSignal", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
                                 Console.WriteLine($"[VERIFIED_PRETRADE_BLOCKED] Group={opp.GroupKey} Reason=WaitingForStableExecutableSignal State={st}");
+                                continue;
+                            }
+                            var costPerBasket = opp.Legs.Sum(x => x.NoAsk);
+                            var maxNotional = executionOptions.MaxNotionalPerBasket;
+                            var maxQtyByNotional = costPerBasket > 0 ? maxNotional / costPerBasket : 0m;
+                            var maxQtyByLiquidity = opp.Legs.Min(x => x.NoAskQuantity);
+                            var plannedQty = Math.Min(maxQtyByNotional, maxQtyByLiquidity);
+                            var plannedCost = plannedQty * costPerBasket;
+                            var plannedExpectedProfit = plannedQty * opp.NetEdge;
+                            string? readinessReason = null;
+                            if (plannedQty < executionOptions.MinPlannedBasketQty) readinessReason = "PlannedQtyBelowMinimum";
+                            else if (plannedCost < executionOptions.MinPlannedNotional) readinessReason = "PlannedNotionalBelowMinimum";
+                            else if (plannedExpectedProfit < executionOptions.MinPlannedExpectedProfit) readinessReason = "PlannedExpectedProfitBelowMinimum";
+                            if (readinessReason is not null)
+                            {
+                                verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "ExecutionReadinessRejected", "Rejected", readinessReason, opp.NetEdge, plannedExpectedProfit, plannedCost, plannedQty, $"MinQty={executionOptions.MinPlannedBasketQty}"));
+                                Console.WriteLine($"[EXECUTION_READINESS_REJECTED] Group={opp.GroupKey} Reason={readinessReason} PlannedQty={plannedQty:0.####} MinQty={executionOptions.MinPlannedBasketQty} MaxQtyByLiquidity={maxQtyByLiquidity:0.####}");
                                 continue;
                             }
                             var pre = verifiedExecution.Validate(opp, positionBook);
