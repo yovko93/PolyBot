@@ -14,6 +14,7 @@ public sealed class VerifiedBasketExecutionCoordinator
     private readonly ExecutionOptions _execution;
     private readonly Dictionary<string, DateTime> _recentlyExecuted = new();
     private readonly ConcurrentQueue<ExecutionAuditEvent> _audit = new();
+    private readonly ConcurrentQueue<BasketOrderPlan> _dryRunPlans = new();
     private readonly Dictionary<string, int> _duplicateSuppressionByGroup = new(StringComparer.OrdinalIgnoreCase);
 
     public VerifiedBasketExecutionCoordinator(IOptions<ExecutionOptions> executionOptions)
@@ -22,11 +23,40 @@ public sealed class VerifiedBasketExecutionCoordinator
     }
 
     public IReadOnlyList<ExecutionAuditEvent> ListAudit(int limit = 200) => _audit.TakeLast(Math.Clamp(limit, 1, 1000)).ToArray();
+    public IReadOnlyList<BasketOrderPlan> ListDryRunPlans(int limit = 50) => _dryRunPlans.TakeLast(Math.Clamp(limit, 1, 500)).ToArray();
 
     public void Audit(ExecutionAuditEvent e)
     {
         _audit.Enqueue(e);
         while (_audit.Count > 2000) _audit.TryDequeue(out _);
+    }
+
+    public void RecordDryRunPlan(BasketOrderPlan plan)
+    {
+        _dryRunPlans.Enqueue(plan);
+        while (_dryRunPlans.Count > 1000) _dryRunPlans.TryDequeue(out _);
+    }
+
+    public void ExportDryRunPlans(string path, string activeProfile, bool paperOnly, int limit = 50)
+    {
+        var payload = new
+        {
+            timestamp = DateTime.UtcNow,
+            activeProfile,
+            paperOnly,
+            plans = ListDryRunPlans(limit).Select(plan => new
+            {
+                groupKey = plan.GroupKey,
+                strategy = plan.Strategy,
+                plannedQty = plan.PlannedQty,
+                totalEstimatedCost = plan.TotalEstimatedCost,
+                expectedProfit = plan.ExpectedProfit,
+                netEdge = plan.NetEdge,
+                orders = plan.Orders.Select(o => new { o.MarketId, o.Question, o.TokenId, o.Side, o.PositionSide, o.Price, o.Quantity, o.EstimatedCost, o.DryRunOnly })
+            })
+        };
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
     }
 
     public int MarkDuplicateSuppressed(string groupKey)

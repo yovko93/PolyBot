@@ -36,6 +36,8 @@ public sealed class ExecutionOptions
     public bool AllowPartialFills { get; set; } = false;
     public bool CancelRemainingLegOnPartialFill { get; set; } = true;
     public bool PaperOnly { get; set; } = true;
+    public bool EnableLiveOrderSubmission { get; set; } = false;
+    public bool EnableDryRunOrderBuilder { get; set; } = true;
     public bool PreventDuplicateGroupPositions { get; set; } = true;
     [Range(1, 1440)] public int DuplicateCooldownMinutes { get; set; } = 60;
 }
