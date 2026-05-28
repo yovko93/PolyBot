@@ -31,8 +31,10 @@ public class PaperTradingEngine
     public decimal Balance { get; private set; } = 1000m;
     public decimal LockedCapital { get; private set; } = 0m;
     public decimal ExpectedProfit { get; private set; } = 0m;
+    public decimal RealizedPnl { get; private set; } = 0m;
+    public decimal UnrealizedPnl { get; private set; } = 0m;
 
-    public decimal Equity => Balance + LockedCapital + ExpectedProfit;
+    public decimal Equity => Balance + LockedCapital + UnrealizedPnl;
     public List<Position> Positions { get; } = new();
 
     public void Execute(TradeSignal signal, string marketId)
@@ -222,6 +224,7 @@ public class PaperTradingEngine
             ExpectedProfit += expectedProfit;
 
             Console.WriteLine($"[PAPER POSITION OPENED] ID={position.PositionId}");
+            Console.WriteLine($"[PAPER ACCOUNT] Cash={Balance:0.####} Locked={LockedCapital:0.####} OpenExposure={LockedCapital:0.####} UnrealizedPnl={UnrealizedPnl:0.####} RealizedPnl={RealizedPnl:0.####} Equity={Equity:0.####}");
 
             _journal?.Record(new ExecutionJournalRecord(
                 TimestampUtc: DateTime.UtcNow,
@@ -433,6 +436,7 @@ public class PaperTradingEngine
             );
 
             Console.WriteLine($"[PAPER POSITION OPENED] ID={position.PositionId}");
+            Console.WriteLine($"[PAPER ACCOUNT] Cash={Balance:0.####} Locked={LockedCapital:0.####} OpenExposure={LockedCapital:0.####} UnrealizedPnl={UnrealizedPnl:0.####} RealizedPnl={RealizedPnl:0.####} Equity={Equity:0.####}");
 
             _journal?.Record(new ExecutionJournalRecord(
                 TimestampUtc: DateTime.UtcNow,

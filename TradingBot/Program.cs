@@ -184,7 +184,8 @@ logger.LogSuccess("startup", $"ExecutionMode={options.ExecutionMode}; EnablePape
 logger.LogInfo("startup", $"[CONFIG] Scanner Mode={options.Mode} MarketScanLimit={options.MarketScanLimit} MaxMarketsToDiscover={options.MaxMarketsToDiscover} ScanBatchSize={options.ScanBatchSize} MaxOrderbooksPerCycle={options.MaxOrderbooksPerCycle} MaxConcurrentOrderbookRequests={options.MaxConcurrentOrderbookRequests} LogEmptyOpportunityCycles={options.LogEmptyOpportunityCycles}");
 logger.LogInfo("startup", $"[DIAGNOSTICS] DebuggerSafeMode={options.Diagnostics.DebuggerSafeMode} DetailedLogs={(!options.Diagnostics.DebuggerSafeMode).ToString().ToLowerInvariant()} MaxRecentLogs={options.RuntimeState.MaxRecentLogs}");
 logger.LogInfo("startup", $"[CONFIG] MultiOutcome FeePerLeg={options.MultiOutcomeArbitrage.FeePerLeg} SlippagePerLeg={options.MultiOutcomeArbitrage.SlippageBufferPerLeg} SafetyPerGroup={options.MultiOutcomeArbitrage.SafetyBufferPerGroup} MinNetEdgePerBasket={options.MultiOutcomeArbitrage.MinMultiOutcomeEdge} MinExpectedProfit={options.MultiOutcomeArbitrage.MinExpectedProfit} EnableSensitivityDiagnostics={options.MultiOutcomeArbitrage.EnableSensitivityDiagnostics}");
-logger.LogInfo("startup", $"[CONFIG] Execution MaxNotionalPerBasket={options.MultiOutcomeArbitrage.MaxNotionalPerGroup} MaxOpenBasketPositions={options.MaxOpenPositions} PaperOnly={options.PaperOnly.ToString().ToLowerInvariant()}");
+var executionCfg = app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value;
+logger.LogInfo("startup", $"[CONFIG] Execution PaperOnly={executionCfg.PaperOnly.ToString().ToLowerInvariant()} MaxNotionalPerBasket={executionCfg.MaxNotionalPerBasket} MaxOpenBasketPositions={executionCfg.MaxOpenBasketPositions} MaxExposurePerGroup={executionCfg.MaxExposurePerGroup} DuplicateCooldownMinutes={executionCfg.DuplicateCooldownMinutes}");
 var activeProfileName = options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile;
 if (!options.MultiOutcomeArbitrage.CostProfiles.Profiles.TryGetValue(activeProfileName, out var activeProfileCfg)) activeProfileCfg = options.MultiOutcomeArbitrage.CostProfiles.Profiles["Conservative"];
 if (options.EnableLiveExecution && activeProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))
@@ -528,7 +529,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 }
                                 else
                                 {
-                                    Console.WriteLine($"[VERIFIED_PRETRADE_REJECTED] Group={opp.GroupKey} Reason={pre.Reason}");
+                                    Console.WriteLine($"[VERIFIED_PRETRADE_REJECTED] Group={opp.GroupKey} Reason={pre.Reason} Cost={pre.EstimatedCost} MaxNotional={options.MultiOutcomeArbitrage.MaxNotionalPerGroup}");
                                 }
                             }
                             else
@@ -536,7 +537,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 Console.WriteLine($"[VERIFIED_PRETRADE_APPROVED] Group={opp.GroupKey} NetEdge={pre.NetEdge} Qty={pre.Quantity} EstimatedCost={pre.EstimatedCost} ExpectedProfit={pre.ExpectedProfit}");
                                 var opened = verifiedExecution.OpenPaperPosition(opp, pre, positionBook);
                                 if (opened is null) Console.WriteLine($"[PAPER BASKET SKIPPED] Group={opp.GroupKey} Reason=DuplicateOpenPosition");
-                                else Console.WriteLine($"[PAPER BASKET OPENED] Group={opp.GroupKey} Legs={opp.LegsCount} Qty={opp.ExecutableQty} Cost={opp.EstimatedCost} NetEdge={opp.NetEdge} ExpectedProfit={opp.ExpectedProfit}");
+                                else Console.WriteLine($"[PAPER BASKET OPENED] Group={opp.GroupKey} Legs={opp.LegsCount} Qty={pre.Quantity} Cost={pre.EstimatedCost} NetEdge={pre.NetEdge} ExpectedProfit={pre.ExpectedProfit}");
                             }
                         }
                         skipReason = isExec ? "Executable" : "NegativeEdge";
@@ -820,6 +821,7 @@ static async Task PushUiUpdates(BotRuntimeState state, IHubContext<BotHub> hub, 
         await hub.Clients.All.SendAsync("opportunitiesUpdated", state.Opportunities().TakeLast(options.SignalR.MaxPayloadItems).ToArray());
         await hub.Clients.All.SendAsync("tradeLogUpdated", state.Trades().TakeLast(300).ToArray());
         verifiedExecution.ExportAudit(Path.Combine(contentRootPath, "exports/execution-audit-latest.json"));
+        File.WriteAllText(Path.Combine(contentRootPath, "exports/paper-positions-latest.json"), System.Text.Json.JsonSerializer.Serialize(state.Positions().TakeLast(200), new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
         await hub.Clients.All.SendAsync("positionsUpdated", state.Positions());
         await hub.Clients.All.SendAsync("scannerStatsUpdated", state.ScannerStats);
         await hub.Clients.All.SendAsync("riskUpdated", state.Risk);

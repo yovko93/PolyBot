@@ -48,12 +48,21 @@ public sealed class VerifiedBasketExecutionCoordinator
 
     public VerifiedBasketPreTradeValidationResult Validate(VerifiedMultiOutcomeOpportunity opp, PaperPositionBook book)
     {
-        AuditEvent(opp, "PreTradeValidationStarted", "Started", "ValidationStart");
+        AuditEvent(opp, "PreTradeStarted", "Started", "ValidationStart");
 
         if (!string.Equals(opp.VerificationStatus, "Verified", StringComparison.OrdinalIgnoreCase)) return Reject(opp, "NotVerified");
         if (opp.ExecutableQty <= 0) return Reject(opp, "NonExecutableQuantity");
         if (opp.NetEdge <= 0) return Reject(opp, "NegativeAfterRecheck");
         if (opp.ExpectedProfit <= 0) return Reject(opp, "NonPositiveExpectedProfit");
+        var costPerBasket = opp.Legs.Sum(x => x.NoAsk);
+        var maxNotional = _execution.MaxNotionalPerBasket;
+        var maxQtyByNotional = costPerBasket > 0 ? maxNotional / costPerBasket : 0m;
+        var maxQtyByLiquidity = opp.Legs.Min(x => x.NoAskQuantity);
+        var plannedQty = Math.Min(maxQtyByNotional, maxQtyByLiquidity);
+        var totalCost = costPerBasket * plannedQty;
+        Console.WriteLine($"[SIZING_BASKET] Group={opp.GroupKey} CostPerBasket={costPerBasket} MaxNotional={maxNotional} MaxQtyByNotional={maxQtyByNotional} MaxQtyByLiquidity={maxQtyByLiquidity} PlannedQty={plannedQty} TotalCost={totalCost}");
+        var tolerance = 0.000001m;
+        if (totalCost > maxNotional + tolerance) return Reject(opp, "MaxNotionalExceeded");
         if (opp.Legs.Any(x => x.NoAsk <= 0 || x.NoAskQuantity < x.PlannedQty)) return Reject(opp, "InsufficientLiquidity");
         if (book.GetOpenPositions().Any(x => x.GroupKey.Equals(opp.GroupKey, StringComparison.OrdinalIgnoreCase) && x.Strategy == opp.Strategy)) return Reject(opp, "DuplicatePosition");
 
@@ -67,16 +76,17 @@ public sealed class VerifiedBasketExecutionCoordinator
             _recentlyExecuted[idempotency] = now.Add(cooldown);
         }
 
-        var approved = new VerifiedBasketPreTradeValidationResult(true, "Approved", opp.NetEdge, opp.ExecutableQty, opp.EstimatedCost, opp.ExpectedProfit, idempotency);
+        var approvedExpectedProfit = opp.NetEdge * plannedQty;
+        var approved = new VerifiedBasketPreTradeValidationResult(true, "Approved", opp.NetEdge, plannedQty, totalCost, approvedExpectedProfit, idempotency);
         AuditEvent(opp, "PreTradeApproved", "Approved", "Approved");
         return approved;
     }
 
     public PaperPosition? OpenPaperPosition(VerifiedMultiOutcomeOpportunity opp, VerifiedBasketPreTradeValidationResult check, PaperPositionBook book)
     {
-        AuditEvent(opp, "PaperExecutionStarted", "Started", "PaperExecutionStart");
-        var basket = new BasketArbOpportunity(opp.GroupKey, opp.Strategy, opp.Legs.Select(x => new BasketArbLeg(x.MarketId, x.NoTokenId, x.Question, x.Outcome, x.NoAsk, x.NoAskQuantity)).ToList(), opp.ExecutableQty, opp.NoAskSum, opp.GuaranteedPayout, opp.NetEdge, opp.ExpectedProfit);
-        var opened = book.AddBasketPosition(basket, opp.ExecutableQty, opp.EstimatedCost, opp.ExpectedProfit, "VerifiedMultiOutcome");
+        AuditEvent(opp, "PaperOpenStarted", "Started", "PaperExecutionStart");
+        var basket = new BasketArbOpportunity(opp.GroupKey, opp.Strategy, opp.Legs.Select(x => new BasketArbLeg(x.MarketId, x.NoTokenId, x.Question, x.Outcome, x.NoAsk, x.NoAskQuantity)).ToList(), check.Quantity, opp.NoAskSum, opp.GuaranteedPayout, opp.NetEdge, check.ExpectedProfit);
+        var opened = book.AddBasketPosition(basket, check.Quantity, check.EstimatedCost, check.ExpectedProfit, "VerifiedMultiOutcome");
         if (opened is null)
         {
             AuditEvent(opp, "Rejected", "Rejected", "DuplicateOpenPosition");

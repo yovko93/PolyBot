@@ -37,6 +37,19 @@ public class VerifiedBasketExecutionCoordinatorTests
         Assert.Equal("InsufficientLiquidity", res.Reason);
     }
 
+
+    [Fact]
+    public void PreTrade_Rejects_MaxNotionalExceeded()
+    {
+        var c = Build(new ExecutionOptions { MaxNotionalPerBasket = 0.5m, DuplicateCooldownMinutes = 60, PaperOnly = true, PreventDuplicateGroupPositions = true });
+        var book = new PaperPositionBook(Path.GetTempFileName());
+        var opp = BaseOpp();
+
+        var res = c.Validate(opp, book);
+
+        Assert.False(res.Approved);
+        Assert.Equal("MaxNotionalExceeded", res.Reason);
+    }
     [Fact]
     public void DuplicateOpenGroup_IsRejected()
     {
@@ -70,7 +83,7 @@ public class VerifiedBasketExecutionCoordinatorTests
         var events = c.ListAudit(200);
         Assert.Contains(events, e => e.Stage == "Detected");
         Assert.Contains(events, e => e.Stage == "PromotedToOpportunity");
-        Assert.Contains(events, e => e.Stage == "PreTradeValidationStarted");
+        Assert.Contains(events, e => e.Stage == "PreTradeStarted");
     }
 
     private static VerifiedMultiOutcomeOpportunity BaseOpp()
