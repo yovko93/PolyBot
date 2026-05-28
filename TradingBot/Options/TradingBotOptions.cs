@@ -216,6 +216,10 @@ public class MultiOutcomeLoggingOptions
     public int LogCandidateScanEveryNCycles { get; set; } = 10;
     public int LogVerifiedScanEveryNCycles { get; set; } = 5;
     public int LogVerifiedGroupPricingEveryNCycles { get; set; } = 25;
+    public bool LogPaperMtmOnChangeOnly { get; set; } = true;
+    public int LogPaperMtmEveryNCycles { get; set; } = 25;
+    public bool LogExecutionSuppressionSummary { get; set; } = true;
+    public bool LogRepeatedSizingForOpenPosition { get; set; } = false;
 }
 
 

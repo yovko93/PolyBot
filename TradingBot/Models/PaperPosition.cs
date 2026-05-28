@@ -32,9 +32,21 @@ public class PaperPosition
 
     public decimal Quantity { get; init; }
     public decimal TotalCost { get; init; }
+    public decimal CostPerBasket { get; init; }
     public decimal GuaranteedPayout { get; init; }
     public decimal EdgePerShare { get; init; }
     public decimal ExpectedProfit { get; init; }
+    public decimal GrossEdgeAtOpen { get; init; }
+    public decimal NetEdgeAtOpen { get; init; }
+    public decimal LockedCapital { get; set; }
+    public string ActiveProfile { get; init; } = "";
+    public string Source { get; init; } = "";
+
+    public decimal CurrentNoAskSum { get; set; }
+    public decimal? CurrentExitValue { get; set; }
+    public decimal UnrealizedPnl { get; set; }
+    public string MtmStatus { get; set; } = "Incomplete";
+    public int MissingExitPrices { get; set; }
 
     public decimal? RealizedPayout { get; set; }
     public decimal? RealizedProfit { get; set; }

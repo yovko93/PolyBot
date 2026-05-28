@@ -12,6 +12,7 @@ const shouldDisplayOpportunity = (x: any): boolean => {
   const edge = Number(x?.edgePerShare ?? x?.edge ?? 0);
   const expectedProfit = Number(x?.expectedProfit ?? x?.profit ?? 0);
   const status = String(x?.status ?? '').toUpperCase();
+  if (status === "DUPLICATE_SUPPRESSED") return true;
   if (edge <= 0 || expectedProfit <= 0) return false;
   if (status === 'SKIPPED' && edge <= 0) return false;
   return true;
