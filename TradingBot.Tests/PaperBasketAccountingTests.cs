@@ -27,7 +27,7 @@ public class PaperBasketAccountingTests
             0.0055m,
             0.6913021618903971845148315736m);
 
-        var position = book.AddBasketPosition(opp, opp.ExecutableQuantity, 250m, 0.6913021618903971845148315736m, "VerifiedMultiOutcome");
+        var position = book.AddBasketPosition(opp, opp.Quantity, 250m, 0.6913021618903971845148315736m, "VerifiedMultiOutcome");
         Assert.NotNull(position);
 
         var applied = engine.RegisterExternalBasketOpen(position!, 250m, 0.6913021618903971845148315736m);
