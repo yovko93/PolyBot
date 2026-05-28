@@ -795,7 +795,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 runtimeHealthLastLoggedAt = DateTime.UtcNow;
                 Console.WriteLine($"[RUNTIME_HEALTH] MemoryMb={Math.Round(System.Diagnostics.Process.GetCurrentProcess().WorkingSet64/1024d/1024d,2)} Logs={state.Logs().Length} ScannerHistory={state.ScannerStatsHistoryCount} OrderbookCache=0 Uptime={(DateTime.UtcNow - System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime())}");
             }
-            await PushUiUpdates(state, hub, uiLogger, options);
+            await PushUiUpdates(state, hub, uiLogger, options, verifiedExecution, contentRootPath);
             uiLogger.LogInfo("scanner", $"{{\"event\":\"scan_end\",\"durationMs\":{(long)(DateTime.UtcNow - started).TotalMilliseconds},\"marketsScanned\":{filtered.Count},\"detected\":{cycleTop.Count},\"executable\":{executableCount}}}");
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
