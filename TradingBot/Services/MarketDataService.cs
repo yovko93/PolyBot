@@ -29,7 +29,55 @@ public record MarketDiscoverySummary(
     string? StoppedReason = null,
     string? LastDiscoveryError = null,
     int ExpectedMaxPages = 0,
-    bool SafetyCapReached = false);
+    bool SafetyCapReached = false,
+    bool DiscoveryDegraded = false,
+    bool PartialDiscovery = false,
+    int ExpectedMinActiveMarkets = 0,
+    int ExpectedMinPagesFetched = 0,
+    IReadOnlyList<int>? FailedPages = null,
+    int RetriesAttempted = 0)
+{
+    public string ScanConfidence => DiscoveryHealthy ? "Full" : PartialDiscovery ? "PartialDiscovery" : DiscoveryDegraded ? "Degraded" : "UnhealthyDiscovery";
+}
+
+public sealed record DiscoveryHealth(
+    bool Healthy,
+    bool Completed,
+    bool Degraded,
+    bool Partial,
+    int PagesFetched,
+    int RawLoadedTotal,
+    int ActiveMarketsAvailable,
+    int ExpectedMinActiveMarkets,
+    string? StoppedReason,
+    string? LastError,
+    IReadOnlyList<int> FailedPages,
+    int RetriesAttempted,
+    bool SafetyCapReached,
+    DateTime CompletedAt,
+    string ScanConfidence,
+    bool PaperExecutionBlockedByDiscoveryHealth);
+
+public static class DiscoveryHealthFactory
+{
+    public static DiscoveryHealth FromSummary(MarketDiscoverySummary summary, bool requireHealthyDiscoveryForPaperOpen) => new(
+        summary.DiscoveryHealthy,
+        summary.DiscoveryCompleted,
+        summary.DiscoveryDegraded,
+        summary.PartialDiscovery,
+        summary.PagesFetched,
+        summary.RawLoadedTotal,
+        summary.ActiveMarketsAvailable,
+        summary.ExpectedMinActiveMarkets,
+        summary.StoppedReason,
+        summary.LastDiscoveryError,
+        summary.FailedPages ?? Array.Empty<int>(),
+        summary.RetriesAttempted,
+        summary.SafetyCapReached,
+        summary.LastDiscoveryCompletedAtUtc,
+        summary.ScanConfidence,
+        requireHealthyDiscoveryForPaperOpen && !summary.DiscoveryHealthy);
+}
 
 public class MarketDataService
 {
@@ -61,6 +109,8 @@ public class MarketDataService
         var sampled = 0;
         var paginationMode = "offset";
         string? lastWarning = null;
+        var failedPages = new List<int>();
+        var retriesAttempted = 0;
 
         var discoveryCompleted = false;
         string? stoppedReason = null;
@@ -94,22 +144,25 @@ public class MarketDataService
                     timeoutCts.CancelAfter(TimeSpan.FromMilliseconds(options.MarketDiscovery.RequestTimeoutMs));
                     var json = await _http.GetStringAsync(url, timeoutCts.Token);
                     batch = JsonConvert.DeserializeObject<List<Market>>(json) ?? new List<Market>();
+                    if (retry > 0) Console.WriteLine($"[DISCOVERY_RETRY_SUCCESS] Page={pages + 1} Attempt={retry + 1}");
                     loaded = true;
                     break;
                 }
                 catch (OperationCanceledException ex)
                 {
                     lastError = ex.Message; stoppedReason = "OperationCanceled";
-                    if (retry < options.MarketDiscovery.MaxRetriesPerPage) await Task.Delay(options.MarketDiscovery.RetryBackoffMs * (retry + 1), ct);
+                    if (retry < options.MarketDiscovery.MaxRetriesPerPage) { retriesAttempted++; var backoff = options.MarketDiscovery.RetryBackoffMs * (retry + 1); Console.WriteLine($"[DISCOVERY_RETRY] Page={pages + 1} Attempt={retry + 1} Reason=Timeout BackoffMs={backoff}"); await Task.Delay(backoff, ct); }
                 }
                 catch (Exception ex)
                 {
                     lastError = ex.Message; stoppedReason = "RequestError";
-                    if (retry < options.MarketDiscovery.MaxRetriesPerPage) await Task.Delay(options.MarketDiscovery.RetryBackoffMs * (retry + 1), ct);
+                    if (retry < options.MarketDiscovery.MaxRetriesPerPage) { retriesAttempted++; var backoff = options.MarketDiscovery.RetryBackoffMs * (retry + 1); Console.WriteLine($"[DISCOVERY_RETRY] Page={pages + 1} Attempt={retry + 1} Reason=RequestError BackoffMs={backoff}"); await Task.Delay(backoff, ct); }
                 }
             }
             if (!loaded)
             {
+                failedPages.Add(pages + 1);
+                Console.WriteLine($"[DISCOVERY_PAGE_FAILED] Page={pages + 1} Attempts={options.MarketDiscovery.MaxRetriesPerPage + 1} Reason={stoppedReason ?? "Unknown"}");
                 Console.WriteLine($"[MARKET DATA ERROR] {lastError}");
                 if (!options.MarketDiscovery.ContinueWithPartialDiscoveryOnError) break;
                 else { break; }
@@ -187,10 +240,14 @@ public class MarketDataService
             stoppedReason = "SafetyCapReached";
             Console.WriteLine($"[DISCOVERY] StoppedAtConfiguredPageCap Pages={pages} Raw={rawLoadedTotal} Active={allMarkets.Count} Reason=SafetyCapReached");
         }
-        var healthy = allMarkets.Count > 0 && (discoveryCompleted || safetyCapReached) && (string.IsNullOrWhiteSpace(stoppedReason) || stoppedReason == "SafetyCapReached");
+        var meetsMinimums = allMarkets.Count >= options.MarketDiscovery.MinHealthyActiveMarkets && pages >= options.MarketDiscovery.MinHealthyPagesFetched;
+        var partial = !discoveryCompleted && !safetyCapReached || failedPages.Count > 0 || !meetsMinimums;
+        var degraded = options.MarketDiscovery.TreatPartialDiscoveryAsDegraded && partial;
+        var healthy = allMarkets.Count > 0 && (discoveryCompleted || safetyCapReached) && (string.IsNullOrWhiteSpace(stoppedReason) || stoppedReason == "SafetyCapReached") && meetsMinimums;
         if (!healthy || (safetyCapReached && options.MarketDiscovery.TreatSafetyCapAsWarning))
             Console.WriteLine($"[DISCOVERY_WARNING] Discovery incomplete. PagesFetched={pages} Raw={rawLoadedTotal} Active={allMarkets.Count} Reason={stoppedReason ?? "Unknown"}");
-        var summary = new MarketDiscoverySummary(allMarkets.Count, pages, duplicates, inactive, allMarkets.Count, rawLoadedTotal, seen.Count, skippedClosed, skippedArchived, skippedInactive, skippedMissingTokenIds, skippedMissingOutcomes, skippedPastEndDate, skippedInvalidShape, skippedUnknownStatus, healthy, paginationMode, null, lastWarning, DateTime.UtcNow, discoveryCompleted, stoppedReason, lastError, expectedMaxPages, safetyCapReached);
+        Console.WriteLine($"[DISCOVERY_HEALTH] Healthy={healthy.ToString().ToLowerInvariant()} Degraded={degraded.ToString().ToLowerInvariant()} Pages={pages} Active={allMarkets.Count} Reason={stoppedReason ?? "None"} ExpectedMinActive={options.MarketDiscovery.MinHealthyActiveMarkets}");
+        var summary = new MarketDiscoverySummary(allMarkets.Count, pages, duplicates, inactive, allMarkets.Count, rawLoadedTotal, seen.Count, skippedClosed, skippedArchived, skippedInactive, skippedMissingTokenIds, skippedMissingOutcomes, skippedPastEndDate, skippedInvalidShape, skippedUnknownStatus, healthy, paginationMode, null, lastWarning, DateTime.UtcNow, discoveryCompleted, stoppedReason, lastError, expectedMaxPages, safetyCapReached, degraded, partial, options.MarketDiscovery.MinHealthyActiveMarkets, options.MarketDiscovery.MinHealthyPagesFetched, failedPages, retriesAttempted);
         return (allMarkets, summary);
     }
 

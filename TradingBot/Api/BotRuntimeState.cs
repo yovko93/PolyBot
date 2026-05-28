@@ -17,6 +17,7 @@ public class BotRuntimeState
     public object[] MultiOutcomeCandidates { get; private set; } = Array.Empty<object>();
     public object[] MultiOutcomeReviewReport { get; private set; } = Array.Empty<object>();
     public VerifiedBasketScreenerDto? VerifiedBasketScreener { get; private set; }
+    public TradingBot.Services.DiscoveryHealth DiscoveryHealth { get; private set; } = TradingBot.Services.DiscoveryHealthFactory.FromSummary(new TradingBot.Services.MarketDiscoverySummary(), true);
     public RiskStateDto Risk { get; private set; } = new(100,5,0.003m,0.25m,300,0,5,0,100,new(),true,true,true,true,DateTime.UtcNow,0);
     public BotControlStateDto Controls { get; private set; } = new(false, "RUNNING", DateTime.UtcNow, 0);
     private readonly ConcurrentQueue<OpportunityDto> _opps = new();
@@ -36,6 +37,7 @@ public class BotRuntimeState
     public void SetMultiOutcomeCandidates(IEnumerable<object> items){lock(_gate) MultiOutcomeCandidates = items.Take(_runtime.MaxRejectedCandidateSamples).ToArray();}
     public void SetMultiOutcomeReviewReport(IEnumerable<object> items){lock(_gate) MultiOutcomeReviewReport = items.Take(_runtime.MaxRejectedCandidateSamples).ToArray();}
     public void SetVerifiedBasketScreener(VerifiedBasketScreenerDto? d){lock(_gate) VerifiedBasketScreener=d;}
+    public void SetDiscoveryHealth(TradingBot.Services.DiscoveryHealth d){lock(_gate) DiscoveryHealth=d;}
     public void SetControls(BotControlStateDto c){lock(_gate) Controls=c;}
     public void AddOpportunity(OpportunityDto o){_opps.Enqueue(o); Trim(_opps,500);}    
     public void ReplaceOpportunities(IEnumerable<OpportunityDto> items){while(_opps.TryDequeue(out _)){} foreach(var i in items) _opps.Enqueue(i); Trim(_opps,500);}    
