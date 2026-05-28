@@ -309,7 +309,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 runtimeHealthLastLoggedAt = DateTime.UtcNow;
                 Console.WriteLine($"[RUNTIME_HEALTH] MemoryMb={Math.Round(System.Diagnostics.Process.GetCurrentProcess().WorkingSet64/1024d/1024d,2)} Logs={state.Logs().Length} ScannerHistory={state.ScannerStatsHistoryCount} OrderbookCache=0 Uptime={(DateTime.UtcNow - System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime())}");
             }
-            await PushUiUpdates(state, hub, uiLogger, options);
+            await PushUiUpdates(state, hub, uiLogger, options, verifiedExecution, contentRootPath);
                 uiLogger.LogInfo("scanner", "{\"event\":\"scan_skipped\",\"reason\":\"PAUSED\"}");
                 await Task.Delay(options.ScanIntervalMs, stoppingToken);
                 continue;
@@ -501,7 +501,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             var estimatedCost = qty * formula.NoAskSum;
                             var expectedProfit = qty * formula.NetEdge;
                             var questionByMarket = markets.Where(m => !string.IsNullOrWhiteSpace(m.id)).ToDictionary(m => m.id, m => m.question ?? m.id, StringComparer.OrdinalIgnoreCase);
-                            var legs = resolvedNoAsks.Select(x => new VerifiedMultiOutcomeOpportunityLeg(x.MarketId, x.ConditionId, questionByMarket.TryGetValue(x.MarketId, out var q) ? q : x.MarketId, "NO", x.NoTokenId ?? x.MarketId, x.NoAsk ?? 0m, x.NoAskQuantity ?? 0m, x.Source, qty, qty * (x.NoAsk ?? 0m))).ToArray();
+                            var legs = resolvedNoAsks.Select(x => new VerifiedMultiOutcomeOpportunityLeg(x.MarketId, x.ConditionId ?? x.MarketId, questionByMarket.TryGetValue(x.MarketId, out var q) ? q : x.MarketId, "NO", x.NoTokenId ?? x.MarketId, x.NoAsk ?? 0m, x.NoAskQuantity ?? 0m, x.Source, qty, qty * (x.NoAsk ?? 0m))).ToArray();
                             var opp = new VerifiedMultiOutcomeOpportunity($"verified-{g.GroupKey}-{DateTime.UtcNow:yyyyMMddHHmmss}", "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", g.GroupKey, g.Title, "Verified", legs.Length, formula.GuaranteedPayout, formula.NoAskSum, formula.GrossEdge, formula.NetEdge, activeCostProfileName, qty, expectedProfit, options.MultiOutcomeArbitrage.MaxNotionalPerGroup, estimatedCost, "PaperExecutable", legs);
                             promotedVerifiedOpportunities.Add(opp);
                             state.AddOpportunity(new OpportunityDto(opp.Id, DateTime.UtcNow, 1, opp.Strategy, opp.GroupKey, opp.Title, "NO", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.GuaranteedPayout, opp.ExecutableQty, true, "PAPER_EXECUTABLE", null, state.NextSeq()));
@@ -813,7 +813,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     }
 }
 
-static async Task PushUiUpdates(BotRuntimeState state, IHubContext<BotHub> hub, IBotUiLogger logger, TradingBotOptions options)
+static async Task PushUiUpdates(BotRuntimeState state, IHubContext<BotHub> hub, IBotUiLogger logger, TradingBotOptions options, VerifiedBasketExecutionCoordinator verifiedExecution, string contentRootPath)
 {
     try
     {
