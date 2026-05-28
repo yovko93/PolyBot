@@ -535,7 +535,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 }
                                 else
                                 {
-                                    Console.WriteLine($"[VERIFIED_PRETRADE_REJECTED] Group={opp.GroupKey} Reason={pre.Reason} Cost={pre.EstimatedCost} MaxNotional={executionCfg.MaxNotionalPerBasket}");
+                                    Console.WriteLine($"[VERIFIED_PRETRADE_REJECTED] Group={opp.GroupKey} Reason={pre.Reason} Cost={pre.EstimatedCost} MaxNotional={options.MultiOutcomeArbitrage.MaxNotionalPerGroup}");
                                 }
                             }
                             else
