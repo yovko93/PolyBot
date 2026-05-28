@@ -1,9 +1,9 @@
 [
   {
-    "groupKey": "winner:first round of 2026 colombian presidential election|kind:person",
-    "title": "winner:first round of 2026 colombian presidential election|kind:person",
-    "detectedMarketsCount": 2,
-    "pricedLegs": 2,
+    "groupKey": "winner:2026 ballon d or|kind:generic",
+    "title": "winner:2026 ballon d or|kind:generic",
+    "detectedMarketsCount": 3,
+    "pricedLegs": 3,
     "missingNoAsk": 0,
     "estimatedGrossEdge": null,
     "estimatedNetEdgeConservative": null,
@@ -13,20 +13,22 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:first round of 2026 colombian presidential election|kind:person",
-      "title": "winner:first round of 2026 colombian presidential election|kind:person",
+      "groupKey": "winner:2026 ballon d or|kind:generic",
+      "title": "winner:2026 ballon d or|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "2039651",
-        "2039650"
+        "608547",
+        "608556",
+        "608549"
       ],
       "conditionIds": [
-        "0xc510fd09d6e1cfbfa57b7e673d78d138dbc4f7bb2b2dafe0e322ad9f1409569c",
-        "0xbc12cd85c0cb00a48320d341b51b4eeab9b4b1a98f2a1ed494a332b143c712db"
+        "0x12dc2b61723b2a54fc1947a307389b5f32038e7a29a0e936ad1fe410b969d06a",
+        "0x01f2c56394e8d4fd8f29ac99cbb3247cc9864a0a131ea420156ae2f658534cf2",
+        "0xd5a0dc324b2c8af715850bc34fe2b1089e7627103b92a9ec7aba79cbf9117943"
       ],
-      "requiredOutcomeCount": 2,
+      "requiredOutcomeCount": 3,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
@@ -34,8 +36,8 @@
     }
   },
   {
-    "groupKey": "winner:2026 world series|kind:generic",
-    "title": "winner:2026 world series|kind:generic",
+    "groupKey": "winner:on 2026 05 31|kind:generic",
+    "title": "winner:on 2026 05 31|kind:generic",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
     "missingNoAsk": 0,
@@ -47,120 +49,18 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:2026 world series|kind:generic",
-      "title": "winner:2026 world series|kind:generic",
+      "groupKey": "winner:on 2026 05 31|kind:generic",
+      "title": "winner:on 2026 05 31|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "1235572",
-        "1235561"
+        "2154768",
+        "2154781"
       ],
       "conditionIds": [
-        "0x749d8eccbc0a99447e71fc5e40a0096842774bef4d5c8838b8adb39af068b3cb",
-        "0x618f23aef4bb8eb98a292a0674ed5aee012164f9a762e4bc7f9a2929aa3620d1"
-      ],
-      "requiredOutcomeCount": 2,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-05-28"
-    }
-  },
-  {
-    "groupKey": "winner:msi 2026|kind:generic",
-    "title": "winner:msi 2026|kind:generic",
-    "detectedMarketsCount": 2,
-    "pricedLegs": 2,
-    "missingNoAsk": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "rawOnlyEdge": null,
-    "candidateQualityScore": 90,
-    "safetyClassification": "SafeForManualVerification",
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:msi 2026|kind:generic",
-      "title": "winner:msi 2026|kind:generic",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "1494699",
-        "1494697"
-      ],
-      "conditionIds": [
-        "0x1e5179e2ad483beb64cb089393817b4f4ba77c285a389d8ccdea4cc0b498fa33",
-        "0x5b5ba91ea8fde1fd4e8459c5d7a048959c40a3a3c7847ecb3ffb4e82f70c7cb5"
-      ],
-      "requiredOutcomeCount": 2,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-05-28"
-    }
-  },
-  {
-    "groupKey": "winner:2026 mls cup|kind:generic",
-    "title": "winner:2026 mls cup|kind:generic",
-    "detectedMarketsCount": 2,
-    "pricedLegs": 2,
-    "missingNoAsk": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "rawOnlyEdge": null,
-    "candidateQualityScore": 90,
-    "safetyClassification": "SafeForManualVerification",
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:2026 mls cup|kind:generic",
-      "title": "winner:2026 mls cup|kind:generic",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "1349156",
-        "1349164"
-      ],
-      "conditionIds": [
-        "0x484d3e1f00df54f5084984da97d330cfc1a898f952d7fe87278944b459864ba9",
-        "0xd784299a136fb828bd64fb71cfb97a13441cc1bc3c0fe6f0c6d05013cd22795d"
-      ],
-      "requiredOutcomeCount": 2,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-05-28"
-    }
-  },
-  {
-    "groupKey": "winner:nobel peace prize in 2026|kind:generic",
-    "title": "winner:nobel peace prize in 2026|kind:generic",
-    "detectedMarketsCount": 2,
-    "pricedLegs": 2,
-    "missingNoAsk": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "rawOnlyEdge": null,
-    "candidateQualityScore": 90,
-    "safetyClassification": "SafeForManualVerification",
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:nobel peace prize in 2026|kind:generic",
-      "title": "winner:nobel peace prize in 2026|kind:generic",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "637012",
-        "637011"
-      ],
-      "conditionIds": [
-        "0x720e7267b2bd49feeaed5cf254b5d5243aa4d5e4f2ac03e4a5cb1bd9eea8a6eb",
-        "0xe2cd08587e1f67a41341994fc3ea053a8ed92b5258d42acf3d4448c75095eaa5"
+        "0xd09be6a9266984cc9a80386c1c33f1a6ef939746a1b52c833ea6946b25707de8",
+        "0x1eda1175bd4b6d0e63e2e09110e9cecd81c6d0c58c89563042a97479fbb4cb70"
       ],
       "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,

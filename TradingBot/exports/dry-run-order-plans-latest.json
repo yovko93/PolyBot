@@ -1,0 +1,52 @@
+{
+  "timestamp": "2026-05-28T15:18:00.4554289Z",
+  "activeProfile": "Conservative",
+  "paperOnly": true,
+  "plans": [
+    {
+      "groupKey": "winner:2026 colombian presidential election|kind:person",
+      "strategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "plannedQty": 126.07160867372667675239536056,
+      "totalEstimatedCost": 249.99999999999999999999999999,
+      "expectedProfit": 1.4498234997478567826525466464,
+      "netEdge": 0.0115,
+      "dryRunOnly": true,
+      "status": "PaperOnly",
+      "orders": [
+        {
+          "MarketId": "569368",
+          "Question": "Will Ivan Cepeda Castro win the 2026 Colombian presidential election?",
+          "TokenId": "45225184915026490412090111842887484470550126139644389135401954155408710524398",
+          "Side": "BUY",
+          "PositionSide": "NO",
+          "Price": 0.66,
+          "Quantity": 126.07160867372667675239536056,
+          "EstimatedCost": 83.20726172465960665658093797,
+          "DryRunOnly": true
+        },
+        {
+          "MarketId": "569366",
+          "Question": "Will Abelardo de la Espriella  win the 2026 Colombian presidential election?",
+          "TokenId": "93119283163420984666329627600000273753909488383271496422725436610044958733622",
+          "Side": "BUY",
+          "PositionSide": "NO",
+          "Price": 0.35,
+          "Quantity": 126.07160867372667675239536056,
+          "EstimatedCost": 44.125063035804336863338376196,
+          "DryRunOnly": true
+        },
+        {
+          "MarketId": "569373",
+          "Question": "Will Paloma Valencia win the 2026 Colombian presidential election?",
+          "TokenId": "85033408490054356469224638555921276992969532989623124901223739012644529258496",
+          "Side": "BUY",
+          "PositionSide": "NO",
+          "Price": 0.973,
+          "Quantity": 126.07160867372667675239536056,
+          "EstimatedCost": 122.66767523953605648008068582,
+          "DryRunOnly": true
+        }
+      ]
+    }
+  ]
+}
