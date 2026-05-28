@@ -53,6 +53,21 @@ app.MapGet("/api/bot/opportunities", (BotRuntimeState s, IOptions<OpportunityFil
     return s.Opportunities().Where(o => include || OpportunityVisibilityFilter.IsVisibleOpportunity(o, f.Value)).TakeLast(cappedLimit).ToArray();
 });
 app.MapGet("/api/bot/positions", (BotRuntimeState s) => s.Positions());
+app.MapGet("/api/bot/paper-account", (BotRuntimeState s) => Results.Ok(new
+{
+    cash = s.Status.Cash,
+    lockedCapital = s.Status.LockedCapital,
+    equity = s.Status.Equity,
+    realizedPnl = s.Status.RealizedPnl,
+    unrealizedPnl = s.Status.ExpectedProfit,
+    openPositionsCount = s.Status.OpenPositions
+}));
+app.MapGet("/api/bot/verified-allowlist-health", (IHostEnvironment env) =>
+{
+    var path = Path.Combine(env.ContentRootPath, "exports/verified-allowlist-health-latest.json");
+    if (!File.Exists(path)) return Results.Ok(Array.Empty<object>());
+    return Results.Text(File.ReadAllText(path), "application/json");
+});
 app.MapGet("/api/bot/trade-log", (BotRuntimeState s, int? limit) => s.Trades().TakeLast(Math.Clamp(limit ?? 300, 1, 1000)).ToArray());
 app.MapGet("/api/bot/scanner-stats", (BotRuntimeState s) => s.ScannerStats);
 app.MapGet("/api/bot/opportunity-diagnostics", (BotRuntimeState s, int? nearMissLimit) =>
@@ -169,6 +184,7 @@ logger.LogSuccess("startup", $"ExecutionMode={options.ExecutionMode}; EnablePape
 logger.LogInfo("startup", $"[CONFIG] Scanner Mode={options.Mode} MarketScanLimit={options.MarketScanLimit} MaxMarketsToDiscover={options.MaxMarketsToDiscover} ScanBatchSize={options.ScanBatchSize} MaxOrderbooksPerCycle={options.MaxOrderbooksPerCycle} MaxConcurrentOrderbookRequests={options.MaxConcurrentOrderbookRequests} LogEmptyOpportunityCycles={options.LogEmptyOpportunityCycles}");
 logger.LogInfo("startup", $"[DIAGNOSTICS] DebuggerSafeMode={options.Diagnostics.DebuggerSafeMode} DetailedLogs={(!options.Diagnostics.DebuggerSafeMode).ToString().ToLowerInvariant()} MaxRecentLogs={options.RuntimeState.MaxRecentLogs}");
 logger.LogInfo("startup", $"[CONFIG] MultiOutcome FeePerLeg={options.MultiOutcomeArbitrage.FeePerLeg} SlippagePerLeg={options.MultiOutcomeArbitrage.SlippageBufferPerLeg} SafetyPerGroup={options.MultiOutcomeArbitrage.SafetyBufferPerGroup} MinNetEdgePerBasket={options.MultiOutcomeArbitrage.MinMultiOutcomeEdge} MinExpectedProfit={options.MultiOutcomeArbitrage.MinExpectedProfit} EnableSensitivityDiagnostics={options.MultiOutcomeArbitrage.EnableSensitivityDiagnostics}");
+logger.LogInfo("startup", $"[CONFIG] Execution MaxNotionalPerBasket={options.MultiOutcomeArbitrage.MaxNotionalPerGroup} MaxOpenBasketPositions={options.MaxOpenPositions} PaperOnly={options.PaperOnly.ToString().ToLowerInvariant()}");
 var activeProfileName = options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile;
 if (!options.MultiOutcomeArbitrage.CostProfiles.Profiles.TryGetValue(activeProfileName, out var activeProfileCfg)) activeProfileCfg = options.MultiOutcomeArbitrage.CostProfiles.Profiles["Conservative"];
 if (options.EnableLiveExecution && activeProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))
@@ -293,7 +309,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 runtimeHealthLastLoggedAt = DateTime.UtcNow;
                 Console.WriteLine($"[RUNTIME_HEALTH] MemoryMb={Math.Round(System.Diagnostics.Process.GetCurrentProcess().WorkingSet64/1024d/1024d,2)} Logs={state.Logs().Length} ScannerHistory={state.ScannerStatsHistoryCount} OrderbookCache=0 Uptime={(DateTime.UtcNow - System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime())}");
             }
-            await PushUiUpdates(state, hub, uiLogger, options);
+            await PushUiUpdates(state, hub, uiLogger, options, verifiedExecution, contentRootPath);
                 uiLogger.LogInfo("scanner", "{\"event\":\"scan_skipped\",\"reason\":\"PAUSED\"}");
                 await Task.Delay(options.ScanIntervalMs, stoppingToken);
                 continue;
@@ -485,14 +501,14 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             var estimatedCost = qty * formula.NoAskSum;
                             var expectedProfit = qty * formula.NetEdge;
                             var questionByMarket = markets.Where(m => !string.IsNullOrWhiteSpace(m.id)).ToDictionary(m => m.id, m => m.question ?? m.id, StringComparer.OrdinalIgnoreCase);
-                            var legs = resolvedNoAsks.Select(x => new VerifiedMultiOutcomeOpportunityLeg(x.MarketId, x.ConditionId, questionByMarket.TryGetValue(x.MarketId, out var q) ? q : x.MarketId, "NO", x.NoTokenId ?? x.MarketId, x.NoAsk ?? 0m, x.NoAskQuantity ?? 0m, x.Source, qty, qty * (x.NoAsk ?? 0m))).ToArray();
+                            var legs = resolvedNoAsks.Select(x => new VerifiedMultiOutcomeOpportunityLeg(x.MarketId, x.ConditionId ?? x.MarketId, questionByMarket.TryGetValue(x.MarketId, out var q) ? q : x.MarketId, "NO", x.NoTokenId ?? x.MarketId, x.NoAsk ?? 0m, x.NoAskQuantity ?? 0m, x.Source, qty, qty * (x.NoAsk ?? 0m))).ToArray();
                             var opp = new VerifiedMultiOutcomeOpportunity($"verified-{g.GroupKey}-{DateTime.UtcNow:yyyyMMddHHmmss}", "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", g.GroupKey, g.Title, "Verified", legs.Length, formula.GuaranteedPayout, formula.NoAskSum, formula.GrossEdge, formula.NetEdge, activeCostProfileName, qty, expectedProfit, options.MultiOutcomeArbitrage.MaxNotionalPerGroup, estimatedCost, "PaperExecutable", legs);
                             promotedVerifiedOpportunities.Add(opp);
                             state.AddOpportunity(new OpportunityDto(opp.Id, DateTime.UtcNow, 1, opp.Strategy, opp.GroupKey, opp.Title, "NO", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.GuaranteedPayout, opp.ExecutableQty, true, "PAPER_EXECUTABLE", null, state.NextSeq()));
                             verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "Detected", "Ok", "VerifiedExecutable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
                             verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PromotedToOpportunity", "Ok", "Actionable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
-                            Console.WriteLine($"[VERIFIED_ARB_DETECTED] Group={opp.GroupKey} NetEdge={opp.NetEdge} ExpectedProfit={opp.ExpectedProfit}");
                             var st = stability.State(opp.GroupKey);
+                            if (options.Logging.LogRepeatedArbDetected || st == VerifiedBasketState.StableExecutable || st == VerifiedBasketState.ExecutablePending) Console.WriteLine($"[VERIFIED_ARB_DETECTED] Group={opp.GroupKey} NetEdge={opp.NetEdge} ExpectedProfit={opp.ExpectedProfit}");
                             if (options.EnablePaperTrading && options.MultiOutcomeArbitrage.Enabled && options.ExecutionMode == "PAPER" && st != VerifiedBasketState.StableExecutable)
                             {
                                 verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PreTradeBlocked", "Blocked", "WaitingForStableExecutableSignal", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
@@ -503,7 +519,17 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             preTradeResults.Add(pre);
                             if (!pre.Approved)
                             {
-                                Console.WriteLine($"[VERIFIED_PRETRADE_REJECTED] Group={opp.GroupKey} Reason={pre.Reason}");
+                                if (pre.Reason == "DuplicatePosition")
+                                {
+                                    var suppressedCount = verifiedExecution.MarkDuplicateSuppressed(opp.GroupKey);
+                                    verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "DuplicateSuppressed", "Suppressed", "DuplicateOpenPosition", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, $"Count={suppressedCount}"));
+                                    if (options.Logging.LogDuplicatePositionEveryNCycles <= 1 || suppressedCount % options.Logging.LogDuplicatePositionEveryNCycles == 0)
+                                        Console.WriteLine($"[VERIFIED_EXECUTION_SUPPRESSED] Group={opp.GroupKey} Reason=DuplicateOpenPosition Count={suppressedCount}");
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"[VERIFIED_PRETRADE_REJECTED] Group={opp.GroupKey} Reason={pre.Reason}");
+                                }
                             }
                             else
                             {
@@ -535,8 +561,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     recommendedActions.Add("Check whether FeePerLeg config is realistic.");
                     var screenerPath = Path.Combine(contentRootPath, "exports/verified-basket-opportunity-screener-latest.json");
                     var unresolvedConfiguredGroups = resolved.Where(x => x.ValidationStatus != "VerifiedGroupResolved").Take(5).Select(x => (object)new { x.GroupKey, Reason = x.RejectionReason, x.ValidationStatus }).ToArray();
-                    var allowlistHealth = resolved.Select(g => new { groupKey = g.GroupKey, enabled = true, configuredMarketCount = g.MarketIds.Count, resolvedMarketCount = g.ResolvedMarkets.Count, missingMarketCount = g.MissingMarketIds.Count, missingMarketIds = g.MissingMarketIds, foundMarketIds = g.ResolvedMarkets.Select(x=>x.id).ToArray(), validationStatus = g.ValidationStatus, reason = g.RejectionReason, recommendedAction = g.MissingMarketIds.Count == 0 ? "Keep" : (g.ResolvedMarkets.Count < 2 ? "DisableMissingMarkets" : "RefreshFromCandidateExport") }).ToArray();
-                    Console.WriteLine($"[ALLOWLIST_HEALTH] Configured={allowlistHealth.Length} Healthy={allowlistHealth.Count(x=>x.missingMarketCount==0)} Broken={allowlistHealth.Count(x=>x.missingMarketCount>0)} NeedsRefresh={allowlistHealth.Count(x=>x.recommendedAction=="RefreshFromCandidateExport")}");
+                    var allowlistHealth = resolved.Select(g => new { groupKey = g.GroupKey, enabled = true, configuredMarketCount = g.MarketIds.Count, resolvedMarketCount = g.ResolvedMarkets.Count, missingMarketCount = g.MissingMarketIds.Count + g.MissingConditionIds.Count, missingMarketIds = g.MissingMarketIds, missingConditionIds = g.MissingConditionIds, foundMarketIds = g.ResolvedMarkets.Select(x=>x.id).ToArray(), validationStatus = g.ValidationStatus, reason = g.RejectionReason, recommendedAction = (g.MissingMarketIds.Count + g.MissingConditionIds.Count) == 0 ? "Keep" : (g.ResolvedMarkets.Count < 2 ? "DisableMissingMarkets" : "RefreshFromCandidateExport") }).ToArray();
+                    Console.WriteLine($"[ALLOWLIST_HEALTH] Configured={multiOutcomeValidator.LoadedAllowlistCount} Healthy={allowlistHealth.Count(x=>x.missingMarketCount==0)} Broken={allowlistHealth.Count(x=>x.missingMarketCount>0)} Disabled=0 NeedsRefresh={allowlistHealth.Count(x=>x.recommendedAction=="RefreshFromCandidateExport")}");
                     var healthPath = Path.Combine(contentRootPath, "exports/verified-allowlist-health-latest.json"); Directory.CreateDirectory(Path.GetDirectoryName(healthPath)!); File.WriteAllText(healthPath, System.Text.Json.JsonSerializer.Serialize(allowlistHealth, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
                     var cleanup = new { metadata = new { generatedAtUtc = DateTime.UtcNow, note = "suggested only" }, groups = allowlistHealth.Select(h => new { h.groupKey, h.enabled, h.configuredMarketCount, h.resolvedMarketCount, h.missingMarketCount, h.missingMarketIds, suggestedEnabled = h.missingMarketCount > 0 ? false : h.enabled, reason = h.missingMarketCount > 0 ? "Missing markets in discovered pool" : "Healthy", suggestedPrunedTemplate = h.resolvedMarketCount >= 2 ? new { groupKey = h.groupKey, marketIds = h.foundMarketIds, requiredOutcomeCount = h.resolvedMarketCount } : null })};
                     var cleanupPath = Path.Combine(contentRootPath, "exports/verified-allowlist-cleanup-suggested.json"); File.WriteAllText(cleanupPath, System.Text.Json.JsonSerializer.Serialize(cleanup, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
@@ -769,7 +795,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 runtimeHealthLastLoggedAt = DateTime.UtcNow;
                 Console.WriteLine($"[RUNTIME_HEALTH] MemoryMb={Math.Round(System.Diagnostics.Process.GetCurrentProcess().WorkingSet64/1024d/1024d,2)} Logs={state.Logs().Length} ScannerHistory={state.ScannerStatsHistoryCount} OrderbookCache=0 Uptime={(DateTime.UtcNow - System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime())}");
             }
-            await PushUiUpdates(state, hub, uiLogger, options);
+            await PushUiUpdates(state, hub, uiLogger, options, verifiedExecution, contentRootPath);
             uiLogger.LogInfo("scanner", $"{{\"event\":\"scan_end\",\"durationMs\":{(long)(DateTime.UtcNow - started).TotalMilliseconds},\"marketsScanned\":{filtered.Count},\"detected\":{cycleTop.Count},\"executable\":{executableCount}}}");
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -787,12 +813,13 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     }
 }
 
-static async Task PushUiUpdates(BotRuntimeState state, IHubContext<BotHub> hub, IBotUiLogger logger, TradingBotOptions options)
+static async Task PushUiUpdates(BotRuntimeState state, IHubContext<BotHub> hub, IBotUiLogger logger, TradingBotOptions options, VerifiedBasketExecutionCoordinator verifiedExecution, string contentRootPath)
 {
     try
     {
         await hub.Clients.All.SendAsync("opportunitiesUpdated", state.Opportunities().TakeLast(options.SignalR.MaxPayloadItems).ToArray());
         await hub.Clients.All.SendAsync("tradeLogUpdated", state.Trades().TakeLast(300).ToArray());
+        verifiedExecution.ExportAudit(Path.Combine(contentRootPath, "exports/execution-audit-latest.json"));
         await hub.Clients.All.SendAsync("positionsUpdated", state.Positions());
         await hub.Clients.All.SendAsync("scannerStatsUpdated", state.ScannerStats);
         await hub.Clients.All.SendAsync("riskUpdated", state.Risk);

@@ -185,6 +185,9 @@ public sealed record CostProfileConfig(string FeeModel, decimal FeePerLeg, decim
 
 public class MultiOutcomeLoggingOptions
 {
+    public bool LogRepeatedArbDetected { get; set; } = false;
+    public int LogDuplicatePositionEveryNCycles { get; set; } = 50;
+    public bool LogExecutionStateChangesOnly { get; set; } = true;
     public bool LogVerifiedMismatchDetails { get; set; } = true;
     public int LogVerifiedMismatchEveryNCycles { get; set; } = 100;
     public bool LogVerifiedMismatchOnChangeOnly { get; set; } = true;

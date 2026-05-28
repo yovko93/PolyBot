@@ -14,6 +14,7 @@ public sealed class VerifiedBasketExecutionCoordinator
     private readonly ExecutionOptions _execution;
     private readonly Dictionary<string, DateTime> _recentlyExecuted = new();
     private readonly ConcurrentQueue<ExecutionAuditEvent> _audit = new();
+    private readonly Dictionary<string, int> _duplicateSuppressionByGroup = new(StringComparer.OrdinalIgnoreCase);
 
     public VerifiedBasketExecutionCoordinator(IOptions<ExecutionOptions> executionOptions)
     {
@@ -26,6 +27,23 @@ public sealed class VerifiedBasketExecutionCoordinator
     {
         _audit.Enqueue(e);
         while (_audit.Count > 2000) _audit.TryDequeue(out _);
+    }
+
+    public int MarkDuplicateSuppressed(string groupKey)
+    {
+        lock (_gate)
+        {
+            _duplicateSuppressionByGroup.TryGetValue(groupKey, out var c);
+            c++;
+            _duplicateSuppressionByGroup[groupKey] = c;
+            return c;
+        }
+    }
+
+    public void ExportAudit(string path, int limit = 500)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, JsonSerializer.Serialize(ListAudit(limit), new JsonSerializerOptions { WriteIndented = true }));
     }
 
     public VerifiedBasketPreTradeValidationResult Validate(VerifiedMultiOutcomeOpportunity opp, PaperPositionBook book)
