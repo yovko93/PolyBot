@@ -52,6 +52,8 @@ public sealed class VerifiedBasketExecutionCoordinator
                 totalEstimatedCost = plan.TotalEstimatedCost,
                 expectedProfit = plan.ExpectedProfit,
                 netEdge = plan.NetEdge,
+                dryRunOnly = plan.DryRunOnly,
+                status = plan.Status.ToString(),
                 orders = plan.Orders.Select(o => new { o.MarketId, o.Question, o.TokenId, o.Side, o.PositionSide, o.Price, o.Quantity, o.EstimatedCost, o.DryRunOnly })
             })
         };

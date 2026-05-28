@@ -291,10 +291,12 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var allowlistHealthCycle = 0;
     var candidateScanCycle = 0;
     var verifiedScanCycle = 0;
+    var portfolioCycle = 0;
     var mtmCycle = 0;
     var lastAllowlistHealthFingerprint = string.Empty;
     var lastCandidateScanFingerprint = string.Empty;
     var lastVerifiedScanFingerprint = string.Empty;
+    var lastPortfolioFingerprint = string.Empty;
     var lastMtmFingerprint = string.Empty;
     var mismatchCycle = 0;
     var mismatchFingerprintByGroup = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
@@ -688,10 +690,21 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var bestPricing = pricingDiagnostics.Where(x=>x.SkipReason!="MissingNoAsk").OrderByDescending(x=>x.NetEdge).FirstOrDefault();
                     var snapshotExportPath = Path.Combine(contentRootPath, "exports/verified-executable-opportunities-latest.json");
                     verifiedExecution.ExportSnapshot(snapshotExportPath, options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile, promotedVerifiedOpportunities, preTradeResults, positionBook.OpenPositions);
-                    var candidateReasons = string.Join(",", multiOutcomeReport.RejectedByReason.Select(x => $"{x.Key}:{x.Value}"));
+                    var candidateReasons = string.Join(",", multiOutcomeReport.RejectedByReason.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value}"));
                     candidateScanCycle++;
-                    var candidateFingerprint = $"{multiOutcomeReport.GroupsDetected}|{multiOutcomeReport.GroupsVerified}|{multiOutcomeReport.TopSkipReason}|{candidateReasons}";
-                    if (candidateFingerprint != lastCandidateScanFingerprint || (options.Logging.LogCandidateScanEveryNCycles > 0 && candidateScanCycle % options.Logging.LogCandidateScanEveryNCycles == 0))
+                    var candidateCount = multiOutcomeReport.GroupsDetected;
+                    var rejectedCount = Math.Max(0, multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified);
+                    var candidateFingerprint = $"{candidateCount}|{rejectedCount}|{multiOutcomeReport.TopSkipReason}|{candidateReasons}";
+                    var hasExecutableAutoCandidates = multiOutcomeReport.ExecutableGroups > 0;
+                    var distributionChanged = !string.Equals(candidateFingerprint, lastCandidateScanFingerprint, StringComparison.Ordinal);
+                    var periodicCandidate = options.Logging.LogCandidateScanEveryNCycles > 0 && candidateScanCycle % options.Logging.LogCandidateScanEveryNCycles == 0;
+                    var firstCandidateScan = string.IsNullOrEmpty(lastCandidateScanFingerprint);
+                    var shouldLogCandidate = firstCandidateScan
+                        || periodicCandidate
+                        || (!options.Logging.LogCandidateScanOnChangeOnly)
+                        || (options.Logging.LogCandidateScanWhenRejectDistributionChanges && distributionChanged)
+                        || (options.Logging.LogCandidateScanWhenExecutableOnly && hasExecutableAutoCandidates);
+                    if (shouldLogCandidate)
                         Console.WriteLine($"[MULTI_CANDIDATE_SCAN] Candidates={multiOutcomeReport.GroupsDetected} Rejected={Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified)} TopReject={multiOutcomeReport.TopSkipReason} RejectedByReason={{{candidateReasons}}}");
                     lastCandidateScanFingerprint = candidateFingerprint;
                     var bestConservativeNet = snapshot.BestByConservative?.ActiveProfileNetEdge;
@@ -700,7 +713,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var unresolved = Math.Max(0, multiOutcomeValidator.LoadedAllowlistCount - verifiedResolved);
                     verifiedScanCycle++;
                     var verifiedScanFingerprint = $"{multiOutcomeValidator.LoadedAllowlistCount}|{verifiedResolved}|{unresolved}|{verifiedEvaluated}|{verifiedExecutable}|{verifiedMismatch}|{bestConservativeNet}|{bestPoly}|{bestRaw}";
-                    var shouldLogVerifiedScan = !options.Logging.LogVerifiedScanOnChangeOnly || verifiedScanFingerprint != lastVerifiedScanFingerprint || (options.Logging.LogVerifiedScanEveryNCycles > 0 && verifiedScanCycle % options.Logging.LogVerifiedScanEveryNCycles == 0);
+                    var shouldLogVerifiedScan = string.IsNullOrEmpty(lastVerifiedScanFingerprint)
+                        || !options.Logging.LogVerifiedScanOnChangeOnly
+                        || verifiedScanFingerprint != lastVerifiedScanFingerprint
+                        || (options.Logging.LogVerifiedScanEveryNCycles > 0 && verifiedScanCycle % options.Logging.LogVerifiedScanEveryNCycles == 0);
                     if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} Evaluated={verifiedEvaluated} Executable={verifiedExecutable} Mismatch={verifiedMismatch} BestConservativeNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestPolymarketApproxNet={bestPoly} BestRaw={bestRaw}");
                     lastVerifiedScanFingerprint = verifiedScanFingerprint;
                     foreach (var ug in unresolvedConfiguredGroups.Take(3)) Console.WriteLine($"[VERIFIED_UNRESOLVED_SAMPLE] {System.Text.Json.JsonSerializer.Serialize(ug)}");
@@ -795,7 +811,16 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         needsPruningGroups = triageRows.Where(x => x.recommendedConfigAction == "PruneMissingNoAskLegs").Select(x => x.groupKey).ToArray(),
                         nextGroupsToVerify = nextGroups
                     }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
-                    Console.WriteLine($"[VERIFIED_GROUP_PORTFOLIO] Total={multiOutcomeValidator.LoadedAllowlistCount} Keep={triageRows.Count(x => x.recommendedConfigAction is "KeepEnabled" or "KeepForMonitoring")} DisableRecommended={triageRows.Count(x => x.recommendedConfigAction == "DisableUntilBetterPricing")} NeedsPruning={triageRows.Count(x => x.recommendedConfigAction == "PruneMissingNoAskLegs")} Executable={verifiedExecutable} Best={(bestPricing?.GroupKey ?? "N/A")}");
+                    portfolioCycle++;
+                    var openPositionFingerprint = string.Join("|", positionBook.OpenPositions.Select(p => $"{p.GroupKey}:{p.Status}:{p.Quantity}").OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+                    var portfolioFingerprint = $"{multiOutcomeValidator.LoadedAllowlistCount}|{verifiedExecutable}|{bestPricing?.GroupKey}|{bestPricing?.NetEdge}|{openPositionFingerprint}";
+                    var shouldLogPortfolio = string.IsNullOrEmpty(lastPortfolioFingerprint)
+                        || !options.Logging.LogPortfolioOnChangeOnly
+                        || !string.Equals(portfolioFingerprint, lastPortfolioFingerprint, StringComparison.Ordinal)
+                        || (options.Logging.LogPortfolioEveryNCycles > 0 && portfolioCycle % options.Logging.LogPortfolioEveryNCycles == 0);
+                    if (shouldLogPortfolio)
+                        Console.WriteLine($"[VERIFIED_GROUP_PORTFOLIO] Total={multiOutcomeValidator.LoadedAllowlistCount} Keep={triageRows.Count(x => x.recommendedConfigAction is "KeepEnabled" or "KeepForMonitoring")} DisableRecommended={triageRows.Count(x => x.recommendedConfigAction == "DisableUntilBetterPricing")} NeedsPruning={triageRows.Count(x => x.recommendedConfigAction == "PruneMissingNoAskLegs")} Executable={verifiedExecutable} Best={(bestPricing?.GroupKey ?? "N/A")}");
+                    lastPortfolioFingerprint = portfolioFingerprint;
                     exportService.ExportVerifiedPricing(verifiedPricingExport);
                     state.SetMultiOutcomeDiagnostics(new MultiOutcomeDiagnosticsDto(multiOutcomeReport.GroupsDetected,multiOutcomeReport.GroupsVerified,Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified),multiOutcomeReport.ExecutableGroups,multiOutcomeReport.RejectedByReason.ToDictionary(k=>k.Key,v=>v.Value),multiOutcomeReport.TopRejectedSamples.Take(25).Select(x=>$"{x.GroupKey}:{x.Reason}").ToArray(),Array.Empty<string>(),multiOutcomeValidator.LoadedAllowlistCount,Array.Empty<string>(),Guid.NewGuid().ToString("N"),DateTime.UtcNow,state.NextSeq(),multiOutcomeValidator.LoadedAllowlistCount,verifiedResolved,verifiedMismatch,verifiedEvaluated,verifiedExecutable,groupDiagnostics,skipReason,pricingDiagnostics,basketCostDiagnostics));
                 }

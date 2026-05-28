@@ -213,10 +213,15 @@ public class MultiOutcomeLoggingOptions
     public int LogProfileComparisonEveryNCycles { get; set; } = 10;
     public bool LogProfileComparisonSummary { get; set; } = true;
     public bool LogNearExecutableOnlyOnChange { get; set; } = true;
-    public int LogCandidateScanEveryNCycles { get; set; } = 10;
-    public int LogVerifiedScanEveryNCycles { get; set; } = 10;
+    public int LogCandidateScanEveryNCycles { get; set; } = 25;
+    public bool LogCandidateScanOnChangeOnly { get; set; } = true;
+    public bool LogCandidateScanWhenExecutableOnly { get; set; } = true;
+    public bool LogCandidateScanWhenRejectDistributionChanges { get; set; } = true;
+    public int LogVerifiedScanEveryNCycles { get; set; } = 25;
     public int LogAllowlistHealthEveryNCycles { get; set; } = 25;
     public bool LogVerifiedScanOnChangeOnly { get; set; } = true;
+    public int LogPortfolioEveryNCycles { get; set; } = 25;
+    public bool LogPortfolioOnChangeOnly { get; set; } = true;
     public bool LogAllowlistHealthOnChangeOnly { get; set; } = true;
     public int LogVerifiedGroupPricingEveryNCycles { get; set; } = 25;
     public bool LogPaperMtmOnChangeOnly { get; set; } = true;
