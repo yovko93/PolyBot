@@ -101,7 +101,9 @@ public class PaperPositionBook
         decimal executableQuantity,
         decimal totalCost,
         decimal expectedProfit,
-        string engine = "MultiOutcomeGroup")
+        string engine = "MultiOutcomeGroup",
+        bool openedFromSimulatedFills = false,
+        string? fillSimulationId = null)
     {
         var position = new PaperPosition
         {
@@ -121,6 +123,8 @@ public class PaperPositionBook
             LockedCapital = totalCost,
             ActiveProfile = "Conservative",
             Source = engine,
+            OpenedFromSimulatedFills = openedFromSimulatedFills,
+            FillSimulationId = fillSimulationId,
             CurrentNoAskSum = opportunity.CostPerShare,
             CurrentExitValue = null,
             UnrealizedPnl = 0m,

@@ -41,6 +41,8 @@ public class PaperPosition
     public decimal LockedCapital { get; set; }
     public string ActiveProfile { get; init; } = "";
     public string Source { get; init; } = "";
+    public bool OpenedFromSimulatedFills { get; init; }
+    public string? FillSimulationId { get; init; }
 
     public decimal CurrentNoAskSum { get; set; }
     public decimal? CurrentExitValue { get; set; }
