@@ -1,0 +1,214 @@
+[
+  {
+    "groupKey": "winner:2026 fifa world cup|kind:generic",
+    "enabled": true,
+    "configuredMarketCount": 36,
+    "resolvedMarketCount": 36,
+    "missingMarketCount": 0,
+    "missingMarketIds": [],
+    "foundMarketIds": [
+      "558966",
+      "558951",
+      "558955",
+      "558954",
+      "558963",
+      "558974",
+      "558944",
+      "558976",
+      "558965",
+      "558946",
+      "558943",
+      "558959",
+      "558961",
+      "558985",
+      "558940",
+      "558941",
+      "558958",
+      "558936",
+      "558967",
+      "558938",
+      "558945",
+      "558935",
+      "558939",
+      "558969",
+      "558952",
+      "558968",
+      "558947",
+      "558973",
+      "558980",
+      "558956",
+      "558984",
+      "558975",
+      "558934",
+      "558983",
+      "558949",
+      "558937"
+    ],
+    "validationStatus": "VerifiedGroupResolved",
+    "reason": "VerifiedGroupResolved",
+    "recommendedAction": "Keep"
+  },
+  {
+    "groupKey": "winner:2028 democratic presidential nomination|kind:person",
+    "enabled": true,
+    "configuredMarketCount": 9,
+    "resolvedMarketCount": 9,
+    "missingMarketCount": 0,
+    "missingMarketIds": [],
+    "foundMarketIds": [
+      "559676",
+      "559673",
+      "559668",
+      "559671",
+      "559680",
+      "559677",
+      "559666",
+      "559678",
+      "559664"
+    ],
+    "validationStatus": "VerifiedGroupResolved",
+    "reason": "VerifiedGroupResolved",
+    "recommendedAction": "Keep"
+  },
+  {
+    "groupKey": "winner:2028 republican presidential nomination|kind:person",
+    "enabled": true,
+    "configuredMarketCount": 5,
+    "resolvedMarketCount": 5,
+    "missingMarketCount": 0,
+    "missingMarketIds": [],
+    "foundMarketIds": [
+      "561983",
+      "561998",
+      "561992",
+      "562005",
+      "561974"
+    ],
+    "validationStatus": "VerifiedGroupResolved",
+    "reason": "VerifiedGroupResolved",
+    "recommendedAction": "Keep"
+  },
+  {
+    "groupKey": "winner:2028 us presidential election|kind:person",
+    "enabled": true,
+    "configuredMarketCount": 7,
+    "resolvedMarketCount": 7,
+    "missingMarketCount": 0,
+    "missingMarketIds": [],
+    "foundMarketIds": [
+      "561258",
+      "561249",
+      "561252",
+      "561229",
+      "561260",
+      "561235",
+      "561240"
+    ],
+    "validationStatus": "VerifiedGroupResolved",
+    "reason": "VerifiedGroupResolved",
+    "recommendedAction": "Keep"
+  },
+  {
+    "groupKey": "winner:2026 peruvian presidential election|kind:person",
+    "enabled": true,
+    "configuredMarketCount": 5,
+    "resolvedMarketCount": 5,
+    "missingMarketCount": 0,
+    "missingMarketIds": [],
+    "foundMarketIds": [
+      "947289",
+      "947269",
+      "947287",
+      "947268",
+      "947283"
+    ],
+    "validationStatus": "VerifiedGroupResolved",
+    "reason": "VerifiedGroupResolved",
+    "recommendedAction": "Keep"
+  },
+  {
+    "groupKey": "winner:2026 brazilian presidential election|kind:person",
+    "enabled": true,
+    "configuredMarketCount": 9,
+    "resolvedMarketCount": 9,
+    "missingMarketCount": 0,
+    "missingMarketIds": [],
+    "foundMarketIds": [
+      "601823",
+      "601829",
+      "601821",
+      "601827",
+      "601825",
+      "601818",
+      "601819",
+      "601822",
+      "601833"
+    ],
+    "validationStatus": "VerifiedGroupResolved",
+    "reason": "VerifiedGroupResolved",
+    "recommendedAction": "Keep"
+  },
+  {
+    "groupKey": "winner:2026 women s us open|kind:generic",
+    "enabled": true,
+    "configuredMarketCount": 3,
+    "resolvedMarketCount": 3,
+    "missingMarketCount": 0,
+    "missingMarketIds": [],
+    "foundMarketIds": [
+      "1088662",
+      "1088680",
+      "1088679"
+    ],
+    "validationStatus": "VerifiedGroupResolved",
+    "reason": "VerifiedGroupResolved",
+    "recommendedAction": "Keep"
+  },
+  {
+    "groupKey": "winner:2026 nba finals|kind:generic",
+    "enabled": true,
+    "configuredMarketCount": 3,
+    "resolvedMarketCount": 3,
+    "missingMarketCount": 0,
+    "missingMarketIds": [],
+    "foundMarketIds": [
+      "553858",
+      "553866",
+      "553856"
+    ],
+    "validationStatus": "VerifiedGroupResolved",
+    "reason": "VerifiedGroupResolved",
+    "recommendedAction": "Keep"
+  },
+  {
+    "groupKey": "winner:2027 french presidential election|kind:person",
+    "enabled": true,
+    "configuredMarketCount": 2,
+    "resolvedMarketCount": 2,
+    "missingMarketCount": 0,
+    "missingMarketIds": [],
+    "foundMarketIds": [
+      "679049",
+      "679025"
+    ],
+    "validationStatus": "VerifiedGroupResolved",
+    "reason": "VerifiedGroupResolved",
+    "recommendedAction": "Keep"
+  },
+  {
+    "groupKey": "winner:2026 colombian presidential election|kind:person",
+    "enabled": true,
+    "configuredMarketCount": 3,
+    "resolvedMarketCount": 3,
+    "missingMarketCount": 0,
+    "missingMarketIds": [],
+    "foundMarketIds": [
+      "569368",
+      "569366",
+      "569373"
+    ],
+    "validationStatus": "VerifiedGroupResolved",
+    "reason": "VerifiedGroupResolved",
+    "recommendedAction": "Keep"
+  }
+]

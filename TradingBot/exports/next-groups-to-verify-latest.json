@@ -1,45 +1,55 @@
 [
   {
-    "groupKey": "winner:2026 busan mayoral election|kind:person",
-    "title": "winner:2026 busan mayoral election|kind:person",
-    "detectedMarketsCount": 4,
-    "pricedLegs": 4,
+    "groupKey": "winner:2026 democratic d c mayoral primary|kind:generic",
+    "title": "winner:2026 democratic d c mayoral primary|kind:generic",
+    "detectedMarketsCount": 9,
+    "pricedLegs": 9,
     "missingNoAsk": 0,
     "estimatedGrossEdge": null,
     "estimatedNetEdgeConservative": null,
     "rawOnlyEdge": null,
-    "candidateQualityScore": 90,
+    "candidateQualityScore": 110,
     "safetyClassification": "SafeForManualVerification",
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:2026 busan mayoral election|kind:person",
-      "title": "winner:2026 busan mayoral election|kind:person",
+      "groupKey": "winner:2026 democratic d c mayoral primary|kind:generic",
+      "title": "winner:2026 democratic d c mayoral primary|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "679162",
-        "679157",
-        "679156",
-        "679154"
+        "703742",
+        "703741",
+        "703736",
+        "703737",
+        "703739",
+        "703735",
+        "703732",
+        "703734",
+        "703733"
       ],
       "conditionIds": [
-        "0x9a108beb3347ff75d7deefc2b61a42897275cf436282027e3e019f1bd1ae902a",
-        "0xe3b7f338805e6218cc48883337066d12600b37450ff67ecd867dd2380d75ce00",
-        "0x7159c9392022c0d7c2190a7a34f9f2c0bded82596f7c22f343c38929b764c252",
-        "0x8fe6708a0eb52edb74a042f9bfff14cdd8d14d5c2505bc625f060ec8d1f64f44"
+        "0x83ae11433d9fbfc2d1b0ac20737238e14de1a49aad8ac9c843f0095929076992",
+        "0xd3635a3419bcccea334cf212a0a2563757361bc3975d74784c7d43fdffcf473e",
+        "0xbda4383cab42acaf2bf5e96a46fc983e5d87716392996bf277936985ed02ad14",
+        "0xe43d519c8187accd9bb3c71aeaa4088f5676a2973b8a55ab85e2910023ddb445",
+        "0xa9331a9cceb4d83a5bc12a26ae3e79a647122024ab6f1fd4c785fefd0dca0fc6",
+        "0xb82b77689a74a55992d01281871e301b6c127e2cfab9476c19bf01b734a85e35",
+        "0xb57ee7394ed65d2fed3914c255a0e368366f6f75075e71826d0bf0f315268f20",
+        "0x6dc6ae164362e3151bfe3d6b60c138c6616d7592d3c11540be98bd409a115b23",
+        "0x7a5ce7ceb8a77b024fa14c123e8267b7ab23ceb53d63b270d92517747e6ece81"
       ],
-      "requiredOutcomeCount": 4,
+      "requiredOutcomeCount": 9,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-05-26"
+      "verifiedAt": "2026-05-28"
     }
   },
   {
-    "groupKey": "winner:2026 women s french open|kind:generic",
-    "title": "winner:2026 women s french open|kind:generic",
+    "groupKey": "winner:2026 alaska governor election|kind:person",
+    "title": "winner:2026 alaska governor election|kind:person",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
     "missingNoAsk": 0,
@@ -51,29 +61,29 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:2026 women s french open|kind:generic",
-      "title": "winner:2026 women s french open|kind:generic",
+      "groupKey": "winner:2026 alaska governor election|kind:person",
+      "title": "winner:2026 alaska governor election|kind:person",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "1087798",
-        "1087763"
+        "635019",
+        "635003"
       ],
       "conditionIds": [
-        "0xbacfd7a02f0b4a70ab12110fbc47c54296f5597a641547f45998f8dabeccb3eb",
-        "0xc8e467fbf7e96bd9bdf64ced89bbc8f6ad0ecf2c78391ee8e778b6f6e6194ee7"
+        "0xef25acd9423c7c1aeb1a85a2f2e295ce6bcee19abd84a8b99c7e84713434abf3",
+        "0xb2fddc90e11d6c55351bfbd5c01e67323f4d177f55f612274a90da92d1ae68db"
       ],
       "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-05-26"
+      "verifiedAt": "2026-05-28"
     }
   },
   {
-    "groupKey": "winner:2026 roland garros men s singles|kind:generic",
-    "title": "winner:2026 roland garros men s singles|kind:generic",
+    "groupKey": "winner:2026 charles schwab challenge|kind:generic",
+    "title": "winner:2026 charles schwab challenge|kind:generic",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
     "missingNoAsk": 0,
@@ -85,101 +95,29 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:2026 roland garros men s singles|kind:generic",
-      "title": "winner:2026 roland garros men s singles|kind:generic",
+      "groupKey": "winner:2026 charles schwab challenge|kind:generic",
+      "title": "winner:2026 charles schwab challenge|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "1920464",
-        "1920456"
+        "2354263",
+        "2354385"
       ],
       "conditionIds": [
-        "0x431588150ce3babe78d8d03e8eb68fdd5924d33ec011effe30e9ed5237d140c7",
-        "0x7f8e9f66726ced43cf171b2522917da9351f8ff70e30dd24171bcf2f1b5f1241"
+        "0x2d7f8f718fd270e99fe0b1d263af55f1898c7d1eda94d0dd2cb19812b8dedcd6",
+        "0x42d754693f24a5c8d283f94f70d91d47a307c3b9fa7be055222dba7597189d9a"
       ],
       "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-05-26"
+      "verifiedAt": "2026-05-28"
     }
   },
   {
-    "groupKey": "winner:2026 world series|kind:generic",
-    "title": "winner:2026 world series|kind:generic",
-    "detectedMarketsCount": 3,
-    "pricedLegs": 3,
-    "missingNoAsk": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "rawOnlyEdge": null,
-    "candidateQualityScore": 90,
-    "safetyClassification": "SafeForManualVerification",
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:2026 world series|kind:generic",
-      "title": "winner:2026 world series|kind:generic",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "1235565",
-        "1235562",
-        "1235564"
-      ],
-      "conditionIds": [
-        "0xa5f1c7110b05fde645258c7c9e58d3ddbec94631db35b22f7a02db94d4571a29",
-        "0x7c6d624563d7efee94f7ef54da8d35fd794b3cde9ead02df0d413d6ad3886570",
-        "0x9e238daa4cc2b89379314f5c1873e3c0d07d26bf2eb69a3d618a7b5d13b165a0"
-      ],
-      "requiredOutcomeCount": 3,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-05-26"
-    }
-  },
-  {
-    "groupKey": "winner:most seats in 2026 armenian national assembly election|kind:person",
-    "title": "winner:most seats in 2026 armenian national assembly election|kind:person",
-    "detectedMarketsCount": 3,
-    "pricedLegs": 3,
-    "missingNoAsk": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "rawOnlyEdge": null,
-    "candidateQualityScore": 90,
-    "safetyClassification": "SafeForManualVerification",
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:most seats in 2026 armenian national assembly election|kind:person",
-      "title": "winner:most seats in 2026 armenian national assembly election|kind:person",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "942048",
-        "942042",
-        "942047"
-      ],
-      "conditionIds": [
-        "0xf5b5255c6e5e96ac3cb2ed9e1a54754ed9f1d7c874a609e2b534b17378a447b7",
-        "0x28a5449552f62f685ae27710d2e2b898b1c3d43ba4e1ffb3f1ecb8bad0536225",
-        "0xc1e6e7ddb5bc4119391c57f62bc3f2ed1fdf1d2b02cbba15df7782a988fe74b4"
-      ],
-      "requiredOutcomeCount": 3,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-05-26"
-    }
-  },
-  {
-    "groupKey": "winner:group k in 2026 fifa world cup|kind:generic",
-    "title": "winner:group k in 2026 fifa world cup|kind:generic",
+    "groupKey": "winner:most seats in 2027 mexico legislative election|kind:person",
+    "title": "winner:most seats in 2027 mexico legislative election|kind:person",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
     "missingNoAsk": 0,
@@ -191,58 +129,24 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:group k in 2026 fifa world cup|kind:generic",
-      "title": "winner:group k in 2026 fifa world cup|kind:generic",
+      "groupKey": "winner:most seats in 2027 mexico legislative election|kind:person",
+      "title": "winner:most seats in 2027 mexico legislative election|kind:person",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "840174",
-        "840172"
+        "2271400",
+        "2271398"
       ],
       "conditionIds": [
-        "0x881c23cb7b27ca775bfc550550ee94e6dc980a1b4dff7ca7f6f5f24e95bff060",
-        "0xeb188213dda8c13a4783822755d725a5ac3fa80f5c38879762e395cac46873df"
+        "0x3e3f8e34209c6235295c06296e75974c31158d6e182c78661391ef13c77a2146",
+        "0x9d5ef67f4aa0e00ff62abcce8493a96e8e6586f30d93561410f9f7e264fdb678"
       ],
       "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-05-26"
-    }
-  },
-  {
-    "groupKey": "winner:group f in 2026 fifa world cup|kind:generic",
-    "title": "winner:group f in 2026 fifa world cup|kind:generic",
-    "detectedMarketsCount": 2,
-    "pricedLegs": 2,
-    "missingNoAsk": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "rawOnlyEdge": null,
-    "candidateQualityScore": 90,
-    "safetyClassification": "SafeForManualVerification",
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:group f in 2026 fifa world cup|kind:generic",
-      "title": "winner:group f in 2026 fifa world cup|kind:generic",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "839435",
-        "839434"
-      ],
-      "conditionIds": [
-        "0xde6e8331eaaf0b212f688a04f6c4ff5f895ab633a467cb3e9f3da48fce7c6801",
-        "0x9ad73ff7534b1051e2dad167a0b1617ae20f64f20770ae8bf89a59a7a7290669"
-      ],
-      "requiredOutcomeCount": 2,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-05-26"
+      "verifiedAt": "2026-05-28"
     }
   }
 ]
