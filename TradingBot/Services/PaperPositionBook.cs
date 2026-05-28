@@ -103,7 +103,9 @@ public class PaperPositionBook
         decimal expectedProfit,
         string engine = "MultiOutcomeGroup",
         bool openedFromSimulatedFills = false,
-        string? fillSimulationId = null)
+        string? fillSimulationId = null,
+        decimal? grossEdgeAtOpen = null,
+        string activeProfile = "Conservative")
     {
         var position = new PaperPosition
         {
@@ -118,10 +120,10 @@ public class PaperPositionBook
             GuaranteedPayout = executableQuantity * opportunity.GuaranteedPayoutPerShare,
             EdgePerShare = opportunity.EdgePerShare,
             ExpectedProfit = expectedProfit,
-            GrossEdgeAtOpen = opportunity.EdgePerShare,
+            GrossEdgeAtOpen = grossEdgeAtOpen ?? opportunity.EdgePerShare,
             NetEdgeAtOpen = opportunity.EdgePerShare,
             LockedCapital = totalCost,
-            ActiveProfile = "Conservative",
+            ActiveProfile = activeProfile,
             Source = engine,
             OpenedFromSimulatedFills = openedFromSimulatedFills,
             FillSimulationId = fillSimulationId,

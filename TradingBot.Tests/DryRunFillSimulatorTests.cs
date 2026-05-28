@@ -1,4 +1,5 @@
 using MsOptions = Microsoft.Extensions.Options.Options;
+using TradingBot.Engines;
 using TradingBot.Models;
 using TradingBot.Options;
 using TradingBot.Services;
@@ -146,6 +147,148 @@ public class DryRunFillSimulatorTests
         Assert.Equal(FillSimulationStatus.Rejected, result.Status);
     }
 
+
+    [Fact]
+    public void Paper_position_uses_active_profile_net_edge_not_gross_edge()
+    {
+        var coord = Coordinator();
+        var book = new PaperPositionBook(Path.GetTempFileName());
+        var opp = Opp();
+        var pre = coord.Validate(opp, book);
+        var fill = ColombianFill(pre.Quantity);
+
+        var opened = coord.OpenPaperPosition(opp, pre, book, fill);
+
+        Assert.NotNull(opened);
+        Assert.Equal(0.011m, opened!.GrossEdgeAtOpen);
+        Assert.Equal(0.0055m, opened.NetEdgeAtOpen);
+        Assert.Equal(pre.ExpectedProfit, opened.ExpectedProfit);
+    }
+
+    [Fact]
+    public void Colombian_pretrade_net_edge_and_qty_produce_expected_paper_profit()
+    {
+        var coord = Coordinator();
+        var book = new PaperPositionBook(Path.GetTempFileName());
+        var opp = Opp();
+        var pre = coord.Validate(opp, book);
+
+        var opened = coord.OpenPaperPosition(opp, pre, book, ColombianFill(pre.Quantity));
+
+        Assert.NotNull(opened);
+        Assert.Equal(pre.Quantity * 0.0055m, opened!.ExpectedProfit);
+        Assert.True(Math.Abs(opened.ExpectedProfit - 0.6913021618903971845148315736m) < 0.00000000000000000000000001m);
+    }
+
+    [Fact]
+    public void Paper_open_is_blocked_if_expected_profit_doubles_without_fill_reason()
+    {
+        var coord = Coordinator();
+        var book = new PaperPositionBook(Path.GetTempFileName());
+        var opp = Opp();
+        var pre = coord.Validate(opp, book);
+        var inconsistent = ColombianFill(pre.Quantity) with { FillAdjustedExpectedProfit = pre.ExpectedProfit * 2m, EstimatedExpectedProfit = pre.ExpectedProfit * 2m };
+
+        var opened = coord.OpenPaperPosition(opp, pre, book, inconsistent);
+
+        Assert.Null(opened);
+        Assert.Empty(book.OpenPositions);
+        Assert.Contains(coord.ListAudit(), x => x.Stage == "PaperOpenBlocked" && x.Reason == "PaperOpenInvariantFailed");
+    }
+
+    [Fact]
+    public void Fill_simulation_pass_with_unchanged_cost_preserves_net_edge()
+    {
+        var qty = 125.69130216189039718451483157m;
+        var result = new DryRunFillSimulator().Simulate(Plan(qty, netEdge: 0.0055m), Books([300m,300m,300m]), Snapshots(), Options(), Now, profileUsed: "Conservative");
+
+        Assert.Equal(FillSimulationStatus.FullyFillable, result.Status);
+        Assert.Equal(0.011m, result.FillAdjustedGrossEdgePerBasket);
+        Assert.Equal(0.0055m, result.FillAdjustedNetEdgePerBasket);
+        Assert.Equal(qty * 0.0055m, result.FillAdjustedExpectedProfit);
+    }
+
+    [Fact]
+    public void Fill_simulation_with_worse_weighted_average_recomputes_lower_net_edge()
+    {
+        var qty = 10m;
+        var books = Books([300m,300m,300m]);
+        books["t1"] = new CachedOrderBookSnapshot("t1", "m1", Now, [new BookQuote(0.665m, 300m)], []);
+        var optimisticPlan = Plan(qty, prices: [0.665m, 0.663m, 0.663m], netEdge: 0.0055m) with
+        {
+            CostPerBasket = 1.989m,
+            TotalEstimatedCost = qty * 1.989m
+        };
+        var result = new DryRunFillSimulator().Simulate(optimisticPlan, books, Snapshots(), Options(), Now, profileUsed: "Conservative");
+
+        Assert.Equal(FillSimulationStatus.FullyFillable, result.Status);
+        Assert.True(result.FillAdjustedNetEdgePerBasket < result.PlannedNetEdgePerBasket);
+        Assert.Equal(0.0035m, result.FillAdjustedNetEdgePerBasket);
+    }
+
+    [Fact]
+    public void Paper_open_invariant_failure_prevents_position_persistence()
+    {
+        var coord = Coordinator();
+        var book = new PaperPositionBook(Path.GetTempFileName());
+        var opp = Opp();
+        var pre = coord.Validate(opp, book);
+        var inconsistent = ColombianFill(pre.Quantity) with { FillAdjustedNetEdgePerBasket = 0.011m };
+
+        var opened = coord.OpenPaperPosition(opp, pre, book, inconsistent);
+
+        Assert.Null(opened);
+        Assert.Empty(book.OpenPositions);
+    }
+
+    [Fact]
+    public void Execution_audit_values_are_consistent_across_fill_and_paper_open()
+    {
+        var coord = Coordinator();
+        var book = new PaperPositionBook(Path.GetTempFileName());
+        var opp = Opp();
+        var pre = coord.Validate(opp, book);
+        var fill = ColombianFill(pre.Quantity);
+        coord.RecordDryRunPlan(Plan(pre.Quantity, netEdge: pre.NetEdge));
+        coord.RecordFillSimulation(fill);
+        coord.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "DryRunFillSimulationPassed", "Ok", "FullyFillable", fill.FillAdjustedNetEdgePerBasket, fill.FillAdjustedExpectedProfit, fill.EstimatedFilledCost, fill.SafeExecutableQty, ""));
+
+        var opened = coord.OpenPaperPosition(opp, pre, book, fill);
+
+        Assert.NotNull(opened);
+        var audit = coord.ListAudit();
+        Assert.Contains(audit, x => x.Stage == "PreTradeApproved" && x.NetEdge == 0.0055m && x.ExpectedProfit == pre.ExpectedProfit);
+        Assert.Contains(audit, x => x.Stage == "DryRunFillSimulationPassed" && x.NetEdge == 0.0055m && x.ExpectedProfit == pre.ExpectedProfit);
+        Assert.Contains(audit, x => x.Stage == "PaperOpened" && x.NetEdge == 0.0055m && x.ExpectedProfit == pre.ExpectedProfit);
+    }
+
+    [Fact]
+    public void Paper_account_equity_does_not_include_expected_profit_at_open()
+    {
+        var executionPolicy = new ExecutionPolicy { MaxLockedCapital = 1000m, MaxOpenPositions = 10, MaxExposurePerGroup = 1000m, AllowBasketArbs = true };
+        var journal = new ExecutionJournal(Path.GetTempFileName());
+        var book = new PaperPositionBook(Path.GetTempFileName());
+        var paper = new PaperTradingEngine(executionPolicy, journal, new ExecutionDecisionService(executionPolicy), book);
+        var coord = Coordinator();
+        var opp = Opp();
+        var pre = coord.Validate(opp, book);
+        var opened = coord.OpenPaperPosition(opp, pre, book, ColombianFill(pre.Quantity));
+
+        paper.RegisterExternalBasketOpen(opened!, opened!.TotalCost, opened.ExpectedProfit);
+
+        Assert.Equal(1000m - opened.TotalCost, paper.Balance);
+        Assert.Equal(1000m, paper.Equity);
+        Assert.Equal(0m, paper.RealizedPnl);
+        Assert.Equal(0m, paper.UnrealizedPnl);
+    }
+
+
+    private static FillSimulationResult ColombianFill(decimal qty)
+    {
+        var plan = Plan(qty, netEdge: 0.0055m);
+        return new DryRunFillSimulator().Simulate(plan, Books([300m, 300m, 300m]), Snapshots(), Options(), Now, profileUsed: "Conservative");
+    }
+
     private static FillSimulationResult Simulate(decimal qty, decimal[] sizes, ExecutionOptions? options = null)
         => new DryRunFillSimulator().Simulate(Plan(qty), Books(sizes), Snapshots(), options ?? Options(), Now);
 
@@ -160,34 +303,36 @@ public class DryRunFillSimulatorTests
     private static VerifiedBasketExecutionCoordinator Coordinator()
         => new(MsOptions.Create(new ExecutionOptions { DuplicateCooldownMinutes = 60, PaperOnly = true, PreventDuplicateGroupPositions = true, MaxNotionalPerBasket = 250 }));
 
-    private static BasketOrderPlan Plan(decimal qty, decimal[]? prices = null, string[]? tokenIds = null)
+    private static BasketOrderPlan Plan(decimal qty, decimal[]? prices = null, string[]? tokenIds = null, decimal? netEdge = null)
     {
-        prices ??= [0.22m, 0.33m, 0.40m];
+        prices ??= [0.663m, 0.663m, 0.663m];
         tokenIds ??= ["t1", "t2", "t3"];
         var orders = Enumerable.Range(1, 3).Select(i => new OrderIntent($"o{i}", "opp-1", "dry", "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", $"m{i}", $"c{i}", $"q{i}", tokenIds[i-1], "NO", "BUY", "NO", prices[i-1], qty, prices[i-1] * qty, "LIMIT", "GTC", false, true, Now)).ToArray();
-        return new BasketOrderPlan("plan-1", "opp-1", "dry", "Dry", "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", "Conservative", true, Now, Now.AddMinutes(10), BasketOrderPlanStatus.PaperOnly, 3, qty, 2m, prices.Sum(), orders.Sum(x => x.EstimatedCost), qty * (2m - prices.Sum()), 2m - prices.Sum(), 250m, orders, [], []);
+        var gross = 2m - prices.Sum();
+        var net = netEdge ?? gross;
+        return new BasketOrderPlan("plan-1", "opp-1", "dry", "Dry", "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", "Conservative", true, Now, Now.AddMinutes(10), BasketOrderPlanStatus.PaperOnly, 3, qty, 2m, prices.Sum(), orders.Sum(x => x.EstimatedCost), qty * net, net, 250m, orders, [], []);
     }
 
     private static Dictionary<string, CachedOrderBookSnapshot?> Books(decimal[] sizes, DateTime? ts = null)
         => new(StringComparer.OrdinalIgnoreCase)
         {
-            ["t1"] = new CachedOrderBookSnapshot("t1", "m1", ts ?? Now, [new BookQuote(0.22m, sizes[0])], []),
-            ["t2"] = new CachedOrderBookSnapshot("t2", "m2", ts ?? Now, [new BookQuote(0.33m, sizes[1])], []),
-            ["t3"] = new CachedOrderBookSnapshot("t3", "m3", ts ?? Now, [new BookQuote(0.40m, sizes[2])], [])
+            ["t1"] = new CachedOrderBookSnapshot("t1", "m1", ts ?? Now, [new BookQuote(0.663m, sizes[0])], []),
+            ["t2"] = new CachedOrderBookSnapshot("t2", "m2", ts ?? Now, [new BookQuote(0.663m, sizes[1])], []),
+            ["t3"] = new CachedOrderBookSnapshot("t3", "m3", ts ?? Now, [new BookQuote(0.663m, sizes[2])], [])
         };
 
     private static Dictionary<string, BinaryOrderBookSnapshot?> Snapshots()
         => new(StringComparer.OrdinalIgnoreCase)
         {
-            ["m1"] = new BinaryOrderBookSnapshot("m1", "q1", "y1", "t1", null, null, null, new BookQuote(0.22m, 100m)),
-            ["m2"] = new BinaryOrderBookSnapshot("m2", "q2", "y2", "t2", null, null, null, new BookQuote(0.33m, 100m)),
-            ["m3"] = new BinaryOrderBookSnapshot("m3", "q3", "y3", "t3", null, null, null, new BookQuote(0.40m, 100m))
+            ["m1"] = new BinaryOrderBookSnapshot("m1", "q1", "y1", "t1", null, null, null, new BookQuote(0.663m, 100m)),
+            ["m2"] = new BinaryOrderBookSnapshot("m2", "q2", "y2", "t2", null, null, null, new BookQuote(0.663m, 100m)),
+            ["m3"] = new BinaryOrderBookSnapshot("m3", "q3", "y3", "t3", null, null, null, new BookQuote(0.663m, 100m))
         };
 
-    private static VerifiedMultiOutcomeOpportunity Opp()
-        => new("opp-1", "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", "dry", "Dry", "Verified", 3, 2m, 0.95m, 1.05m, 1.05m, "Conservative", 10m, 10.5m, 250m, 9.5m, "PaperExecutable", [
-            new VerifiedMultiOutcomeOpportunityLeg("m1", "c1", "q1", "NO", "t1", 0.22m, 20m, "DirectNoAsk", 10m, 2.2m),
-            new VerifiedMultiOutcomeOpportunityLeg("m2", "c2", "q2", "NO", "t2", 0.33m, 20m, "DirectNoAsk", 10m, 3.3m),
-            new VerifiedMultiOutcomeOpportunityLeg("m3", "c3", "q3", "NO", "t3", 0.40m, 20m, "DirectNoAsk", 10m, 4.0m)
+    private static VerifiedMultiOutcomeOpportunity Opp(decimal qty = 125.69130216189039718451483157m)
+        => new("opp-1", "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", "dry", "Dry", "Verified", 3, 2m, 1.989m, 0.011m, 0.0055m, "Conservative", qty, qty * 0.0055m, 250m, qty * 1.989m, "PaperExecutable", [
+            new VerifiedMultiOutcomeOpportunityLeg("m1", "c1", "q1", "NO", "t1", 0.663m, 300m, "DirectNoAsk", qty, qty * 0.663m),
+            new VerifiedMultiOutcomeOpportunityLeg("m2", "c2", "q2", "NO", "t2", 0.663m, 300m, "DirectNoAsk", qty, qty * 0.663m),
+            new VerifiedMultiOutcomeOpportunityLeg("m3", "c3", "q3", "NO", "t3", 0.663m, 300m, "DirectNoAsk", qty, qty * 0.663m)
         ]);
 }

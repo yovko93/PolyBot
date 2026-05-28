@@ -47,6 +47,8 @@ public sealed class VerifiedOpportunityStabilityTracker
     private readonly Dictionary<string, DateTime?> _lastExec = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<ExecutionReadinessSample>> _readinessHistory = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, int> _consecutiveReady = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, DateTime> _stateChangedAt = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _lastResetReason = new(StringComparer.OrdinalIgnoreCase);
 
     public VerifiedBasketState Track(string groupKey, VerifiedBasketScreener.ScreenResult row, int maxHistory, int requiredConsecutive, decimal minStableNet, decimal maxVol)
     {
@@ -66,6 +68,11 @@ public sealed class VerifiedOpportunityStabilityTracker
         var vol = ComputeVolatility(list);
         var edgeState = !positive ? (row.NearExecutable ? VerifiedBasketState.NearExecutable : VerifiedBasketState.NotExecutable)
             : (c >= requiredConsecutive && vol <= maxVol ? VerifiedBasketState.EdgeStable : VerifiedBasketState.EdgeExecutablePending);
+        var resetReason = !positive ? "BelowThreshold"
+            : vol > maxVol ? "NetEdgeVolatility"
+            : edgeState == VerifiedBasketState.EdgeExecutablePending ? "AwaitingConsecutiveScans"
+            : "None";
+        _lastResetReason[groupKey] = resetReason;
 
         var current = State(groupKey);
         var st = edgeState == VerifiedBasketState.EdgeStable && current is VerifiedBasketState.ExecutionReadinessPending or VerifiedBasketState.ExecutionStable or VerifiedBasketState.PaperOpened or VerifiedBasketState.SuppressedDuplicate
@@ -73,6 +80,7 @@ public sealed class VerifiedOpportunityStabilityTracker
             : edgeState;
         if (st is VerifiedBasketState.NotExecutable or VerifiedBasketState.NearExecutable or VerifiedBasketState.EdgeExecutablePending)
             _consecutiveReady[groupKey] = 0;
+        if (current != st || !_stateChangedAt.ContainsKey(groupKey)) _stateChangedAt[groupKey] = DateTime.UtcNow;
         _state[groupKey] = st;
         return st;
     }
@@ -102,7 +110,9 @@ public sealed class VerifiedOpportunityStabilityTracker
         var state = ready && (!options.RequireStableExecutionReadiness || consecutive >= options.RequiredConsecutiveExecutionReadyScans)
             ? VerifiedBasketState.ExecutionStable
             : ready ? VerifiedBasketState.ExecutionReadinessPending : VerifiedBasketState.EdgeStable;
+        if (State(opp.GroupKey) != state || !_stateChangedAt.ContainsKey(opp.GroupKey)) _stateChangedAt[opp.GroupKey] = DateTime.UtcNow;
         _state[opp.GroupKey] = state;
+        _lastResetReason[opp.GroupKey] = reason ?? "None";
         var reset = !ready && previousReady > 0;
         var sample = new ExecutionReadinessSample(opp.GroupKey, DateTime.UtcNow, opp.NetEdge, costPerBasket, maxQtyByNotional, maxQtyByLiquidity, plannedQty, plannedCost, plannedExpectedProfit, limitingFactor, ready, reason, consecutive, options.RequiredConsecutiveExecutionReadyScans, state, reset, previousReady);
         if (!_readinessHistory.TryGetValue(opp.GroupKey, out var list)) { list = []; _readinessHistory[opp.GroupKey] = list; }
@@ -131,6 +141,8 @@ public sealed class VerifiedOpportunityStabilityTracker
     public int ConsecutiveExecutionReady(string groupKey) => _consecutiveReady.TryGetValue(groupKey, out var c) ? c : 0;
     public DateTime? LastExecutableAt(string groupKey) => _lastExec.TryGetValue(groupKey, out var v) ? v : null;
     public VerifiedBasketState State(string groupKey) => _state.TryGetValue(groupKey, out var s) ? s : VerifiedBasketState.NotExecutable;
+    public TimeSpan StateAge(string groupKey) => _stateChangedAt.TryGetValue(groupKey, out var t) ? DateTime.UtcNow - t : TimeSpan.Zero;
+    public string LastResetReason(string groupKey) => _lastResetReason.TryGetValue(groupKey, out var r) ? r : "None";
     public ExecutionReadinessSample? LatestReadiness(string groupKey) => _readinessHistory.TryGetValue(groupKey, out var l) ? l.LastOrDefault() : null;
     public decimal Volatility(string groupKey) => _history.TryGetValue(groupKey, out var l) ? ComputeVolatility(l) : 0m;
     public IReadOnlyList<ExecutionReadinessHistorySummary> ReadinessSummaries(int requiredConsecutiveReadyScans) => _readinessHistory.Select(kv => new ExecutionReadinessHistorySummary(kv.Key, State(kv.Key), kv.Value.LastOrDefault(), ConsecutiveExecutionReady(kv.Key), requiredConsecutiveReadyScans, kv.Value.LastOrDefault()?.NotReadyReason, kv.Value.ToArray())).ToArray();

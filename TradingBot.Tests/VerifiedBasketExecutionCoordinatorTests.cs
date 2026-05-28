@@ -95,7 +95,7 @@ public class VerifiedBasketExecutionCoordinatorTests
             new LegFillSimulation("m2", "c2", "q2", "t2", "BUY", "NO", qty, 0.33m, qty, qty, 0.33m, 0.33m * qty, FillSimulationStatus.FullyFillable, null, DateTime.UtcNow, false),
             new LegFillSimulation("m3", "c3", "q3", "t3", "BUY", "NO", qty, 0.40m, qty, qty, 0.40m, 0.40m * qty, FillSimulationStatus.FullyFillable, null, DateTime.UtcNow, false),
         };
-        return new FillSimulationResult("sim", "plan", "winner:2026 colombian presidential election|kind:person", "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", DateTime.UtcNow, FillSimulationStatus.FullyFillable, 3, 3, 0, 0, qty, qty, qty, 0m, 0.95m * qty, 0.95m * qty, 1.05m * qty, 0m, false, true, [], [], legs);
+        return new FillSimulationResult("sim", "plan", "winner:2026 colombian presidential election|kind:person", "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", DateTime.UtcNow, FillSimulationStatus.FullyFillable, 3, 3, 0, 0, qty, qty, qty, 0m, 0.95m * qty, 0.95m * qty, 0.0035m * qty, 0m, 1.05m, 0.0035m, 1.05m, 0.0035m, 0.0035m * qty, 0.0035m * qty, 0.95m, 0.95m, 0m, 0m, 1.0465m, "Conservative", false, true, [], [], legs);
     }
 
     private static VerifiedMultiOutcomeOpportunity BaseOpp()

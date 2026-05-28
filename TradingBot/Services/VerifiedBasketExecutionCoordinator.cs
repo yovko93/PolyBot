@@ -85,6 +85,18 @@ public sealed class VerifiedBasketExecutionCoordinator
                 s.FullyFillableQty,
                 s.SafeExecutableQty,
                 s.EstimatedFilledCost,
+                s.EstimatedFilledCostPerBasket,
+                s.PlannedGrossEdgePerBasket,
+                s.PlannedNetEdgePerBasket,
+                s.FillAdjustedGrossEdgePerBasket,
+                s.FillAdjustedNetEdgePerBasket,
+                s.PlannedExpectedProfit,
+                s.FillAdjustedExpectedProfit,
+                s.SimulatedNoAskSum,
+                s.EstimatedFees,
+                s.EstimatedSlippage,
+                s.SafetyBuffer,
+                s.ProfileUsed,
                 s.PartialFillRisk,
                 s.AllOrNoneRecommended,
                 s.LegResults
@@ -175,22 +187,44 @@ public sealed class VerifiedBasketExecutionCoordinator
 
         var qty = fillSimulation.SafeExecutableQty;
         var cost = fillSimulation.EstimatedFilledCost;
-        var expectedProfit = fillSimulation.EstimatedExpectedProfit;
-        var costPerBasket = qty > 0m ? cost / qty : 0m;
-        var netEdge = opp.GuaranteedPayout - costPerBasket;
+        var expectedProfit = fillSimulation.FillAdjustedExpectedProfit;
+        var costPerBasket = fillSimulation.EstimatedFilledCostPerBasket;
+        var netEdge = fillSimulation.FillAdjustedNetEdgePerBasket;
+        var grossEdge = fillSimulation.FillAdjustedGrossEdgePerBasket;
+        if (!ValidatePaperOpenInvariants(opp, qty, cost, expectedProfit, netEdge, grossEdge, fillSimulation, out var invariantReason))
+        {
+            Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PaperOpenBlocked", "Blocked", "PaperOpenInvariantFailed", netEdge, expectedProfit, cost, qty, invariantReason));
+            Console.WriteLine($"[PAPER_OPEN_BLOCKED] Group={opp.GroupKey} Reason=PaperOpenInvariantFailed ExpectedProfitPlan={fillSimulation.PlannedExpectedProfit:0.####} ExpectedProfitPaper={expectedProfit:0.####} Details={invariantReason}");
+            return null;
+        }
+
         var basket = new BasketArbOpportunity(opp.GroupKey, opp.Strategy, opp.Legs.Select(x =>
         {
             var sim = legByMarket[x.MarketId];
             return new BasketArbLeg(x.MarketId, x.NoTokenId, x.Question, x.Outcome, sim.SimulatedAveragePrice, sim.AvailableQtyAtOrBelowLimit);
         }).ToList(), qty, costPerBasket, opp.GuaranteedPayout, netEdge, expectedProfit);
-        var opened = book.AddBasketPosition(basket, qty, cost, expectedProfit, "VerifiedMultiOutcome", true, fillSimulation.Id);
+        var opened = book.AddBasketPosition(basket, qty, cost, expectedProfit, "VerifiedMultiOutcome", true, fillSimulation.Id, grossEdge, fillSimulation.ProfileUsed);
         if (opened is null)
         {
             AuditEvent(opp, "Rejected", "Rejected", "DuplicateOpenPosition");
             return null;
         }
-        AuditEvent(opp, "PaperOpened", "Opened", "PaperOpenedFromSimulatedFills");
+        Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PaperOpened", "Opened", "PaperOpenedFromSimulatedFills", opened.NetEdgeAtOpen, opened.ExpectedProfit, opened.TotalCost, opened.Quantity, $"GrossEdgeAtOpen={opened.GrossEdgeAtOpen};FillAdjustedNetEdge={fillSimulation.FillAdjustedNetEdgePerBasket};ExpectedProfitAtOpen={opened.ExpectedProfit};Profile={fillSimulation.ProfileUsed}"));
         return opened;
+    }
+
+
+    private static bool ValidatePaperOpenInvariants(VerifiedMultiOutcomeOpportunity opp, decimal qty, decimal totalCost, decimal expectedProfitAtOpen, decimal netEdgeAtOpen, decimal grossEdgeAtOpen, FillSimulationResult fillSimulation, out string reason)
+    {
+        const decimal tolerance = 0.000001m;
+        var checks = new List<string>();
+        if (Math.Abs(expectedProfitAtOpen - fillSimulation.FillAdjustedExpectedProfit) > tolerance) checks.Add($"ExpectedProfitMismatch:{expectedProfitAtOpen}:{fillSimulation.FillAdjustedExpectedProfit}");
+        if (Math.Abs(netEdgeAtOpen - fillSimulation.FillAdjustedNetEdgePerBasket) > tolerance) checks.Add($"NetEdgeMismatch:{netEdgeAtOpen}:{fillSimulation.FillAdjustedNetEdgePerBasket}");
+        if (Math.Abs(totalCost - fillSimulation.EstimatedFilledCost) > tolerance) checks.Add($"CostMismatch:{totalCost}:{fillSimulation.EstimatedFilledCost}");
+        if (Math.Abs(expectedProfitAtOpen - (qty * netEdgeAtOpen)) > tolerance) checks.Add($"ProfitFormulaMismatch:{expectedProfitAtOpen}:{qty * netEdgeAtOpen}");
+        if (netEdgeAtOpen > grossEdgeAtOpen + tolerance) checks.Add($"NetGreaterThanGross:{netEdgeAtOpen}:{grossEdgeAtOpen}");
+        reason = string.Join(";", checks);
+        return checks.Count == 0;
     }
 
     public void ExportSnapshot(string path, string activeProfile, IEnumerable<VerifiedMultiOutcomeOpportunity> executable, IEnumerable<VerifiedBasketPreTradeValidationResult> results, IReadOnlyCollection<PaperPosition> paperPositions)

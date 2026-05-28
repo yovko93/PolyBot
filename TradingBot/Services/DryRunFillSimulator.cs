@@ -10,7 +10,11 @@ public sealed class DryRunFillSimulator
         IReadOnlyDictionary<string, CachedOrderBookSnapshot?> orderbooksByToken,
         IReadOnlyDictionary<string, BinaryOrderBookSnapshot?> snapshotsByMarket,
         ExecutionOptions options,
-        DateTime? nowUtc = null)
+        DateTime? nowUtc = null,
+        string profileUsed = "",
+        decimal? estimatedFees = null,
+        decimal? estimatedSlippage = null,
+        decimal? safetyBuffer = null)
     {
         var now = nowUtc ?? DateTime.UtcNow;
         var warnings = new List<string>();
@@ -45,9 +49,22 @@ public sealed class DryRunFillSimulator
         if (fillableRatio < options.MinFillableQtyRatio) warnings.Add($"FillableQtyRatioBelowMinimum:{fillableRatio:0.####}");
 
         var estimatedFilledCost = legResults.Sum(x => RepriceCost(x, safeExecutableQty));
+        var estimatedFilledCostPerBasket = safeExecutableQty > 0m ? estimatedFilledCost / safeExecutableQty : 0m;
+        var simulatedNoAskSum = estimatedFilledCostPerBasket;
+        var plannedGrossEdgePerBasket = plan.GuaranteedPayout - plan.CostPerBasket;
+        var plannedNetEdgePerBasket = plan.NetEdge;
+        var derivedTotalProfileCosts = Math.Max(0m, plannedGrossEdgePerBasket - plannedNetEdgePerBasket);
+        var fees = estimatedFees ?? 0m;
+        var slippage = estimatedSlippage ?? 0m;
+        var safety = safetyBuffer ?? Math.Max(0m, derivedTotalProfileCosts - fees - slippage);
+        if (!estimatedFees.HasValue && !estimatedSlippage.HasValue && !safetyBuffer.HasValue) safety = derivedTotalProfileCosts;
+        var fillAdjustedGrossEdgePerBasket = plan.GuaranteedPayout - simulatedNoAskSum;
+        var fillAdjustedNetEdgePerBasket = fillAdjustedGrossEdgePerBasket - fees - slippage - safety;
+        var plannedExpectedProfit = plan.ExpectedProfit;
+        var fillAdjustedExpectedProfit = safeExecutableQty * fillAdjustedNetEdgePerBasket;
         var worstCaseFilledLegs = legResults.Where(x => x.SimulatedFilledQty > 0m).Sum(x => x.SimulatedCost);
         var guaranteedPayout = plan.GuaranteedPayout * safeExecutableQty;
-        var estimatedExpectedProfit = guaranteedPayout - estimatedFilledCost;
+        var estimatedExpectedProfit = fillAdjustedExpectedProfit;
         var worstCaseExposure = Math.Max(0m, worstCaseFilledLegs - guaranteedPayout);
 
         return new FillSimulationResult(
@@ -69,6 +86,18 @@ public sealed class DryRunFillSimulator
             worstCaseFilledLegs,
             estimatedExpectedProfit,
             worstCaseExposure,
+            plannedGrossEdgePerBasket,
+            plannedNetEdgePerBasket,
+            fillAdjustedGrossEdgePerBasket,
+            fillAdjustedNetEdgePerBasket,
+            plannedExpectedProfit,
+            fillAdjustedExpectedProfit,
+            estimatedFilledCostPerBasket,
+            simulatedNoAskSum,
+            fees,
+            slippage,
+            safety,
+            string.IsNullOrWhiteSpace(profileUsed) ? plan.ActiveProfile : profileUsed,
             partialFillRisk,
             allOrNoneRecommended,
             warnings,
