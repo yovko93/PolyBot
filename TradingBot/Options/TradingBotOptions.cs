@@ -77,6 +77,8 @@ public class TradingBotOptions
     public MultiOutcomeReviewOptions MultiOutcomeReview { get; set; } = new();
     public RuntimeStateOptions RuntimeState { get; set; } = new();
     public MarketDiscoveryOptions MarketDiscovery { get; set; } = new();
+    public SignalROptions SignalR { get; set; } = new();
+    public RuntimeHealthOptions RuntimeHealth { get; set; } = new();
 }
 public class MarketDiscoveryOptions
 {
@@ -103,6 +105,7 @@ public class DiagnosticsOptions
     public int InsufficientLiquiditySampleCount { get; set; } = 10;
     public bool EnableNearMissDiagnostics { get; set; } = true;
     public bool EnableMultiOutcomeNearMisses { get; set; } = true;
+    public bool DebuggerSafeMode { get; set; } = false;
     public int MultiOutcomeNearMissTopN { get; set; } = 25;
     public decimal MultiOutcomeNearMissMaxNegativeEdge { get; set; } = 0.05m;
 }
@@ -240,4 +243,24 @@ public class RuntimeStateOptions
     public int MaxCandidateGroupsForReview { get; set; } = 50;
     public int MaxMultiOutcomeDiagnosticsHistory { get; set; } = 100;
     public int MaxRecentLogs { get; set; } = 500;
+    public int MaxScannerStatsHistory { get; set; } = 500;
+    public int MaxProfileComparisonHistory { get; set; } = 200;
+    public int MaxRejectedCandidateSamples { get; set; } = 100;
+    public int MaxExecutionAuditEvents { get; set; } = 500;
+    public int MaxSignalREventBuffer { get; set; } = 100;
+    public int OrderbookCacheTtlSeconds { get; set; } = 30;
+    public int MarketCacheTtlMinutes { get; set; } = 30;
+}
+
+public class SignalROptions
+{
+    public int MaxPayloadItems { get; set; } = 100;
+    public int MaxRecentLogsToBroadcast { get; set; } = 100;
+    public int MaxDiagnosticsItemsToBroadcast { get; set; } = 50;
+}
+
+public class RuntimeHealthOptions
+{
+    public bool Enabled { get; set; } = true;
+    public int LogEveryMinutes { get; set; } = 5;
 }

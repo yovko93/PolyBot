@@ -34,7 +34,7 @@ builder.Services.AddSingleton<OrderPlanBuilder>();
 builder.Services.AddSingleton<ExecutionAuditLog>();
 builder.Services.AddSingleton<VerifiedBasketExecutionCoordinator>();
 builder.Services.AddSingleton<DryRunLiveExecutor>();
-builder.Services.AddSingleton<BotRuntimeState>();
+builder.Services.AddSingleton(sp => new BotRuntimeState(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value.RuntimeState));
 builder.Services.AddSingleton<TextWriter>(originalOut);
 builder.Services.AddSingleton<IBotUiLogger, BotUiLogger>();
 
@@ -139,6 +139,23 @@ app.MapPost("/api/bot/controls/resume", async (BotRuntimeState s, IHubContext<Bo
 });
 app.MapGet("/api/bot/logs/recent", (BotRuntimeState s, int? limit) => s.Logs().TakeLast(Math.Clamp(limit ?? 300, 1, 1000)).ToArray());
 app.MapGet("/api/bot/equity", (BotRuntimeState s, int? limit) => s.Equity().TakeLast(Math.Clamp(limit ?? 500, 1, 1000)).ToArray());
+app.MapGet("/api/bot/runtime-health", (BotRuntimeState s) => Results.Ok(new {
+    processMemoryMb = Math.Round(System.Diagnostics.Process.GetCurrentProcess().WorkingSet64 / 1024d / 1024d, 2),
+    gcTotalMemoryMb = Math.Round(GC.GetTotalMemory(false) / 1024d / 1024d, 2),
+    gen0Collections = GC.CollectionCount(0),
+    gen1Collections = GC.CollectionCount(1),
+    gen2Collections = GC.CollectionCount(2),
+    recentLogsCount = s.Logs().Length,
+    scannerStatsHistoryCount = s.ScannerStatsHistoryCount,
+    verifiedGroupsCount = s.VerifiedBasketScreener?.Results?.Length ?? 0,
+    candidateGroupsCount = s.MultiOutcomeCandidates.Length,
+    rejectedSamplesCount = s.MultiOutcomeReviewReport.Length,
+    signalRClientsCount = (int?)null,
+    orderbookCacheCount = 0,
+    marketCacheCount = 0,
+    uptime = DateTime.UtcNow - System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime(),
+    lastScanId = s.ScannerStats.Sequence
+}));
 app.MapHub<BotHub>("/hubs/bot");
 
 var apiTask = app.RunAsync(listenUrl);
@@ -150,6 +167,7 @@ Console.SetOut(new MultiTextWriter(originalOut, msg => logger.LogInfo("console",
 logger.LogSuccess("startup", $"Bot API listening on {listenUrl}");
 logger.LogSuccess("startup", $"ExecutionMode={options.ExecutionMode}; EnablePaperTrading={options.EnablePaperTrading}; EnableLiveExecution={options.EnableLiveExecution}");
 logger.LogInfo("startup", $"[CONFIG] Scanner Mode={options.Mode} MarketScanLimit={options.MarketScanLimit} MaxMarketsToDiscover={options.MaxMarketsToDiscover} ScanBatchSize={options.ScanBatchSize} MaxOrderbooksPerCycle={options.MaxOrderbooksPerCycle} MaxConcurrentOrderbookRequests={options.MaxConcurrentOrderbookRequests} LogEmptyOpportunityCycles={options.LogEmptyOpportunityCycles}");
+logger.LogInfo("startup", $"[DIAGNOSTICS] DebuggerSafeMode={options.Diagnostics.DebuggerSafeMode} DetailedLogs={(!options.Diagnostics.DebuggerSafeMode).ToString().ToLowerInvariant()} MaxRecentLogs={options.RuntimeState.MaxRecentLogs}");
 logger.LogInfo("startup", $"[CONFIG] MultiOutcome FeePerLeg={options.MultiOutcomeArbitrage.FeePerLeg} SlippagePerLeg={options.MultiOutcomeArbitrage.SlippageBufferPerLeg} SafetyPerGroup={options.MultiOutcomeArbitrage.SafetyBufferPerGroup} MinNetEdgePerBasket={options.MultiOutcomeArbitrage.MinMultiOutcomeEdge} MinExpectedProfit={options.MultiOutcomeArbitrage.MinExpectedProfit} EnableSensitivityDiagnostics={options.MultiOutcomeArbitrage.EnableSensitivityDiagnostics}");
 var activeProfileName = options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile;
 if (!options.MultiOutcomeArbitrage.CostProfiles.Profiles.TryGetValue(activeProfileName, out var activeProfileCfg)) activeProfileCfg = options.MultiOutcomeArbitrage.CostProfiles.Profiles["Conservative"];
@@ -248,6 +266,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var nearExecutableFingerprint = string.Empty;
     var mismatchCycle = 0;
     var mismatchFingerprintByGroup = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+    var runtimeHealthLastLoggedAt = DateTime.MinValue;
     var basketStateByGroup = new Dictionary<string, VerifiedBasketState>(StringComparer.OrdinalIgnoreCase);
     var stability = new VerifiedOpportunityStabilityTracker();
     var verifiedBasketLastFingerprint = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -269,7 +288,12 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             if (state.Controls.IsPaused)
             {
                 state.SetStatus(state.Status with { ScannerActive = false, LastScanTime = DateTime.UtcNow });
-                await PushUiUpdates(state, hub, uiLogger);
+                if (options.RuntimeHealth.Enabled && (runtimeHealthLastLoggedAt == DateTime.MinValue || DateTime.UtcNow - runtimeHealthLastLoggedAt >= TimeSpan.FromMinutes(Math.Max(1, options.RuntimeHealth.LogEveryMinutes))))
+            {
+                runtimeHealthLastLoggedAt = DateTime.UtcNow;
+                Console.WriteLine($"[RUNTIME_HEALTH] MemoryMb={Math.Round(System.Diagnostics.Process.GetCurrentProcess().WorkingSet64/1024d/1024d,2)} Logs={state.Logs().Length} ScannerHistory={state.ScannerStatsHistoryCount} OrderbookCache=0 Uptime={(DateTime.UtcNow - System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime())}");
+            }
+            await PushUiUpdates(state, hub, uiLogger, options);
                 uiLogger.LogInfo("scanner", "{\"event\":\"scan_skipped\",\"reason\":\"PAUSED\"}");
                 await Task.Delay(options.ScanIntervalMs, stoppingToken);
                 continue;
@@ -351,7 +375,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             mismatchCycle++;
                             if (options.Logging.LogVerifiedMismatchDetails)
                             {
-                                var fp = $"{g.MarketIds.Count}|{g.ResolvedMarkets.Count}|{g.MissingMarketIds.Count}";
+                                var missingIdsHash = string.Join(",", g.MissingMarketIds.OrderBy(x => x, StringComparer.OrdinalIgnoreCase)).GetHashCode();
+                                var fp = $"{g.GroupKey}|{g.RejectionReason}|{g.ResolvedMarkets.Count}|{g.MissingMarketIds.Count}|{missingIdsHash}";
                                 var changed = !mismatchFingerprintByGroup.TryGetValue(g.GroupKey, out var prev) || prev != fp;
                                 mismatchFingerprintByGroup[g.GroupKey] = fp;
                                 var periodic = options.Logging.LogVerifiedMismatchEveryNCycles > 0 && mismatchCycle % options.Logging.LogVerifiedMismatchEveryNCycles == 0;
@@ -739,7 +764,12 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             }
             monitor.FlushCsv();
             SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, filtered.Count, started, null, scanStats, filtering, lastDiscoverySummary, rollingOffset, options.ScanBatchSize, discoveredMarkets.Count, discoveryStartedAt, discoveryCompletedAt, emptyCycles, options.MarketScanLimit, effectiveMarketLimit, options.MaxMarketsToDiscover, options, poolLimitReason, multiOutcomeReport);
-            await PushUiUpdates(state, hub, uiLogger);
+            if (options.RuntimeHealth.Enabled && (runtimeHealthLastLoggedAt == DateTime.MinValue || DateTime.UtcNow - runtimeHealthLastLoggedAt >= TimeSpan.FromMinutes(Math.Max(1, options.RuntimeHealth.LogEveryMinutes))))
+            {
+                runtimeHealthLastLoggedAt = DateTime.UtcNow;
+                Console.WriteLine($"[RUNTIME_HEALTH] MemoryMb={Math.Round(System.Diagnostics.Process.GetCurrentProcess().WorkingSet64/1024d/1024d,2)} Logs={state.Logs().Length} ScannerHistory={state.ScannerStatsHistoryCount} OrderbookCache=0 Uptime={(DateTime.UtcNow - System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime())}");
+            }
+            await PushUiUpdates(state, hub, uiLogger, options);
             uiLogger.LogInfo("scanner", $"{{\"event\":\"scan_end\",\"durationMs\":{(long)(DateTime.UtcNow - started).TotalMilliseconds},\"marketsScanned\":{filtered.Count},\"detected\":{cycleTop.Count},\"executable\":{executableCount}}}");
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -757,18 +787,19 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     }
 }
 
-static async Task PushUiUpdates(BotRuntimeState state, IHubContext<BotHub> hub, IBotUiLogger logger)
+static async Task PushUiUpdates(BotRuntimeState state, IHubContext<BotHub> hub, IBotUiLogger logger, TradingBotOptions options)
 {
     try
     {
-        await hub.Clients.All.SendAsync("opportunitiesUpdated", state.Opportunities().TakeLast(100).ToArray());
+        await hub.Clients.All.SendAsync("opportunitiesUpdated", state.Opportunities().TakeLast(options.SignalR.MaxPayloadItems).ToArray());
         await hub.Clients.All.SendAsync("tradeLogUpdated", state.Trades().TakeLast(300).ToArray());
         await hub.Clients.All.SendAsync("positionsUpdated", state.Positions());
         await hub.Clients.All.SendAsync("scannerStatsUpdated", state.ScannerStats);
         await hub.Clients.All.SendAsync("riskUpdated", state.Risk);
         await hub.Clients.All.SendAsync("controlsUpdated", state.Controls);
         await hub.Clients.All.SendAsync("botStatusUpdated", state.Status);
-        await hub.Clients.All.SendAsync("equityUpdated", state.Equity().TakeLast(500).ToArray());
+        await hub.Clients.All.SendAsync("equityUpdated", state.Equity().TakeLast(options.SignalR.MaxPayloadItems).ToArray());
+        await hub.Clients.All.SendAsync("terminalLogsUpdated", state.Logs().TakeLast(options.SignalR.MaxRecentLogsToBroadcast).ToArray());
     }
     catch (Exception ex)
     {
