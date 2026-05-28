@@ -1,0 +1,34 @@
+[
+  {
+    "Id": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE_winner_2026_colombian_presidential_election_kind_person_569366-NO_569368-NO_569373-NO",
+    "OpenedAt": "2026-05-28T10:50:12.5403316Z",
+    "ClosedAt": null,
+    "Strategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+    "Group": "winner:2026 colombian presidential election|kind:person",
+    "Legs": [
+      "NO:Will Ivan Cepeda Castro win the 2026 Colombian presidential election?",
+      "NO:Will Abelardo de la Espriella  win the 2026 Colombian presidential election?",
+      "NO:Will Paloma Valencia win the 2026 Colombian presidential election?"
+    ],
+    "Qty": 125.69130216189039718451483157,
+    "Cost": 249.99999999999999999999999999,
+    "CostPerBasket": 1.989,
+    "GuaranteedPayout": 251.38260432378079436902966314,
+    "MaxPayout": 377.07390648567119155354449471,
+    "GrossEdgeAtOpen": 0.0055,
+    "NetEdgeAtOpen": 0.0055,
+    "ExpectedProfit": 0.6913021618903971845148315736,
+    "LockedCapital": 249.99999999999999999999999999,
+    "ActiveProfile": "Conservative",
+    "Source": "VerifiedMultiOutcome",
+    "CurrentNoAskSum": 1.989,
+    "CurrentExitValue": null,
+    "UnrealizedPnl": 0,
+    "MtmStatus": "Incomplete",
+    "MissingExitPrices": 3,
+    "RealizedPayout": null,
+    "RealizedProfit": null,
+    "Status": "OPEN",
+    "Sequence": 897
+  }
+]

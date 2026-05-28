@@ -1,7 +1,7 @@
 {
   "metadata": {
     "note": "Suggested only. Does not overwrite config/verified-multi-outcome-groups.json.",
-    "generatedAtUtc": "2026-05-28T08:56:52.2723133Z"
+    "generatedAtUtc": "2026-05-28T10:50:13.0254579Z"
   },
   "groups": [
     {
@@ -123,10 +123,10 @@
   ],
   "nextGroupsToVerify": [
     {
-      "groupKey": "winner:2026 democratic d c mayoral primary|kind:generic",
-      "title": "winner:2026 democratic d c mayoral primary|kind:generic",
-      "detectedMarketsCount": 9,
-      "pricedLegs": 9,
+      "groupKey": "winner:nobel peace prize in 2026|kind:generic",
+      "title": "winner:nobel peace prize in 2026|kind:generic",
+      "detectedMarketsCount": 5,
+      "pricedLegs": 5,
       "missingNoAsk": 0,
       "estimatedGrossEdge": null,
       "estimatedNetEdgeConservative": null,
@@ -136,34 +136,26 @@
       "recommendedAction": "SafeCandidateForManualVerification",
       "suggestedAllowlistTemplate": {
         "enabled": true,
-        "groupKey": "winner:2026 democratic d c mayoral primary|kind:generic",
-        "title": "winner:2026 democratic d c mayoral primary|kind:generic",
+        "groupKey": "winner:nobel peace prize in 2026|kind:generic",
+        "title": "winner:nobel peace prize in 2026|kind:generic",
         "verificationStatus": "Verified",
         "groupType": "MutuallyExclusiveWinner",
         "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
         "marketIds": [
-          "703742",
-          "703741",
-          "703736",
-          "703737",
-          "703739",
-          "703735",
-          "703732",
-          "703734",
-          "703733"
+          "637016",
+          "637015",
+          "637007",
+          "637019",
+          "637003"
         ],
         "conditionIds": [
-          "0x83ae11433d9fbfc2d1b0ac20737238e14de1a49aad8ac9c843f0095929076992",
-          "0xd3635a3419bcccea334cf212a0a2563757361bc3975d74784c7d43fdffcf473e",
-          "0xbda4383cab42acaf2bf5e96a46fc983e5d87716392996bf277936985ed02ad14",
-          "0xe43d519c8187accd9bb3c71aeaa4088f5676a2973b8a55ab85e2910023ddb445",
-          "0xa9331a9cceb4d83a5bc12a26ae3e79a647122024ab6f1fd4c785fefd0dca0fc6",
-          "0xb82b77689a74a55992d01281871e301b6c127e2cfab9476c19bf01b734a85e35",
-          "0xb57ee7394ed65d2fed3914c255a0e368366f6f75075e71826d0bf0f315268f20",
-          "0x6dc6ae164362e3151bfe3d6b60c138c6616d7592d3c11540be98bd409a115b23",
-          "0x7a5ce7ceb8a77b024fa14c123e8267b7ab23ceb53d63b270d92517747e6ece81"
+          "0x32146c285b1d126556a309e3eae227f614076c93c0b080bae4ed6aaf6b1e9e5f",
+          "0x73ea54d2bbd4a4bb22cc78f1ef9b8373c76e57fe2a4bf09784413002885f69f7",
+          "0x97115010af13666600dc8776dce48290f5c4c23d387a86a97f6b4b38561dd5af",
+          "0xda9e24f8b6b8f71f02a79fe9d27348f6cbf2ff670cbef4afc58ae52fb4c8b1cb",
+          "0xec2e51ebb99006172b05548fc53d6842d30c9c0cccaf4c34569f0431b94d4bfc"
         ],
-        "requiredOutcomeCount": 9,
+        "requiredOutcomeCount": 5,
         "requireExactOutcomeCount": false,
         "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
         "verifiedBy": "manual",
@@ -171,8 +163,222 @@
       }
     },
     {
-      "groupKey": "winner:2026 alaska governor election|kind:person",
-      "title": "winner:2026 alaska governor election|kind:person",
+      "groupKey": "winner:iem cologne major 2026|kind:generic",
+      "title": "winner:iem cologne major 2026|kind:generic",
+      "detectedMarketsCount": 13,
+      "pricedLegs": 13,
+      "missingNoAsk": 0,
+      "estimatedGrossEdge": null,
+      "estimatedNetEdgeConservative": null,
+      "rawOnlyEdge": null,
+      "candidateQualityScore": 110,
+      "safetyClassification": "SafeForManualVerification",
+      "recommendedAction": "SafeCandidateForManualVerification",
+      "suggestedAllowlistTemplate": {
+        "enabled": true,
+        "groupKey": "winner:iem cologne major 2026|kind:generic",
+        "title": "winner:iem cologne major 2026|kind:generic",
+        "verificationStatus": "Verified",
+        "groupType": "MutuallyExclusiveWinner",
+        "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+        "marketIds": [
+          "1892307",
+          "1892291",
+          "1892287",
+          "1892292",
+          "1892297",
+          "1892299",
+          "1892295",
+          "1892290",
+          "1892288",
+          "1892289",
+          "1892298",
+          "1892281",
+          "1892286"
+        ],
+        "conditionIds": [
+          "0xf3767c9260d825c337a4fbc3542b797d65dc6fa3b34a953c9207701f379982ae",
+          "0xa2ea44f06f6b7ca3e00cea284d6e9294ac3d0331fd8817a5ff82989a5ae2291d",
+          "0x824c710d20c3f83c4078e6c834d659489233e3fb8772d215071ee3f0ac8f4d34",
+          "0x18b175a7f6faa5dd8942d03df7ebf3b3c244357af7bbc0f70f363311bc3b9028",
+          "0x10cfe107f46a1f4465e41501bebf20edda4f16ef47b702a4f45cacce90e01d16",
+          "0x0937e92157c668597b425daa34f89eab4b8e3493b3c2c6a71b99d1dff333253c",
+          "0x6d98df5d6142dbec8a034841f7aa3626b00102df59e01e06977786753378a3e8",
+          "0xdc412c53ae19e5571c646fea4957dccd5d771ea743c8d4ab5bbb69332273fea4",
+          "0xf5e41ab84b0c79d73ca4698a3d60a578fd4fa077b9b091f9f5ac2c2053e6b601",
+          "0x40fe0e847061514a774ade752050570f3f0c36addb1c69937d09e3151c34a74b",
+          "0xe31c9b200a40505aa8da2a7e89229c4a928e2216858b41dde7965959e65ae17e",
+          "0xadf834ab08d5e31ca8dabac7c194632bf4739fe695aa70937ce0dff296990e90",
+          "0xc9cd0881f8dd1897870b628e0015e61482720a718cf83836d446eb7b1eeea662"
+        ],
+        "requiredOutcomeCount": 13,
+        "requireExactOutcomeCount": false,
+        "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+        "verifiedBy": "manual",
+        "verifiedAt": "2026-05-28"
+      }
+    },
+    {
+      "groupKey": "winner:california governor election in 2026|kind:person",
+      "title": "winner:california governor election in 2026|kind:person",
+      "detectedMarketsCount": 6,
+      "pricedLegs": 6,
+      "missingNoAsk": 0,
+      "estimatedGrossEdge": null,
+      "estimatedNetEdgeConservative": null,
+      "rawOnlyEdge": null,
+      "candidateQualityScore": 110,
+      "safetyClassification": "SafeForManualVerification",
+      "recommendedAction": "SafeCandidateForManualVerification",
+      "suggestedAllowlistTemplate": {
+        "enabled": true,
+        "groupKey": "winner:california governor election in 2026|kind:person",
+        "title": "winner:california governor election in 2026|kind:person",
+        "verificationStatus": "Verified",
+        "groupType": "MutuallyExclusiveWinner",
+        "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+        "marketIds": [
+          "628941",
+          "628957",
+          "628938",
+          "628948",
+          "628943",
+          "628936"
+        ],
+        "conditionIds": [
+          "0xa5d79e71e66c9fe122f8b8b3ca6ab7a0e3048bd8508f130746944e92ed79ddf3",
+          "0x58b0474e74a03480c439d50e13dd0b75146c3596e5a475f95e70035c90cee4ca",
+          "0x11375fe1cf6665bbdee0cba5c2d48be1dedafab87841bd2eb8bc778c0402f457",
+          "0x331cd65740d378b98427723b33b353c62241e7bdabfaa01daac48d9caf85b401",
+          "0xad80f8a007ce2dad75754998cc72f162b2b2eef2c6b1017b47add4f01974a5e8",
+          "0x046941ddc09a5420aae85108b94bec3e1d7a3290b4144346cfc37e125282f958"
+        ],
+        "requiredOutcomeCount": 6,
+        "requireExactOutcomeCount": false,
+        "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+        "verifiedBy": "manual",
+        "verifiedAt": "2026-05-28"
+      }
+    },
+    {
+      "groupKey": "winner:2026 men s french open|kind:generic",
+      "title": "winner:2026 men s french open|kind:generic",
+      "detectedMarketsCount": 5,
+      "pricedLegs": 5,
+      "missingNoAsk": 0,
+      "estimatedGrossEdge": null,
+      "estimatedNetEdgeConservative": null,
+      "rawOnlyEdge": null,
+      "candidateQualityScore": 110,
+      "safetyClassification": "SafeForManualVerification",
+      "recommendedAction": "SafeCandidateForManualVerification",
+      "suggestedAllowlistTemplate": {
+        "enabled": true,
+        "groupKey": "winner:2026 men s french open|kind:generic",
+        "title": "winner:2026 men s french open|kind:generic",
+        "verificationStatus": "Verified",
+        "groupType": "MutuallyExclusiveWinner",
+        "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+        "marketIds": [
+          "1087532",
+          "1087546",
+          "1087529",
+          "1087521",
+          "1087524"
+        ],
+        "conditionIds": [
+          "0x5fd7a14573c76aff95dee08cc00dbc0e87a6c7ba374bad1300e9aff5f0b98611",
+          "0xb599d781347109dfc846c1ae5d6dd8afab6271a4ab0c792ae1c4e865a55772a1",
+          "0x0eeeb4d04b12f8e2b937dfa6563a89b6cc08d69e8ab918c51185e3752a334030",
+          "0x40d85bb0c07156d8078ed03df11bea9aff0c6700a5186c9848307f00503b2060",
+          "0x2dba5d6bcf0ad364a444985f07286ebf2dc5bc0ee7989ef1227d14c245e301fb"
+        ],
+        "requiredOutcomeCount": 5,
+        "requireExactOutcomeCount": false,
+        "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+        "verifiedBy": "manual",
+        "verifiedAt": "2026-05-28"
+      }
+    },
+    {
+      "groupKey": "winner:2027 nfl league championship|kind:generic",
+      "title": "winner:2027 nfl league championship|kind:generic",
+      "detectedMarketsCount": 4,
+      "pricedLegs": 4,
+      "missingNoAsk": 0,
+      "estimatedGrossEdge": null,
+      "estimatedNetEdgeConservative": null,
+      "rawOnlyEdge": null,
+      "candidateQualityScore": 90,
+      "safetyClassification": "SafeForManualVerification",
+      "recommendedAction": "SafeCandidateForManualVerification",
+      "suggestedAllowlistTemplate": {
+        "enabled": true,
+        "groupKey": "winner:2027 nfl league championship|kind:generic",
+        "title": "winner:2027 nfl league championship|kind:generic",
+        "verificationStatus": "Verified",
+        "groupType": "MutuallyExclusiveWinner",
+        "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+        "marketIds": [
+          "1357391",
+          "1357384",
+          "1357402",
+          "1357390"
+        ],
+        "conditionIds": [
+          "0x2972fe6bf03e5b4b21b135c69689710e184d300185540827c5c8fe4a135121c8",
+          "0xefa35b4d8604c62727434b91e97878fd1f85e751b0582d2041a381a9b0165871",
+          "0x2075c64a5dbb84d1232b1162c31136337b8595365ee2e1ea4f6c44b351aef58d",
+          "0x811e51a7acf39eeb9757f87d71624c0dbc2e12992c58419dddb8c6b4cb339df8"
+        ],
+        "requiredOutcomeCount": 4,
+        "requireExactOutcomeCount": false,
+        "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+        "verifiedBy": "manual",
+        "verifiedAt": "2026-05-28"
+      }
+    },
+    {
+      "groupKey": "winner:2026 world series|kind:generic",
+      "title": "winner:2026 world series|kind:generic",
+      "detectedMarketsCount": 4,
+      "pricedLegs": 4,
+      "missingNoAsk": 0,
+      "estimatedGrossEdge": null,
+      "estimatedNetEdgeConservative": null,
+      "rawOnlyEdge": null,
+      "candidateQualityScore": 90,
+      "safetyClassification": "SafeForManualVerification",
+      "recommendedAction": "SafeCandidateForManualVerification",
+      "suggestedAllowlistTemplate": {
+        "enabled": true,
+        "groupKey": "winner:2026 world series|kind:generic",
+        "title": "winner:2026 world series|kind:generic",
+        "verificationStatus": "Verified",
+        "groupType": "MutuallyExclusiveWinner",
+        "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+        "marketIds": [
+          "1235570",
+          "1235571",
+          "1235556",
+          "1235550"
+        ],
+        "conditionIds": [
+          "0xf9a6f017f72960b267bd398f32f4f4b20a163586ba49930e3533f8bd003dd507",
+          "0x598654e5e8ad06b44107cb541773c459580dfc208fc74e4694d1ada41d679c1d",
+          "0xf134705aea567d66f664016d8522ef98e42aefe6a305c22447695a9462857ccd",
+          "0xae8cf6ba7bd936d12c4c77b77b800dc378a76f02d0276fbc1dc1932f01f8eb9e"
+        ],
+        "requiredOutcomeCount": 4,
+        "requireExactOutcomeCount": false,
+        "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+        "verifiedBy": "manual",
+        "verifiedAt": "2026-05-28"
+      }
+    },
+    {
+      "groupKey": "winner:2026 ulsan mayoral election|kind:person",
+      "title": "winner:2026 ulsan mayoral election|kind:person",
       "detectedMarketsCount": 2,
       "pricedLegs": 2,
       "missingNoAsk": 0,
@@ -184,18 +390,18 @@
       "recommendedAction": "SafeCandidateForManualVerification",
       "suggestedAllowlistTemplate": {
         "enabled": true,
-        "groupKey": "winner:2026 alaska governor election|kind:person",
-        "title": "winner:2026 alaska governor election|kind:person",
+        "groupKey": "winner:2026 ulsan mayoral election|kind:person",
+        "title": "winner:2026 ulsan mayoral election|kind:person",
         "verificationStatus": "Verified",
         "groupType": "MutuallyExclusiveWinner",
         "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
         "marketIds": [
-          "635019",
-          "635003"
+          "2062623",
+          "2062620"
         ],
         "conditionIds": [
-          "0xef25acd9423c7c1aeb1a85a2f2e295ce6bcee19abd84a8b99c7e84713434abf3",
-          "0xb2fddc90e11d6c55351bfbd5c01e67323f4d177f55f612274a90da92d1ae68db"
+          "0xac75e53e00f5cd101ad284f3c026e26593ffe4a94edfe6580927ecb336aba5b4",
+          "0x7441be9aee85e1c6d85961ca75a9439c0c377f721069e0a93db018cd0220fc14"
         ],
         "requiredOutcomeCount": 2,
         "requireExactOutcomeCount": false,
@@ -205,8 +411,8 @@
       }
     },
     {
-      "groupKey": "winner:2026 charles schwab challenge|kind:generic",
-      "title": "winner:2026 charles schwab challenge|kind:generic",
+      "groupKey": "winner:eastern conference|kind:generic",
+      "title": "winner:eastern conference|kind:generic",
       "detectedMarketsCount": 2,
       "pricedLegs": 2,
       "missingNoAsk": 0,
@@ -218,52 +424,18 @@
       "recommendedAction": "SafeCandidateForManualVerification",
       "suggestedAllowlistTemplate": {
         "enabled": true,
-        "groupKey": "winner:2026 charles schwab challenge|kind:generic",
-        "title": "winner:2026 charles schwab challenge|kind:generic",
+        "groupKey": "winner:eastern conference|kind:generic",
+        "title": "winner:eastern conference|kind:generic",
         "verificationStatus": "Verified",
         "groupType": "MutuallyExclusiveWinner",
         "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
         "marketIds": [
-          "2354263",
-          "2354385"
+          "629100",
+          "629096"
         ],
         "conditionIds": [
-          "0x2d7f8f718fd270e99fe0b1d263af55f1898c7d1eda94d0dd2cb19812b8dedcd6",
-          "0x42d754693f24a5c8d283f94f70d91d47a307c3b9fa7be055222dba7597189d9a"
-        ],
-        "requiredOutcomeCount": 2,
-        "requireExactOutcomeCount": false,
-        "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-        "verifiedBy": "manual",
-        "verifiedAt": "2026-05-28"
-      }
-    },
-    {
-      "groupKey": "winner:most seats in 2027 mexico legislative election|kind:person",
-      "title": "winner:most seats in 2027 mexico legislative election|kind:person",
-      "detectedMarketsCount": 2,
-      "pricedLegs": 2,
-      "missingNoAsk": 0,
-      "estimatedGrossEdge": null,
-      "estimatedNetEdgeConservative": null,
-      "rawOnlyEdge": null,
-      "candidateQualityScore": 90,
-      "safetyClassification": "SafeForManualVerification",
-      "recommendedAction": "SafeCandidateForManualVerification",
-      "suggestedAllowlistTemplate": {
-        "enabled": true,
-        "groupKey": "winner:most seats in 2027 mexico legislative election|kind:person",
-        "title": "winner:most seats in 2027 mexico legislative election|kind:person",
-        "verificationStatus": "Verified",
-        "groupType": "MutuallyExclusiveWinner",
-        "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-        "marketIds": [
-          "2271400",
-          "2271398"
-        ],
-        "conditionIds": [
-          "0x3e3f8e34209c6235295c06296e75974c31158d6e182c78661391ef13c77a2146",
-          "0x9d5ef67f4aa0e00ff62abcce8493a96e8e6586f30d93561410f9f7e264fdb678"
+          "0xd50349a2c87d5a64128c40574f310f60a130d8aaf955bd3d3d69aab62b1df539",
+          "0x452f9e53cec1846bd092436b33613c64bcb03cc23e46554c3d163de39b309c52"
         ],
         "requiredOutcomeCount": 2,
         "requireExactOutcomeCount": false,

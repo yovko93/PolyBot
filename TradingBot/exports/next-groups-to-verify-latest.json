@@ -1,55 +1,7 @@
 [
   {
-    "groupKey": "winner:2026 democratic d c mayoral primary|kind:generic",
-    "title": "winner:2026 democratic d c mayoral primary|kind:generic",
-    "detectedMarketsCount": 9,
-    "pricedLegs": 9,
-    "missingNoAsk": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "rawOnlyEdge": null,
-    "candidateQualityScore": 110,
-    "safetyClassification": "SafeForManualVerification",
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:2026 democratic d c mayoral primary|kind:generic",
-      "title": "winner:2026 democratic d c mayoral primary|kind:generic",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "703742",
-        "703741",
-        "703736",
-        "703737",
-        "703739",
-        "703735",
-        "703732",
-        "703734",
-        "703733"
-      ],
-      "conditionIds": [
-        "0x83ae11433d9fbfc2d1b0ac20737238e14de1a49aad8ac9c843f0095929076992",
-        "0xd3635a3419bcccea334cf212a0a2563757361bc3975d74784c7d43fdffcf473e",
-        "0xbda4383cab42acaf2bf5e96a46fc983e5d87716392996bf277936985ed02ad14",
-        "0xe43d519c8187accd9bb3c71aeaa4088f5676a2973b8a55ab85e2910023ddb445",
-        "0xa9331a9cceb4d83a5bc12a26ae3e79a647122024ab6f1fd4c785fefd0dca0fc6",
-        "0xb82b77689a74a55992d01281871e301b6c127e2cfab9476c19bf01b734a85e35",
-        "0xb57ee7394ed65d2fed3914c255a0e368366f6f75075e71826d0bf0f315268f20",
-        "0x6dc6ae164362e3151bfe3d6b60c138c6616d7592d3c11540be98bd409a115b23",
-        "0x7a5ce7ceb8a77b024fa14c123e8267b7ab23ceb53d63b270d92517747e6ece81"
-      ],
-      "requiredOutcomeCount": 9,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-05-28"
-    }
-  },
-  {
-    "groupKey": "winner:2026 alaska governor election|kind:person",
-    "title": "winner:2026 alaska governor election|kind:person",
+    "groupKey": "winner:first round of 2026 colombian presidential election|kind:person",
+    "title": "winner:first round of 2026 colombian presidential election|kind:person",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
     "missingNoAsk": 0,
@@ -61,18 +13,18 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:2026 alaska governor election|kind:person",
-      "title": "winner:2026 alaska governor election|kind:person",
+      "groupKey": "winner:first round of 2026 colombian presidential election|kind:person",
+      "title": "winner:first round of 2026 colombian presidential election|kind:person",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "635019",
-        "635003"
+        "2039651",
+        "2039650"
       ],
       "conditionIds": [
-        "0xef25acd9423c7c1aeb1a85a2f2e295ce6bcee19abd84a8b99c7e84713434abf3",
-        "0xb2fddc90e11d6c55351bfbd5c01e67323f4d177f55f612274a90da92d1ae68db"
+        "0xc510fd09d6e1cfbfa57b7e673d78d138dbc4f7bb2b2dafe0e322ad9f1409569c",
+        "0xbc12cd85c0cb00a48320d341b51b4eeab9b4b1a98f2a1ed494a332b143c712db"
       ],
       "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
@@ -82,8 +34,8 @@
     }
   },
   {
-    "groupKey": "winner:2026 charles schwab challenge|kind:generic",
-    "title": "winner:2026 charles schwab challenge|kind:generic",
+    "groupKey": "winner:2026 world series|kind:generic",
+    "title": "winner:2026 world series|kind:generic",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
     "missingNoAsk": 0,
@@ -95,18 +47,18 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:2026 charles schwab challenge|kind:generic",
-      "title": "winner:2026 charles schwab challenge|kind:generic",
+      "groupKey": "winner:2026 world series|kind:generic",
+      "title": "winner:2026 world series|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "2354263",
-        "2354385"
+        "1235572",
+        "1235561"
       ],
       "conditionIds": [
-        "0x2d7f8f718fd270e99fe0b1d263af55f1898c7d1eda94d0dd2cb19812b8dedcd6",
-        "0x42d754693f24a5c8d283f94f70d91d47a307c3b9fa7be055222dba7597189d9a"
+        "0x749d8eccbc0a99447e71fc5e40a0096842774bef4d5c8838b8adb39af068b3cb",
+        "0x618f23aef4bb8eb98a292a0674ed5aee012164f9a762e4bc7f9a2929aa3620d1"
       ],
       "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
@@ -116,8 +68,8 @@
     }
   },
   {
-    "groupKey": "winner:most seats in 2027 mexico legislative election|kind:person",
-    "title": "winner:most seats in 2027 mexico legislative election|kind:person",
+    "groupKey": "winner:msi 2026|kind:generic",
+    "title": "winner:msi 2026|kind:generic",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
     "missingNoAsk": 0,
@@ -129,18 +81,86 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:most seats in 2027 mexico legislative election|kind:person",
-      "title": "winner:most seats in 2027 mexico legislative election|kind:person",
+      "groupKey": "winner:msi 2026|kind:generic",
+      "title": "winner:msi 2026|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "2271400",
-        "2271398"
+        "1494699",
+        "1494697"
       ],
       "conditionIds": [
-        "0x3e3f8e34209c6235295c06296e75974c31158d6e182c78661391ef13c77a2146",
-        "0x9d5ef67f4aa0e00ff62abcce8493a96e8e6586f30d93561410f9f7e264fdb678"
+        "0x1e5179e2ad483beb64cb089393817b4f4ba77c285a389d8ccdea4cc0b498fa33",
+        "0x5b5ba91ea8fde1fd4e8459c5d7a048959c40a3a3c7847ecb3ffb4e82f70c7cb5"
+      ],
+      "requiredOutcomeCount": 2,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-05-28"
+    }
+  },
+  {
+    "groupKey": "winner:2026 mls cup|kind:generic",
+    "title": "winner:2026 mls cup|kind:generic",
+    "detectedMarketsCount": 2,
+    "pricedLegs": 2,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:2026 mls cup|kind:generic",
+      "title": "winner:2026 mls cup|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "1349156",
+        "1349164"
+      ],
+      "conditionIds": [
+        "0x484d3e1f00df54f5084984da97d330cfc1a898f952d7fe87278944b459864ba9",
+        "0xd784299a136fb828bd64fb71cfb97a13441cc1bc3c0fe6f0c6d05013cd22795d"
+      ],
+      "requiredOutcomeCount": 2,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-05-28"
+    }
+  },
+  {
+    "groupKey": "winner:nobel peace prize in 2026|kind:generic",
+    "title": "winner:nobel peace prize in 2026|kind:generic",
+    "detectedMarketsCount": 2,
+    "pricedLegs": 2,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:nobel peace prize in 2026|kind:generic",
+      "title": "winner:nobel peace prize in 2026|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "637012",
+        "637011"
+      ],
+      "conditionIds": [
+        "0x720e7267b2bd49feeaed5cf254b5d5243aa4d5e4f2ac03e4a5cb1bd9eea8a6eb",
+        "0xe2cd08587e1f67a41341994fc3ea053a8ed92b5258d42acf3d4448c75095eaa5"
       ],
       "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
