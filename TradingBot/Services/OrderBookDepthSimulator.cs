@@ -12,7 +12,7 @@ public class OrderBookDepthSimulator
         _orderBooks = orderBooks;
     }
 
-    public async Task<FillSimulationResult?> SimulateBuyAsync(
+    public async Task<OrderBookFillSimulationResult?> SimulateBuyAsync(
         Market market,
         string outcome,
         decimal targetQuantity,
@@ -45,7 +45,7 @@ public class OrderBookDepthSimulator
         );
     }
 
-    public async Task<FillSimulationResult?> SimulateSellAsync(
+    public async Task<OrderBookFillSimulationResult?> SimulateSellAsync(
         Market market,
         string outcome,
         decimal targetQuantity,
@@ -78,7 +78,7 @@ public class OrderBookDepthSimulator
         );
     }
 
-    private static FillSimulationResult SimulateFill(
+    private static OrderBookFillSimulationResult SimulateFill(
         Market market,
         string outcome,
         FillSide side,
@@ -113,7 +113,7 @@ public class OrderBookDepthSimulator
             ? totalNotional / filled
             : 0m;
 
-        return new FillSimulationResult(
+        return new OrderBookFillSimulationResult(
             MarketId: market.id,
             Question: market.question,
             Outcome: outcome.ToUpperInvariant(),
