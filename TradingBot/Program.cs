@@ -52,7 +52,7 @@ app.MapGet("/api/bot/opportunities", (BotRuntimeState s, IOptions<OpportunityFil
     var include = (includeNegativeEdge ?? false) || (debug ?? false) || f.Value.EnableDebugNegativeEdgeView;
     return s.Opportunities().Where(o => include || OpportunityVisibilityFilter.IsVisibleOpportunity(o, f.Value)).TakeLast(cappedLimit).ToArray();
 });
-app.MapGet("/api/bot/positions", (BotRuntimeState s) => s.Positions());
+app.MapGet("/api/bot/positions", (BotRuntimeState s) => s.Positions().Select(p=> new { id=p.Id, groupKey=p.Group, strategy=p.Strategy, status=p.Status, openedAt=p.OpenedAt, qty=p.Qty, legs=p.Legs, totalCost=p.Cost, costPerBasket=p.CostPerBasket, guaranteedPayout=p.GuaranteedPayout, maxPayout=p.MaxPayout, grossEdgeAtOpen=p.GrossEdgeAtOpen, netEdgeAtOpen=p.NetEdgeAtOpen, expectedProfitAtOpen=p.ExpectedProfit, lockedCapital=p.LockedCapital, activeProfile=p.ActiveProfile, source=p.Source }));
 app.MapGet("/api/bot/paper-account", (BotRuntimeState s) => Results.Ok(new
 {
     cash = s.Status.Cash,
@@ -866,7 +866,7 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
         return new OpportunityDto($"{r.Engine}-{r.Key}-{i}", r.TimestampUtc, i + 1, r.Strategy, r.GroupKey ?? "", r.Leg1, "BOTH", r.EdgePerShare, r.ExpectedProfit, r.CostOrProceeds, r.GuaranteedPayout, r.QuantityAvailable, r.IsExecutable, status, reason, state.NextSeq());
     }));
 
-    state.ReplacePositions(pb.OpenPositions.Concat(pb.ClosedPositions).Take(200).Select(pz => new PaperPositionDto(pz.PositionId, pz.OpenedAtUtc, pz.ClosedAtUtc, pz.Strategy, pz.GroupKey, pz.Legs.Select(l => $"{l.Outcome}:{l.Question}").ToList(), pz.TotalCost, pz.GuaranteedPayout, pz.ExpectedProfit, pz.RealizedPayout, pz.RealizedProfit, pz.Status.ToString().ToUpperInvariant(), state.NextSeq())));
+    state.ReplacePositions(pb.OpenPositions.Concat(pb.ClosedPositions).Take(200).Select(pz => new PaperPositionDto(pz.PositionId, pz.OpenedAtUtc, pz.ClosedAtUtc, pz.Strategy, pz.GroupKey, pz.Legs.Select(l => $"{l.Outcome}:{l.Question}").ToList(), pz.Quantity, pz.TotalCost, pz.CostPerBasket, pz.GuaranteedPayout, pz.Quantity * pz.Legs.Count, pz.GrossEdgeAtOpen, pz.NetEdgeAtOpen, pz.ExpectedProfit, pz.LockedCapital, pz.ActiveProfile, pz.Source, pz.RealizedPayout, pz.RealizedProfit, pz.Status.ToString().ToUpperInvariant(), state.NextSeq())));
 
     state.ReplaceTrades(ReadTradeEntries(executionJournalPath, state, filtering));
 

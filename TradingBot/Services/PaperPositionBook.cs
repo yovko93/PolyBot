@@ -112,9 +112,15 @@ public class PaperPositionBook
             GroupKey = opportunity.GroupKey,
             Quantity = executableQuantity,
             TotalCost = totalCost,
+            CostPerBasket = opportunity.CostPerShare,
             GuaranteedPayout = executableQuantity * opportunity.GuaranteedPayoutPerShare,
             EdgePerShare = opportunity.EdgePerShare,
             ExpectedProfit = expectedProfit,
+            GrossEdgeAtOpen = opportunity.EdgePerShare,
+            NetEdgeAtOpen = opportunity.EdgePerShare,
+            LockedCapital = totalCost,
+            ActiveProfile = "Conservative",
+            Source = engine,
             Status = PaperPositionStatus.Open,
             Legs = opportunity.Legs
                 .Select(x => new PaperPositionLeg(

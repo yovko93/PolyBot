@@ -503,6 +503,25 @@ public class PaperTradingEngine
         }
     }
 
+
+    public bool SettleBasketPosition(string positionId, string winningMarketId)
+    {
+        lock (_lock)
+        {
+            if (_positionBook == null) return false;
+            var position = _positionBook.OpenPositions.FirstOrDefault(x => x.PositionId == positionId);
+            if (position == null) return false;
+            if (!string.Equals(position.Strategy, "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", StringComparison.OrdinalIgnoreCase)) return false;
+            var legsCount = position.Legs.Count;
+            var inside = position.Legs.Any(x => string.Equals(x.MarketId, winningMarketId, StringComparison.OrdinalIgnoreCase));
+            var payout = (inside ? (legsCount - 1) : legsCount) * position.Quantity;
+            var ok = SettlePosition(positionId, payout);
+            if (!ok) return false;
+            Console.WriteLine($"[PAPER BASKET SETTLED] Group={position.GroupKey} WinningMarket={winningMarketId} Payout={payout:0.####} Cost={position.TotalCost:0.####} RealizedProfit={payout - position.TotalCost:0.####}");
+            return true;
+        }
+    }
+
     private static string BuildBasketKey(BasketArbOpportunity opportunity)
     {
         var legsKey = string.Join("|",
