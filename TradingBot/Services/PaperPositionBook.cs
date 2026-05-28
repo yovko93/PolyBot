@@ -121,6 +121,11 @@ public class PaperPositionBook
             LockedCapital = totalCost,
             ActiveProfile = "Conservative",
             Source = engine,
+            CurrentNoAskSum = opportunity.CostPerShare,
+            CurrentExitValue = null,
+            UnrealizedPnl = 0m,
+            MtmStatus = "Incomplete",
+            MissingExitPrices = opportunity.Legs.Count,
             Status = PaperPositionStatus.Open,
             Legs = opportunity.Legs
                 .Select(x => new PaperPositionLeg(

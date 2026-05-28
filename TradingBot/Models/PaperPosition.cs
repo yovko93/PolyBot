@@ -42,6 +42,12 @@ public class PaperPosition
     public string ActiveProfile { get; init; } = "";
     public string Source { get; init; } = "";
 
+    public decimal CurrentNoAskSum { get; set; }
+    public decimal? CurrentExitValue { get; set; }
+    public decimal UnrealizedPnl { get; set; }
+    public string MtmStatus { get; set; } = "Incomplete";
+    public int MissingExitPrices { get; set; }
+
     public decimal? RealizedPayout { get; set; }
     public decimal? RealizedProfit { get; set; }
 

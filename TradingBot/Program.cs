@@ -530,6 +530,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                     verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "DuplicateSuppressed", "Suppressed", "DuplicateOpenPosition", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, $"Count={suppressedCount}"));
                                     if (options.Logging.LogDuplicatePositionEveryNCycles <= 1 || suppressedCount % options.Logging.LogDuplicatePositionEveryNCycles == 0)
                                         Console.WriteLine($"[VERIFIED_EXECUTION_SUPPRESSED] Group={opp.GroupKey} Reason=DuplicateOpenPosition Count={suppressedCount}");
+                                    state.AddOpportunity(new OpportunityDto($"{opp.Id}-dup-{suppressedCount}", DateTime.UtcNow, 1, opp.Strategy, opp.GroupKey, opp.Title, "NO", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.GuaranteedPayout, opp.ExecutableQty, false, "DUPLICATE_SUPPRESSED", "AlreadyOpen", state.NextSeq()));
+
                                 }
                                 else
                                 {
@@ -541,7 +543,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 Console.WriteLine($"[VERIFIED_PRETRADE_APPROVED] Group={opp.GroupKey} NetEdge={pre.NetEdge} Qty={pre.Quantity} EstimatedCost={pre.EstimatedCost} ExpectedProfit={pre.ExpectedProfit}");
                                 var opened = verifiedExecution.OpenPaperPosition(opp, pre, positionBook);
                                 if (opened is null) Console.WriteLine($"[PAPER BASKET SKIPPED] Group={opp.GroupKey} Reason=DuplicateOpenPosition");
-                                else Console.WriteLine($"[PAPER BASKET OPENED] Group={opp.GroupKey} Legs={opp.LegsCount} Qty={pre.Quantity} Cost={pre.EstimatedCost} NetEdge={pre.NetEdge} ExpectedProfit={pre.ExpectedProfit}");
+                                else { Console.WriteLine($"[PAPER BASKET OPENED] Group={opp.GroupKey} Legs={opp.LegsCount} Qty={pre.Quantity} Cost={pre.EstimatedCost} NetEdge={pre.NetEdge} ExpectedProfit={pre.ExpectedProfit}"); Console.WriteLine($"[PAPER_BASKET_MTM] Group={opp.GroupKey} MtMStatus=Incomplete MissingExitPrices={opp.LegsCount}"); }
                             }
                         }
                         skipReason = isExec ? "Executable" : "NegativeEdge";
@@ -874,7 +876,7 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
         return new OpportunityDto($"{r.Engine}-{r.Key}-{i}", r.TimestampUtc, i + 1, r.Strategy, r.GroupKey ?? "", r.Leg1, "BOTH", r.EdgePerShare, r.ExpectedProfit, r.CostOrProceeds, r.GuaranteedPayout, r.QuantityAvailable, r.IsExecutable, status, reason, state.NextSeq());
     }));
 
-    state.ReplacePositions(pb.OpenPositions.Concat(pb.ClosedPositions).Take(200).Select(pz => new PaperPositionDto(pz.PositionId, pz.OpenedAtUtc, pz.ClosedAtUtc, pz.Strategy, pz.GroupKey, pz.Legs.Select(l => $"{l.Outcome}:{l.Question}").ToList(), pz.Quantity, pz.TotalCost, pz.CostPerBasket, pz.GuaranteedPayout, pz.Quantity * pz.Legs.Count, pz.GrossEdgeAtOpen, pz.NetEdgeAtOpen, pz.ExpectedProfit, pz.LockedCapital, pz.ActiveProfile, pz.Source, pz.RealizedPayout, pz.RealizedProfit, pz.Status.ToString().ToUpperInvariant(), state.NextSeq())));
+    state.ReplacePositions(pb.OpenPositions.Concat(pb.ClosedPositions).Take(200).Select(pz => new PaperPositionDto(pz.PositionId, pz.OpenedAtUtc, pz.ClosedAtUtc, pz.Strategy, pz.GroupKey, pz.Legs.Select(l => $"{l.Outcome}:{l.Question}").ToList(), pz.Quantity, pz.TotalCost, pz.CostPerBasket, pz.GuaranteedPayout, pz.Quantity * pz.Legs.Count, pz.GrossEdgeAtOpen, pz.NetEdgeAtOpen, pz.ExpectedProfit, pz.LockedCapital, pz.ActiveProfile, pz.Source, pz.CurrentNoAskSum, pz.CurrentExitValue, pz.UnrealizedPnl, pz.MtmStatus, pz.MissingExitPrices, pz.RealizedPayout, pz.RealizedProfit, pz.Status.ToString().ToUpperInvariant(), state.NextSeq())));
 
     state.ReplaceTrades(ReadTradeEntries(executionJournalPath, state, filtering));
 
