@@ -310,11 +310,15 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var lastPortfolioFingerprint = string.Empty;
     var lastMtmFingerprint = string.Empty;
     var mismatchCycle = 0;
+    var experimentalCandidateCycle = 0;
+    var lastExperimentalFingerprintByGroup = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+    var lastProfileComparisonFingerprint = string.Empty;
     var mismatchFingerprintByGroup = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
     var runtimeHealthLastLoggedAt = DateTime.MinValue;
     var basketStateByGroup = new Dictionary<string, VerifiedBasketState>(StringComparer.OrdinalIgnoreCase);
     var stability = new VerifiedOpportunityStabilityTracker();
     var edgeStabilityLogThrottle = new EdgeStabilityLogThrottle();
+    var logThrottle = new LogThrottle();
     var verifiedBasketLastFingerprint = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     var verifiedBasketLastExecutable = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
     var verifiedPricingLastFingerprint = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -409,6 +413,11 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var verifiedResolved = resolved.Count - verifiedMismatch;
                     var verifiedEvaluated = 0;
                     var verifiedExecutable = 0;
+                    var activeExecutable = 0;
+                    var experimentalCandidates = 0;
+                    var diagnosticsOnlyPositive = 0;
+                    var paperOpenedCount = 0;
+                    var suppressedDuplicateCount = 0;
                     var skipReason = "None";
                     var groupDiagnostics = new List<VerifiedGroupDiagnosticDto>();
                     var pricingDiagnostics = new List<VerifiedGroupPricingDto>();
@@ -525,26 +534,30 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         }
                         var edge = formula.NetEdge;
                         var isExec = edge > options.MultiOutcomeArbitrage.MinMultiOutcomeEdge;
-                        if (isExec)
+                        var strategyName = "BUY_ALL_NO_MUTUALLY_EXCLUSIVE";
+                        var hasOpenPosition = positionBook.GetOpenPositions().Any(x => x.GroupKey.Equals(g.GroupKey, StringComparison.OrdinalIgnoreCase) && x.Strategy == strategyName);
+                        if (hasOpenPosition)
+                        {
+                            paperOpenedCount++;
+                            suppressedDuplicateCount++;
+                            stability.MarkSuppressedDuplicate(g.GroupKey);
+                            var suppressedCount = verifiedExecution.MarkDuplicateSuppressed(g.GroupKey);
+                            var duplicateId = $"verified-{g.GroupKey}-{DateTime.UtcNow:yyyyMMddHHmmss}";
+                            verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, duplicateId, g.GroupKey, strategyName, "DuplicateSuppressed", "Suppressed", "DuplicateOpenPosition", formula.NetEdge, 0m, formula.NoAskSum, 0m, $"Count={suppressedCount}"));
+                            state.AddOpportunity(new OpportunityDto($"{duplicateId}-dup-{suppressedCount}", DateTime.UtcNow, 1, strategyName, g.GroupKey, g.Title, "NO", formula.NetEdge, 0m, 0m, formula.GuaranteedPayout, 0m, false, "ALREADY_OPEN", "AlreadyOpen", state.NextSeq()));
+                            if (options.Logging.LogExecutionSuppressionSummary && (suppressedCount == 1 || options.Logging.LogDuplicatePositionEveryNCycles <= 1 || suppressedCount % options.Logging.LogDuplicatePositionEveryNCycles == 0))
+                                Console.WriteLine($"[VERIFIED_EXECUTION_SUPPRESSED] Group={g.GroupKey} Reason=DuplicateOpenPosition Count={suppressedCount} LastNetEdge={formula.NetEdge}");
+                        }
+                        if (isExec && !hasOpenPosition)
                         {
                             verifiedExecutable++;
+                            activeExecutable++;
                             var maxLiquidityQty = Math.Max(options.MultiOutcomeArbitrage.MinExecutableQty, resolvedNoAsks.Min(x => x.NoAskQuantity ?? 0m));
                             var maxLiquidityExpectedProfit = maxLiquidityQty * formula.NetEdge;
                             var questionByMarket = markets.Where(m => !string.IsNullOrWhiteSpace(m.id)).ToDictionary(m => m.id, m => m.question ?? m.id, StringComparer.OrdinalIgnoreCase);
                             var legs = resolvedNoAsks.Select(x => new VerifiedMultiOutcomeOpportunityLeg(x.MarketId, x.ConditionId ?? x.MarketId, questionByMarket.TryGetValue(x.MarketId, out var q) ? q : x.MarketId, "NO", x.NoTokenId ?? x.MarketId, x.NoAsk ?? 0m, x.NoAskQuantity ?? 0m, x.Source, maxLiquidityQty, maxLiquidityQty * (x.NoAsk ?? 0m))).ToArray();
-                            var opp = new VerifiedMultiOutcomeOpportunity($"verified-{g.GroupKey}-{DateTime.UtcNow:yyyyMMddHHmmss}", "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", g.GroupKey, g.Title, "Verified", legs.Length, formula.GuaranteedPayout, formula.NoAskSum, formula.GrossEdge, formula.NetEdge, activeCostProfileName, maxLiquidityQty, maxLiquidityExpectedProfit, options.MultiOutcomeArbitrage.MaxNotionalPerGroup, maxLiquidityQty * formula.NoAskSum, "PaperExecutable", legs);
+                            var opp = new VerifiedMultiOutcomeOpportunity($"verified-{g.GroupKey}-{DateTime.UtcNow:yyyyMMddHHmmss}", strategyName, g.GroupKey, g.Title, "Verified", legs.Length, formula.GuaranteedPayout, formula.NoAskSum, formula.GrossEdge, formula.NetEdge, activeCostProfileName, maxLiquidityQty, maxLiquidityExpectedProfit, options.MultiOutcomeArbitrage.MaxNotionalPerGroup, maxLiquidityQty * formula.NoAskSum, "PaperExecutable", legs);
                             promotedVerifiedOpportunities.Add(opp);
-
-                            var hasOpenPosition = positionBook.GetOpenPositions().Any(x => x.GroupKey.Equals(opp.GroupKey, StringComparison.OrdinalIgnoreCase) && x.Strategy == opp.Strategy);
-                            if (hasOpenPosition)
-                            {
-                                var suppressedCount = verifiedExecution.MarkDuplicateSuppressed(opp.GroupKey);
-                                verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "DuplicateSuppressed", "Suppressed", "DuplicateOpenPosition", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, $"Count={suppressedCount}"));
-                                state.AddOpportunity(new OpportunityDto($"{opp.Id}-dup-{suppressedCount}", DateTime.UtcNow, 1, opp.Strategy, opp.GroupKey, opp.Title, "NO", opp.NetEdge, 0m, 0m, opp.GuaranteedPayout, 0m, false, "ALREADY_OPEN", "AlreadyOpen", state.NextSeq()));
-                                if (options.Logging.LogExecutionSuppressionSummary && (suppressedCount == 1 || options.Logging.LogDuplicatePositionEveryNCycles <= 1 || suppressedCount % options.Logging.LogDuplicatePositionEveryNCycles == 0))
-                                    Console.WriteLine($"[VERIFIED_EXECUTION_SUPPRESSED] Group={opp.GroupKey} Reason=DuplicateOpenPosition Count={suppressedCount} LastNetEdge={opp.NetEdge}");
-                                continue;
-                            }
 
                             verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "Detected", "Ok", "VerifiedExecutable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
                             verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PromotedToOpportunity", "Ok", "Actionable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
@@ -647,10 +660,30 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 }
                                 var opened = verifiedExecution.OpenPaperPosition(opp, pre, positionBook, fill);
                                 if (opened is null) Console.WriteLine($"[PAPER BASKET SKIPPED] Group={opp.GroupKey} Reason={(fill.Status == FillSimulationStatus.FullyFillable ? "DuplicateOpenPosition" : "FillSimulationFailed")}");
-                                else { paper.RegisterExternalBasketOpen(opened, opened.TotalCost, opened.ExpectedProfit); Console.WriteLine($"[PAPER BASKET OPENED] Group={opp.GroupKey} Legs={opp.LegsCount} Qty={opened.Quantity:0.####} Cost={opened.TotalCost:0.####} GrossEdge={opened.GrossEdgeAtOpen:0.####} NetEdge={opened.NetEdgeAtOpen:0.####} FillAdjustedNetEdge={fill.FillAdjustedNetEdgePerBasket:0.####} ExpectedProfit={opened.ExpectedProfit:0.####} CostSource=FillSimulation Profile={opened.ActiveProfile}"); Console.WriteLine($"[PAPER ACCOUNT] Cash={paper.Balance:0.####} Locked={paper.LockedCapital:0.####} OpenExposure={paper.LockedCapital:0.####} UnrealizedPnl={paper.UnrealizedPnl:0.####} RealizedPnl={paper.RealizedPnl:0.####} Equity={paper.Equity:0.####} OpenPositions={positionBook.OpenPositions.Count}"); var mtmFingerprint=$"{opp.GroupKey}|Incomplete|{opp.LegsCount}"; mtmCycle++; var logMtm = !options.Logging.LogPaperMtmOnChangeOnly || mtmFingerprint != lastMtmFingerprint || (options.Logging.LogPaperMtmEveryNCycles > 0 && mtmCycle % options.Logging.LogPaperMtmEveryNCycles == 0); lastMtmFingerprint = mtmFingerprint; if (logMtm) Console.WriteLine($"[PAPER_BASKET_MTM] Group={opp.GroupKey} MtMStatus=Incomplete MissingExitPrices={opp.LegsCount}"); verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "MtMUpdated", "Ok", "Incomplete", opened.NetEdgeAtOpen, 0m, opened.TotalCost, opened.Quantity, $"MissingExitPrices={opp.LegsCount}")); }
+                                else { stability.MarkPaperOpened(opp.GroupKey); paper.RegisterExternalBasketOpen(opened, opened.TotalCost, opened.ExpectedProfit); Console.WriteLine($"[PAPER BASKET OPENED] Group={opp.GroupKey} Legs={opp.LegsCount} Qty={opened.Quantity:0.####} Cost={opened.TotalCost:0.####} GrossEdge={opened.GrossEdgeAtOpen:0.####} NetEdge={opened.NetEdgeAtOpen:0.####} FillAdjustedNetEdge={fill.FillAdjustedNetEdgePerBasket:0.####} ExpectedProfit={opened.ExpectedProfit:0.####} CostSource=FillSimulation Profile={opened.ActiveProfile}"); Console.WriteLine($"[PAPER ACCOUNT] Cash={paper.Balance:0.####} Locked={paper.LockedCapital:0.####} OpenExposure={paper.LockedCapital:0.####} UnrealizedPnl={paper.UnrealizedPnl:0.####} RealizedPnl={paper.RealizedPnl:0.####} Equity={paper.Equity:0.####} OpenPositions={positionBook.OpenPositions.Count}"); var mtmFingerprint=$"{opp.GroupKey}|Incomplete|{opp.LegsCount}"; mtmCycle++; var logMtm = !options.Logging.LogPaperMtmOnChangeOnly || mtmFingerprint != lastMtmFingerprint || (options.Logging.LogPaperMtmEveryNCycles > 0 && mtmCycle % options.Logging.LogPaperMtmEveryNCycles == 0); lastMtmFingerprint = mtmFingerprint; if (logMtm) Console.WriteLine($"[PAPER_BASKET_MTM] Group={opp.GroupKey} MtMStatus=Incomplete MissingExitPrices={opp.LegsCount}"); verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "MtMUpdated", "Ok", "Incomplete", opened.NetEdgeAtOpen, 0m, opened.TotalCost, opened.Quantity, $"MissingExitPrices={opp.LegsCount}")); }
                             }
                         }
-                        skipReason = isExec ? "Executable" : "NegativeEdge";
+
+                        if (!isExec && !hasOpenPosition && screen.ExecutionStatus == VerifiedBasketScreener.ExecutionStatus.ExperimentalPaperCandidate)
+                        {
+                            experimentalCandidates++;
+                            var expState = stability.TrackExperimental(g.GroupKey, screen.ActiveProfileNetEdge, screen.ExperimentalProfileNetEdge, options.RequiredConsecutiveExperimentalScans, options.MinExperimentalNetEdgePerBasket);
+                            experimentalCandidateCycle++;
+                            var expFingerprint = $"{g.GroupKey}|{screen.ActiveProfileNetEdge}|{screen.ExperimentalProfileNetEdge}|{expState}|{screen.ExecutionStatus}";
+                            var expChanged = !lastExperimentalFingerprintByGroup.TryGetValue(g.GroupKey, out var prevExp) || prevExp != expFingerprint;
+                            lastExperimentalFingerprintByGroup[g.GroupKey] = expFingerprint;
+                            var expPeriodic = options.Logging.LogExperimentalCandidateEveryNCycles > 0 && experimentalCandidateCycle % options.Logging.LogExperimentalCandidateEveryNCycles == 0;
+                            if (!options.Logging.LogExperimentalCandidateOnChangeOnly || expChanged || expPeriodic)
+                                Console.WriteLine($"[EXPERIMENTAL_PROFILE_PENDING] Group={g.GroupKey} Consecutive={stability.ConsecutiveExperimental(g.GroupKey)} Required={options.RequiredConsecutiveExperimentalScans} ExperimentalNet={screen.ExperimentalProfileNetEdge:0.####} ActiveNet={screen.ActiveProfileNetEdge:0.####} State={expState}");
+                            if (expState == VerifiedBasketState.ExperimentalProfileStable && !options.EnableExperimentalProfilePaper && (expChanged || expPeriodic))
+                                Console.WriteLine($"[EXPERIMENTAL_PROFILE_BLOCKED] Group={g.GroupKey} Reason=ExperimentalPaperDisabled");
+                        }
+                        if (!isExec && screen.ExecutionStatus == VerifiedBasketScreener.ExecutionStatus.DiagnosticsOnlyPositive)
+                        {
+                            diagnosticsOnlyPositive++;
+                            stability.MarkDiagnosticsOnly(g.GroupKey);
+                        }
+                        skipReason = hasOpenPosition ? "AlreadyOpen" : isExec ? "Executable" : screen.ExecutionStatus == VerifiedBasketScreener.ExecutionStatus.ExperimentalPaperCandidate ? "ExperimentalProfileCandidate" : "NegativeEdge";
                         groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, "VerifiedResolved", skipReason, edge, 0, 0, Array.Empty<string>(), Array.Empty<string>()));
                         pricingDiagnostics.Add(new VerifiedGroupPricingDto(g.GroupKey, resolvedNoAsks.Count, formula.GuaranteedPayout, formula.NoAskSum, formula.MinNoAsk, formula.MaxNoAsk, formula.AverageNoAsk, formula.GrossEdge, formula.Fees, formula.Slippage, formula.SafetyBuffer, formula.NetEdge, 1, formula.NetEdge, skipReason, formula.FormulaWarnings));
                         verifiedPricingExport.Add(new
@@ -700,7 +733,14 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     VerifiedBasketScreener.Export(screenerPath, snapshot);
                     foreach (var row in snapshot.ExperimentalCandidates)
                     {
-                        Console.WriteLine($"[EXPERIMENTAL_PROFILE_CANDIDATE] Group={row.GroupKey} ActiveProfile={snapshot.ActiveProfile} ActiveNet={row.ActiveProfileNetEdge} ExperimentalProfile={snapshot.ExperimentalProfile} ExperimentalNet={row.ExperimentalProfileNetEdge} Status=PendingStability");
+                        experimentalCandidateCycle++;
+                        var expState = stability.State(row.GroupKey);
+                        var expFingerprint = $"{row.GroupKey}|{row.ActiveProfileNetEdge}|{row.ExperimentalProfileNetEdge}|{expState}|{row.ExecutionStatus}";
+                        var expChanged = !lastExperimentalFingerprintByGroup.TryGetValue(row.GroupKey, out var prevExp) || prevExp != expFingerprint;
+                        lastExperimentalFingerprintByGroup[row.GroupKey] = expFingerprint;
+                        var expPeriodic = options.Logging.LogExperimentalCandidateEveryNCycles > 0 && experimentalCandidateCycle % options.Logging.LogExperimentalCandidateEveryNCycles == 0;
+                        if (!options.Logging.LogExperimentalCandidateOnChangeOnly || expChanged || expPeriodic)
+                            Console.WriteLine($"[EXPERIMENTAL_PROFILE_CANDIDATE] Group={row.GroupKey} ActiveProfile={snapshot.ActiveProfile} ActiveNet={row.ActiveProfileNetEdge} ExperimentalProfile={snapshot.ExperimentalProfile} ExperimentalNet={row.ExperimentalProfileNetEdge} Status={expState}");
                     }
                     var experimentalExportPath = Path.Combine(contentRootPath, "exports/experimental-profile-paper-candidates-latest.json");
                     File.WriteAllText(experimentalExportPath, System.Text.Json.JsonSerializer.Serialize(new { timestamp = DateTime.UtcNow, activeProfile = snapshot.ActiveProfile, experimentalProfile = snapshot.ExperimentalProfile, candidates = snapshot.ExperimentalCandidates, stabilityState = stability.Summaries(), paperActions = Array.Empty<object>(), blockedReasons = Array.Empty<object>() }, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
@@ -713,12 +753,14 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     }
                     stability.Export(Path.Combine(contentRootPath, "exports/verified-basket-edge-history-latest.json"));
                     stability.ExportExecutionReadiness(Path.Combine(contentRootPath, "exports/execution-readiness-latest.json"), executionOptions.RequiredConsecutiveExecutionReadyScans);
-                    var verifiedRowsWithReadiness = snapshot.VerifiedBaskets.Select(row => BuildVerifiedScreenerRow(row, stability, executionOptions)).Take(100).ToArray();
-                    var rankingRowsWithReadiness = snapshot.VerifiedBaskets.Select(row => BuildVerifiedScreenerRow(row, stability, executionOptions)).Take(100).ToArray();
+                    var openGroupKeys = positionBook.GetOpenPositions().Select(x => $"{x.GroupKey}|{x.Strategy}").ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var verifiedRowsWithReadiness = snapshot.VerifiedBaskets.Select(row => BuildVerifiedScreenerRow(row, stability, executionOptions, openGroupKeys, verifiedExecution)).Take(100).ToArray();
+                    var rankingRowsWithReadiness = snapshot.VerifiedBaskets.Select(row => BuildVerifiedScreenerRow(row, stability, executionOptions, openGroupKeys, verifiedExecution)).Take(100).ToArray();
                     state.SetVerifiedBasketScreener(new VerifiedBasketScreenerDto(snapshot.ActiveProfile, snapshot.ExperimentalProfile, snapshot.Timestamp, verifiedRowsWithReadiness, rankingRowsWithReadiness, snapshot.NearExecutableBaskets.Cast<object>().Take(25).ToArray(), snapshot.ExperimentalCandidates.Cast<object>().Take(100).ToArray(), snapshot.StableExperimentalCandidates.Cast<object>().Take(100).ToArray(), snapshot.ActiveProfileExecutable.Cast<object>().Take(100).ToArray(), snapshot.DiagnosticsOnlyPositive.Cast<object>().Take(100).ToArray(), snapshot.Profiles, snapshot.BestByActiveProfile, snapshot.BestByRawEdge, snapshot.BestByConservative, snapshot.BestByPolymarketApprox, snapshot.BestByRaw, snapshot.BestNearExecutable, snapshot.UnresolvedConfiguredGroups, stability.ReadinessSummaries(executionOptions.RequiredConsecutiveExecutionReadyScans).Cast<object>().ToArray()));
                     profileComparisonCycle++;
-                    var shouldLogProfileComparison = options.Logging.LogProfileComparisonEveryNCycles > 0 && profileComparisonCycle % options.Logging.LogProfileComparisonEveryNCycles == 0;
-                    if (options.Logging.LogProfileComparisonSummary && shouldLogProfileComparison)
+                    var profileComparisonFingerprint = string.Join("|", snapshot.VerifiedBaskets.Take(5).Select(row => $"{row.GroupKey}:{row.GrossEdge}:{row.ActiveProfileNetEdge}:{row.ExperimentalProfileNetEdge}"));
+                    var shouldLogProfileComparison = options.Logging.LogProfileComparisonSummary && logThrottle.ShouldLog("PROFILE_COMPARISON", profileComparisonFingerprint, options.Logging.LogProfileComparisonOnChangeOnly, options.Logging.LogProfileComparisonEveryNCycles);
+                    if (shouldLogProfileComparison)
                     {
                         foreach (var row in snapshot.VerifiedBaskets.Take(5))
                         {
@@ -755,9 +797,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     {
                         verifiedBasketRankingCycle++;
                         var rankingFingerprint = $"{rankedScreen.Count}|{rankedScreen[0].GrossEdge}|{rankedScreen[0].ActiveProfileNetEdge}|{rankedScreen[0].GroupKey}|{rankedScreen[0].Classification}";
-                        var shouldLogRanking = !options.Logging.LogVerifiedBasketOnlyOnChangeRanking
-                            || rankingFingerprint != lastRankingFingerprint
-                            || (options.Logging.LogVerifiedBasketRankingEveryNCycles > 0 && verifiedBasketRankingCycle % options.Logging.LogVerifiedBasketRankingEveryNCycles == 0);
+                        var shouldLogRanking = logThrottle.ShouldLog("VERIFIED_BASKET_RANKING", rankingFingerprint, options.Logging.LogVerifiedBasketOnlyOnChangeRanking, options.Logging.LogVerifiedBasketRankingEveryNCycles);
                         lastRankingFingerprint = rankingFingerprint;
                         if (shouldLogRanking) Console.WriteLine($"[VERIFIED_BASKET_RANKING] Count={rankedScreen.Count} BestGrossEdge={rankedScreen[0].GrossEdge} BestNetEdge={rankedScreen[0].ActiveProfileNetEdge} BestGroup={rankedScreen[0].GroupKey} Classification={rankedScreen[0].Classification}");
                     }
@@ -774,11 +814,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var candidateFingerprint = $"{candidateCount}|{rejectedCount}|{multiOutcomeReport.TopSkipReason}|{candidateReasons}";
                     var hasExecutableAutoCandidates = multiOutcomeReport.ExecutableGroups > 0;
                     var distributionChanged = !string.Equals(candidateFingerprint, lastCandidateScanFingerprint, StringComparison.Ordinal);
-                    var periodicCandidate = options.Logging.LogCandidateScanEveryNCycles > 0 && candidateScanCycle % options.Logging.LogCandidateScanEveryNCycles == 0;
-                    var firstCandidateScan = string.IsNullOrEmpty(lastCandidateScanFingerprint);
-                    var shouldLogCandidate = firstCandidateScan
-                        || periodicCandidate
-                        || (!options.Logging.LogCandidateScanOnChangeOnly)
+                    var shouldLogCandidate = logThrottle.ShouldLog("MULTI_CANDIDATE_SCAN", candidateFingerprint, options.Logging.LogCandidateScanOnChangeOnly, options.Logging.LogCandidateScanEveryNCycles)
                         || (options.Logging.LogCandidateScanWhenRejectDistributionChanges && distributionChanged)
                         || (options.Logging.LogCandidateScanWhenExecutableOnly && hasExecutableAutoCandidates);
                     if (shouldLogCandidate)
@@ -789,12 +825,12 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var bestRaw = snapshot.VerifiedBaskets.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue).DefaultIfEmpty(decimal.MinValue).Max();
                     var unresolved = Math.Max(0, multiOutcomeValidator.LoadedAllowlistCount - verifiedResolved);
                     verifiedScanCycle++;
-                    var verifiedScanFingerprint = $"{multiOutcomeValidator.LoadedAllowlistCount}|{verifiedResolved}|{unresolved}|{verifiedEvaluated}|{verifiedExecutable}|{verifiedMismatch}|{bestConservativeNet}|{bestPoly}|{bestRaw}";
+                    var verifiedScanFingerprint = $"{multiOutcomeValidator.LoadedAllowlistCount}|{verifiedResolved}|{unresolved}|{verifiedEvaluated}|{activeExecutable}|{experimentalCandidates}|{diagnosticsOnlyPositive}|{paperOpenedCount}|{suppressedDuplicateCount}|{verifiedMismatch}|{bestConservativeNet}|{bestPoly}|{bestRaw}";
                     var shouldLogVerifiedScan = string.IsNullOrEmpty(lastVerifiedScanFingerprint)
                         || !options.Logging.LogVerifiedScanOnChangeOnly
                         || verifiedScanFingerprint != lastVerifiedScanFingerprint
                         || (options.Logging.LogVerifiedScanEveryNCycles > 0 && verifiedScanCycle % options.Logging.LogVerifiedScanEveryNCycles == 0);
-                    if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} Evaluated={verifiedEvaluated} Executable={verifiedExecutable} Mismatch={verifiedMismatch} BestConservativeNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestPolymarketApproxNet={bestPoly} BestRaw={bestRaw}");
+                    if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} Evaluated={verifiedEvaluated} ActiveExecutable={activeExecutable} ExperimentalCandidates={experimentalCandidates} DiagnosticsOnlyPositive={diagnosticsOnlyPositive} PaperOpened={paperOpenedCount} SuppressedDuplicate={suppressedDuplicateCount} Mismatch={verifiedMismatch} BestActiveNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestExperimentalNet={bestPoly} BestRaw={bestRaw}");
                     lastVerifiedScanFingerprint = verifiedScanFingerprint;
                     foreach (var ug in unresolvedConfiguredGroups.Take(3)) Console.WriteLine($"[VERIFIED_UNRESOLVED_SAMPLE] {System.Text.Json.JsonSerializer.Serialize(ug)}");
 
@@ -1187,12 +1223,14 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
 
 
 
-static object BuildVerifiedScreenerRow(VerifiedBasketScreener.ScreenResult row, VerifiedOpportunityStabilityTracker stability, ExecutionOptions executionOptions)
+static object BuildVerifiedScreenerRow(VerifiedBasketScreener.ScreenResult row, VerifiedOpportunityStabilityTracker stability, ExecutionOptions executionOptions, ISet<string>? openGroupKeys = null, VerifiedBasketExecutionCoordinator? verifiedExecution = null)
 {
     var json = System.Text.Json.JsonSerializer.SerializeToNode(row)!.AsObject();
     var latest = stability.LatestReadiness(row.GroupKey);
     var state = stability.State(row.GroupKey);
-    json["edgeStabilityStatus"] = state is VerifiedBasketState.EdgeStable or VerifiedBasketState.ExecutionReadinessPending or VerifiedBasketState.ExecutionStable or VerifiedBasketState.PaperOpened ? "EdgeStable" : state.ToString();
+    var strategy = "BUY_ALL_NO_MUTUALLY_EXCLUSIVE";
+    var hasOpenPaperPosition = openGroupKeys?.Contains($"{row.GroupKey}|{strategy}") ?? false;
+    json["edgeStabilityStatus"] = state is VerifiedBasketState.EdgeStable or VerifiedBasketState.ExecutionReadinessPending or VerifiedBasketState.ExecutionStable or VerifiedBasketState.PaperOpened or VerifiedBasketState.SuppressedDuplicate ? "EdgeStable" : state.ToString();
     json["executionReadinessStatus"] = state == VerifiedBasketState.ExecutionStable ? "ExecutionStable" : state == VerifiedBasketState.ExecutionReadinessPending ? "ExecutionReadinessPending" : "WaitingForExecutionReadiness";
     json["consecutiveEdgeScans"] = stability.Consecutive(row.GroupKey);
     json["requiredEdgeScans"] = executionOptions.RequiredConsecutiveExecutableScans;
@@ -1203,7 +1241,17 @@ static object BuildVerifiedScreenerRow(VerifiedBasketScreener.ScreenResult row, 
     json["latestReadinessSample"] = latest is null ? null : System.Text.Json.JsonSerializer.SerializeToNode(latest);
     json["readinessHistorySummary"] = System.Text.Json.JsonSerializer.SerializeToNode(stability.ReadinessSummaries(executionOptions.RequiredConsecutiveExecutionReadyScans).FirstOrDefault(x => x.GroupKey.Equals(row.GroupKey, StringComparison.OrdinalIgnoreCase)));
     json["notReadyReason"] = latest?.NotReadyReason;
-    json["uiStatus"] = state == VerifiedBasketState.ExecutionStable ? "Actionable" : "WaitingForExecutionReadiness";
+    json["state"] = state.ToString();
+    json["hasOpenPaperPosition"] = hasOpenPaperPosition;
+    json["suppressionCount"] = verifiedExecution?.GetSuppressionCount(row.GroupKey) ?? 0;
+    json["activeExecutable"] = !hasOpenPaperPosition && row.ExecutionStatus == VerifiedBasketScreener.ExecutionStatus.ExecutableUnderActiveProfile;
+    json["experimentalCandidate"] = row.ExecutionStatus == VerifiedBasketScreener.ExecutionStatus.ExperimentalPaperCandidate;
+    json["diagnosticsOnly"] = row.ExecutionStatus == VerifiedBasketScreener.ExecutionStatus.DiagnosticsOnlyPositive;
+    json["paperOpened"] = hasOpenPaperPosition || state is VerifiedBasketState.PaperOpened or VerifiedBasketState.SuppressedDuplicate;
+    json["lastStateTransition"] = DateTime.UtcNow - stability.StateAge(row.GroupKey);
+    json["lastSuppressionReason"] = hasOpenPaperPosition ? "DuplicateOpenPosition" : null;
+    json["experimentalProfileNetEdge"] = row.ExperimentalProfileNetEdge;
+    json["uiStatus"] = state == VerifiedBasketState.ExecutionStable ? "Actionable" : hasOpenPaperPosition ? "AlreadyOpen" : "WaitingForExecutionReadiness";
     return json;
 }
 

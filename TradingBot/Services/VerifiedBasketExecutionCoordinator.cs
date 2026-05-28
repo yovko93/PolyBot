@@ -117,6 +117,14 @@ public sealed class VerifiedBasketExecutionCoordinator
         }
     }
 
+    public int GetSuppressionCount(string groupKey)
+    {
+        lock (_gate)
+        {
+            return _duplicateSuppressionByGroup.TryGetValue(groupKey, out var c) ? c : 0;
+        }
+    }
+
     public void ExportAudit(string path, int limit = 500)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);

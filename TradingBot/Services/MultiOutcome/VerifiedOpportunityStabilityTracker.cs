@@ -5,7 +5,7 @@ using TradingBot.Services.MultiOutcome;
 
 namespace TradingBot.Services;
 
-public enum VerifiedBasketState { NotExecutable, NearExecutable, EdgeExecutablePending, EdgeStable, ExecutionReadinessPending, ExecutionStable, PaperOpened, SuppressedDuplicate }
+public enum VerifiedBasketState { NotExecutable, NearExecutable, EdgeExecutablePending, EdgeStable, ExecutionReadinessPending, ExecutionStable, PaperOpened, SuppressedDuplicate, ExperimentalProfilePending, ExperimentalProfileStable, DiagnosticsOnly }
 
 public sealed record VerifiedBasketEdgeSample(DateTime Timestamp, decimal GrossEdge, decimal ConservativeNet, decimal PolymarketApproxNet, decimal RawOnlyNet, bool Executable, string Classification, string TopReject, decimal NoAskSum, string LimitingLeg);
 
@@ -47,6 +47,8 @@ public sealed class VerifiedOpportunityStabilityTracker
     private readonly Dictionary<string, DateTime?> _lastExec = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<ExecutionReadinessSample>> _readinessHistory = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, int> _consecutiveReady = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _consecutiveExperimental = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, decimal> _lastExperimentalNet = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> _stateChangedAt = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _lastResetReason = new(StringComparer.OrdinalIgnoreCase);
 
@@ -75,7 +77,9 @@ public sealed class VerifiedOpportunityStabilityTracker
         _lastResetReason[groupKey] = resetReason;
 
         var current = State(groupKey);
-        var st = edgeState == VerifiedBasketState.EdgeStable && current is VerifiedBasketState.ExecutionReadinessPending or VerifiedBasketState.ExecutionStable or VerifiedBasketState.PaperOpened or VerifiedBasketState.SuppressedDuplicate
+        if (current is VerifiedBasketState.PaperOpened or VerifiedBasketState.SuppressedDuplicate) return current;
+        if (current is (VerifiedBasketState.ExperimentalProfilePending or VerifiedBasketState.ExperimentalProfileStable or VerifiedBasketState.DiagnosticsOnly) && edgeState is not VerifiedBasketState.EdgeStable) return current;
+        var st = edgeState == VerifiedBasketState.EdgeStable && current is VerifiedBasketState.ExecutionReadinessPending or VerifiedBasketState.ExecutionStable or VerifiedBasketState.ExperimentalProfilePending or VerifiedBasketState.ExperimentalProfileStable or VerifiedBasketState.DiagnosticsOnly
             ? current
             : edgeState;
         if (st is VerifiedBasketState.NotExecutable or VerifiedBasketState.NearExecutable or VerifiedBasketState.EdgeExecutablePending)
@@ -137,7 +141,29 @@ public sealed class VerifiedOpportunityStabilityTracker
 
     private static decimal RatioDelta(decimal current, decimal previous) => previous <= 0m ? (current == previous ? 0m : decimal.MaxValue) : Math.Abs(current - previous) / previous;
 
+    public void MarkPaperOpened(string groupKey) => SetTerminalState(groupKey, VerifiedBasketState.PaperOpened, "PaperOpened");
+    public void MarkSuppressedDuplicate(string groupKey) => SetTerminalState(groupKey, VerifiedBasketState.SuppressedDuplicate, "DuplicateOpenPosition");
+    public void MarkDiagnosticsOnly(string groupKey, string reason = "DiagnosticsOnly") => SetTerminalState(groupKey, VerifiedBasketState.DiagnosticsOnly, reason);
+    public VerifiedBasketState TrackExperimental(string groupKey, decimal activeNet, decimal experimentalNet, int requiredScans, decimal minExperimentalNet)
+    {
+        var positive = experimentalNet >= minExperimentalNet && activeNet <= 0m;
+        _consecutiveExperimental.TryGetValue(groupKey, out var c);
+        c = positive ? c + 1 : 0;
+        _consecutiveExperimental[groupKey] = c;
+        _lastExperimentalNet[groupKey] = experimentalNet;
+        var state = positive && c >= requiredScans ? VerifiedBasketState.ExperimentalProfileStable : positive ? VerifiedBasketState.ExperimentalProfilePending : VerifiedBasketState.DiagnosticsOnly;
+        SetTerminalState(groupKey, state, positive ? "ExperimentalProfileCandidate" : "DiagnosticsOnly");
+        return state;
+    }
+    private void SetTerminalState(string groupKey, VerifiedBasketState state, string reason)
+    {
+        if (State(groupKey) != state || !_stateChangedAt.ContainsKey(groupKey)) _stateChangedAt[groupKey] = DateTime.UtcNow;
+        _state[groupKey] = state;
+        _lastResetReason[groupKey] = reason;
+    }
     public int Consecutive(string groupKey) => _consecutive.TryGetValue(groupKey, out var c) ? c : 0;
+    public int ConsecutiveExperimental(string groupKey) => _consecutiveExperimental.TryGetValue(groupKey, out var c) ? c : 0;
+    public decimal LastExperimentalNet(string groupKey) => _lastExperimentalNet.TryGetValue(groupKey, out var v) ? v : 0m;
     public int ConsecutiveExecutionReady(string groupKey) => _consecutiveReady.TryGetValue(groupKey, out var c) ? c : 0;
     public DateTime? LastExecutableAt(string groupKey) => _lastExec.TryGetValue(groupKey, out var v) ? v : null;
     public VerifiedBasketState State(string groupKey) => _state.TryGetValue(groupKey, out var s) ? s : VerifiedBasketState.NotExecutable;
