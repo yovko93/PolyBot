@@ -9,6 +9,7 @@ public class PaperTradingEngine
     private readonly Dictionary<string, PaperPosition> _positions = new();
     private readonly object _lock = new();
     private readonly HashSet<string> _executedArbs = new();
+    private readonly HashSet<string> _accountedBasketPositionIds = new(StringComparer.OrdinalIgnoreCase);
     //private readonly HashSet<string> _executedBasketArbs = new();
     private readonly HashSet<string> _executedCompleteSetSellArbs = new();
     private readonly ExecutionPolicy _policy;
@@ -499,6 +500,24 @@ public class PaperTradingEngine
                 $"Equity={Equity:0.####}"
             );
 
+            return true;
+        }
+    }
+
+    public bool RegisterExternalBasketOpen(PaperPosition position, decimal totalCost, decimal expectedProfit)
+    {
+        lock (_lock)
+        {
+            if (_accountedBasketPositionIds.Contains(position.PositionId))
+                return false;
+
+            if (totalCost <= 0m)
+                return false;
+
+            Balance -= totalCost;
+            LockedCapital += totalCost;
+            ExpectedProfit += expectedProfit;
+            _accountedBasketPositionIds.Add(position.PositionId);
             return true;
         }
     }

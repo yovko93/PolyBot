@@ -52,17 +52,19 @@ app.MapGet("/api/bot/opportunities", (BotRuntimeState s, IOptions<OpportunityFil
     var include = (includeNegativeEdge ?? false) || (debug ?? false) || f.Value.EnableDebugNegativeEdgeView;
     return s.Opportunities().Where(o => include || OpportunityVisibilityFilter.IsVisibleOpportunity(o, f.Value)).TakeLast(cappedLimit).ToArray();
 });
-app.MapGet("/api/bot/positions", (BotRuntimeState s) => s.Positions().Select(p=> new { id=p.Id, groupKey=p.Group, strategy=p.Strategy, status=p.Status, openedAt=p.OpenedAt, qty=p.Qty, legs=p.Legs, totalCost=p.Cost, costPerBasket=p.CostPerBasket, guaranteedPayout=p.GuaranteedPayout, maxPayout=p.MaxPayout, grossEdgeAtOpen=p.GrossEdgeAtOpen, netEdgeAtOpen=p.NetEdgeAtOpen, expectedProfitAtOpen=p.ExpectedProfit, lockedCapital=p.LockedCapital, activeProfile=p.ActiveProfile, source=p.Source }));
+app.MapGet("/api/bot/positions", (BotRuntimeState s) => s.Positions().Select(p=> new { id=p.Id, groupKey=p.Group, strategy=p.Strategy, status=p.Status, openedAt=p.OpenedAt, qty=p.Qty, legs=p.Legs, totalCost=p.Cost, costPerBasket=p.CostPerBasket, guaranteedPayout=p.GuaranteedPayout, maxPayout=p.MaxPayout, grossEdgeAtOpen=p.GrossEdgeAtOpen, netEdgeAtOpen=p.NetEdgeAtOpen, expectedProfitAtOpen=p.ExpectedProfit, lockedCapital=p.LockedCapital, mtmStatus=p.MtmStatus, unrealizedPnl=p.MtmStatus == "Incomplete" ? (decimal?)null : p.UnrealizedPnl, activeProfile=p.ActiveProfile, source=p.Source }));
 app.MapGet("/api/bot/paper-account", (BotRuntimeState s) => Results.Ok(new
 {
+    lastUpdatedAt = s.Status.LastScanTime,
     cash = s.Status.Cash,
     lockedCapital = s.Status.LockedCapital,
     equity = s.Status.Equity,
     realizedPnl = s.Status.RealizedPnl,
-    unrealizedPnl = s.Status.ExpectedProfit,
+    unrealizedPnl = s.Positions().Where(p => p.MtmStatus != "Incomplete").Sum(p => p.UnrealizedPnl),
     initialCash = 1000m,
     openExposure = s.Status.LockedCapital,
-    openPositionsCount = s.Status.OpenPositions
+    openPositionsCount = s.Status.OpenPositions,
+    openBasketPositionsCount = s.Status.OpenPositions
 }));
 app.MapGet("/api/bot/verified-allowlist-health", (IHostEnvironment env) =>
 {
@@ -283,6 +285,14 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var profileComparisonCycle = 0;
     var lastRankingFingerprint = string.Empty;
     var nearExecutableFingerprint = string.Empty;
+    var allowlistHealthCycle = 0;
+    var candidateScanCycle = 0;
+    var verifiedScanCycle = 0;
+    var mtmCycle = 0;
+    var lastAllowlistHealthFingerprint = string.Empty;
+    var lastCandidateScanFingerprint = string.Empty;
+    var lastVerifiedScanFingerprint = string.Empty;
+    var lastMtmFingerprint = string.Empty;
     var mismatchCycle = 0;
     var mismatchFingerprintByGroup = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
     var runtimeHealthLastLoggedAt = DateTime.MinValue;
@@ -376,7 +386,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 if (options.MultiOutcomeArbitrage.EvaluateVerifiedGroupsAgainstFullPool)
                 {
                     var allByMarketId = discoveredMarkets.Where(m => !string.IsNullOrWhiteSpace(m.id)).ToDictionary(m => m.id, StringComparer.OrdinalIgnoreCase);
-                    var resolved = verifiedResolver.ResolveVerifiedGroups(multiOutcomeValidator.GetAllowlistedGroups(), allByMarketId, options.MultiOutcomeArbitrage, lastDiscoverySummary.DiscoveryHealthy);
+                    var allowlistedGroups = multiOutcomeValidator.GetAllowlistedGroups();
+                    var resolved = verifiedResolver.ResolveVerifiedGroups(allowlistedGroups, allByMarketId, options.MultiOutcomeArbitrage, lastDiscoverySummary.DiscoveryHealthy);
                     var verifiedMismatch = resolved.Count(x => x.ValidationStatus != "VerifiedGroupResolved");
                     var verifiedResolved = resolved.Count - verifiedMismatch;
                     var verifiedEvaluated = 0;
@@ -545,7 +556,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 Console.WriteLine($"[VERIFIED_PRETRADE_APPROVED] Group={opp.GroupKey} NetEdge={pre.NetEdge} Qty={pre.Quantity} EstimatedCost={pre.EstimatedCost} ExpectedProfit={pre.ExpectedProfit}");
                                 var opened = verifiedExecution.OpenPaperPosition(opp, pre, positionBook);
                                 if (opened is null) Console.WriteLine($"[PAPER BASKET SKIPPED] Group={opp.GroupKey} Reason=DuplicateOpenPosition");
-                                else { Console.WriteLine($"[PAPER BASKET OPENED] Group={opp.GroupKey} Legs={opp.LegsCount} Qty={pre.Quantity} Cost={pre.EstimatedCost} NetEdge={pre.NetEdge} ExpectedProfit={pre.ExpectedProfit}"); Console.WriteLine($"[PAPER_BASKET_MTM] Group={opp.GroupKey} MtMStatus=Incomplete MissingExitPrices={opp.LegsCount}"); verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "MtMUpdated", "Ok", "Incomplete", pre.NetEdge, 0m, pre.EstimatedCost, pre.Quantity, $"MissingExitPrices={opp.LegsCount}")); }
+                                else { paper.RegisterExternalBasketOpen(opened, pre.EstimatedCost, pre.ExpectedProfit); Console.WriteLine($"[PAPER BASKET OPENED] Group={opp.GroupKey} Legs={opp.LegsCount} Qty={pre.Quantity} Cost={pre.EstimatedCost} NetEdge={pre.NetEdge} ExpectedProfit={pre.ExpectedProfit}"); Console.WriteLine($"[PAPER ACCOUNT] Cash={paper.Balance:0.####} Locked={paper.LockedCapital:0.####} OpenExposure={paper.LockedCapital:0.####} UnrealizedPnl={paper.UnrealizedPnl:0.####} RealizedPnl={paper.RealizedPnl:0.####} Equity={paper.Equity:0.####} OpenPositions={positionBook.OpenPositions.Count}"); var mtmFingerprint=$"{opp.GroupKey}|Incomplete|{opp.LegsCount}"; mtmCycle++; var logMtm = !options.Logging.LogPaperMtmOnChangeOnly || mtmFingerprint != lastMtmFingerprint || (options.Logging.LogPaperMtmEveryNCycles > 0 && mtmCycle % options.Logging.LogPaperMtmEveryNCycles == 0); lastMtmFingerprint = mtmFingerprint; if (logMtm) Console.WriteLine($"[PAPER_BASKET_MTM] Group={opp.GroupKey} MtMStatus=Incomplete MissingExitPrices={opp.LegsCount}"); verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "MtMUpdated", "Ok", "Incomplete", pre.NetEdge, 0m, pre.EstimatedCost, pre.Quantity, $"MissingExitPrices={opp.LegsCount}")); }
                             }
                         }
                         skipReason = isExec ? "Executable" : "NegativeEdge";
@@ -570,13 +581,28 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     recommendedActions.Add("Check whether FeePerLeg config is realistic.");
                     var screenerPath = Path.Combine(contentRootPath, "exports/verified-basket-opportunity-screener-latest.json");
                     var unresolvedConfiguredGroups = resolved.Where(x => x.ValidationStatus != "VerifiedGroupResolved").Take(5).Select(x => (object)new { x.GroupKey, Reason = x.RejectionReason, x.ValidationStatus }).ToArray();
-                    var allowlistHealth = resolved.Select(g => new { groupKey = g.GroupKey, enabled = true, configuredMarketCount = g.MarketIds.Count, resolvedMarketCount = g.ResolvedMarkets.Count, missingMarketCount = g.MissingMarketIds.Count + g.MissingConditionIds.Count, missingMarketIds = g.MissingMarketIds, missingConditionIds = g.MissingConditionIds, foundMarketIds = g.ResolvedMarkets.Select(x=>x.id).ToArray(), validationStatus = g.ValidationStatus, reason = g.RejectionReason, unresolved = g.ValidationStatus != "VerifiedGroupResolved", unresolvedDetail = g.ValidationStatus != "VerifiedGroupResolved" ? (g.RejectionReason ?? "Unresolved") : null, recommendedAction = (g.MissingMarketIds.Count + g.MissingConditionIds.Count) == 0 ? "Keep" : (g.ResolvedMarkets.Count < 2 ? "DisableMissingMarkets" : "RefreshFromCandidateExport") }).ToArray();
-                    var healthyCount = allowlistHealth.Count(x=>x.missingMarketCount==0 && !x.unresolved);
-                    var brokenCount = allowlistHealth.Count(x=>x.missingMarketCount>0 || x.unresolved);
-                    var unresolvedCount = allowlistHealth.Count(x=>x.unresolved);
-                    var needsRefreshCount = allowlistHealth.Count(x=>x.recommendedAction=="RefreshFromCandidateExport" || x.unresolved);
-                    Console.WriteLine($"[ALLOWLIST_HEALTH] Configured={multiOutcomeValidator.LoadedAllowlistCount} Healthy={healthyCount} Broken={brokenCount} Disabled=0 NeedsRefresh={needsRefreshCount}");
-                    var healthPath = Path.Combine(contentRootPath, "exports/verified-allowlist-health-latest.json"); Directory.CreateDirectory(Path.GetDirectoryName(healthPath)!); File.WriteAllText(healthPath, System.Text.Json.JsonSerializer.Serialize(new { configured = multiOutcomeValidator.LoadedAllowlistCount, healthy = healthyCount, broken = brokenCount, disabled = 0, unresolved = unresolvedCount, needsRefresh = needsRefreshCount, groups = allowlistHealth }, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
+                    var resolvedByGroup = resolved.ToDictionary(x => x.GroupKey, StringComparer.OrdinalIgnoreCase);
+                    var allowlistHealth = allowlistedGroups.Select(g =>
+                    {
+                        if (!resolvedByGroup.TryGetValue(g.GroupKey, out var rg))
+                        {
+                            return new { groupKey = g.GroupKey, enabled = g.Enabled, configuredMarketCount = g.MarketIds.Count, resolvedMarketCount = 0, missingMarketCount = g.MarketIds.Count, missingMarketIds = g.MarketIds, foundMarketIds = Array.Empty<string>(), status = "Broken", reason = "ResolverMissingConfiguredGroup", recommendedAction = "RefreshFromCandidateExport" };
+                        }
+                        return new { groupKey = rg.GroupKey, enabled = g.Enabled, configuredMarketCount = rg.MarketIds.Count, resolvedMarketCount = rg.ResolvedMarkets.Count, missingMarketCount = rg.MissingMarketIds.Count + rg.MissingConditionIds.Count, missingMarketIds = rg.MissingMarketIds, foundMarketIds = rg.ResolvedMarkets.Select(x => x.id).ToArray(), status = rg.ValidationStatus == "VerifiedGroupResolved" ? "Healthy" : "Broken", reason = rg.RejectionReason ?? (rg.ValidationStatus == "VerifiedGroupResolved" ? "Healthy" : "Unresolved"), recommendedAction = rg.ValidationStatus == "VerifiedGroupResolved" ? "PruneIfSafe" : (rg.ResolvedMarkets.Count < 2 ? "DisableMissingMarkets" : "RefreshFromCandidateExport") };
+                    }).ToArray();
+                    var healthyCount = allowlistHealth.Count(x=>x.status=="Healthy");
+                    var brokenCount = allowlistHealth.Count(x=>x.status=="Broken");
+                    var unresolvedCount = allowlistHealth.Count(x=>x.status!="Healthy");
+                    var disabledCount = 0; var ignoredCount = 0;
+                    var needsRefreshCount = allowlistHealth.Count(x=>x.status!="Healthy");
+                    var invariantTotal = healthyCount + brokenCount + disabledCount + ignoredCount;
+                    allowlistHealthCycle++;
+                    var allowlistFingerprint = $"{multiOutcomeValidator.LoadedAllowlistCount}|{healthyCount}|{brokenCount}|{disabledCount}|{ignoredCount}|{needsRefreshCount}";
+                    var shouldLogAllowlist = !options.Logging.LogAllowlistHealthOnChangeOnly || allowlistFingerprint != lastAllowlistHealthFingerprint || (options.Logging.LogAllowlistHealthEveryNCycles > 0 && allowlistHealthCycle % options.Logging.LogAllowlistHealthEveryNCycles == 0);
+                    lastAllowlistHealthFingerprint = allowlistFingerprint;
+                    if (shouldLogAllowlist) Console.WriteLine($"[ALLOWLIST_HEALTH] Configured={multiOutcomeValidator.LoadedAllowlistCount} Healthy={healthyCount} Broken={brokenCount} Disabled={disabledCount} NeedsRefresh={needsRefreshCount} Ignored={ignoredCount}");
+                    if (invariantTotal != multiOutcomeValidator.LoadedAllowlistCount) Console.WriteLine($"[ALLOWLIST_HEALTH_ERROR] Configured={multiOutcomeValidator.LoadedAllowlistCount} Healthy={healthyCount} Broken={brokenCount} Disabled={disabledCount} Ignored={ignoredCount}");
+                    var healthPath = Path.Combine(contentRootPath, "exports/verified-allowlist-health-latest.json"); Directory.CreateDirectory(Path.GetDirectoryName(healthPath)!); File.WriteAllText(healthPath, System.Text.Json.JsonSerializer.Serialize(new { configured = multiOutcomeValidator.LoadedAllowlistCount, healthy = healthyCount, broken = brokenCount, disabled = disabledCount, ignored = ignoredCount, unresolved = unresolvedCount, needsRefresh = needsRefreshCount, groups = allowlistHealth }, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
                     var cleanup = new { metadata = new { generatedAtUtc = DateTime.UtcNow, note = "suggested only" }, groups = allowlistHealth.Select(h => new { h.groupKey, h.enabled, h.configuredMarketCount, h.resolvedMarketCount, h.missingMarketCount, h.missingMarketIds, suggestedEnabled = h.missingMarketCount > 0 ? false : h.enabled, reason = h.missingMarketCount > 0 ? "Missing markets in discovered pool" : "Healthy", suggestedPrunedTemplate = h.resolvedMarketCount >= 2 ? new { groupKey = h.groupKey, marketIds = h.foundMarketIds, requiredOutcomeCount = h.resolvedMarketCount } : null })};
                     var cleanupPath = Path.Combine(contentRootPath, "exports/verified-allowlist-cleanup-suggested.json"); File.WriteAllText(cleanupPath, System.Text.Json.JsonSerializer.Serialize(cleanup, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
                     var snapshot = VerifiedBasketScreener.BuildSnapshot(options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile, "PolymarketApprox", verifiedScreenResults, unresolvedConfiguredGroups);
@@ -648,12 +674,20 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var snapshotExportPath = Path.Combine(contentRootPath, "exports/verified-executable-opportunities-latest.json");
                     verifiedExecution.ExportSnapshot(snapshotExportPath, options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile, promotedVerifiedOpportunities, preTradeResults, positionBook.OpenPositions);
                     var candidateReasons = string.Join(",", multiOutcomeReport.RejectedByReason.Select(x => $"{x.Key}:{x.Value}"));
-                    Console.WriteLine($"[MULTI_CANDIDATE_SCAN] Candidates={multiOutcomeReport.GroupsDetected} Rejected={Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified)} TopReject={multiOutcomeReport.TopSkipReason} RejectedByReason={{{candidateReasons}}}");
+                    candidateScanCycle++;
+                    var candidateFingerprint = $"{multiOutcomeReport.GroupsDetected}|{multiOutcomeReport.GroupsVerified}|{multiOutcomeReport.TopSkipReason}|{candidateReasons}";
+                    if (candidateFingerprint != lastCandidateScanFingerprint || (options.Logging.LogCandidateScanEveryNCycles > 0 && candidateScanCycle % options.Logging.LogCandidateScanEveryNCycles == 0))
+                        Console.WriteLine($"[MULTI_CANDIDATE_SCAN] Candidates={multiOutcomeReport.GroupsDetected} Rejected={Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified)} TopReject={multiOutcomeReport.TopSkipReason} RejectedByReason={{{candidateReasons}}}");
+                    lastCandidateScanFingerprint = candidateFingerprint;
                     var bestConservativeNet = snapshot.BestByConservative?.ActiveProfileNetEdge;
                     var bestPoly = snapshot.VerifiedBaskets.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("PolymarketApprox", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue).DefaultIfEmpty(decimal.MinValue).Max();
                     var bestRaw = snapshot.VerifiedBaskets.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue).DefaultIfEmpty(decimal.MinValue).Max();
                     var unresolved = Math.Max(0, multiOutcomeValidator.LoadedAllowlistCount - verifiedResolved);
-                    Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} Evaluated={verifiedEvaluated} Executable={verifiedExecutable} Mismatch={verifiedMismatch} BestConservativeNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestPolymarketApproxNet={bestPoly} BestRaw={bestRaw}");
+                    verifiedScanCycle++;
+                    var verifiedScanFingerprint = $"{multiOutcomeValidator.LoadedAllowlistCount}|{verifiedResolved}|{unresolved}|{verifiedEvaluated}|{verifiedExecutable}|{verifiedMismatch}|{bestConservativeNet}|{bestPoly}|{bestRaw}";
+                    var shouldLogVerifiedScan = !options.Logging.LogVerifiedScanOnChangeOnly || verifiedScanFingerprint != lastVerifiedScanFingerprint || (options.Logging.LogVerifiedScanEveryNCycles > 0 && verifiedScanCycle % options.Logging.LogVerifiedScanEveryNCycles == 0);
+                    if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} Evaluated={verifiedEvaluated} Executable={verifiedExecutable} Mismatch={verifiedMismatch} BestConservativeNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestPolymarketApproxNet={bestPoly} BestRaw={bestRaw}");
+                    lastVerifiedScanFingerprint = verifiedScanFingerprint;
                     foreach (var ug in unresolvedConfiguredGroups.Take(3)) Console.WriteLine($"[VERIFIED_UNRESOLVED_SAMPLE] {System.Text.Json.JsonSerializer.Serialize(ug)}");
 
                     var triageRows = resolved.Select(g =>
@@ -834,6 +868,18 @@ static async Task PushUiUpdates(BotRuntimeState state, IHubContext<BotHub> hub, 
         await hub.Clients.All.SendAsync("tradeLogUpdated", state.Trades().TakeLast(300).ToArray());
         verifiedExecution.ExportAudit(Path.Combine(contentRootPath, "exports/execution-audit-latest.json"));
         File.WriteAllText(Path.Combine(contentRootPath, "exports/paper-positions-latest.json"), System.Text.Json.JsonSerializer.Serialize(state.Positions().TakeLast(200), new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(Path.Combine(contentRootPath, "exports/paper-account-latest.json"), System.Text.Json.JsonSerializer.Serialize(new {
+            initialCash = 1000m,
+            cash = state.Status.Cash,
+            lockedCapital = state.Status.LockedCapital,
+            openExposure = state.Status.LockedCapital,
+            realizedPnl = state.Status.RealizedPnl,
+            unrealizedPnl = state.Positions().Where(p => p.MtmStatus != "Incomplete").Sum(p => p.UnrealizedPnl),
+            equity = state.Status.Equity,
+            openPositionsCount = state.Status.OpenPositions,
+            openBasketPositionsCount = state.Status.OpenPositions,
+            lastUpdatedAt = state.Status.LastScanTime
+        }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
         await hub.Clients.All.SendAsync("positionsUpdated", state.Positions());
         await hub.Clients.All.SendAsync("scannerStatsUpdated", state.ScannerStats);
         await hub.Clients.All.SendAsync("riskUpdated", state.Risk);
