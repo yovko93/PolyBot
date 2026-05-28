@@ -60,7 +60,8 @@ public sealed class VerifiedBasketExecutionCoordinator
         var maxQtyByLiquidity = opp.Legs.Min(x => x.NoAskQuantity);
         var plannedQty = Math.Min(maxQtyByNotional, maxQtyByLiquidity);
         var totalCost = costPerBasket * plannedQty;
-        Console.WriteLine($"[SIZING_BASKET] Group={opp.GroupKey} CostPerBasket={costPerBasket} MaxNotional={maxNotional} MaxQtyByNotional={maxQtyByNotional} MaxQtyByLiquidity={maxQtyByLiquidity} PlannedQty={plannedQty} TotalCost={totalCost}");
+        var plannedExpectedProfit = opp.NetEdge * plannedQty;
+        Console.WriteLine($"[SIZING_BASKET] Group={opp.GroupKey} CostPerBasket={costPerBasket} MaxNotional={maxNotional} MaxQtyByNotional={maxQtyByNotional} MaxQtyByLiquidity={maxQtyByLiquidity} PlannedQty={plannedQty} PlannedExpectedProfit={plannedExpectedProfit} TotalCost={totalCost}");
         var tolerance = 0.000001m;
         if (totalCost > maxNotional + tolerance) return Reject(opp, "MaxNotionalExceeded");
         if (opp.Legs.Any(x => x.NoAsk <= 0 || x.NoAskQuantity < x.PlannedQty)) return Reject(opp, "InsufficientLiquidity");
@@ -76,7 +77,7 @@ public sealed class VerifiedBasketExecutionCoordinator
             _recentlyExecuted[idempotency] = now.Add(cooldown);
         }
 
-        var approvedExpectedProfit = opp.NetEdge * plannedQty;
+        var approvedExpectedProfit = plannedExpectedProfit;
         var approved = new VerifiedBasketPreTradeValidationResult(true, "Approved", opp.NetEdge, plannedQty, totalCost, approvedExpectedProfit, idempotency);
         AuditEvent(opp, "PreTradeApproved", "Approved", "Approved");
         return approved;
