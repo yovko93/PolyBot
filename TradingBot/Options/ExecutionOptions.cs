@@ -32,10 +32,19 @@ public sealed class ExecutionOptions
     [Range(1, 20)] public int RequiredConsecutiveExecutableScans { get; set; } = 3;
     [Range(-1.0, 1.0)] public decimal MinStableNetEdgePerBasket { get; set; } = 0.001m;
     [Range(0.0, 1.0)] public decimal MaxNetEdgeVolatility { get; set; } = 0.002m;
+    public bool RequireStableExecutionReadiness { get; set; } = true;
+    [Range(1, 20)] public int RequiredConsecutiveExecutionReadyScans { get; set; } = 3;
+    [Range(0.0001, double.MaxValue)] public decimal MinPlannedBasketQty { get; set; } = 5m;
+    [Range(0.0001, double.MaxValue)] public decimal MinPlannedNotional { get; set; } = 25m;
+    [Range(0.0000001, double.MaxValue)] public decimal MinPlannedExpectedProfit { get; set; } = 0.10m;
+    [Range(0.0, 10.0)] public decimal MaxPlannedQtyVolatilityRatio { get; set; } = 0.50m;
+    [Range(0.0, 10.0)] public decimal MaxPlannedCostVolatilityRatio { get; set; } = 0.50m;
     [Range(1, 600)] public int StabilityWindowSeconds { get; set; } = 30;
     public bool AllowPartialFills { get; set; } = false;
     public bool CancelRemainingLegOnPartialFill { get; set; } = true;
     public bool PaperOnly { get; set; } = true;
+    public bool EnableLiveOrderSubmission { get; set; } = false;
+    public bool EnableDryRunOrderBuilder { get; set; } = true;
     public bool PreventDuplicateGroupPositions { get; set; } = true;
     [Range(1, 1440)] public int DuplicateCooldownMinutes { get; set; } = 60;
 }
