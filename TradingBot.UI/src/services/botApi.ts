@@ -61,6 +61,7 @@ export const getControls = async (signal?: AbortSignal): Promise<BotControlState
 export const getOpportunityDiagnostics = async (signal?: AbortSignal): Promise<OpportunityDiagnostics | null> => safeRequest<any | null>('/opportunity-diagnostics', null, signal);
 export const getMultiOutcomeDiagnostics = async (signal?: AbortSignal): Promise<MultiOutcomeDiagnostics | null> => safeRequest<any | null>('/multi-outcome-diagnostics', null, signal);
 export const getVerifiedBasketScreener = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/verified-basket-screener', null, signal);
+export const getDiscoveryHealth = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/discovery-health', null, signal);
 export const getExecutionAudit = async (signal?: AbortSignal): Promise<any[]> => safeRequest<any[]>('/execution-audit?limit=200', [], signal);
 export const getDryRunOrderPlans = async (signal?: AbortSignal): Promise<any[]> => safeRequest<any[]>('/dry-run-order-plans?limit=50', [], signal);
 export const pauseScanner = async (): Promise<BotControlState> => mapControls(await request('/controls/pause', undefined, { method: 'POST' }));

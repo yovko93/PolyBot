@@ -4,6 +4,21 @@ using TradingBot.Options;
 
 namespace TradingBot.Services;
 
+public record MarketDiscoveryHealth(
+    bool Healthy,
+    bool Degraded,
+    bool Partial,
+    string ScanConfidence,
+    int PagesFetched,
+    int ActiveMarketsAvailable,
+    int RawLoadedTotal,
+    string StoppedReason,
+    string? LastError,
+    bool SafetyCapReached,
+    int RetriesAttempted,
+    int FailedPages,
+    DateTime CompletedAtUtc);
+
 public record MarketDiscoverySummary(
     int MarketsDiscovered = 0,
     int PagesFetched = 0,
@@ -29,7 +44,32 @@ public record MarketDiscoverySummary(
     string? StoppedReason = null,
     string? LastDiscoveryError = null,
     int ExpectedMaxPages = 0,
-    bool SafetyCapReached = false);
+    bool SafetyCapReached = false,
+    bool DiscoveryDegraded = false,
+    bool PartialDiscovery = false,
+    string ScanConfidence = "PartialDiscovery",
+    int RetriesAttempted = 0,
+    int FailedPages = 0)
+{
+    public MarketDiscoveryHealth ToHealth() => new(DiscoveryHealthy, DiscoveryDegraded, PartialDiscovery, ScanConfidence, PagesFetched, ActiveMarketsAvailable, RawLoadedTotal, StoppedReason ?? "Unknown", LastDiscoveryError, SafetyCapReached, RetriesAttempted, FailedPages, LastDiscoveryCompletedAtUtc);
+}
+
+public static class MarketDiscoveryHealthEvaluator
+{
+    public static MarketDiscoveryHealth Evaluate(int pagesFetched, int activeMarketsAvailable, int rawLoadedTotal, bool discoveryCompleted, string? stoppedReason, string? lastError, bool safetyCapReached, int retriesAttempted, int failedPages, MarketDiscoveryOptions options, DateTime completedAtUtc)
+    {
+        var reason = string.IsNullOrWhiteSpace(stoppedReason) ? (discoveryCompleted ? "Completed" : "Unknown") : stoppedReason!;
+        if (options.TreatOperationCanceledAtPageCapAsSafetyCap && reason == "OperationCanceled" && safetyCapReached)
+            reason = "SafetyCapReached";
+        var fatal = reason is "RequestError" or "Timeout" || (reason == "OperationCanceled" && !safetyCapReached);
+        var meetsThresholds = pagesFetched >= options.MinHealthyPagesFetched && activeMarketsAvailable >= options.MinHealthyActiveMarkets;
+        var healthy = meetsThresholds && !fatal;
+        var partial = !discoveryCompleted && !safetyCapReached;
+        var degraded = !healthy;
+        var confidence = healthy ? "Full" : "PartialDiscovery";
+        return new MarketDiscoveryHealth(healthy, degraded, partial, confidence, pagesFetched, activeMarketsAvailable, rawLoadedTotal, reason, lastError, safetyCapReached, retriesAttempted, failedPages, completedAtUtc);
+    }
+}
 
 public class MarketDataService
 {
@@ -61,6 +101,8 @@ public class MarketDataService
         var sampled = 0;
         var paginationMode = "offset";
         string? lastWarning = null;
+        var retriesAttempted = 0;
+        var failedPages = 0;
 
         var discoveryCompleted = false;
         string? stoppedReason = null;
@@ -100,16 +142,17 @@ public class MarketDataService
                 catch (OperationCanceledException ex)
                 {
                     lastError = ex.Message; stoppedReason = "OperationCanceled";
-                    if (retry < options.MarketDiscovery.MaxRetriesPerPage) await Task.Delay(options.MarketDiscovery.RetryBackoffMs * (retry + 1), ct);
+                    if (retry < options.MarketDiscovery.MaxRetriesPerPage) { retriesAttempted++; await Task.Delay(options.MarketDiscovery.RetryBackoffMs * (retry + 1), ct); }
                 }
                 catch (Exception ex)
                 {
                     lastError = ex.Message; stoppedReason = "RequestError";
-                    if (retry < options.MarketDiscovery.MaxRetriesPerPage) await Task.Delay(options.MarketDiscovery.RetryBackoffMs * (retry + 1), ct);
+                    if (retry < options.MarketDiscovery.MaxRetriesPerPage) { retriesAttempted++; await Task.Delay(options.MarketDiscovery.RetryBackoffMs * (retry + 1), ct); }
                 }
             }
             if (!loaded)
             {
+                failedPages++;
                 Console.WriteLine($"[MARKET DATA ERROR] {lastError}");
                 if (!options.MarketDiscovery.ContinueWithPartialDiscoveryOnError) break;
                 else { break; }
@@ -168,10 +211,11 @@ public class MarketDataService
             if (allMarkets.Count >= cap) { safetyCapReached = true; break; }
             offset += Math.Max(1, effectivePageSize);
         }
-        if (!discoveryCompleted && string.IsNullOrWhiteSpace(stoppedReason) && (safetyCapReached || pages >= expectedMaxPages || rawLoadedTotal >= cap))
+        if (!discoveryCompleted && (safetyCapReached || pages >= expectedMaxPages || rawLoadedTotal >= cap))
         {
             safetyCapReached = true;
-            stoppedReason = "SafetyCapReached";
+            if (string.IsNullOrWhiteSpace(stoppedReason) || (options.MarketDiscovery.TreatOperationCanceledAtPageCapAsSafetyCap && stoppedReason == "OperationCanceled"))
+                stoppedReason = "SafetyCapReached";
         }
 
         var inactive = skippedClosed + skippedArchived + skippedInactive + skippedMissingTokenIds + skippedMissingOutcomes + skippedPastEndDate + skippedInvalidShape + skippedUnknownStatus;
@@ -182,15 +226,15 @@ public class MarketDataService
         }
         if (options.LogDiscoveryPages)
             Console.WriteLine($"[DISCOVERY] Completed Raw={rawLoadedTotal} Unique={seen.Count} Active={allMarkets.Count} Pages={pages} SkippedClosed={skippedClosed} SkippedArchived={skippedArchived} SkippedInactive={skippedInactive} SkippedMissingTokenIds={skippedMissingTokenIds} SkippedMissingOutcomes={skippedMissingOutcomes} SkippedPastEndDate={skippedPastEndDate} SkippedInvalidShape={skippedInvalidShape} SkippedUnknownStatus={skippedUnknownStatus}");
-        if (safetyCapReached && string.IsNullOrWhiteSpace(stoppedReason))
-        {
-            stoppedReason = "SafetyCapReached";
+        if (safetyCapReached)
             Console.WriteLine($"[DISCOVERY] StoppedAtConfiguredPageCap Pages={pages} Raw={rawLoadedTotal} Active={allMarkets.Count} Reason=SafetyCapReached");
-        }
-        var healthy = allMarkets.Count > 0 && (discoveryCompleted || safetyCapReached) && (string.IsNullOrWhiteSpace(stoppedReason) || stoppedReason == "SafetyCapReached");
-        if (!healthy || (safetyCapReached && options.MarketDiscovery.TreatSafetyCapAsWarning))
-            Console.WriteLine($"[DISCOVERY_WARNING] Discovery incomplete. PagesFetched={pages} Raw={rawLoadedTotal} Active={allMarkets.Count} Reason={stoppedReason ?? "Unknown"}");
-        var summary = new MarketDiscoverySummary(allMarkets.Count, pages, duplicates, inactive, allMarkets.Count, rawLoadedTotal, seen.Count, skippedClosed, skippedArchived, skippedInactive, skippedMissingTokenIds, skippedMissingOutcomes, skippedPastEndDate, skippedInvalidShape, skippedUnknownStatus, healthy, paginationMode, null, lastWarning, DateTime.UtcNow, discoveryCompleted, stoppedReason, lastError, expectedMaxPages, safetyCapReached);
+
+        var completedAt = DateTime.UtcNow;
+        var health = MarketDiscoveryHealthEvaluator.Evaluate(pages, allMarkets.Count, rawLoadedTotal, discoveryCompleted, stoppedReason, lastError, safetyCapReached, retriesAttempted, failedPages, options.MarketDiscovery, completedAt);
+        if (!health.Healthy || (health.SafetyCapReached && options.MarketDiscovery.TreatSafetyCapAsWarning))
+            Console.WriteLine($"[DISCOVERY_WARNING] Discovery incomplete. PagesFetched={pages} Raw={rawLoadedTotal} Active={allMarkets.Count} Reason={health.StoppedReason}");
+        Console.WriteLine($"[DISCOVERY_HEALTH] Healthy={health.Healthy.ToString().ToLowerInvariant()} Degraded={health.Degraded.ToString().ToLowerInvariant()} Partial={health.Partial.ToString().ToLowerInvariant()} Pages={health.PagesFetched} Active={health.ActiveMarketsAvailable} Reason={health.StoppedReason} ScanConfidence={health.ScanConfidence}");
+        var summary = new MarketDiscoverySummary(allMarkets.Count, pages, duplicates, inactive, allMarkets.Count, rawLoadedTotal, seen.Count, skippedClosed, skippedArchived, skippedInactive, skippedMissingTokenIds, skippedMissingOutcomes, skippedPastEndDate, skippedInvalidShape, skippedUnknownStatus, health.Healthy, paginationMode, null, lastWarning, completedAt, discoveryCompleted, health.StoppedReason, lastError, expectedMaxPages, safetyCapReached, health.Degraded, health.Partial, health.ScanConfidence, retriesAttempted, failedPages);
         return (allMarkets, summary);
     }
 

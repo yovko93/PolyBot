@@ -50,5 +50,8 @@ public sealed class ExecutionOptions
     public bool EnableLiveOrderSubmission { get; set; } = false;
     public bool EnableDryRunOrderBuilder { get; set; } = true;
     public bool PreventDuplicateGroupPositions { get; set; } = true;
+    public bool RequireHealthyDiscoveryForPaperOpen { get; set; } = true;
+    public bool AllowDryRunOrderPlanOnPartialDiscovery { get; set; } = true;
+    public bool AllowPaperExecutionOnPartialDiscovery { get; set; } = false;
     [Range(1, 1440)] public int DuplicateCooldownMinutes { get; set; } = 60;
 }

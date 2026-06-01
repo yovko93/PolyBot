@@ -179,6 +179,7 @@ public record ScannerStatsDto(
 public record TerminalLogEntryDto(string Id,DateTime Timestamp,string Level,string Source,string Message,long Sequence);
 public record EquityPointDto(DateTime Timestamp, decimal Equity, long Sequence);
 public record BotControlStateDto(bool IsPaused, string Reason, DateTime UpdatedAtUtc, long Sequence);
+public record DiscoveryHealthDto(bool Healthy,bool Degraded,bool Partial,string ScanConfidence,int PagesFetched,int ActiveMarketsAvailable,int RawLoadedTotal,string StoppedReason,string? LastError,bool SafetyCapReached,int RetriesAttempted,int FailedPages,DateTime CompletedAt,bool PaperExecutionAllowed);
 
 public record VerifiedGroupDiagnosticDto(string GroupKey,int RequiredMarketCount,int ResolvedMarketCount,int MissingMarketCount,string EvaluationStatus,string SkipReason,decimal? BestEdge,int MissingNoAskCount,int InsufficientLiquidityCount,IReadOnlyList<string> MissingMarketSamples,IReadOnlyList<string> MissingConditionSamples);
 public record VerifiedGroupPricingDto(string GroupKey,int Legs,decimal GuaranteedPayout,decimal NoAskSum,decimal MinNoAsk,decimal MaxNoAsk,decimal AverageNoAsk,decimal GrossEdge,decimal Fees,decimal Slippage,decimal SafetyBuffer,decimal NetEdge,decimal ExecutableQty,decimal ExpectedProfit,string SkipReason,IReadOnlyList<string> FormulaWarnings);

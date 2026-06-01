@@ -82,11 +82,14 @@ public class TradingBotOptions
 }
 public class MarketDiscoveryOptions
 {
-    public int RequestTimeoutMs { get; set; } = 15000;
+    public int RequestTimeoutMs { get; set; } = 30000;
     public int MaxRetriesPerPage { get; set; } = 3;
     public int RetryBackoffMs { get; set; } = 1000;
     public bool ContinueWithPartialDiscoveryOnError { get; set; } = true;
     public bool TreatSafetyCapAsWarning { get; set; } = false;
+    public bool TreatOperationCanceledAtPageCapAsSafetyCap { get; set; } = true;
+    public int MinHealthyActiveMarkets { get; set; } = 8000;
+    public int MinHealthyPagesFetched { get; set; } = 95;
 }
 
 public class DiagnosticsOptions

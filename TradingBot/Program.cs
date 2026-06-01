@@ -77,6 +77,7 @@ app.MapGet("/api/bot/verified-allowlist-health", (IHostEnvironment env) =>
 });
 app.MapGet("/api/bot/trade-log", (BotRuntimeState s, int? limit) => s.Trades().TakeLast(Math.Clamp(limit ?? 300, 1, 1000)).ToArray());
 app.MapGet("/api/bot/scanner-stats", (BotRuntimeState s) => s.ScannerStats);
+app.MapGet("/api/bot/discovery-health", (BotRuntimeState s) => Results.Ok(s.DiscoveryHealth));
 app.MapGet("/api/bot/opportunity-diagnostics", (BotRuntimeState s, int? nearMissLimit) =>
 {
     var d = s.OpportunityDiagnostics;
@@ -358,6 +359,12 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 lastDiscoveryAt = DateTime.UtcNow;
                 discoveryCompletedAt = lastDiscoveryAt;
                 cyclesCompletedSinceDiscovery = 0;
+                var paperAllowedByDiscovery = !executionOptions.RequireHealthyDiscoveryForPaperOpen || lastDiscoverySummary.DiscoveryHealthy || executionOptions.AllowPaperExecutionOnPartialDiscovery;
+                var discoveryHealthDto = new DiscoveryHealthDto(lastDiscoverySummary.DiscoveryHealthy, lastDiscoverySummary.DiscoveryDegraded, lastDiscoverySummary.PartialDiscovery, lastDiscoverySummary.ScanConfidence, lastDiscoverySummary.PagesFetched, lastDiscoverySummary.ActiveMarketsAvailable, lastDiscoverySummary.RawLoadedTotal, lastDiscoverySummary.StoppedReason ?? "Unknown", lastDiscoverySummary.LastDiscoveryError, lastDiscoverySummary.SafetyCapReached, lastDiscoverySummary.RetriesAttempted, lastDiscoverySummary.FailedPages, lastDiscoverySummary.LastDiscoveryCompletedAtUtc, paperAllowedByDiscovery);
+                state.SetDiscoveryHealth(discoveryHealthDto);
+                var discoveryHealthPath = Path.Combine(contentRootPath, "exports/discovery-health-latest.json");
+                Directory.CreateDirectory(Path.GetDirectoryName(discoveryHealthPath)!);
+                File.WriteAllText(discoveryHealthPath, System.Text.Json.JsonSerializer.Serialize(discoveryHealthDto, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
                 if (options.LogPrefetchSummary)
                     Console.WriteLine($"[DISCOVERY] marketsDiscovered={lastDiscoverySummary.MarketsDiscovered}, pagesFetched={lastDiscoverySummary.PagesFetched}, duplicatesRemoved={lastDiscoverySummary.DuplicatesRemoved}, inactiveSkipped={lastDiscoverySummary.InactiveSkipped}, activeMarketsAvailable={lastDiscoverySummary.ActiveMarketsAvailable}, rawLoadedTotal={lastDiscoverySummary.RawLoadedTotal}, uniqueMarketsTotal={lastDiscoverySummary.UniqueMarketsTotal}, skippedClosed={lastDiscoverySummary.SkippedClosed}, skippedArchived={lastDiscoverySummary.SkippedArchived}, skippedMissingTokenIds={lastDiscoverySummary.SkippedMissingTokenIds}, skippedInvalidShape={lastDiscoverySummary.SkippedInvalidShape}");
             }
@@ -623,6 +630,12 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             else
                             {
                                 Console.WriteLine($"[VERIFIED_PRETRADE_APPROVED] Group={opp.GroupKey} NetEdge={pre.NetEdge} Qty={pre.Quantity} EstimatedCost={pre.EstimatedCost} ExpectedProfit={pre.ExpectedProfit}");
+                                if (!lastDiscoverySummary.DiscoveryHealthy && !executionOptions.AllowDryRunOrderPlanOnPartialDiscovery)
+                                {
+                                    verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "DryRunOrderPlanBlocked", "Blocked", "DiscoveryUnhealthy", pre.NetEdge, pre.ExpectedProfit, pre.EstimatedCost, pre.Quantity, $"ScanConfidence={lastDiscoverySummary.ScanConfidence};DiscoveryReason={lastDiscoverySummary.StoppedReason}"));
+                                    Console.WriteLine($"[DRY_RUN_ORDER_PLAN_BLOCKED] Group={opp.GroupKey} Reason=DiscoveryUnhealthy ScanConfidence={lastDiscoverySummary.ScanConfidence}");
+                                    continue;
+                                }
                                 verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "DryRunOrderBuildStarted", "Started", "DryRunBuildStarted", pre.NetEdge, pre.ExpectedProfit, pre.EstimatedCost, pre.Quantity, ""));
                                 var plan = dryRunBuilder.Build(opp, pre, executionOptions);
                                 if (plan.Status == BasketOrderPlanStatus.Rejected)
@@ -634,7 +647,15 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 }
                                 verifiedExecution.RecordDryRunPlan(plan);
                                 verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "DryRunOrderPlanCreated", "Ok", "DryRunOnly", pre.NetEdge, pre.ExpectedProfit, pre.EstimatedCost, pre.Quantity, $"Orders={plan.Orders.Count}"));
-                                Console.WriteLine($"[DRY_RUN_ORDER_PLAN_CREATED] Group={opp.GroupKey} Orders={plan.Orders.Count} Qty={pre.Quantity:0.####} TotalCost={plan.TotalEstimatedCost:0.####} ExpectedProfit={plan.ExpectedProfit:0.####} DryRunOnly=true");
+                                var discoveryAllowsPaperOpen = !executionOptions.RequireHealthyDiscoveryForPaperOpen || lastDiscoverySummary.DiscoveryHealthy || executionOptions.AllowPaperExecutionOnPartialDiscovery;
+                                var dryRunDiscoveryFlag = lastDiscoverySummary.DiscoveryHealthy ? "FullDiscovery" : "PartialDiscoveryWarning";
+                                Console.WriteLine($"[DRY_RUN_ORDER_PLAN_CREATED] Group={opp.GroupKey} Orders={plan.Orders.Count} Qty={pre.Quantity:0.####} TotalCost={plan.TotalEstimatedCost:0.####} ExpectedProfit={plan.ExpectedProfit:0.####} DryRunOnly=true DiscoveryFlag={dryRunDiscoveryFlag} ScanConfidence={lastDiscoverySummary.ScanConfidence}");
+                                if (!discoveryAllowsPaperOpen)
+                                {
+                                    verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PaperOpenBlocked", "Blocked", "DiscoveryUnhealthy", pre.NetEdge, pre.ExpectedProfit, pre.EstimatedCost, pre.Quantity, $"ScanConfidence={lastDiscoverySummary.ScanConfidence};DiscoveryReason={lastDiscoverySummary.StoppedReason}"));
+                                    Console.WriteLine($"[PAPER_OPEN_BLOCKED] Group={opp.GroupKey} Reason=DiscoveryUnhealthy ScanConfidence={lastDiscoverySummary.ScanConfidence}");
+                                    continue;
+                                }
                                 var marketById = g.ResolvedMarkets.ToDictionary(x => x.id, StringComparer.OrdinalIgnoreCase);
                                 var snapshotsByMarket = new Dictionary<string, BinaryOrderBookSnapshot?>(StringComparer.OrdinalIgnoreCase);
                                 foreach (var order in plan.Orders)
@@ -821,16 +842,19 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         Console.WriteLine($"[MULTI_CANDIDATE_SCAN] Candidates={multiOutcomeReport.GroupsDetected} Rejected={Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified)} TopReject={multiOutcomeReport.TopSkipReason} RejectedByReason={{{candidateReasons}}}");
                     lastCandidateScanFingerprint = candidateFingerprint;
                     var bestConservativeNet = snapshot.BestByConservative?.ActiveProfileNetEdge;
-                    var bestPoly = snapshot.VerifiedBaskets.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("PolymarketApprox", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue).DefaultIfEmpty(decimal.MinValue).Max();
+                    var bestExperimentalCandidate = snapshot.ExperimentalCandidates.Select(x => (decimal?)x.ExperimentalProfileNetEdge).DefaultIfEmpty(null).Max();
+                    var bestAlternateProfileNet = snapshot.ActiveProfileExecutable
+                        .SelectMany(gx => gx.ProfileResults.Where(p => !p.ProfileName.Equals(snapshot.ActiveProfile, StringComparison.OrdinalIgnoreCase) && !p.ProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase)).Select(p => (decimal?)p.NetEdge))
+                        .DefaultIfEmpty(null).Max();
                     var bestRaw = snapshot.VerifiedBaskets.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue).DefaultIfEmpty(decimal.MinValue).Max();
                     var unresolved = Math.Max(0, multiOutcomeValidator.LoadedAllowlistCount - verifiedResolved);
                     verifiedScanCycle++;
-                    var verifiedScanFingerprint = $"{multiOutcomeValidator.LoadedAllowlistCount}|{verifiedResolved}|{unresolved}|{verifiedEvaluated}|{activeExecutable}|{experimentalCandidates}|{diagnosticsOnlyPositive}|{paperOpenedCount}|{suppressedDuplicateCount}|{verifiedMismatch}|{bestConservativeNet}|{bestPoly}|{bestRaw}";
+                    var verifiedScanFingerprint = $"{multiOutcomeValidator.LoadedAllowlistCount}|{verifiedResolved}|{unresolved}|{verifiedEvaluated}|{activeExecutable}|{experimentalCandidates}|{diagnosticsOnlyPositive}|{paperOpenedCount}|{suppressedDuplicateCount}|{verifiedMismatch}|{bestConservativeNet}|{bestExperimentalCandidate}|{bestAlternateProfileNet}|{bestRaw}|{lastDiscoverySummary.DiscoveryHealthy}|{lastDiscoverySummary.ScanConfidence}|{lastDiscoverySummary.StoppedReason}";
                     var shouldLogVerifiedScan = string.IsNullOrEmpty(lastVerifiedScanFingerprint)
                         || !options.Logging.LogVerifiedScanOnChangeOnly
                         || verifiedScanFingerprint != lastVerifiedScanFingerprint
                         || (options.Logging.LogVerifiedScanEveryNCycles > 0 && verifiedScanCycle % options.Logging.LogVerifiedScanEveryNCycles == 0);
-                    if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} Evaluated={verifiedEvaluated} ActiveExecutable={activeExecutable} ExperimentalCandidates={experimentalCandidates} DiagnosticsOnlyPositive={diagnosticsOnlyPositive} PaperOpened={paperOpenedCount} SuppressedDuplicate={suppressedDuplicateCount} Mismatch={verifiedMismatch} BestActiveNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestExperimentalNet={bestPoly} BestRaw={bestRaw}");
+                    if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} Evaluated={verifiedEvaluated} ActiveExecutable={activeExecutable} ExperimentalCandidates={experimentalCandidates} DiagnosticsOnlyPositive={diagnosticsOnlyPositive} PaperOpened={paperOpenedCount} SuppressedDuplicate={suppressedDuplicateCount} Mismatch={verifiedMismatch} BestActiveNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestExperimentalNet={(bestExperimentalCandidate.HasValue ? bestExperimentalCandidate.Value.ToString() : "N/A")} BestAlternateProfileNet={(bestAlternateProfileNet.HasValue ? bestAlternateProfileNet.Value.ToString() : "N/A")} BestRaw={bestRaw} DiscoveryHealthy={lastDiscoverySummary.DiscoveryHealthy.ToString().ToLowerInvariant()} ScanConfidence={lastDiscoverySummary.ScanConfidence} DiscoveryReason={lastDiscoverySummary.StoppedReason ?? "Unknown"}");
                     lastVerifiedScanFingerprint = verifiedScanFingerprint;
                     foreach (var ug in unresolvedConfiguredGroups.Take(3)) Console.WriteLine($"[VERIFIED_UNRESOLVED_SAMPLE] {System.Text.Json.JsonSerializer.Serialize(ug)}");
 
