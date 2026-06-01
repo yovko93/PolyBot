@@ -1,0 +1,12 @@
+{
+  "initialCash": 1000,
+  "cash": 750.00000000000000000000000001,
+  "lockedCapital": 249.99999999999999999999999999,
+  "openExposure": 249.99999999999999999999999999,
+  "realizedPnl": 0,
+  "unrealizedPnl": 0,
+  "equity": 1000.0000000000000000000000000,
+  "openPositionsCount": 1,
+  "openBasketPositionsCount": 1,
+  "lastUpdatedAt": "2026-05-28T15:18:00.426496Z"
+}

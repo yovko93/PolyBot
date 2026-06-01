@@ -41,6 +41,10 @@ public sealed class ExecutionOptions
     [Range(0.0, 10.0)] public decimal MaxPlannedCostVolatilityRatio { get; set; } = 0.50m;
     [Range(1, 600)] public int StabilityWindowSeconds { get; set; } = 30;
     public bool AllowPartialFills { get; set; } = false;
+    public bool RequireAllLegsFillable { get; set; } = true;
+    public bool AllowPartialBasketFill { get; set; } = false;
+    [Range(0.0, 1.0)] public decimal MinFillableQtyRatio { get; set; } = 1.0m;
+    [Range(1, int.MaxValue)] public int MaxOrderbookAgeMsForFillSimulation { get; set; } = 5000;
     public bool CancelRemainingLegOnPartialFill { get; set; } = true;
     public bool PaperOnly { get; set; } = true;
     public bool EnableLiveOrderSubmission { get; set; } = false;

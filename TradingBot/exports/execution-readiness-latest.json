@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-05-28T15:19:51.2705686Z",
+  "groups": [
+    {
+      "groupKey": "winner:2026 colombian presidential election|kind:person",
+      "state": "ExecutionStable",
+      "netEdge": 0.0115,
+      "plannedQty": 126.07160867372667675239536056,
+      "plannedCost": 249.99999999999999999999999999,
+      "plannedExpectedProfit": 1.4498234997478567826525466464,
+      "maxQtyByLiquidity": 174.94,
+      "maxQtyByNotional": 126.07160867372667675239536056,
+      "limitingFactor": "Notional",
+      "ready": true,
+      "notReadyReason": null,
+      "consecutiveReadyScans": 3,
+      "requiredConsecutiveReadyScans": 3
+    }
+  ]
+}

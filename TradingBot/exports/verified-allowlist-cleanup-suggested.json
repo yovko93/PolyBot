@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAtUtc": "2026-05-28T11:05:03.0007193Z",
+    "generatedAtUtc": "2026-05-28T15:19:51.2255492Z",
     "note": "suggested only"
   },
   "groups": [
@@ -245,6 +245,21 @@
         ],
         "requiredOutcomeCount": 3
       }
+    },
+    {
+      "groupKey": "winner:1st round of 2026 colombian presidential election|kind:person",
+      "enabled": true,
+      "configuredMarketCount": 3,
+      "resolvedMarketCount": 0,
+      "missingMarketCount": 3,
+      "missingMarketIds": [
+        "569342",
+        "569344",
+        "569343"
+      ],
+      "suggestedEnabled": false,
+      "reason": "Missing markets in discovered pool",
+      "suggestedPrunedTemplate": null
     }
   ]
 }

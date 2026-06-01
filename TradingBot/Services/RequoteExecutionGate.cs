@@ -28,7 +28,7 @@ public class RequoteExecutionGate
         if (targetQuantity <= 0)
             return false;
 
-        var fills = new List<FillSimulationResult>();
+        var fills = new List<OrderBookFillSimulationResult>();
 
         foreach (var market in sourceMarkets)
         {

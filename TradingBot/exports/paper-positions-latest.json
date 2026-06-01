@@ -1,7 +1,7 @@
 [
   {
     "Id": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE_winner_2026_colombian_presidential_election_kind_person_569366-NO_569368-NO_569373-NO",
-    "OpenedAt": "2026-05-28T10:50:12.5403316Z",
+    "OpenedAt": "2026-05-28T15:17:59.7706041Z",
     "ClosedAt": null,
     "Strategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
     "Group": "winner:2026 colombian presidential election|kind:person",
@@ -10,18 +10,18 @@
       "NO:Will Abelardo de la Espriella  win the 2026 Colombian presidential election?",
       "NO:Will Paloma Valencia win the 2026 Colombian presidential election?"
     ],
-    "Qty": 125.69130216189039718451483157,
+    "Qty": 126.07160867372667675239536056,
     "Cost": 249.99999999999999999999999999,
-    "CostPerBasket": 1.989,
-    "GuaranteedPayout": 251.38260432378079436902966314,
-    "MaxPayout": 377.07390648567119155354449471,
-    "GrossEdgeAtOpen": 0.0055,
-    "NetEdgeAtOpen": 0.0055,
-    "ExpectedProfit": 0.6913021618903971845148315736,
+    "CostPerBasket": 1.983,
+    "GuaranteedPayout": 252.14321734745335350479072112,
+    "MaxPayout": 378.21482602118003025718608168,
+    "GrossEdgeAtOpen": 0.0115,
+    "NetEdgeAtOpen": 0.0115,
+    "ExpectedProfit": 1.4498234997478567826525466464,
     "LockedCapital": 249.99999999999999999999999999,
     "ActiveProfile": "Conservative",
     "Source": "VerifiedMultiOutcome",
-    "CurrentNoAskSum": 1.989,
+    "CurrentNoAskSum": 1.983,
     "CurrentExitValue": null,
     "UnrealizedPnl": 0,
     "MtmStatus": "Incomplete",
@@ -29,6 +29,6 @@
     "RealizedPayout": null,
     "RealizedProfit": null,
     "Status": "OPEN",
-    "Sequence": 897
+    "Sequence": 1277
   }
 ]

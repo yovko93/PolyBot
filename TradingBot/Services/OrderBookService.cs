@@ -324,6 +324,26 @@ public class OrderBookService : IOrderBookProvider
         return null;
     }
 
+
+    public CachedOrderBookSnapshot? GetCachedOrderBookSnapshot(string tokenId, string marketId = "")
+    {
+        tokenId = NormalizeTokenId(tokenId) ?? "";
+        if (string.IsNullOrWhiteSpace(tokenId)) return null;
+
+        lock (_cacheLock)
+        {
+            if (!_bookCache.TryGetValue(tokenId, out var cached) || cached.Book is null)
+                return null;
+
+            return new CachedOrderBookSnapshot(
+                tokenId,
+                marketId,
+                cached.Time,
+                cached.Book.asks?.Select(ToBookQuote).Where(x => x is not null).Select(x => x!).OrderBy(x => x.Price).ToArray() ?? Array.Empty<BookQuote>(),
+                cached.Book.bids?.Select(ToBookQuote).Where(x => x is not null).Select(x => x!).OrderByDescending(x => x.Price).ToArray() ?? Array.Empty<BookQuote>());
+        }
+    }
+
     public void ClearExpiredCache()
     {
         lock (_cacheLock)

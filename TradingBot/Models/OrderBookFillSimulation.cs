@@ -12,7 +12,7 @@ public record SimulatedFillLevel(
     decimal Notional
 );
 
-public record FillSimulationResult(
+public record OrderBookFillSimulationResult(
     string MarketId,
     string Question,
     string Outcome,
