@@ -36,6 +36,7 @@ public sealed record AllowlistRepairMatch(
     int MissingNoAsk,
     IReadOnlyList<string> AddedMarketIds,
     IReadOnlyList<string> RemovedMarketIds,
+    int ChangedConditionIds,
     string Confidence);
 
 public sealed record AllowlistRepairClassification(
@@ -183,7 +184,9 @@ public sealed record AllowlistRepairPatchPreview(
     bool WillOverwriteRealConfig,
     AllowlistRepairPatchSummary Summary,
     IReadOnlyList<AllowlistRepairPatchItem> Patches,
-    AllowlistRepairPostApplyValidationPlan PostApplyValidationPlan);
+    AllowlistRepairPostApplyValidationPlan PostApplyValidationPlan,
+    AllowlistRepairManualApplyInstructions ManualApplyInstructions,
+    AllowlistPatchedPreviewValidation PatchedPreviewValidation);
 
 public sealed record AllowlistRepairPatchSummary(
     int TotalConfigured,
@@ -205,6 +208,21 @@ public sealed record AllowlistRepairPatchItem(
     string ManualInstructions,
     string ExpectedResultAfterApply);
 
+public sealed record AllowlistRepairManualApplyInstructions(
+    string SourcePreviewFile,
+    string TargetRealConfigPath,
+    IReadOnlyList<string> BackupInstructions,
+    IReadOnlyList<string> GroupsToApply,
+    IReadOnlyList<string> GroupsNotToApply,
+    IReadOnlyList<string> ExpectedLogsAfterRestart);
+
+public sealed record AllowlistPatchedPreviewValidation(
+    int TotalGroups,
+    int UniqueGroupKeys,
+    int DuplicateGroupKeys,
+    bool Valid,
+    IReadOnlyList<string> Reasons);
+
 public sealed record AllowlistRepairPostApplyValidationPlan(
     IReadOnlyList<string> Steps,
     int ExpectedConfiguredCount,
@@ -219,3 +237,5 @@ public sealed record AllowlistRepairPatchExport(
     AllowlistRepairPatchPreview PatchPreview,
     JsonNode PatchedPreviewConfig,
     JsonNode? PatchedPreviewWithMetadata);
+
+public sealed record AllowlistPatchValidationResult(string GroupKey, IReadOnlyList<string> RemovedMarketIds, bool Valid, int FinalLegs);

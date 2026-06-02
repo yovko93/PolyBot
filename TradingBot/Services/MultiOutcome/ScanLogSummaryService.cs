@@ -7,6 +7,16 @@ public sealed record DiscoveryHealthSummary(bool Healthy, bool Degraded, int Pag
     public string ToLogLine() => $"[DISCOVERY_HEALTH] Healthy={Healthy.ToString().ToLowerInvariant()} Degraded={Degraded.ToString().ToLowerInvariant()} Pages={Pages} Active={Active} Reason={Reason} ScanConfidence={ScanConfidence} ExpectedMinActive={ExpectedMinActive}";
 }
 
+public sealed record VerifiedUnresolvedSampleSummary(int Total, int SamplesShown, int Suppressed)
+{
+    public string ToLogLine() => $"[VERIFIED_UNRESOLVED_SUMMARY] Total={Total} SamplesShown={SamplesShown} Suppressed={Suppressed}";
+}
+
+public sealed record AllowlistConfigValidationSummary(int Total, int UniqueGroupKeys, int DuplicateGroupKeys, int Enabled, int Disabled)
+{
+    public string ToLogLine() => $"[ALLOWLIST_CONFIG_VALIDATION] Total={Total} UniqueGroupKeys={UniqueGroupKeys} DuplicateGroupKeys={DuplicateGroupKeys} Enabled={Enabled} Disabled={Disabled}";
+}
+
 public static class ScanLogSummaryService
 {
     public static DiscoveryHealthSummary DiscoveryHealth(MarketDiscoverySummary summary, int expectedMinActive)
@@ -24,5 +34,36 @@ public static class ScanLogSummaryService
     {
         var values = baskets.Select(x => x.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals(profileName, StringComparison.OrdinalIgnoreCase))?.NetEdge).Where(x => x.HasValue).Select(x => x!.Value).ToArray();
         return values.Length == 0 ? null : values.Max();
+    }
+
+    public static string CandidateScanFingerprint(int candidateCount, string topReject, IReadOnlyDictionary<string, int> rejectedByReason, int countBucketSize, int executableAutoCandidates = 0)
+    {
+        var bucket = Math.Max(1, countBucketSize);
+        var candidateCountBucket = (int)Math.Floor(candidateCount / (decimal)bucket);
+        var reasonBuckets = string.Join(",", rejectedByReason.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{(int)Math.Floor(x.Value / (decimal)bucket)}"));
+        var executableBucket = executableAutoCandidates > 0 ? $"exec:{executableAutoCandidates}" : "exec:0";
+        return $"count:{candidateCountBucket}|top:{topReject}|reasons:{reasonBuckets}|{executableBucket}";
+    }
+
+    public static string ProfileComparisonFingerprint(IReadOnlyList<VerifiedBasketScreener.ScreenResult> rows, decimal netDelta)
+    {
+        var bucket = netDelta <= 0m ? 0.002m : netDelta;
+        static long EdgeBucket(decimal value, decimal bucket) => (long)Math.Round(value / bucket, MidpointRounding.AwayFromZero);
+        return string.Join("|", rows.Take(5).Select(row =>
+        {
+            var conservative = row.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("Conservative", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? row.ActiveProfileNetEdge;
+            var poly = row.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("PolymarketApprox", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? 0m;
+            return $"{row.GroupKey}:{EdgeBucket(row.GrossEdge, bucket)}:{EdgeBucket(conservative, bucket)}:{EdgeBucket(poly, bucket)}:{row.Classification}";
+        }));
+    }
+
+    public static VerifiedUnresolvedSampleSummary UnresolvedSampleSummary(int total, int samplesShown)
+        => new(total, Math.Max(0, samplesShown), Math.Max(0, total - Math.Max(0, samplesShown)));
+
+    public static AllowlistConfigValidationSummary AllowlistConfigValidation(IReadOnlyList<VerifiedMultiOutcomeGroupConfig> groups)
+    {
+        var total = groups.Count;
+        var unique = groups.Select(x => x.GroupKey).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        return new AllowlistConfigValidationSummary(total, unique, Math.Max(0, total - unique), groups.Count(x => x.Enabled), groups.Count(x => !x.Enabled));
     }
 }
