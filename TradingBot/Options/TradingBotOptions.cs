@@ -87,6 +87,7 @@ public class MarketDiscoveryOptions
     public int RetryBackoffMs { get; set; } = 1000;
     public bool ContinueWithPartialDiscoveryOnError { get; set; } = true;
     public bool TreatSafetyCapAsWarning { get; set; } = false;
+    public int MinHealthyActiveMarkets { get; set; } = 8000;
 }
 
 public class DiagnosticsOptions
@@ -232,6 +233,10 @@ public class MultiOutcomeLoggingOptions
     public int LogPaperMtmEveryNCycles { get; set; } = 25;
     public bool LogExecutionSuppressionSummary { get; set; } = true;
     public bool LogRepeatedSizingForOpenPosition { get; set; } = false;
+    public bool LogVerifiedUnresolvedSamplesOnChangeOnly { get; set; } = true;
+    public int LogVerifiedUnresolvedSamplesEveryNCycles { get; set; } = 50;
+    public bool LogAllowlistRepairSuggestionsOnChangeOnly { get; set; } = true;
+    public int LogAllowlistRepairSuggestionsEveryNCycles { get; set; } = 50;
 }
 
 
@@ -253,6 +258,8 @@ public class MultiOutcomeReviewOptions
     public string ExportVerifiedTriagePath { get; set; } = "exports/verified-group-triage-latest.json";
     public string ExportNextGroupsToVerifyPath { get; set; } = "exports/next-groups-to-verify-latest.json";
     public string ExportSuggestedVerifiedGroupsPath { get; set; } = "exports/verified-multi-outcome-groups-suggested.json";
+    public string ExportAllowlistRepairReportPath { get; set; } = "exports/verified-allowlist-repair-report-latest.json";
+    public string ExportAllowlistRepairSuggestedConfigPath { get; set; } = "exports/verified-multi-outcome-groups-repair-suggested.json";
 }
 
 public class RuntimeStateOptions

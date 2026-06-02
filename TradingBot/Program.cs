@@ -35,6 +35,7 @@ builder.Services.AddSingleton<ExecutionAuditLog>();
 builder.Services.AddSingleton<VerifiedBasketExecutionCoordinator>();
 builder.Services.AddSingleton<VerifiedBasketDryRunOrderBuilder>();
 builder.Services.AddSingleton<DryRunFillSimulator>();
+builder.Services.AddSingleton<AllowlistRepairService>();
 builder.Services.AddSingleton<IExchangeOrderExecutor, DisabledExchangeOrderExecutor>();
 builder.Services.AddSingleton<DryRunLiveExecutor>();
 builder.Services.AddSingleton(sp => new BotRuntimeState(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value.RuntimeState));
@@ -137,6 +138,30 @@ app.MapGet("/api/bot/verified-allowlist-suggestion", (IHostEnvironment env) =>
     if (!File.Exists(path)) return Results.Ok(new { items = Array.Empty<object>() });
     return Results.Text(File.ReadAllText(path), "application/json");
 });
+app.MapGet("/api/bot/verified-allowlist-repair-report", (IHostEnvironment env, int? limit) =>
+{
+    var path = Path.Combine(env.ContentRootPath, "exports/verified-allowlist-repair-report-latest.json");
+    if (!File.Exists(path)) return Results.Ok(new { groups = Array.Empty<object>() });
+    var node = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.Nodes.JsonObject>(File.ReadAllText(path));
+    if (node?["groups"] is System.Text.Json.Nodes.JsonArray groups)
+    {
+        var capped = Math.Clamp(limit ?? 50, 1, 500);
+        node["groups"] = new System.Text.Json.Nodes.JsonArray(groups.Take(capped).Select(x => System.Text.Json.Nodes.JsonNode.Parse(x!.ToJsonString())).ToArray());
+    }
+    return Results.Json(node);
+});
+app.MapGet("/api/bot/verified-allowlist-suggested-config", (IHostEnvironment env, int? limit) =>
+{
+    var path = Path.Combine(env.ContentRootPath, "exports/verified-multi-outcome-groups-repair-suggested.json");
+    if (!File.Exists(path)) return Results.Ok(new { groups = Array.Empty<object>() });
+    var node = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.Nodes.JsonObject>(File.ReadAllText(path));
+    if (node?["groups"] is System.Text.Json.Nodes.JsonArray groups)
+    {
+        var capped = Math.Clamp(limit ?? 50, 1, 500);
+        node["groups"] = new System.Text.Json.Nodes.JsonArray(groups.Take(capped).Select(x => System.Text.Json.Nodes.JsonNode.Parse(x!.ToJsonString())).ToArray());
+    }
+    return Results.Json(node);
+});
 app.MapGet("/api/bot/risk", (BotRuntimeState s, IRiskManager risk) => Results.Ok(new { runtime = s.Risk, executionRisk = risk.GetRiskSnapshot() }));
 app.MapGet("/api/bot/execution-audit", (VerifiedBasketExecutionCoordinator audit, int? limit) => audit.ListAudit(Math.Clamp(limit ?? 200, 1, 1000)));
 app.MapGet("/api/bot/dry-run-order-plans", (VerifiedBasketExecutionCoordinator audit, int? limit) =>
@@ -220,10 +245,10 @@ _ = Task.Run(async () =>
     }
 });
 
-await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>(), app.Services.GetRequiredService<VerifiedBasketDryRunOrderBuilder>(), app.Services.GetRequiredService<DryRunFillSimulator>(), app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value, options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping);
+await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>(), app.Services.GetRequiredService<VerifiedBasketDryRunOrderBuilder>(), app.Services.GetRequiredService<DryRunFillSimulator>(), app.Services.GetRequiredService<AllowlistRepairService>(), app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value, options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping);
 await apiTask;
 
-static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, VerifiedBasketExecutionCoordinator verifiedExecution, VerifiedBasketDryRunOrderBuilder dryRunBuilder, DryRunFillSimulator fillSimulator, ExecutionOptions executionOptions, TradingBotOptions options, OpportunityFilteringOptions filtering, string contentRootPath, CancellationToken stoppingToken)
+static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, VerifiedBasketExecutionCoordinator verifiedExecution, VerifiedBasketDryRunOrderBuilder dryRunBuilder, DryRunFillSimulator fillSimulator, AllowlistRepairService allowlistRepairService, ExecutionOptions executionOptions, TradingBotOptions options, OpportunityFilteringOptions filtering, string contentRootPath, CancellationToken stoppingToken)
 {
     var scannerInstanceId = Guid.NewGuid().ToString("N");
     var scannerStartedAt = DateTime.UtcNow;
@@ -353,6 +378,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 cyclesCompletedSinceDiscovery = 0;
                 if (options.LogPrefetchSummary)
                     Console.WriteLine($"[DISCOVERY] marketsDiscovered={lastDiscoverySummary.MarketsDiscovered}, pagesFetched={lastDiscoverySummary.PagesFetched}, duplicatesRemoved={lastDiscoverySummary.DuplicatesRemoved}, inactiveSkipped={lastDiscoverySummary.InactiveSkipped}, activeMarketsAvailable={lastDiscoverySummary.ActiveMarketsAvailable}, rawLoadedTotal={lastDiscoverySummary.RawLoadedTotal}, uniqueMarketsTotal={lastDiscoverySummary.UniqueMarketsTotal}, skippedClosed={lastDiscoverySummary.SkippedClosed}, skippedArchived={lastDiscoverySummary.SkippedArchived}, skippedMissingTokenIds={lastDiscoverySummary.SkippedMissingTokenIds}, skippedInvalidShape={lastDiscoverySummary.SkippedInvalidShape}");
+                Console.WriteLine(ScanLogSummaryService.DiscoveryHealth(lastDiscoverySummary, options.MarketDiscovery.MinHealthyActiveMarkets).ToLogLine());
             }
 
             var configuredPoolLimit = options.UseAllDiscoveredMarkets ? options.MaxMarketsInPool : (options.MaxMarketsInPool > 0 ? options.MaxMarketsInPool : options.MarketScanLimit);
@@ -474,7 +500,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             var missingIds = missingNoAskLegs.Select(x => x.MarketId).ToHashSet(StringComparer.OrdinalIgnoreCase);
                             var suggestedMarketIds = markets.Where(x => !missingIds.Contains(x.id) && x.active != false).Select(x => x.id).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
                             var suggestedConditionIds = markets.Where(x => !missingIds.Contains(x.id) && x.active != false && !string.IsNullOrWhiteSpace(x.conditionId)).Select(x => x.conditionId!).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-                            var suggestion = options.MultiOutcomeReview.IncludeSuggestedPrunedAllowlist ? new { enabled = true, groupKey = g.GroupKey, title = g.Title, verificationStatus = "Verified", groupType = "MutuallyExclusiveWinner", allowedStrategy = "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", marketIds = suggestedMarketIds, conditionIds = suggestedConditionIds, requiredOutcomeCount = suggestedMarketIds.Length, requireExactOutcomeCount = false, suggestionReason = "MissingNoAsk legs excluded" } : null;
+                            var suggestion = options.MultiOutcomeReview.IncludeSuggestedPrunedAllowlist ? new { enabled = true, groupKey = g.GroupKey, title = g.Title, verificationStatus = "Verified", groupType = "MutuallyExclusiveWinner", allowedStrategy = "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", marketIds = suggestedMarketIds, conditionIds = suggestedConditionIds, requiredOutcomeCount = suggestedMarketIds.Length, requireExactOutcomeCount = false, suggestionReason = "MissingNoAsk legs excluded", settlementNotes = "Pruned to priced mutually exclusive subset. Missing NO ask leg excluded." } : null;
                             verifiedPricingExport.Add(new
                             {
                                 groupKey = g.GroupKey,
@@ -722,6 +748,18 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var healthPath = Path.Combine(contentRootPath, "exports/verified-allowlist-health-latest.json"); Directory.CreateDirectory(Path.GetDirectoryName(healthPath)!); File.WriteAllText(healthPath, System.Text.Json.JsonSerializer.Serialize(new { configured = multiOutcomeValidator.LoadedAllowlistCount, healthy = healthyCount, broken = brokenCount, disabled = disabledCount, ignored = ignoredCount, unresolved = unresolvedCount, needsRefresh = needsRefreshCount, groups = allowlistHealth }, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
                     var cleanup = new { metadata = new { generatedAtUtc = DateTime.UtcNow, note = "suggested only" }, groups = allowlistHealth.Select(h => new { h.groupKey, h.enabled, h.configuredMarketCount, h.resolvedMarketCount, h.missingMarketCount, h.missingMarketIds, suggestedEnabled = h.missingMarketCount > 0 ? false : h.enabled, reason = h.missingMarketCount > 0 ? "Missing markets in discovered pool" : "Healthy", suggestedPrunedTemplate = h.resolvedMarketCount >= 2 ? new { groupKey = h.groupKey, marketIds = h.foundMarketIds, requiredOutcomeCount = h.resolvedMarketCount } : null })};
                     var cleanupPath = Path.Combine(contentRootPath, "exports/verified-allowlist-cleanup-suggested.json"); File.WriteAllText(cleanupPath, System.Text.Json.JsonSerializer.Serialize(cleanup, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
+                    var repairReportPath = Path.Combine(contentRootPath, options.MultiOutcomeReview.ExportAllowlistRepairReportPath);
+                    var repairSuggestedPath = Path.Combine(contentRootPath, options.MultiOutcomeReview.ExportAllowlistRepairSuggestedConfigPath);
+                    var repairExports = allowlistRepairService.Export(repairReportPath, repairSuggestedPath, allowlistedGroups, resolved, verifiedPricingExport, boundedCandidates);
+                    var repairReport = repairExports.Report;
+                    Console.WriteLine($"[ALLOWLIST_REPAIR_REPORT] Groups={repairReport.ConfiguredGroups} Healthy={repairReport.Healthy} NeedsPricingPrune={repairReport.NeedsPricingPrune} NeedsRefresh={repairReport.NeedsRefresh} Broken={repairReport.Broken} Path={options.MultiOutcomeReview.ExportAllowlistRepairReportPath}");
+                    foreach (var repair in repairReport.Groups.Where(x => x.RecommendedAction is "PruneMissingNoAskLegs" or "RefreshFromCandidateExport" or "DisableMissingMarkets" or "NeedsManualReview"))
+                    {
+                        var suggestedLegs = repair.SuggestedPrunedTemplate?["marketIds"] is System.Text.Json.Nodes.JsonArray ids ? ids.Count : 0;
+                        var repairFingerprint = $"{repair.GroupKey}|{repair.RecommendedAction}|{repair.MissingNoAsk}|{suggestedLegs}|{repair.RepairConfidence}";
+                        if (logThrottle.ShouldLog($"ALLOWLIST_REPAIR_SUGGESTION:{repair.GroupKey}", repairFingerprint, options.Logging.LogAllowlistRepairSuggestionsOnChangeOnly, options.Logging.LogAllowlistRepairSuggestionsEveryNCycles))
+                            Console.WriteLine($"[ALLOWLIST_REPAIR_SUGGESTION] Group={repair.GroupKey} Action={repair.RecommendedAction} MissingNoAsk={repair.MissingNoAsk} SuggestedLegs={suggestedLegs} Confidence={repair.RepairConfidence}");
+                    }
                     var snapshot = VerifiedBasketScreener.BuildSnapshot(options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile, "PolymarketApprox", verifiedScreenResults, unresolvedConfiguredGroups);
                     VerifiedBasketScreener.Export(screenerPath, snapshot);
                     foreach (var row in snapshot.ExperimentalCandidates)
@@ -805,27 +843,30 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var candidateCount = multiOutcomeReport.GroupsDetected;
                     var rejectedCount = Math.Max(0, multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified);
                     var candidateFingerprint = $"{candidateCount}|{rejectedCount}|{multiOutcomeReport.TopSkipReason}|{candidateReasons}";
-                    var hasExecutableAutoCandidates = multiOutcomeReport.ExecutableGroups > 0;
-                    var distributionChanged = !string.Equals(candidateFingerprint, lastCandidateScanFingerprint, StringComparison.Ordinal);
-                    var shouldLogCandidate = logThrottle.ShouldLog("MULTI_CANDIDATE_SCAN", candidateFingerprint, options.Logging.LogCandidateScanOnChangeOnly, options.Logging.LogCandidateScanEveryNCycles)
-                        || (options.Logging.LogCandidateScanWhenRejectDistributionChanges && distributionChanged)
-                        || (options.Logging.LogCandidateScanWhenExecutableOnly && hasExecutableAutoCandidates);
+                    var shouldLogCandidate = logThrottle.ShouldLog("MULTI_CANDIDATE_SCAN", candidateFingerprint, options.Logging.LogCandidateScanOnChangeOnly, options.Logging.LogCandidateScanEveryNCycles);
                     if (shouldLogCandidate)
                         Console.WriteLine($"[MULTI_CANDIDATE_SCAN] Candidates={multiOutcomeReport.GroupsDetected} Rejected={Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified)} TopReject={multiOutcomeReport.TopSkipReason} RejectedByReason={{{candidateReasons}}}");
                     lastCandidateScanFingerprint = candidateFingerprint;
                     var bestConservativeNet = snapshot.BestByConservative?.ActiveProfileNetEdge;
-                    var bestPoly = snapshot.VerifiedBaskets.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("PolymarketApprox", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue).DefaultIfEmpty(decimal.MinValue).Max();
+                    decimal? bestExperimentalNet = ScanLogSummaryService.BestExperimentalNet(snapshot.ExperimentalCandidates);
+                    var bestAlternateProfileNet = ScanLogSummaryService.BestAlternateProfileNet(snapshot.VerifiedBaskets, "PolymarketApprox") ?? decimal.MinValue;
                     var bestRaw = snapshot.VerifiedBaskets.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue).DefaultIfEmpty(decimal.MinValue).Max();
                     var unresolved = Math.Max(0, multiOutcomeValidator.LoadedAllowlistCount - verifiedResolved);
                     verifiedScanCycle++;
-                    var verifiedScanFingerprint = $"{multiOutcomeValidator.LoadedAllowlistCount}|{verifiedResolved}|{unresolved}|{verifiedEvaluated}|{activeExecutable}|{experimentalCandidates}|{diagnosticsOnlyPositive}|{paperOpenedCount}|{suppressedDuplicateCount}|{verifiedMismatch}|{bestConservativeNet}|{bestPoly}|{bestRaw}";
+                    var bestExperimentalText = bestExperimentalNet.HasValue ? bestExperimentalNet.Value.ToString("0.####") : "N/A";
+                    var verifiedScanFingerprint = $"{multiOutcomeValidator.LoadedAllowlistCount}|{verifiedResolved}|{unresolved}|{verifiedEvaluated}|{activeExecutable}|{experimentalCandidates}|{diagnosticsOnlyPositive}|{paperOpenedCount}|{suppressedDuplicateCount}|{verifiedMismatch}|{bestConservativeNet}|{bestExperimentalText}|{bestAlternateProfileNet}|{bestRaw}";
                     var shouldLogVerifiedScan = string.IsNullOrEmpty(lastVerifiedScanFingerprint)
                         || !options.Logging.LogVerifiedScanOnChangeOnly
                         || verifiedScanFingerprint != lastVerifiedScanFingerprint
                         || (options.Logging.LogVerifiedScanEveryNCycles > 0 && verifiedScanCycle % options.Logging.LogVerifiedScanEveryNCycles == 0);
-                    if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} Evaluated={verifiedEvaluated} ActiveExecutable={activeExecutable} ExperimentalCandidates={experimentalCandidates} DiagnosticsOnlyPositive={diagnosticsOnlyPositive} PaperOpened={paperOpenedCount} SuppressedDuplicate={suppressedDuplicateCount} Mismatch={verifiedMismatch} BestActiveNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestExperimentalNet={bestPoly} BestRaw={bestRaw}");
+                    if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} Evaluated={verifiedEvaluated} ActiveExecutable={activeExecutable} ExperimentalCandidates={experimentalCandidates} DiagnosticsOnlyPositive={diagnosticsOnlyPositive} PaperOpened={paperOpenedCount} SuppressedDuplicate={suppressedDuplicateCount} Mismatch={verifiedMismatch} BestActiveNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestExperimentalNet={bestExperimentalText} BestAlternateProfileNet={bestAlternateProfileNet} BestRaw={bestRaw}");
                     lastVerifiedScanFingerprint = verifiedScanFingerprint;
-                    foreach (var ug in unresolvedConfiguredGroups.Take(3)) Console.WriteLine($"[VERIFIED_UNRESOLVED_SAMPLE] {System.Text.Json.JsonSerializer.Serialize(ug)}");
+                    foreach (var ug in resolved.Where(x => x.ValidationStatus != "VerifiedGroupResolved").Take(3))
+                    {
+                        var sampleFingerprint = $"{ug.GroupKey}|{ug.RejectionReason}|{ug.ValidationStatus}|{string.Join(",", ug.MissingMarketIds.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}|{string.Join(",", ug.ResolvedMarkets.Select(x => x.id).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}";
+                        if (logThrottle.ShouldLog($"VERIFIED_UNRESOLVED_SAMPLE:{ug.GroupKey}", sampleFingerprint, options.Logging.LogVerifiedUnresolvedSamplesOnChangeOnly, options.Logging.LogVerifiedUnresolvedSamplesEveryNCycles))
+                            Console.WriteLine($"[VERIFIED_UNRESOLVED_SAMPLE] {System.Text.Json.JsonSerializer.Serialize(new { ug.GroupKey, Reason = ug.RejectionReason, ug.ValidationStatus })}");
+                    }
 
                     var triageRows = resolved.Select(g =>
                     {
