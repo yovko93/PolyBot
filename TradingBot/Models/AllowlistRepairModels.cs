@@ -36,6 +36,7 @@ public sealed record AllowlistRepairMatch(
     int MissingNoAsk,
     IReadOnlyList<string> AddedMarketIds,
     IReadOnlyList<string> RemovedMarketIds,
+    int ChangedConditionIds,
     string Confidence);
 
 public sealed record AllowlistRepairClassification(
@@ -219,3 +220,5 @@ public sealed record AllowlistRepairPatchExport(
     AllowlistRepairPatchPreview PatchPreview,
     JsonNode PatchedPreviewConfig,
     JsonNode? PatchedPreviewWithMetadata);
+
+public sealed record AllowlistPatchValidationResult(string GroupKey, IReadOnlyList<string> RemovedMarketIds, bool Valid, int FinalLegs);

@@ -308,6 +308,93 @@ public class AllowlistRepairServiceTests
         Assert.Equal(3, export.PatchPreview.Summary.PatchableHighConfidence);
     }
 
+
+    [Fact]
+    public void Refresh_match_with_zero_added_removed_and_same_conditions_is_not_patchable()
+    {
+        var configured = new[]
+        {
+            new VerifiedMultiOutcomeGroupConfig(true, "winner:2026 peruvian presidential election|kind:person", "2026 Peruvian Presidential Election", ["peru-1", "peru-2"], ["peru-c1", "peru-c2"], 2, "Verified")
+        };
+        var resolved = new[]
+        {
+            new ResolvedVerifiedGroup(configured[0].GroupKey, configured[0].Title!, configured[0].MarketIds, configured[0].ConditionIds, [], ["peru-1", "peru-2"], [], "Rejected", "VerifiedGroupMarketMismatch")
+        };
+
+        var report = new AllowlistRepairService().BuildReport(configured, resolved, [], [PeruCandidate()]);
+        var peru = report.Groups.Single();
+        var export = new AllowlistRepairService().BuildPatchPreview(report, configured);
+
+        Assert.Empty(peru.RepairMatch!.AddedMarketIds);
+        Assert.Empty(peru.RepairMatch!.RemovedMarketIds);
+        Assert.Equal(0, peru.RepairMatch!.ChangedConditionIds);
+        Assert.False(export.PatchPreview.Patches.Any(x => x.GroupKey == peru.GroupKey && x.PatchType == "ReplaceGroup"));
+    }
+
+    [Fact]
+    public void No_op_refresh_becomes_keep_monitoring()
+    {
+        var configured = new[]
+        {
+            new VerifiedMultiOutcomeGroupConfig(true, "winner:2026 peruvian presidential election|kind:person", "2026 Peruvian Presidential Election", ["peru-1", "peru-2"], ["peru-c1", "peru-c2"], 2, "Verified")
+        };
+        var resolved = new[]
+        {
+            new ResolvedVerifiedGroup(configured[0].GroupKey, configured[0].Title!, configured[0].MarketIds, configured[0].ConditionIds, [], ["peru-1", "peru-2"], [], "Rejected", "VerifiedGroupMarketMismatch")
+        };
+
+        var report = new AllowlistRepairService().BuildReport(configured, resolved, [], [PeruCandidate()]);
+        var peru = report.Groups.Single();
+
+        Assert.Equal("KeepMonitoring", peru.RecommendedAction);
+        Assert.Equal("MonitoringOnly", peru.HealthCategory);
+    }
+
+    [Fact]
+    public void Patchable_count_excludes_no_op_repairs()
+    {
+        var configured = new[]
+        {
+            new VerifiedMultiOutcomeGroupConfig(true, "winner:2026 fifa world cup|kind:generic", "2026 FIFA World Cup", Enumerable.Range(1, 36).Select(i => i == 36 ? "558954" : $"fifa-{i}").ToArray(), Enumerable.Range(1, 36).Select(i => $"fifa-c{i}").ToArray(), 36, "Verified"),
+            new VerifiedMultiOutcomeGroupConfig(true, "winner:2026 peruvian presidential election|kind:person", "2026 Peruvian Presidential Election", ["peru-1", "peru-2"], ["peru-c1", "peru-c2"], 2, "Verified")
+        };
+        var resolved = new[]
+        {
+            new ResolvedVerifiedGroup(configured[0].GroupKey, configured[0].Title!, configured[0].MarketIds, configured[0].ConditionIds, configured[0].MarketIds.Select(Market).ToArray(), [], [], "VerifiedGroupResolved", "VerifiedGroupResolved"),
+            new ResolvedVerifiedGroup(configured[1].GroupKey, configured[1].Title!, configured[1].MarketIds, configured[1].ConditionIds, [], ["peru-1", "peru-2"], [], "Rejected", "VerifiedGroupMarketMismatch")
+        };
+
+        var report = new AllowlistRepairService().BuildReport(configured, resolved, FifaPricing(), [PeruCandidate()]);
+        var export = new AllowlistRepairService().BuildPatchPreview(report, configured);
+
+        Assert.Equal(1, export.PatchPreview.Summary.PatchableHighConfidence);
+    }
+
+    [Fact]
+    public void Fifa_patch_removes_missing_no_ask_market_and_matching_condition()
+    {
+        var configured = FifaConfigured();
+        var report = new AllowlistRepairService().BuildReport(configured, FifaResolved(), FifaPricing(), []);
+        var export = new AllowlistRepairService().BuildPatchPreview(report, configured);
+        var fifa = export.PatchPreview.Patches.Single(x => x.GroupKey.Contains("fifa", StringComparison.OrdinalIgnoreCase));
+        var validation = AllowlistRepairService.ValidatePatchItem(fifa);
+        var marketIds = fifa.ProposedGroup!["marketIds"]!.AsArray().Select(x => x!.GetValue<string>()).ToArray();
+        var conditionIds = fifa.ProposedGroup!["conditionIds"]!.AsArray().Select(x => x!.GetValue<string>()).ToArray();
+
+        Assert.DoesNotContain("558954", marketIds);
+        Assert.DoesNotContain("fifa-c36", conditionIds);
+        Assert.Equal(35, marketIds.Length);
+        Assert.Equal(35, conditionIds.Length);
+        Assert.Equal(35, fifa.ProposedGroup!["requiredOutcomeCount"]!.GetValue<int>());
+        Assert.False(fifa.ProposedGroup!["requireExactOutcomeCount"]!.GetValue<bool>());
+        Assert.Contains("Missing NO ask leg excluded", fifa.ProposedGroup!["settlementNotes"]!.GetValue<string>());
+        Assert.Equal("PruneMissingNoAskLegs", fifa.ProposedGroup!["repairAction"]!.GetValue<string>());
+        Assert.False(string.IsNullOrWhiteSpace(fifa.ProposedGroup!["repairSourceSnapshotId"]!.GetValue<string>()));
+        Assert.True(validation.Valid);
+        Assert.Equal(35, validation.FinalLegs);
+        Assert.Contains("558954", validation.RemovedMarketIds);
+    }
+
     [Fact]
     public void Post_apply_validation_plan_is_included()
     {
@@ -334,6 +421,29 @@ public class AllowlistRepairServiceTests
         Assert.False(node["willOverwriteRealConfig"]!.GetValue<bool>());
         Assert.True(node["patches"]!.AsArray().Count > 0);
     }
+
+
+    private static IReadOnlyList<VerifiedMultiOutcomeGroupConfig> FifaConfigured() =>
+    [
+        new(true, "winner:2026 fifa world cup|kind:generic", "2026 FIFA World Cup", Enumerable.Range(1, 36).Select(i => i == 36 ? "558954" : $"fifa-{i}").ToArray(), Enumerable.Range(1, 36).Select(i => $"fifa-c{i}").ToArray(), 36, "Verified")
+    ];
+
+    private static IReadOnlyList<ResolvedVerifiedGroup> FifaResolved() =>
+    [
+        new("winner:2026 fifa world cup|kind:generic", "2026 FIFA World Cup", FifaConfigured()[0].MarketIds, FifaConfigured()[0].ConditionIds, FifaConfigured()[0].MarketIds.Select(Market).ToArray(), [], [], "VerifiedGroupResolved", "VerifiedGroupResolved")
+    ];
+
+    private static IReadOnlyList<object> FifaPricing() =>
+    [
+        new
+        {
+            groupKey = "winner:2026 fifa world cup|kind:generic",
+            noAskResolvedCount = 35,
+            missingNoAskCount = 1,
+            pricedLegs = Enumerable.Range(1, 35).Select(i => Leg($"fifa-{i}", $"fifa-c{i}")).ToArray(),
+            missingPriceLegs = new[] { Leg("558954", "fifa-c36") }
+        }
+    ];
 
     private static IReadOnlyList<VerifiedMultiOutcomeGroupConfig> Configured() =>
     [

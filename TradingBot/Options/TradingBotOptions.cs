@@ -219,6 +219,7 @@ public class MultiOutcomeLoggingOptions
     public bool LogExperimentalCandidateOnChangeOnly { get; set; } = true;
     public bool LogOnlyOnChange { get; set; } = true;
     public bool LogProfileComparisonSummary { get; set; } = true;
+    public decimal ProfileComparisonSignificantNetDelta { get; set; } = 0.002m;
     public bool LogNearExecutableOnlyOnChange { get; set; } = true;
     public int LogCandidateScanEveryNCycles { get; set; } = 25;
     public bool LogCandidateScanOnChangeOnly { get; set; } = true;
@@ -238,6 +239,7 @@ public class MultiOutcomeLoggingOptions
     public bool LogRepeatedSizingForOpenPosition { get; set; } = false;
     public bool LogVerifiedUnresolvedSamplesOnChangeOnly { get; set; } = true;
     public int LogVerifiedUnresolvedSamplesEveryNCycles { get; set; } = 50;
+    public int MaxVerifiedUnresolvedSamplesToLog { get; set; } = 5;
     public bool LogAllowlistRepairSuggestionsOnChangeOnly { get; set; } = true;
     public int LogAllowlistRepairSuggestionsEveryNCycles { get; set; } = 50;
     public bool LogAllowlistRepairOnChangeOnly { get; set; } = true;

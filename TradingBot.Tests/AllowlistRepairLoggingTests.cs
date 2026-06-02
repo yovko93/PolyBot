@@ -87,6 +87,54 @@ public class AllowlistRepairLoggingTests
     }
 
 
+
+    [Fact]
+    public void Unresolved_summary_reports_more_when_sample_limit_is_lower_than_total()
+    {
+        var summary = ScanLogSummaryService.UnresolvedSampleSummary(3, 2);
+
+        Assert.Equal(3, summary.Total);
+        Assert.Equal(2, summary.SamplesShown);
+        Assert.Equal(1, summary.More);
+        Assert.Contains("More=1", summary.ToLogLine());
+    }
+
+    [Fact]
+    public void Candidate_scan_fingerprint_buckets_small_count_changes()
+    {
+        var throttle = new LogThrottle();
+        var firstHash = ScanLogSummaryService.CandidateScanFingerprint(8391, "Safety", new Dictionary<string, int> { ["A"] = 14 }, 10);
+        var smallHash = ScanLogSummaryService.CandidateScanFingerprint(8394, "Safety", new Dictionary<string, int> { ["A"] = 19 }, 10);
+
+        Assert.True(throttle.ShouldLog("MULTI_CANDIDATE_SCAN", firstHash, true, 25));
+        Assert.False(throttle.ShouldLog("MULTI_CANDIDATE_SCAN", smallHash, true, 25));
+    }
+
+    [Fact]
+    public void Profile_comparison_fingerprint_buckets_unchanged_values()
+    {
+        var throttle = new LogThrottle();
+        var firstHash = ScanLogSummaryService.ProfileComparisonFingerprint([Row(active: -0.0030m, experimental: -0.0010m)], 0.002m);
+        var smallHash = ScanLogSummaryService.ProfileComparisonFingerprint([Row(active: -0.0031m, experimental: -0.0011m)], 0.002m);
+
+        Assert.True(throttle.ShouldLog("PROFILE_COMPARISON", firstHash, true, 25));
+        Assert.False(throttle.ShouldLog("PROFILE_COMPARISON", smallHash, true, 25));
+    }
+
+    [Fact]
+    public void Allowlist_startup_validation_counts_unique_keys()
+    {
+        var summary = ScanLogSummaryService.AllowlistConfigValidation([
+            new TradingBot.Services.VerifiedMultiOutcomeGroupConfig(true, "g1", "G1", ["m1"], [], 1, "Verified"),
+            new TradingBot.Services.VerifiedMultiOutcomeGroupConfig(true, "g2", "G2", ["m2"], [], 1, "Verified")
+        ]);
+
+        Assert.Equal(2, summary.Total);
+        Assert.Equal(2, summary.UniqueGroupKeys);
+        Assert.Equal(0, summary.DuplicateGroupKeys);
+        Assert.Contains("DuplicateGroupKeys=0", summary.ToLogLine());
+    }
+
     [Fact]
     public void Ranking_logs_are_throttled_by_stable_hash()
     {

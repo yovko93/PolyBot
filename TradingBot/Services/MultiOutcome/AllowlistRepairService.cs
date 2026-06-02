@@ -207,6 +207,32 @@ public sealed class AllowlistRepairService
         return new AllowlistRepairPatchExport(preview, patchedConfig, wrapped);
     }
 
+
+    public static AllowlistPatchValidationResult ValidatePatchItem(AllowlistRepairPatchItem patch)
+    {
+        var proposed = patch.ProposedGroup as JsonObject;
+        var marketIds = ReadStringArray(proposed, "marketIds");
+        var conditionIds = ReadStringArray(proposed, "conditionIds");
+        var removed = patch.Diff?["removedMarketIds"] is JsonArray rm
+            ? rm.Select(x => x?.GetValue<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>().ToArray()
+            : [];
+        var required = GetNullableInt(proposed, "requiredOutcomeCount");
+        var exact = GetNullableBool(proposed, "requireExactOutcomeCount");
+        var notes = proposed?["settlementNotes"]?.GetValue<string>() ?? string.Empty;
+        var repairAction = proposed?["repairAction"]?.GetValue<string>() ?? string.Empty;
+        var snapshot = proposed?["repairSourceSnapshotId"]?.GetValue<string>() ?? string.Empty;
+        var valid = patch.PatchType == "PruneGroup"
+            && proposed is not null
+            && marketIds.Count == conditionIds.Count
+            && required == marketIds.Count
+            && exact == false
+            && removed.All(x => !marketIds.Contains(x, StringComparer.OrdinalIgnoreCase))
+            && notes.Contains(VerifiedAllowlistGroupHealthClassifier.PruneSettlementNote, StringComparison.OrdinalIgnoreCase)
+            && repairAction == nameof(AllowlistRepairRecommendedAction.PruneMissingNoAskLegs)
+            && !string.IsNullOrWhiteSpace(snapshot);
+        return new AllowlistPatchValidationResult(patch.GroupKey, removed, valid, marketIds.Count);
+    }
+
     private static bool IsPatchPreviewCandidate(AllowlistRepairGroup g)
         => g.RecommendedAction is nameof(AllowlistRepairRecommendedAction.PruneMissingNoAskLegs)
             or nameof(AllowlistRepairRecommendedAction.RefreshFromCandidateExport)
@@ -215,7 +241,25 @@ public sealed class AllowlistRepairService
 
     private static bool IsPatchablePatch(AllowlistRepairPatchItem p)
         => (p.PatchType is "ReplaceGroup" or "PruneGroup" or "DisableGroup")
-            && (p.Confidence is "High" or "Medium");
+            && (p.Confidence is "High" or "Medium")
+            && HasRealPatchDiff(p);
+
+    private static bool HasRealPatchDiff(AllowlistRepairPatchItem p)
+        => CountArray(p.Diff, "addedMarketIds") > 0
+            || CountArray(p.Diff, "removedMarketIds") > 0
+            || CountArray(p.Diff, "changedConditionIds") > 0
+            || ChangedValue(p.Diff, "requiredOutcomeCountBefore", "requiredOutcomeCountAfter")
+            || ChangedValue(p.Diff, "enabledBefore", "enabledAfter");
+
+    private static int CountArray(JsonNode? node, string property)
+        => node?[property] is JsonArray arr ? arr.Count : 0;
+
+    private static bool ChangedValue(JsonNode? node, string beforeProperty, string afterProperty)
+    {
+        var before = node?[beforeProperty]?.ToJsonString();
+        var after = node?[afterProperty]?.ToJsonString();
+        return !string.Equals(before, after, StringComparison.OrdinalIgnoreCase);
+    }
 
     private static AllowlistRepairPatchItem BuildPatchItem(string snapshotId, AllowlistRepairGroup g, JsonObject? currentGroup)
     {
@@ -237,9 +281,15 @@ public sealed class AllowlistRepairService
         if (g.RecommendedAction == nameof(AllowlistRepairRecommendedAction.DisableMissingMarkets) && g.RepairConfidence.Equals("Low", StringComparison.OrdinalIgnoreCase))
             proposed = null;
         var diff = BuildPatchDiff(g, currentGroup, proposed);
+        if (patchType == "ReplaceGroup" && !HasRealPatchDiff(new AllowlistRepairPatchItem(g.GroupKey, g.RecommendedAction, g.RepairConfidence, patchType, null, proposed, diff, [], string.Empty, string.Empty)))
+        {
+            patchType = "None";
+            proposed = null;
+            diff = BuildPatchDiff(g, currentGroup, proposed);
+        }
         var risks = BuildRiskNotes(g, patchType).ToArray();
-        var manualInstructions = patchType == "ReviewOnly"
-            ? "Low confidence. Review before disabling or refreshing. Do not copy an executable group from this preview."
+        var manualInstructions = patchType is "ReviewOnly" or "None"
+            ? "No trusted automatic config change. Review diagnostics manually; do not copy an executable group from this preview."
             : "Review currentGroup, proposedGroup, and diff. If acceptable, manually copy the matching group from exports/verified-multi-outcome-groups-patched-preview.json into config/verified-multi-outcome-groups.json, then restart/reload allowlist.";
         return new AllowlistRepairPatchItem(g.GroupKey, g.RecommendedAction, g.RepairConfidence, patchType, Clone(currentGroup), Clone(proposed), diff, risks, manualInstructions, g.ExpectedResultAfterManualApply);
     }
@@ -576,7 +626,11 @@ public sealed class VerifiedAllowlistGroupHealthClassifier
             {
                 var template = BuildRefreshTemplate(cfg, match.Match.Candidate);
                 if (template is not null)
+                {
+                    if (IsNoOpRefresh(cfg, template, match.Match.Diagnostics))
+                        return Result(cfg, AllowlistRepairHealthCategory.MonitoringOnly, AllowlistRepairRecommendedAction.KeepMonitoring, match.Match.Diagnostics.Confidence, "Stable candidate export matches current group; no repair patch is required.", missingMarketIds, missingNoAskIds, repairMatch: match.Match.Diagnostics, misses: match.ConsecutiveMisses);
                     return Result(cfg, AllowlistRepairHealthCategory.NeedsRefresh, AllowlistRepairRecommendedAction.RefreshFromCandidateExport, match.Match.Diagnostics.Confidence, "Market mismatch; stable refreshed candidate is available for manual review.", missingMarketIds, missingNoAskIds, refreshed: template, repairMatch: match.Match.Diagnostics, misses: match.ConsecutiveMisses);
+                }
             }
 
             var forceDisable = IsWomenUsOpen(cfg.GroupKey) && (resolved?.ResolvedMarkets.Count ?? 0) < 2;
@@ -630,8 +684,26 @@ public sealed class VerifiedAllowlistGroupHealthClassifier
         if (marketIds.Length < 2) score = 0m;
         var added = marketIds.Except(cfg.MarketIds, StringComparer.OrdinalIgnoreCase).ToArray();
         var removed = cfg.MarketIds.Except(marketIds, StringComparer.OrdinalIgnoreCase).Concat(resolved?.MissingMarketIds ?? Array.Empty<string>()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var changedConditionIds = cfg.ConditionIds.Count == 0 && conditionIds.Length == 0
+            ? 0
+            : cfg.ConditionIds.Except(conditionIds, StringComparer.OrdinalIgnoreCase).Concat(conditionIds.Except(cfg.ConditionIds, StringComparer.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase).Count();
         var confidence = score >= 0.85m ? "High" : score >= 0.70m ? "Medium" : "Low";
-        return (candidate, new AllowlistRepairMatch(candidateKey, score, titleSimilarity, marketOverlap, conditionOverlap, semantic, pricedLegs, 0, added, removed, confidence));
+        return (candidate, new AllowlistRepairMatch(candidateKey, score, titleSimilarity, marketOverlap, conditionOverlap, semantic, pricedLegs, 0, added, removed, changedConditionIds, confidence));
+    }
+
+    private static bool IsNoOpRefresh(VerifiedMultiOutcomeGroupConfig cfg, JsonObject template, AllowlistRepairMatch diagnostics)
+    {
+        var marketIds = ((template["marketIds"] as JsonArray) ?? []).Select(x => x?.GetValue<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>().ToArray();
+        var conditionIds = ((template["conditionIds"] as JsonArray) ?? []).Select(x => x?.GetValue<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>().ToArray();
+        var marketsSame = cfg.MarketIds.Count == marketIds.Length && cfg.MarketIds.SequenceEqual(marketIds, StringComparer.OrdinalIgnoreCase);
+        var conditionsSame = cfg.ConditionIds.Count == conditionIds.Length && cfg.ConditionIds.SequenceEqual(conditionIds, StringComparer.OrdinalIgnoreCase);
+        var requiredSame = !cfg.RequiredOutcomeCount.HasValue || cfg.RequiredOutcomeCount.Value == marketIds.Length;
+        return diagnostics.AddedMarketIds.Count == 0
+            && diagnostics.RemovedMarketIds.Count == 0
+            && diagnostics.ChangedConditionIds == 0
+            && marketsSame
+            && conditionsSame
+            && requiredSame;
     }
 
     private static JsonObject? BuildPrunedTemplate(VerifiedMultiOutcomeGroupConfig cfg, JsonObject? pricing, int noAskResolved)
