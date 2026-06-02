@@ -72,7 +72,7 @@ public class DryRunFillSimulatorTests
         var opp = Opp();
         var pre = coord.Validate(opp, book);
         var failed = Simulate(qty: pre.Quantity, sizes: [20m, 1m, 20m]);
-        var opened = coord.OpenPaperPosition(opp, pre, book, failed);
+        var opened = coord.OpenPaperPosition(opp, pre, book, Plan(pre.Quantity, netEdge: pre.NetEdge), failed);
         Assert.Null(opened);
         Assert.Empty(book.OpenPositions);
     }
@@ -90,7 +90,7 @@ public class DryRunFillSimulatorTests
         books["t2"] = new CachedOrderBookSnapshot("t2", "m2", Now, [new BookQuote(0.33m, 20m)], []);
         books["t3"] = new CachedOrderBookSnapshot("t3", "m3", Now, [new BookQuote(0.4m, 20m)], []);
         var fill = new DryRunFillSimulator().Simulate(plan, books, Snapshots(), Options(), Now);
-        var opened = coord.OpenPaperPosition(opp, pre, book, fill);
+        var opened = coord.OpenPaperPosition(opp, pre, book, Plan(pre.Quantity, netEdge: pre.NetEdge), fill);
         Assert.NotNull(opened);
         Assert.NotEqual(pre.EstimatedCost, opened!.TotalCost);
         Assert.Equal(fill.EstimatedFilledCost, opened.TotalCost);
@@ -157,7 +157,7 @@ public class DryRunFillSimulatorTests
         var pre = coord.Validate(opp, book);
         var fill = ColombianFill(pre.Quantity);
 
-        var opened = coord.OpenPaperPosition(opp, pre, book, fill);
+        var opened = coord.OpenPaperPosition(opp, pre, book, Plan(pre.Quantity, netEdge: pre.NetEdge), fill);
 
         Assert.NotNull(opened);
         Assert.Equal(0.011m, opened!.GrossEdgeAtOpen);
@@ -173,7 +173,7 @@ public class DryRunFillSimulatorTests
         var opp = Opp();
         var pre = coord.Validate(opp, book);
 
-        var opened = coord.OpenPaperPosition(opp, pre, book, ColombianFill(pre.Quantity));
+        var opened = coord.OpenPaperPosition(opp, pre, book, Plan(pre.Quantity, netEdge: pre.NetEdge), ColombianFill(pre.Quantity));
 
         Assert.NotNull(opened);
         Assert.Equal(pre.Quantity * 0.0055m, opened!.ExpectedProfit);
@@ -189,7 +189,7 @@ public class DryRunFillSimulatorTests
         var pre = coord.Validate(opp, book);
         var inconsistent = ColombianFill(pre.Quantity) with { FillAdjustedExpectedProfit = pre.ExpectedProfit * 2m, EstimatedExpectedProfit = pre.ExpectedProfit * 2m };
 
-        var opened = coord.OpenPaperPosition(opp, pre, book, inconsistent);
+        var opened = coord.OpenPaperPosition(opp, pre, book, Plan(pre.Quantity, netEdge: pre.NetEdge), inconsistent);
 
         Assert.Null(opened);
         Assert.Empty(book.OpenPositions);
@@ -235,7 +235,7 @@ public class DryRunFillSimulatorTests
         var pre = coord.Validate(opp, book);
         var inconsistent = ColombianFill(pre.Quantity) with { FillAdjustedNetEdgePerBasket = 0.011m };
 
-        var opened = coord.OpenPaperPosition(opp, pre, book, inconsistent);
+        var opened = coord.OpenPaperPosition(opp, pre, book, Plan(pre.Quantity, netEdge: pre.NetEdge), inconsistent);
 
         Assert.Null(opened);
         Assert.Empty(book.OpenPositions);
@@ -253,7 +253,7 @@ public class DryRunFillSimulatorTests
         coord.RecordFillSimulation(fill);
         coord.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "DryRunFillSimulationPassed", "Ok", "FullyFillable", fill.FillAdjustedNetEdgePerBasket, fill.FillAdjustedExpectedProfit, fill.EstimatedFilledCost, fill.SafeExecutableQty, ""));
 
-        var opened = coord.OpenPaperPosition(opp, pre, book, fill);
+        var opened = coord.OpenPaperPosition(opp, pre, book, Plan(pre.Quantity, netEdge: pre.NetEdge), fill);
 
         Assert.NotNull(opened);
         var audit = coord.ListAudit();
@@ -272,7 +272,7 @@ public class DryRunFillSimulatorTests
         var coord = Coordinator();
         var opp = Opp();
         var pre = coord.Validate(opp, book);
-        var opened = coord.OpenPaperPosition(opp, pre, book, ColombianFill(pre.Quantity));
+        var opened = coord.OpenPaperPosition(opp, pre, book, Plan(pre.Quantity, netEdge: pre.NetEdge), ColombianFill(pre.Quantity));
 
         paper.RegisterExternalBasketOpen(opened!, opened!.TotalCost, opened.ExpectedProfit);
 

@@ -60,7 +60,7 @@ public class VerifiedBasketExecutionCoordinatorTests
 
         var first = c.Validate(opp, book);
         Assert.True(first.Approved);
-        var opened = c.OpenPaperPosition(opp, first, book, SuccessfulFill(first.Quantity));
+        var opened = c.OpenPaperPosition(opp, first, book, Plan(first.Quantity, first.NetEdge), SuccessfulFill(first.Quantity));
         Assert.NotNull(opened);
 
         var second = c.Validate(opp with { Id = "opp-2" }, book);
@@ -78,7 +78,7 @@ public class VerifiedBasketExecutionCoordinatorTests
         c.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "Detected", "Ok", "VerifiedExecutable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
         c.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PromotedToOpportunity", "Ok", "Actionable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
         var pre = c.Validate(opp, book);
-        if (pre.Approved) c.OpenPaperPosition(opp, pre, book, SuccessfulFill(pre.Quantity));
+        if (pre.Approved) c.OpenPaperPosition(opp, pre, book, Plan(pre.Quantity, pre.NetEdge), SuccessfulFill(pre.Quantity));
 
         var events = c.ListAudit(200);
         Assert.Contains(events, e => e.Stage == "Detected");
@@ -86,6 +86,18 @@ public class VerifiedBasketExecutionCoordinatorTests
         Assert.Contains(events, e => e.Stage == "PreTradeStarted");
     }
 
+
+    private static BasketOrderPlan Plan(decimal qty, decimal netEdge)
+    {
+        var now = DateTime.UtcNow;
+        var orders = new[]
+        {
+            new OrderIntent("o1", "opp-1", "winner:2026 colombian presidential election|kind:person", "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", "m1", "c1", "q1", "t1", "NO", "BUY", "NO", 0.22m, qty, 0.22m * qty, "LIMIT", "GTC", false, true, now),
+            new OrderIntent("o2", "opp-1", "winner:2026 colombian presidential election|kind:person", "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", "m2", "c2", "q2", "t2", "NO", "BUY", "NO", 0.33m, qty, 0.33m * qty, "LIMIT", "GTC", false, true, now),
+            new OrderIntent("o3", "opp-1", "winner:2026 colombian presidential election|kind:person", "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", "m3", "c3", "q3", "t3", "NO", "BUY", "NO", 0.40m, qty, 0.40m * qty, "LIMIT", "GTC", false, true, now)
+        };
+        return new BasketOrderPlan("plan-1", "opp-1", "winner:2026 colombian presidential election|kind:person", "Colombia 2026", "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", "Conservative", true, now, now.AddMinutes(10), BasketOrderPlanStatus.PaperOnly, 3, qty, 2m, 0.95m, orders.Sum(x => x.EstimatedCost), qty * netEdge, netEdge, 250m, orders, [], []);
+    }
 
     private static FillSimulationResult SuccessfulFill(decimal qty)
     {
