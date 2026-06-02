@@ -10,7 +10,6 @@
       "558966",
       "558951",
       "558955",
-      "558954",
       "558963",
       "558974",
       "558944",
@@ -48,7 +47,6 @@
       "0x289568d555ec620ed6fa33c936c5f42649d3a2e30748a1daf7079f42453fbea4",
       "0x7b52405ad0e0d31bfe970940b67d77f24ecedeab8a2361c11148c02a006e325c",
       "0xbaf7780f9059e34b84301fd411f8dc573b4d56adfe6e0cda33daf304b1438da4",
-      "0xff0cfa9506cfa95759e4c7591654195bd26e3011f9882b51439135e04f2b69f1",
       "0x37a6de1b21803e5f3fb1965116218215d79963af4f7e51659696366267a63a03",
       "0x3a26ca6425e2d98f14935670bc22cdb0744defc6f6d83c65f8c413a921c5c70c",
       "0x7876851632c295043c66536150a304cb785abdf712ba8489d298c6e6926be106",
@@ -82,10 +80,13 @@
       "0x0189df05ed7bf84d799213b01a79571e305c03b2ac5359cfbb3a323448ba20fa",
       "0x30d55d8124ee1e12dabe89201badc45669b81dff69e4ce44d961f32878ec178a"
     ],
-    "requiredOutcomeCount": 36,
-    "settlementNotes": "Manually verified subset of 2026 FIFA World Cup winner markets. All included outcomes are mutually exclusive. Illiquid legs without NO ask were excluded.",
+    "requiredOutcomeCount": 35,
+    "requireExactOutcomeCount": false,
+    "settlementNotes": "Manually verified subset of 2026 FIFA World Cup winner markets. All included outcomes are mutually exclusive. Illiquid legs without NO ask were excluded. Pruned to priced mutually exclusive subset. Missing NO ask leg excluded.",
     "verifiedBy": "manual",
-    "verifiedAt": "2026-05-26"
+    "verifiedAt": "2026-06-02",
+    "repairSourceSnapshotId": "candidate-export-8dec0ce80956588-1ba708f8cdbf",
+    "repairAction": "PruneMissingNoAskLegs"
   },
   {
     "enabled": true,
@@ -350,7 +351,7 @@
     "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
     "verifiedBy": "manual",
     "verifiedAt": "2026-06-02",
-    "repairSourceSnapshotId": "candidate-export-8dec0c8cc116af6-95dbb06852f0",
+    "repairSourceSnapshotId": "candidate-export-8dec0ce80956588-1ba708f8cdbf",
     "repairAction": "RefreshFromCandidateExport"
   }
 ]

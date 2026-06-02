@@ -1,43 +1,7 @@
 [
   {
-    "groupKey": "winner:2026 ballon d or|kind:generic",
-    "title": "winner:2026 ballon d or|kind:generic",
-    "detectedMarketsCount": 3,
-    "pricedLegs": 3,
-    "missingNoAsk": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "rawOnlyEdge": null,
-    "candidateQualityScore": 90,
-    "safetyClassification": "SafeForManualVerification",
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:2026 ballon d or|kind:generic",
-      "title": "winner:2026 ballon d or|kind:generic",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "608547",
-        "608556",
-        "608549"
-      ],
-      "conditionIds": [
-        "0x12dc2b61723b2a54fc1947a307389b5f32038e7a29a0e936ad1fe410b969d06a",
-        "0x01f2c56394e8d4fd8f29ac99cbb3247cc9864a0a131ea420156ae2f658534cf2",
-        "0xd5a0dc324b2c8af715850bc34fe2b1089e7627103b92a9ec7aba79cbf9117943"
-      ],
-      "requiredOutcomeCount": 3,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-05-28"
-    }
-  },
-  {
-    "groupKey": "winner:on 2026 05 31|kind:generic",
-    "title": "winner:on 2026 05 31|kind:generic",
+    "groupKey": "winner:on 2026 06 07|kind:generic",
+    "title": "winner:on 2026 06 07|kind:generic",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
     "missingNoAsk": 0,
@@ -49,24 +13,94 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:on 2026 05 31|kind:generic",
-      "title": "winner:on 2026 05 31|kind:generic",
+      "groupKey": "winner:on 2026 06 07|kind:generic",
+      "title": "winner:on 2026 06 07|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "2154768",
-        "2154781"
+        "2371977",
+        "2230385"
       ],
       "conditionIds": [
-        "0xd09be6a9266984cc9a80386c1c33f1a6ef939746a1b52c833ea6946b25707de8",
-        "0x1eda1175bd4b6d0e63e2e09110e9cecd81c6d0c58c89563042a97479fbb4cb70"
+        "0xc77c6f66e72fb9dff3b6e2b5c30f581d2386392d4c23b103e71cc201ce7419eb",
+        "0x03b4cd52fe6d6f463b0e9dac658580f13727c1faa02ea6ad1c5bd78ae95e3f3f"
       ],
       "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-05-28"
+      "verifiedAt": "2026-06-02"
+    }
+  },
+  {
+    "groupKey": "winner:2026 men s french open|kind:generic",
+    "title": "winner:2026 men s french open|kind:generic",
+    "detectedMarketsCount": 3,
+    "pricedLegs": 3,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:2026 men s french open|kind:generic",
+      "title": "winner:2026 men s french open|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "1087553",
+        "1087514",
+        "1087516"
+      ],
+      "conditionIds": [
+        "0x3e166e94d38707543b2e951c325eb9b917468b99e75294d11cd853587364d934",
+        "0x739e756119534672538d8df821a5b3321e2c802d80afff0c5790126be9b41281",
+        "0x24e67fb509df7efecc1840008153634d4852c0d2725d0a6c13f2e60beb2f2e2f"
+      ],
+      "requiredOutcomeCount": 3,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-06-02"
+    }
+  },
+  {
+    "groupKey": "winner:2026 seoul mayoral election|kind:person",
+    "title": "winner:2026 seoul mayoral election|kind:person",
+    "detectedMarketsCount": 2,
+    "pricedLegs": 2,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:2026 seoul mayoral election|kind:person",
+      "title": "winner:2026 seoul mayoral election|kind:person",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "678929",
+        "678937"
+      ],
+      "conditionIds": [
+        "0xc587bda904f031a973ad3cb57128ca011bfab0f45e6cb3734ed2227c4d4be419",
+        "0x1b1a75d6305f5edee255b3f368cca945bde401fea4b2a7e34f2fcca3b3e56cf0"
+      ],
+      "requiredOutcomeCount": 2,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-06-02"
     }
   }
 ]

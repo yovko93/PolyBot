@@ -1,19 +1,45 @@
 {
-  "metadata": {
-    "generatedAtUtc": "2026-06-02T17:47:56.2109518Z",
-    "note": "suggested only"
+  "snapshotId": "candidate-export-8dec0ce80956588-1ba708f8cdbf",
+  "generatedAt": "2026-06-02T17:47:55.7579657Z",
+  "timestamp": "2026-06-02T17:47:55.7579661Z",
+  "note": "Suggested only. Does not overwrite config/verified-multi-outcome-groups.json. Review manually before copying.",
+  "summary": {
+    "configuredGroups": 11,
+    "healthy": 0,
+    "monitoringOnly": 7,
+    "needsPricingPrune": 1,
+    "needsRefresh": 2,
+    "brokenConfig": 1,
+    "disabled": 0,
+    "ignored": 0,
+    "broken": 4,
+    "invariantOk": true
+  },
+  "categoryCounts": {
+    "healthy": 0,
+    "monitoringOnly": 7,
+    "needsPricingPrune": 1,
+    "needsRefresh": 2,
+    "brokenConfig": 1,
+    "disabled": 0,
+    "ignored": 0,
+    "brokenTotal": 4,
+    "hasMissingNoAsk": 1,
+    "hasMarketMismatch": 3,
+    "hasCandidateRefreshMatch": 1,
+    "hasSuggestedTemplate": 2
   },
   "groups": [
     {
-      "GroupKey": "winner:2026 fifa world cup|kind:generic",
-      "Title": "winner:2026 fifa world cup|kind:generic",
-      "CurrentEnabled": true,
-      "HealthCategory": "NeedsPricingPrune",
-      "RecommendedAction": "PruneMissingNoAskLegs",
-      "RepairConfidence": "High",
-      "SuggestedAction": "PruneMissingNoAskLegs",
-      "SuggestedEnabled": true,
-      "SuggestedTemplate": {
+      "groupKey": "winner:2026 fifa world cup|kind:generic",
+      "title": "winner:2026 fifa world cup|kind:generic",
+      "currentEnabled": true,
+      "healthCategory": "NeedsPricingPrune",
+      "recommendedAction": "PruneMissingNoAskLegs",
+      "repairConfidence": "High",
+      "suggestedAction": "PruneMissingNoAskLegs",
+      "suggestedEnabled": true,
+      "suggestedTemplate": {
         "enabled": true,
         "groupKey": "winner:2026 fifa world cup|kind:generic",
         "title": "winner:2026 fifa world cup|kind:generic",
@@ -100,7 +126,7 @@
         "verifiedBy": "manual-review-required",
         "verifiedAt": "2026-06-02"
       },
-      "SuggestedPrunedTemplate": {
+      "suggestedPrunedTemplate": {
         "enabled": true,
         "groupKey": "winner:2026 fifa world cup|kind:generic",
         "title": "winner:2026 fifa world cup|kind:generic",
@@ -187,8 +213,8 @@
         "verifiedBy": "manual-review-required",
         "verifiedAt": "2026-06-02"
       },
-      "SuggestedRefreshedTemplate": null,
-      "Diff": {
+      "suggestedRefreshedTemplate": null,
+      "diff": {
         "suggestedMarketCount": 35,
         "removedMarketIds": [
           "558954"
@@ -196,184 +222,184 @@
         "addedMarketIds": [],
         "changedConditionIds": []
       },
-      "Notes": [
+      "notes": [
         "Pruned to priced mutually exclusive subset. Missing NO ask leg excluded.",
         "Resolved but one or more NO asks are unavailable."
       ],
-      "CopyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
+      "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
     {
-      "GroupKey": "winner:2028 democratic presidential nomination|kind:person",
-      "Title": "winner:2028 democratic presidential nomination|kind:person",
-      "CurrentEnabled": true,
-      "HealthCategory": "MonitoringOnly",
-      "RecommendedAction": "KeepMonitoring",
-      "RepairConfidence": "High",
-      "SuggestedAction": "KeepMonitoring",
-      "SuggestedEnabled": true,
-      "SuggestedTemplate": null,
-      "SuggestedPrunedTemplate": null,
-      "SuggestedRefreshedTemplate": null,
-      "Diff": null,
-      "Notes": [
+      "groupKey": "winner:2028 democratic presidential nomination|kind:person",
+      "title": "winner:2028 democratic presidential nomination|kind:person",
+      "currentEnabled": true,
+      "healthCategory": "MonitoringOnly",
+      "recommendedAction": "KeepMonitoring",
+      "repairConfidence": "High",
+      "suggestedAction": "KeepMonitoring",
+      "suggestedEnabled": true,
+      "suggestedTemplate": null,
+      "suggestedPrunedTemplate": null,
+      "suggestedRefreshedTemplate": null,
+      "diff": null,
+      "notes": [
         "Resolved and evaluated; monitor pricing/execution status."
       ],
-      "CopyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
+      "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
     {
-      "GroupKey": "winner:2028 republican presidential nomination|kind:person",
-      "Title": "winner:2028 republican presidential nomination|kind:person",
-      "CurrentEnabled": true,
-      "HealthCategory": "MonitoringOnly",
-      "RecommendedAction": "KeepMonitoring",
-      "RepairConfidence": "High",
-      "SuggestedAction": "KeepMonitoring",
-      "SuggestedEnabled": true,
-      "SuggestedTemplate": null,
-      "SuggestedPrunedTemplate": null,
-      "SuggestedRefreshedTemplate": null,
-      "Diff": null,
-      "Notes": [
+      "groupKey": "winner:2028 republican presidential nomination|kind:person",
+      "title": "winner:2028 republican presidential nomination|kind:person",
+      "currentEnabled": true,
+      "healthCategory": "MonitoringOnly",
+      "recommendedAction": "KeepMonitoring",
+      "repairConfidence": "High",
+      "suggestedAction": "KeepMonitoring",
+      "suggestedEnabled": true,
+      "suggestedTemplate": null,
+      "suggestedPrunedTemplate": null,
+      "suggestedRefreshedTemplate": null,
+      "diff": null,
+      "notes": [
         "Resolved and evaluated; monitor pricing/execution status."
       ],
-      "CopyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
+      "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
     {
-      "GroupKey": "winner:2028 us presidential election|kind:person",
-      "Title": "winner:2028 us presidential election|kind:person",
-      "CurrentEnabled": true,
-      "HealthCategory": "MonitoringOnly",
-      "RecommendedAction": "KeepMonitoring",
-      "RepairConfidence": "High",
-      "SuggestedAction": "KeepMonitoring",
-      "SuggestedEnabled": true,
-      "SuggestedTemplate": null,
-      "SuggestedPrunedTemplate": null,
-      "SuggestedRefreshedTemplate": null,
-      "Diff": null,
-      "Notes": [
+      "groupKey": "winner:2028 us presidential election|kind:person",
+      "title": "winner:2028 us presidential election|kind:person",
+      "currentEnabled": true,
+      "healthCategory": "MonitoringOnly",
+      "recommendedAction": "KeepMonitoring",
+      "repairConfidence": "High",
+      "suggestedAction": "KeepMonitoring",
+      "suggestedEnabled": true,
+      "suggestedTemplate": null,
+      "suggestedPrunedTemplate": null,
+      "suggestedRefreshedTemplate": null,
+      "diff": null,
+      "notes": [
         "Resolved and evaluated; monitor pricing/execution status."
       ],
-      "CopyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
+      "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
     {
-      "GroupKey": "winner:2026 brazilian presidential election|kind:person",
-      "Title": "winner:2026 brazilian presidential election|kind:person",
-      "CurrentEnabled": true,
-      "HealthCategory": "MonitoringOnly",
-      "RecommendedAction": "KeepMonitoring",
-      "RepairConfidence": "High",
-      "SuggestedAction": "KeepMonitoring",
-      "SuggestedEnabled": true,
-      "SuggestedTemplate": null,
-      "SuggestedPrunedTemplate": null,
-      "SuggestedRefreshedTemplate": null,
-      "Diff": null,
-      "Notes": [
+      "groupKey": "winner:2026 brazilian presidential election|kind:person",
+      "title": "winner:2026 brazilian presidential election|kind:person",
+      "currentEnabled": true,
+      "healthCategory": "MonitoringOnly",
+      "recommendedAction": "KeepMonitoring",
+      "repairConfidence": "High",
+      "suggestedAction": "KeepMonitoring",
+      "suggestedEnabled": true,
+      "suggestedTemplate": null,
+      "suggestedPrunedTemplate": null,
+      "suggestedRefreshedTemplate": null,
+      "diff": null,
+      "notes": [
         "Resolved and evaluated; monitor pricing/execution status."
       ],
-      "CopyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
+      "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
     {
-      "GroupKey": "winner:2026 women s us open|kind:generic",
-      "Title": "winner:2026 women s us open|kind:generic",
-      "CurrentEnabled": true,
-      "HealthCategory": "BrokenConfig",
-      "RecommendedAction": "DisableMissingMarkets",
-      "RepairConfidence": "Low",
-      "SuggestedAction": "DisableMissingMarkets",
-      "SuggestedEnabled": false,
-      "SuggestedTemplate": null,
-      "SuggestedPrunedTemplate": null,
-      "SuggestedRefreshedTemplate": null,
-      "Diff": null,
-      "Notes": [
+      "groupKey": "winner:2026 women s us open|kind:generic",
+      "title": "winner:2026 women s us open|kind:generic",
+      "currentEnabled": true,
+      "healthCategory": "BrokenConfig",
+      "recommendedAction": "DisableMissingMarkets",
+      "repairConfidence": "Low",
+      "suggestedAction": "DisableMissingMarkets",
+      "suggestedEnabled": false,
+      "suggestedTemplate": null,
+      "suggestedPrunedTemplate": null,
+      "suggestedRefreshedTemplate": null,
+      "diff": null,
+      "notes": [
         "No stable candidate match found in repair snapshot; manual review required."
       ],
-      "CopyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
+      "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
     {
-      "GroupKey": "winner:2027 french presidential election|kind:person",
-      "Title": "winner:2027 french presidential election|kind:person",
-      "CurrentEnabled": true,
-      "HealthCategory": "MonitoringOnly",
-      "RecommendedAction": "KeepMonitoring",
-      "RepairConfidence": "High",
-      "SuggestedAction": "KeepMonitoring",
-      "SuggestedEnabled": true,
-      "SuggestedTemplate": null,
-      "SuggestedPrunedTemplate": null,
-      "SuggestedRefreshedTemplate": null,
-      "Diff": null,
-      "Notes": [
+      "groupKey": "winner:2027 french presidential election|kind:person",
+      "title": "winner:2027 french presidential election|kind:person",
+      "currentEnabled": true,
+      "healthCategory": "MonitoringOnly",
+      "recommendedAction": "KeepMonitoring",
+      "repairConfidence": "High",
+      "suggestedAction": "KeepMonitoring",
+      "suggestedEnabled": true,
+      "suggestedTemplate": null,
+      "suggestedPrunedTemplate": null,
+      "suggestedRefreshedTemplate": null,
+      "diff": null,
+      "notes": [
         "Resolved and evaluated; monitor pricing/execution status."
       ],
-      "CopyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
+      "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
     {
-      "GroupKey": "winner:1st round of 2026 colombian presidential election|kind:person",
-      "Title": "winner:1st round of 2026 colombian presidential election|kind:person",
-      "CurrentEnabled": true,
-      "HealthCategory": "NeedsRefresh",
-      "RecommendedAction": "NeedsManualReview",
-      "RepairConfidence": "Low",
-      "SuggestedAction": "NeedsManualReview",
-      "SuggestedEnabled": false,
-      "SuggestedTemplate": null,
-      "SuggestedPrunedTemplate": null,
-      "SuggestedRefreshedTemplate": null,
-      "Diff": null,
-      "Notes": [
+      "groupKey": "winner:1st round of 2026 colombian presidential election|kind:person",
+      "title": "winner:1st round of 2026 colombian presidential election|kind:person",
+      "currentEnabled": true,
+      "healthCategory": "NeedsRefresh",
+      "recommendedAction": "NeedsManualReview",
+      "repairConfidence": "Low",
+      "suggestedAction": "NeedsManualReview",
+      "suggestedEnabled": false,
+      "suggestedTemplate": null,
+      "suggestedPrunedTemplate": null,
+      "suggestedRefreshedTemplate": null,
+      "diff": null,
+      "notes": [
         "No stable candidate match found in repair snapshot; manual review required."
       ],
-      "CopyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
+      "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
     {
-      "GroupKey": "winner:2026 colombian presidential election|kind:person",
-      "Title": "winner:2026 colombian presidential election|kind:person",
-      "CurrentEnabled": true,
-      "HealthCategory": "MonitoringOnly",
-      "RecommendedAction": "KeepMonitoring",
-      "RepairConfidence": "High",
-      "SuggestedAction": "KeepMonitoring",
-      "SuggestedEnabled": true,
-      "SuggestedTemplate": null,
-      "SuggestedPrunedTemplate": null,
-      "SuggestedRefreshedTemplate": null,
-      "Diff": null,
-      "Notes": [
+      "groupKey": "winner:2026 colombian presidential election|kind:person",
+      "title": "winner:2026 colombian presidential election|kind:person",
+      "currentEnabled": true,
+      "healthCategory": "MonitoringOnly",
+      "recommendedAction": "KeepMonitoring",
+      "repairConfidence": "High",
+      "suggestedAction": "KeepMonitoring",
+      "suggestedEnabled": true,
+      "suggestedTemplate": null,
+      "suggestedPrunedTemplate": null,
+      "suggestedRefreshedTemplate": null,
+      "diff": null,
+      "notes": [
         "Resolved and evaluated; monitor pricing/execution status."
       ],
-      "CopyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
+      "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
     {
-      "GroupKey": "winner:2026 nba finals|kind:generic",
-      "Title": "winner:2026 nba finals|kind:generic",
-      "CurrentEnabled": true,
-      "HealthCategory": "MonitoringOnly",
-      "RecommendedAction": "KeepMonitoring",
-      "RepairConfidence": "High",
-      "SuggestedAction": "KeepMonitoring",
-      "SuggestedEnabled": true,
-      "SuggestedTemplate": null,
-      "SuggestedPrunedTemplate": null,
-      "SuggestedRefreshedTemplate": null,
-      "Diff": null,
-      "Notes": [
+      "groupKey": "winner:2026 nba finals|kind:generic",
+      "title": "winner:2026 nba finals|kind:generic",
+      "currentEnabled": true,
+      "healthCategory": "MonitoringOnly",
+      "recommendedAction": "KeepMonitoring",
+      "repairConfidence": "High",
+      "suggestedAction": "KeepMonitoring",
+      "suggestedEnabled": true,
+      "suggestedTemplate": null,
+      "suggestedPrunedTemplate": null,
+      "suggestedRefreshedTemplate": null,
+      "diff": null,
+      "notes": [
         "Resolved and evaluated; monitor pricing/execution status."
       ],
-      "CopyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
+      "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
     {
-      "GroupKey": "winner:2026 peruvian presidential election|kind:person",
-      "Title": "winner:2026 peruvian presidential election|kind:person",
-      "CurrentEnabled": true,
-      "HealthCategory": "NeedsRefresh",
-      "RecommendedAction": "RefreshFromCandidateExport",
-      "RepairConfidence": "High",
-      "SuggestedAction": "RefreshFromCandidateExport",
-      "SuggestedEnabled": true,
-      "SuggestedTemplate": {
+      "groupKey": "winner:2026 peruvian presidential election|kind:person",
+      "title": "winner:2026 peruvian presidential election|kind:person",
+      "currentEnabled": true,
+      "healthCategory": "NeedsRefresh",
+      "recommendedAction": "RefreshFromCandidateExport",
+      "repairConfidence": "High",
+      "suggestedAction": "RefreshFromCandidateExport",
+      "suggestedEnabled": true,
+      "suggestedTemplate": {
         "enabled": true,
         "groupKey": "winner:2026 peruvian presidential election|kind:person",
         "title": "winner:2026 peruvian presidential election|kind:person",
@@ -396,8 +422,8 @@
         "verifiedBy": "manual-review-required",
         "verifiedAt": "2026-06-02"
       },
-      "SuggestedPrunedTemplate": null,
-      "SuggestedRefreshedTemplate": {
+      "suggestedPrunedTemplate": null,
+      "suggestedRefreshedTemplate": {
         "enabled": true,
         "groupKey": "winner:2026 peruvian presidential election|kind:person",
         "title": "winner:2026 peruvian presidential election|kind:person",
@@ -420,7 +446,7 @@
         "verifiedBy": "manual-review-required",
         "verifiedAt": "2026-06-02"
       },
-      "Diff": {
+      "diff": {
         "suggestedMarketCount": 3,
         "removedMarketIds": [
           "947289",
@@ -430,11 +456,11 @@
         "addedMarketIds": [],
         "changedConditionIds": []
       },
-      "Notes": [
+      "notes": [
         "Stable candidate match: winner:2026 peruvian presidential election|kind:person score=1.",
         "Market mismatch; stable refreshed candidate is available for manual review."
       ],
-      "CopyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
+      "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     }
   ]
 }
