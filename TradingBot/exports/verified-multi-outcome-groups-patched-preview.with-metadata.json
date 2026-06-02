@@ -1,11 +1,35 @@
 {
   "metadata": {
-    "timestamp": "2026-06-02T17:47:55.9112409Z",
-    "snapshotId": "candidate-export-8dec0ce80956588-1ba708f8cdbf",
+    "timestamp": "2026-06-02T19:46:09.5932613Z",
+    "snapshotId": "candidate-export-8dec0defe509c7f-e86c8b795571",
     "mode": "ManualPreviewOnly",
     "willOverwriteRealConfig": false,
     "sourceConfigPath": "config/verified-multi-outcome-groups.json",
-    "note": "Preview only. Manually copy after review; this file is not loaded automatically."
+    "note": "Preview only. Manually copy after review; this file is not loaded automatically.",
+    "patchedPreviewValidation": {
+      "TotalGroups": 11,
+      "UniqueGroupKeys": 11,
+      "DuplicateGroupKeys": 0,
+      "Valid": true,
+      "Reasons": []
+    },
+    "manualApplyInstructions": {
+      "SourcePreviewFile": "exports/verified-multi-outcome-groups-patched-preview.json",
+      "TargetRealConfigPath": "config/verified-multi-outcome-groups.json",
+      "BackupInstructions": [
+        "cp config/verified-multi-outcome-groups.json config/verified-multi-outcome-groups.json.bak.$(date -u \u002B%Y%m%dT%H%M%SZ)",
+        "Keep the backup until [ALLOWLIST_HEALTH] and [MULTI_VERIFIED_SCAN] are reviewed after restart."
+      ],
+      "GroupsToApply": [],
+      "GroupsNotToApply": [
+        "winner:2026 women s us open|kind:generic",
+        "winner:1st round of 2026 colombian presidential election|kind:person"
+      ],
+      "ExpectedLogsAfterRestart": [
+        "[ALLOWLIST_CONFIG_VALIDATION] Total=11 UniqueGroupKeys=11 DuplicateGroupKeys=0",
+        "[ALLOWLIST_PATCHED_PREVIEW_VALIDATION] Total=11 UniqueGroupKeys=11 DuplicateGroupKeys=0 Valid=true"
+      ]
+    }
   },
   "groups": [
     {
@@ -94,7 +118,7 @@
       "settlementNotes": "Manually verified subset of 2026 FIFA World Cup winner markets. All included outcomes are mutually exclusive. Illiquid legs without NO ask were excluded. Pruned to priced mutually exclusive subset. Missing NO ask leg excluded.",
       "verifiedBy": "manual",
       "verifiedAt": "2026-06-02",
-      "repairSourceSnapshotId": "candidate-export-8dec0ce80956588-1ba708f8cdbf",
+      "repairSourceSnapshotId": "candidate-export-8dec0dad6111d57-83c8f1142685",
       "repairAction": "PruneMissingNoAskLegs"
     },
     {
@@ -347,20 +371,18 @@
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
         "947289",
-        "947269",
         "947268"
       ],
       "conditionIds": [
         "0x2cd24d17f5680dc6e7b7d67c712a223ae85550745597e81bd2d2b8d073443951",
-        "0xc4c3dbcc37a957a817599b0bf9fb5bd6b62b19210b0f527fec57cb75c7ed150a",
         "0xae6d3d20bc8f742922dc40880cd8a8671c10385a9912fa7cd670fba0643dfe96"
       ],
-      "requiredOutcomeCount": 3,
+      "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
       "verifiedAt": "2026-06-02",
-      "repairSourceSnapshotId": "candidate-export-8dec0ce80956588-1ba708f8cdbf",
+      "repairSourceSnapshotId": "candidate-export-8dec0de724b7f0a-2622bb8f0120",
       "repairAction": "RefreshFromCandidateExport"
     }
   ]
