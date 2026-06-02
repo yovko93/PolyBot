@@ -209,11 +209,13 @@ public class MultiOutcomeLoggingOptions
     public bool LogVerifiedBasketRanking { get; set; } = true;
     public int LogVerifiedBasketRankingEveryNCycles { get; set; } = 25;
     public bool LogVerifiedBasketOnlyOnChangeRanking { get; set; } = true;
+    public bool LogVerifiedBasketRankingOnChangeOnly { get; set; } = true;
     public bool LogScanConfigEachCycle { get; set; } = false;
     public bool LogVerifiedBasketDetailsOnChangeOnly { get; set; } = true;
     public int LogVerifiedBasketDetailsEveryNCycles { get; set; } = 50;
     public int LogProfileComparisonEveryNCycles { get; set; } = 25;
     public bool LogProfileComparisonOnChangeOnly { get; set; } = true;
+    public decimal ProfileComparisonSignificantNetDelta { get; set; } = 0.002m;
     public int LogExperimentalCandidateEveryNCycles { get; set; } = 50;
     public bool LogExperimentalCandidateOnChangeOnly { get; set; } = true;
     public bool LogOnlyOnChange { get; set; } = true;
@@ -223,7 +225,7 @@ public class MultiOutcomeLoggingOptions
     public bool LogCandidateScanOnChangeOnly { get; set; } = true;
     public bool LogCandidateScanWhenExecutableOnly { get; set; } = true;
     public bool LogCandidateScanWhenRejectDistributionChanges { get; set; } = true;
-    public int CandidateScanSignificantCountDelta { get; set; } = 5;
+    public int CandidateScanSignificantCountDelta { get; set; } = 10;
     public int LogVerifiedScanEveryNCycles { get; set; } = 25;
     public int LogAllowlistHealthEveryNCycles { get; set; } = 25;
     public bool LogVerifiedScanOnChangeOnly { get; set; } = true;
@@ -237,6 +239,7 @@ public class MultiOutcomeLoggingOptions
     public bool LogRepeatedSizingForOpenPosition { get; set; } = false;
     public bool LogVerifiedUnresolvedSamplesOnChangeOnly { get; set; } = true;
     public int LogVerifiedUnresolvedSamplesEveryNCycles { get; set; } = 50;
+    public int MaxVerifiedUnresolvedSamplesToLog { get; set; } = 5;
     public bool LogAllowlistRepairSuggestionsOnChangeOnly { get; set; } = true;
     public int LogAllowlistRepairSuggestionsEveryNCycles { get; set; } = 50;
     public bool LogAllowlistRepairOnChangeOnly { get; set; } = true;

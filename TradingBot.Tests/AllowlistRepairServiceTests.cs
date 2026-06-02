@@ -222,6 +222,179 @@ public class AllowlistRepairServiceTests
         Assert.True(report.Groups.Count > bounded.Length);
     }
 
+
+    [Fact]
+    public void Patch_preview_export_is_created_and_does_not_overwrite_real_config()
+    {
+        var svc = new AllowlistRepairService();
+        var dir = Directory.CreateTempSubdirectory();
+        var configDir = Directory.CreateDirectory(Path.Combine(dir.FullName, "config"));
+        var realConfig = new JsonArray(Configured().Select(ConfigNode).ToArray()).ToJsonString();
+        var configPath = Path.Combine(configDir.FullName, "verified-multi-outcome-groups.json");
+        File.WriteAllText(configPath, realConfig);
+        var report = svc.BuildReport(Configured(), ResolvedWithColombianPricingProblem(), Pricing(), [NbaCandidate(), PeruCandidate()]);
+        var patchPath = Path.Combine(dir.FullName, "exports/verified-allowlist-repair-patch-preview-latest.json");
+        var previewPath = Path.Combine(dir.FullName, "exports/verified-multi-outcome-groups-patched-preview.json");
+        var metadataPath = Path.Combine(dir.FullName, "exports/verified-multi-outcome-groups-patched-preview.with-metadata.json");
+
+        var export = svc.ExportPatchPreview(patchPath, previewPath, metadataPath, report, Configured(), dir.FullName);
+
+        Assert.True(File.Exists(patchPath));
+        Assert.True(File.Exists(previewPath));
+        Assert.True(File.Exists(metadataPath));
+        Assert.Equal(realConfig, File.ReadAllText(configPath));
+        Assert.False(export.PatchPreview.WillOverwriteRealConfig);
+        Assert.Equal("ManualPreviewOnly", export.PatchPreview.Mode);
+    }
+
+    [Fact]
+    public void Patch_preview_marks_high_confidence_repairs_patchable_and_low_confidence_review_only()
+    {
+        var svc = new AllowlistRepairService();
+        var report = svc.BuildReport(Configured(), ResolvedWithColombianPricingProblem(), Pricing(), [NbaCandidate(), PeruCandidate()]);
+        var export = svc.BuildPatchPreview(report, Configured());
+        var patches = export.PatchPreview.Patches;
+
+        var col = patches.Single(x => x.GroupKey.Contains("colombian presidential", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("PruneGroup", col.PatchType);
+        Assert.Equal("High", col.Confidence);
+        Assert.DoesNotContain("569373", col.ProposedGroup!["marketIds"]!.AsArray().Select(x => x!.GetValue<string>()));
+        Assert.Equal(2, col.ProposedGroup!["requiredOutcomeCount"]!.GetValue<int>());
+        Assert.False(col.ProposedGroup!["requireExactOutcomeCount"]!.GetValue<bool>());
+        Assert.True(col.ProposedGroup!["enabled"]!.GetValue<bool>());
+        Assert.Contains("Missing NO ask leg excluded", col.ProposedGroup!["settlementNotes"]!.GetValue<string>());
+
+        var nba = patches.Single(x => x.GroupKey.Contains("nba finals", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("ReplaceGroup", nba.PatchType);
+        Assert.Contains("nba-old", nba.Diff!["removedMarketIds"]!.AsArray().Select(x => x!.GetValue<string>()));
+
+        var peru = patches.Single(x => x.GroupKey.Contains("peruvian", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("ReplaceGroup", peru.PatchType);
+        Assert.Equal("RefreshFromCandidateExport", peru.ProposedGroup!["repairAction"]!.GetValue<string>());
+
+        var womens = patches.Single(x => x.GroupKey.Contains("women s us open", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("ReviewOnly", womens.PatchType);
+        Assert.Null(womens.ProposedGroup);
+        Assert.Contains(womens.RiskNotes, x => x.Contains("Low confidence", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void First_round_colombian_low_confidence_is_review_only()
+    {
+        var configured = Configured().Concat([new VerifiedMultiOutcomeGroupConfig(true, "winner:1st round of 2026 colombian presidential election|kind:person", "1st round Colombia", ["round-old"], [], 1, "Verified")]).ToArray();
+        var resolved = ResolvedWithColombianPricingProblem().Concat([new ResolvedVerifiedGroup("winner:1st round of 2026 colombian presidential election|kind:person", "1st round Colombia", ["round-old"], [], [], ["round-old"], [], "Rejected", "VerifiedGroupMarketMismatch")]).ToArray();
+        var report = new AllowlistRepairService().BuildReport(configured, resolved, Pricing(), [NbaCandidate(), PeruCandidate()]);
+        var export = new AllowlistRepairService().BuildPatchPreview(report, configured);
+
+        var firstRound = export.PatchPreview.Patches.Single(x => x.GroupKey.Contains("1st round", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal("NeedsManualReview", firstRound.CurrentAction);
+        Assert.Equal("Low", firstRound.Confidence);
+        Assert.Equal("ReviewOnly", firstRound.PatchType);
+        Assert.Null(firstRound.ProposedGroup);
+    }
+
+    [Fact]
+    public void Patched_preview_includes_all_original_groups_and_applies_only_high_medium()
+    {
+        var svc = new AllowlistRepairService();
+        var report = svc.BuildReport(Configured(), ResolvedWithColombianPricingProblem(), Pricing(), [NbaCandidate(), PeruCandidate()]);
+        var export = svc.BuildPatchPreview(report, Configured());
+        var groups = export.PatchedPreviewConfig.AsArray();
+
+        Assert.Equal(Configured().Count, groups.Count);
+        Assert.Contains(groups, x => x!["groupKey"]!.GetValue<string>().Contains("women s us open", StringComparison.OrdinalIgnoreCase) && x["marketIds"]!.AsArray().Single()!.GetValue<string>() == "w-us-open-old");
+        Assert.Contains(groups, x => x!["groupKey"]!.GetValue<string>().Contains("nba finals", StringComparison.OrdinalIgnoreCase) && x["marketIds"]!.AsArray().Any(m => m!.GetValue<string>() == "nba-1"));
+        Assert.Equal(3, export.PatchPreview.Summary.PatchableHighConfidence);
+    }
+
+    [Fact]
+    public void Post_apply_validation_plan_is_included()
+    {
+        var report = new AllowlistRepairService().BuildReport(Configured(), ResolvedWithColombianPricingProblem(), Pricing(), [NbaCandidate(), PeruCandidate()]);
+        var preview = new AllowlistRepairService().BuildPatchPreview(report, Configured()).PatchPreview;
+
+        Assert.NotEmpty(preview.PostApplyValidationPlan.Steps);
+        Assert.Contains(preview.PostApplyValidationPlan.CommandsOrEndpointsToCheck, x => x.Contains("allowlist-repair-patch-preview", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(preview.PostApplyValidationPlan.ExpectedOutcomes, x => x.Contains("Colombian", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Api_patch_preview_file_shape_is_returnable()
+    {
+        var svc = new AllowlistRepairService();
+        var dir = Directory.CreateTempSubdirectory();
+        var report = svc.BuildReport(Configured(), ResolvedWithColombianPricingProblem(), Pricing(), [NbaCandidate(), PeruCandidate()]);
+        var patchPath = Path.Combine(dir.FullName, "exports/verified-allowlist-repair-patch-preview-latest.json");
+        svc.ExportPatchPreview(patchPath, Path.Combine(dir.FullName, "exports/verified-multi-outcome-groups-patched-preview.json"), Path.Combine(dir.FullName, "exports/verified-multi-outcome-groups-patched-preview.with-metadata.json"), report, Configured(), dir.FullName);
+
+        var node = JsonNode.Parse(File.ReadAllText(patchPath))!.AsObject();
+
+        Assert.Equal("ManualPreviewOnly", node["mode"]!.GetValue<string>());
+        Assert.False(node["willOverwriteRealConfig"]!.GetValue<bool>());
+        Assert.True(node["patches"]!.AsArray().Count > 0);
+    }
+
+
+    [Fact]
+    public void No_op_refresh_match_is_keep_monitoring_and_not_patchable()
+    {
+        var cfg = new VerifiedMultiOutcomeGroupConfig(true, "winner:2026 peruvian presidential election|kind:person", "Peru", ["peru-1", "peru-2"], ["peru-c1", "peru-c2"], 2, "Verified");
+        var resolved = new ResolvedVerifiedGroup(cfg.GroupKey, "Peru", cfg.MarketIds, cfg.ConditionIds, [], [], [], "Rejected", "VerifiedGroupMarketMismatch");
+        var report = new AllowlistRepairService().BuildReport([cfg], [resolved], [], [PeruCandidate()]);
+        var group = report.Groups.Single();
+        var preview = new AllowlistRepairService().BuildPatchPreview(report, [cfg]).PatchPreview;
+
+        Assert.Equal("KeepMonitoring", group.RecommendedAction);
+        Assert.Equal("MonitoringOnly", group.HealthCategory);
+        Assert.Empty(preview.Patches.Where(x => x.GroupKey == cfg.GroupKey && x.PatchType != "None"));
+        Assert.Equal(0, preview.Summary.PatchableHighConfidence);
+    }
+
+    [Fact]
+    public void Patchable_count_excludes_no_op_refresh_repairs()
+    {
+        var fifa = FifaConfig();
+        var peru = new VerifiedMultiOutcomeGroupConfig(true, "winner:2026 peruvian presidential election|kind:person", "Peru", ["peru-1", "peru-2"], ["peru-c1", "peru-c2"], 2, "Verified");
+        var resolved = new[]
+        {
+            FifaResolved(fifa),
+            new ResolvedVerifiedGroup(peru.GroupKey, "Peru", peru.MarketIds, peru.ConditionIds, [], [], [], "Rejected", "VerifiedGroupMarketMismatch")
+        };
+        var report = new AllowlistRepairService().BuildReport([fifa, peru], resolved, [FifaPricing()], [PeruCandidate()]);
+        var preview = new AllowlistRepairService().BuildPatchPreview(report, [fifa, peru]).PatchPreview;
+
+        Assert.Equal(1, preview.Summary.PatchableHighConfidence);
+        Assert.Single(preview.Patches.Where(x => x.PatchType == "PruneGroup"));
+        Assert.DoesNotContain(preview.Patches, x => x.GroupKey == peru.GroupKey && x.PatchType == "ReplaceGroup");
+    }
+
+    [Fact]
+    public void Fifa_patch_removes_558954_and_validates_final_35_legs()
+    {
+        var fifa = FifaConfig();
+        var report = new AllowlistRepairService().BuildReport([fifa], [FifaResolved(fifa)], [FifaPricing()], []);
+        var preview = new AllowlistRepairService().BuildPatchPreview(report, [fifa]).PatchPreview;
+        var patch = preview.Patches.Single(x => x.GroupKey.Contains("fifa world cup", StringComparison.OrdinalIgnoreCase));
+        var proposed = patch.ProposedGroup!.AsObject();
+        var marketIds = proposed["marketIds"]!.AsArray().Select(x => x!.GetValue<string>()).ToArray();
+        var conditionIds = proposed["conditionIds"]!.AsArray().Select(x => x!.GetValue<string>()).ToArray();
+        var validation = AllowlistRepairService.ValidatePatch(patch);
+
+        Assert.Equal("PruneGroup", patch.PatchType);
+        Assert.DoesNotContain("558954", marketIds);
+        Assert.Equal(35, marketIds.Length);
+        Assert.Equal(35, conditionIds.Length);
+        Assert.Equal(35, proposed["requiredOutcomeCount"]!.GetValue<int>());
+        Assert.False(proposed["requireExactOutcomeCount"]!.GetValue<bool>());
+        Assert.Contains("Missing NO ask leg excluded", proposed["settlementNotes"]!.GetValue<string>());
+        Assert.Equal("PruneMissingNoAskLegs", proposed["repairAction"]!.GetValue<string>());
+        Assert.False(string.IsNullOrWhiteSpace(proposed["repairSourceSnapshotId"]!.GetValue<string>()));
+        Assert.True(validation.Valid);
+        Assert.Equal(35, validation.FinalLegs);
+        Assert.Contains("558954", validation.RemovedMarketIds);
+    }
+
     private static IReadOnlyList<VerifiedMultiOutcomeGroupConfig> Configured() =>
     [
         new(true, "winner:2026 colombian presidential election|kind:person", "Colombia", ["m-priced-1", "569373", "m-priced-2"], [], 3, "Verified"),
@@ -279,6 +452,46 @@ public class AllowlistRepairServiceTests
         ["markets"] = new JsonArray(
             MarketNode("w-1", "w-c1", "Will Player A win the 2026 Women s US Open?"),
             MarketNode("w-2", "w-c2", "Will Player B win the 2026 Women s US Open?"))
+    };
+
+    private static VerifiedMultiOutcomeGroupConfig FifaConfig()
+    {
+        var marketIds = Enumerable.Range(0, 36).Select(i => i == 10 ? "558954" : $"fifa-{i:00}").ToArray();
+        var conditionIds = Enumerable.Range(0, 36).Select(i => $"fifa-c-{i:00}").ToArray();
+        return new VerifiedMultiOutcomeGroupConfig(true, "winner:2026 fifa world cup|kind:generic", "2026 FIFA World Cup", marketIds, conditionIds, 36, "Verified");
+    }
+
+    private static ResolvedVerifiedGroup FifaResolved(VerifiedMultiOutcomeGroupConfig cfg)
+        => new(cfg.GroupKey, cfg.Title ?? cfg.GroupKey, cfg.MarketIds, cfg.ConditionIds, cfg.MarketIds.Select((id, i) => MarketWithCondition(id, cfg.ConditionIds[i])).ToArray(), [], [], "VerifiedGroupResolved", "VerifiedGroupResolved");
+
+    private static object FifaPricing()
+    {
+        var cfg = FifaConfig();
+        var priced = cfg.MarketIds.Zip(cfg.ConditionIds).Where(x => x.First != "558954").Select(x => Leg(x.First, x.Second)).ToArray();
+        return new
+        {
+            groupKey = cfg.GroupKey,
+            noAskResolvedCount = 35,
+            missingNoAskCount = 1,
+            pricedLegs = priced,
+            missingPriceLegs = new[] { Leg("558954", cfg.ConditionIds[10]) }
+        };
+    }
+
+    private static JsonObject ConfigNode(VerifiedMultiOutcomeGroupConfig cfg) => new()
+    {
+        ["enabled"] = cfg.Enabled,
+        ["groupKey"] = cfg.GroupKey,
+        ["title"] = cfg.Title,
+        ["verificationStatus"] = cfg.VerificationStatus,
+        ["verifiedBy"] = "operator",
+        ["settlementNotes"] = "Manual metadata",
+        ["groupType"] = "MutuallyExclusiveWinner",
+        ["allowedStrategy"] = "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+        ["marketIds"] = new JsonArray(cfg.MarketIds.Select(x => JsonValue.Create(x)).ToArray()),
+        ["conditionIds"] = new JsonArray(cfg.ConditionIds.Select(x => JsonValue.Create(x)).ToArray()),
+        ["requiredOutcomeCount"] = cfg.RequiredOutcomeCount,
+        ["requireExactOutcomeCount"] = false
     };
 
     private static void WriteCandidateExport(string root, IReadOnlyList<JsonObject> candidates, string suffix = "")

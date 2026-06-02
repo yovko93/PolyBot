@@ -14,6 +14,11 @@ public sealed record VerifiedMultiOutcomeGroupConfig(
     int? RequiredOutcomeCount,
     string VerificationStatus);
 
+public sealed record AllowlistConfigValidationSummary(int Total, int UniqueGroupKeys, int DuplicateGroupKeys, int Enabled, int Disabled)
+{
+    public string ToLogLine() => $"[ALLOWLIST_CONFIG_VALIDATION] Total={Total} UniqueGroupKeys={UniqueGroupKeys} DuplicateGroupKeys={DuplicateGroupKeys} Enabled={Enabled} Disabled={Disabled}";
+}
+
 public sealed record GroupValidationResult(
     bool IsValidForNoBasketArbitrage,
     string VerificationStatus,
@@ -97,6 +102,9 @@ public class MutuallyExclusiveGroupValidator
             var path = Path.Combine(contentRootPath, "config", "verified-multi-outcome-groups.json");
             if (!File.Exists(path)) return [];
             var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var validation = ValidateAllowlistConfig(doc.RootElement);
+            Console.WriteLine(validation.ToLogLine());
+            LogKnownRemainingRepairs(doc.RootElement);
             var items = new List<VerifiedMultiOutcomeGroupConfig>();
             foreach (var x in doc.RootElement.EnumerateArray())
             {

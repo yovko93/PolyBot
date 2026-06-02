@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using TradingBot.Services;
 using TradingBot.Services.MultiOutcome;
 using Xunit;
@@ -58,12 +60,44 @@ public class AllowlistRepairLoggingTests
     }
 
     [Fact]
-    public void Candidate_scan_logs_are_throttled_by_stable_hash()
+    public void Candidate_scan_small_count_changes_do_not_log_every_cycle()
     {
         var throttle = new LogThrottle();
-        var first = throttle.ShouldLog("MULTI_CANDIDATE_SCAN", "10|3|Top|A:1", true, 25);
-        var second = throttle.ShouldLog("MULTI_CANDIDATE_SCAN", "10|3|Top|A:1", true, 25);
-        var changed = throttle.ShouldLog("MULTI_CANDIDATE_SCAN", "10|4|Top|A:2", true, 25);
+        var baseFingerprint = ScanLogSummaryService.CandidateScanFingerprint(22, 0, 0, "Top", new Dictionary<string, int> { ["A"] = 22 }, 10);
+        var smallChangeFingerprint = ScanLogSummaryService.CandidateScanFingerprint(27, 0, 0, "Top", new Dictionary<string, int> { ["A"] = 27 }, 10);
+        var materialChangeFingerprint = ScanLogSummaryService.CandidateScanFingerprint(32, 0, 0, "Top", new Dictionary<string, int> { ["A"] = 32 }, 10);
+
+        Assert.Equal(baseFingerprint, smallChangeFingerprint);
+        Assert.NotEqual(baseFingerprint, materialChangeFingerprint);
+        Assert.True(throttle.ShouldLog("MULTI_CANDIDATE_SCAN", baseFingerprint, true, 25));
+        Assert.False(throttle.ShouldLog("MULTI_CANDIDATE_SCAN", smallChangeFingerprint, true, 25));
+        Assert.True(throttle.ShouldLog("MULTI_CANDIDATE_SCAN", materialChangeFingerprint, true, 25));
+    }
+
+
+    [Fact]
+    public void Profile_comparison_unchanged_values_are_throttled()
+    {
+        var throttle = new LogThrottle();
+        var firstFingerprint = ScanLogSummaryService.ProfileComparisonFingerprint([Row(active: -0.0030m, experimental: -0.0010m)], 0.002m);
+        var tinyChangeFingerprint = ScanLogSummaryService.ProfileComparisonFingerprint([Row(active: -0.0029m, experimental: -0.0009m)], 0.002m);
+        var materialChangeFingerprint = ScanLogSummaryService.ProfileComparisonFingerprint([Row(active: 0.0015m, experimental: -0.0010m)], 0.002m);
+
+        Assert.Equal(firstFingerprint, tinyChangeFingerprint);
+        Assert.NotEqual(firstFingerprint, materialChangeFingerprint);
+        Assert.True(throttle.ShouldLog("PROFILE_COMPARISON", firstFingerprint, true, 25));
+        Assert.False(throttle.ShouldLog("PROFILE_COMPARISON", tinyChangeFingerprint, true, 25));
+        Assert.True(throttle.ShouldLog("PROFILE_COMPARISON", materialChangeFingerprint, true, 25));
+    }
+
+
+    [Fact]
+    public void Ranking_logs_are_throttled_by_stable_hash()
+    {
+        var throttle = new LogThrottle();
+        var first = throttle.ShouldLog("VERIFIED_BASKET_RANKING", "5|1|best|Monitor|0", true, 25);
+        var second = throttle.ShouldLog("VERIFIED_BASKET_RANKING", "5|1|best|Monitor|0", true, 25);
+        var changed = throttle.ShouldLog("VERIFIED_BASKET_RANKING", "5|2|best|Monitor|0", true, 25);
 
         Assert.True(first);
         Assert.False(second);
@@ -72,16 +106,24 @@ public class AllowlistRepairLoggingTests
 
 
     [Fact]
-    public void Profile_comparison_logs_are_throttled_by_stable_hash()
+    public void Unresolved_summary_reports_more_when_sample_limited()
     {
-        var throttle = new LogThrottle();
-        var first = throttle.ShouldLog("PROFILE_COMPARISON", "g|gross|active|poly|raw|classification", true, 25);
-        var second = throttle.ShouldLog("PROFILE_COMPARISON", "g|gross|active|poly|raw|classification", true, 25);
-        var changed = throttle.ShouldLog("PROFILE_COMPARISON", "g|gross|active2|poly|raw|classification", true, 25);
+        var summary = ScanLogSummaryService.UnresolvedSummaryLog(total: 3, samplesShown: 2);
 
-        Assert.True(first);
-        Assert.False(second);
-        Assert.True(changed);
+        Assert.Equal("[VERIFIED_UNRESOLVED_SUMMARY] Total=3 SamplesShown=2 More=1", summary);
+    }
+
+    [Fact]
+    public void Allowlist_startup_validation_logs_unique_duplicate_counts()
+    {
+        var json = new JsonArray(Enumerable.Range(1, 11)
+            .Select(i => (JsonNode)new JsonObject { ["enabled"] = true, ["groupKey"] = $"g{i}" })
+            .ToArray());
+        var doc = JsonDocument.Parse(json.ToJsonString());
+
+        var summary = MutuallyExclusiveGroupValidator.ValidateAllowlistConfig(doc.RootElement);
+
+        Assert.Equal("[ALLOWLIST_CONFIG_VALIDATION] Total=11 UniqueGroupKeys=11 DuplicateGroupKeys=0 Enabled=11 Disabled=0", summary.ToLogLine());
     }
 
     private static VerifiedBasketScreener.ScreenResult Row(decimal active, decimal experimental) => new(
