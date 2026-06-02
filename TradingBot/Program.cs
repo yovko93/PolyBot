@@ -143,11 +143,13 @@ app.MapGet("/api/bot/verified-allowlist-repair-report", (IHostEnvironment env, i
     var path = Path.Combine(env.ContentRootPath, "exports/verified-allowlist-repair-report-latest.json");
     if (!File.Exists(path)) return Results.Ok(new { groups = Array.Empty<object>() });
     var node = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.Nodes.JsonObject>(File.ReadAllText(path));
+    var capped = Math.Clamp(limit ?? 50, 1, 500);
     if (node?["groups"] is System.Text.Json.Nodes.JsonArray groups)
-    {
-        var capped = Math.Clamp(limit ?? 50, 1, 500);
         node["groups"] = new System.Text.Json.Nodes.JsonArray(groups.Take(capped).Select(x => System.Text.Json.Nodes.JsonNode.Parse(x!.ToJsonString())).ToArray());
-    }
+    if (node?["repairSuggestions"] is System.Text.Json.Nodes.JsonArray suggestions)
+        node["repairSuggestions"] = new System.Text.Json.Nodes.JsonArray(suggestions.Take(capped).Select(x => System.Text.Json.Nodes.JsonNode.Parse(x!.ToJsonString())).ToArray());
+    if (node?["snapshot"] is System.Text.Json.Nodes.JsonObject snapshot && snapshot["repairResults"] is System.Text.Json.Nodes.JsonArray repairResults)
+        snapshot["repairResults"] = new System.Text.Json.Nodes.JsonArray(repairResults.Take(capped).Select(x => System.Text.Json.Nodes.JsonNode.Parse(x!.ToJsonString())).ToArray());
     return Results.Json(node);
 });
 app.MapGet("/api/bot/verified-allowlist-suggested-config", (IHostEnvironment env, int? limit) =>
@@ -753,30 +755,39 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var allowlistFingerprint = $"{summary.ConfiguredGroups}|{healthyCount}|{brokenCount}|{disabledCount}|{ignoredCount}|{needsRefreshCount}|{summary.NeedsPricingPrune}|{summary.NeedsRefresh}|{summary.BrokenConfig}";
                     var shouldLogAllowlist = !options.Logging.LogAllowlistHealthOnChangeOnly || allowlistFingerprint != lastAllowlistHealthFingerprint || (options.Logging.LogAllowlistHealthEveryNCycles > 0 && allowlistHealthCycle % options.Logging.LogAllowlistHealthEveryNCycles == 0);
                     lastAllowlistHealthFingerprint = allowlistFingerprint;
-                    if (shouldLogAllowlist) Console.WriteLine($"[ALLOWLIST_HEALTH] Configured={summary.ConfiguredGroups} Healthy={healthyCount} Broken={brokenCount} Disabled={disabledCount} NeedsRefresh={needsRefreshCount} NeedsPricingPrune={summary.NeedsPricingPrune} BrokenConfig={summary.BrokenConfig} Ignored={ignoredCount}");
+                    if (shouldLogAllowlist) Console.WriteLine($"[ALLOWLIST_HEALTH] Configured={summary.ConfiguredGroups} Healthy={summary.Healthy} MonitoringOnly={summary.MonitoringOnly} NeedsPricingPrune={summary.NeedsPricingPrune} NeedsRefresh={summary.NeedsRefresh} BrokenConfig={summary.BrokenConfig} Disabled={summary.Disabled} Ignored={summary.Ignored} BrokenTotal={summary.Broken}");
                     if (!summary.InvariantOk) Console.WriteLine($"[ALLOWLIST_CLASSIFICATION_ERROR] Configured={summary.ConfiguredGroups} Healthy={summary.Healthy} MonitoringOnly={summary.MonitoringOnly} NeedsPricingPrune={summary.NeedsPricingPrune} NeedsRefresh={summary.NeedsRefresh} BrokenConfig={summary.BrokenConfig} Disabled={summary.Disabled} Ignored={summary.Ignored}");
-                    var healthPath = Path.Combine(contentRootPath, "exports/verified-allowlist-health-latest.json"); Directory.CreateDirectory(Path.GetDirectoryName(healthPath)!); File.WriteAllText(healthPath, System.Text.Json.JsonSerializer.Serialize(new { configured = summary.ConfiguredGroups, healthy = healthyCount, monitoringOnly = summary.MonitoringOnly, broken = brokenCount, disabled = disabledCount, ignored = ignoredCount, unresolved = unresolvedCount, needsRefresh = needsRefreshCount, needsPricingPrune = summary.NeedsPricingPrune, brokenConfig = summary.BrokenConfig, groups = allowlistHealth }, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
+                    var healthPath = Path.Combine(contentRootPath, "exports/verified-allowlist-health-latest.json"); Directory.CreateDirectory(Path.GetDirectoryName(healthPath)!); File.WriteAllText(healthPath, System.Text.Json.JsonSerializer.Serialize(new { configured = summary.ConfiguredGroups, healthy = summary.Healthy, monitoringOnly = summary.MonitoringOnly, needsPricingPrune = summary.NeedsPricingPrune, needsRefresh = summary.NeedsRefresh, brokenConfig = summary.BrokenConfig, disabled = summary.Disabled, ignored = summary.Ignored, brokenTotal = summary.Broken, invariantResult = summary.InvariantOk, categoryCounts = repairReport.CategoryCounts, groups = allowlistHealth }, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
                     var cleanup = new { metadata = new { generatedAtUtc = DateTime.UtcNow, note = "suggested only" }, groups = repairExports.SuggestedConfig.Groups };
                     var cleanupPath = Path.Combine(contentRootPath, "exports/verified-allowlist-cleanup-suggested.json"); File.WriteAllText(cleanupPath, System.Text.Json.JsonSerializer.Serialize(cleanup, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
-                    var repairReportFingerprint = $"{summary.ConfiguredGroups}|{healthyCount}|{brokenCount}|{summary.NeedsPricingPrune}|{summary.NeedsRefresh}|{summary.BrokenConfig}|{string.Join(";", repairReport.Groups.Select(x => $"{x.GroupKey}:{x.HealthCategory}:{x.RecommendedAction}:{x.RepairConfidence}"))}";
+                    var repairSnapshotFingerprint = $"{repairReport.SnapshotId}|{repairReport.Snapshot.CandidateGroupsCount}|{repairReport.Snapshot.VerifiedGroupsCount}|{repairReport.Snapshot.Source}";
+                    if (logThrottle.ShouldLog("ALLOWLIST_REPAIR_SNAPSHOT", repairSnapshotFingerprint, true, options.Logging.LogAllowlistRepairEveryNCycles))
+                        Console.WriteLine($"[ALLOWLIST_REPAIR_SNAPSHOT] Id={repairReport.SnapshotId} CandidateGroups={repairReport.Snapshot.CandidateGroupsCount} VerifiedGroups={repairReport.Snapshot.VerifiedGroupsCount} Source={repairReport.Snapshot.Source}");
+                    var repairReportFingerprint = $"{repairReport.SnapshotId}|{summary.ConfiguredGroups}|{summary.Healthy}|{summary.MonitoringOnly}|{summary.NeedsPricingPrune}|{summary.NeedsRefresh}|{summary.BrokenConfig}|{summary.Disabled}|{summary.Ignored}|{string.Join(";", repairReport.Groups.Select(x => $"{x.GroupKey}:{x.HealthCategory}:{x.RecommendedAction}:{x.RepairConfidence}:{x.ActionVersion}"))}";
                     if (logThrottle.ShouldLog("ALLOWLIST_REPAIR_REPORT", repairReportFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, options.Logging.LogAllowlistRepairEveryNCycles))
-                        Console.WriteLine($"[ALLOWLIST_REPAIR_REPORT] Groups={repairReport.ConfiguredGroups} Healthy={repairReport.Healthy} NeedsPricingPrune={repairReport.NeedsPricingPrune} NeedsRefresh={repairReport.NeedsRefresh} Broken={repairReport.Broken} Path={options.MultiOutcomeReview.ExportAllowlistRepairReportPath}");
+                        Console.WriteLine($"[ALLOWLIST_REPAIR_REPORT] Groups={repairReport.ConfiguredGroups} Healthy={summary.Healthy} MonitoringOnly={summary.MonitoringOnly} NeedsPricingPrune={summary.NeedsPricingPrune} NeedsRefresh={summary.NeedsRefresh} BrokenConfig={summary.BrokenConfig} Disabled={summary.Disabled} Ignored={summary.Ignored} BrokenTotal={summary.Broken} Path={options.MultiOutcomeReview.ExportAllowlistRepairReportPath}");
                     foreach (var repair in repairReport.Groups.Where(x => x.RecommendedAction is "PruneMissingNoAskLegs" or "RefreshFromCandidateExport" or "DisableMissingMarkets" or "NeedsManualReview"))
                     {
                         var suggestedLegs = repair.SuggestedPrunedTemplate?["marketIds"] is System.Text.Json.Nodes.JsonArray ids ? ids.Count : 0;
-                        var repairFingerprint = $"{repair.GroupKey}|{repair.RecommendedAction}|{repair.MissingNoAsk}|{suggestedLegs}|{repair.RepairConfidence}|{repair.RepairMatch?.CandidateGroupKey}|{repair.RepairMatch?.Score}";
+                        var repairFingerprint = $"{repair.RepairSnapshotId}|{repair.GroupKey}|{repair.RecommendedAction}|{repair.MissingNoAsk}|{suggestedLegs}|{repair.RepairConfidence}|{repair.RepairMatch?.CandidateGroupKey}|{repair.RepairMatch?.Score}|{repair.ActionVersion}";
                         if (logThrottle.ShouldLog($"ALLOWLIST_REPAIR_SUGGESTION:{repair.GroupKey}", repairFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, options.Logging.LogAllowlistRepairEveryNCycles))
-                            Console.WriteLine($"[ALLOWLIST_REPAIR_SUGGESTION] Group={repair.GroupKey} Action={repair.RecommendedAction} MissingNoAsk={repair.MissingNoAsk} SuggestedLegs={suggestedLegs} Confidence={repair.RepairConfidence}");
+                            Console.WriteLine($"[ALLOWLIST_REPAIR_SUGGESTION] Group={repair.GroupKey} Snapshot={repair.RepairSnapshotId} Action={repair.RecommendedAction} MissingNoAsk={repair.MissingNoAsk} SuggestedLegs={suggestedLegs} Confidence={repair.RepairConfidence}");
+                        if (repair.ActionVersion > 1 && !string.Equals(repair.PreviousAction, repair.CurrentAction, StringComparison.OrdinalIgnoreCase))
+                        {
+                            var changeFingerprint = $"{repair.GroupKey}|{repair.RepairSnapshotId}|{repair.ActionVersion}|{repair.PreviousAction}|{repair.CurrentAction}|{repair.ReasonForChange}";
+                            if (logThrottle.ShouldLog($"ALLOWLIST_REPAIR_ACTION_CHANGED:{repair.GroupKey}", changeFingerprint, true, options.Logging.LogAllowlistRepairEveryNCycles))
+                                Console.WriteLine($"[ALLOWLIST_REPAIR_ACTION_CHANGED] Group={repair.GroupKey} From={repair.PreviousAction} To={repair.CurrentAction} Reason={repair.ReasonForChange} ConsecutiveSnapshotMisses={repair.ConsecutiveMatchMisses}");
+                        }
                         if (repair.RepairMatch is not null)
                         {
                             var m = repair.RepairMatch;
-                            var matchFingerprint = $"{repair.GroupKey}|{m.CandidateGroupKey}|{m.Score}|{m.Confidence}|{string.Join(',', m.AddedMarketIds)}|{string.Join(',', m.RemovedMarketIds)}";
+                            var matchFingerprint = $"{repair.RepairSnapshotId}|{repair.GroupKey}|{m.CandidateGroupKey}|{m.Score}|{m.Confidence}|{string.Join(',', m.AddedMarketIds)}|{string.Join(',', m.RemovedMarketIds)}";
                             if (logThrottle.ShouldLog($"ALLOWLIST_REPAIR_MATCH:{repair.GroupKey}", matchFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, options.Logging.LogAllowlistRepairEveryNCycles))
                                 Console.WriteLine($"[ALLOWLIST_REPAIR_MATCH] Group={repair.GroupKey} Candidate={m.CandidateGroupKey} Score={m.Score:0.##} Confidence={m.Confidence} Added={m.AddedMarketIds.Count} Removed={m.RemovedMarketIds.Count}");
                         }
                         if (repair.ConsecutiveMatchMisses > 0 || repair.RecommendedAction == "NeedsManualReview" || repair.RecommendedAction == "DisableMissingMarkets")
                         {
-                            var noMatchFingerprint = $"{repair.GroupKey}|{repair.RecommendedAction}|{repair.Reason}|{repair.ConsecutiveMatchMisses}";
+                            var noMatchFingerprint = $"{repair.RepairSnapshotId}|{repair.GroupKey}|{repair.RecommendedAction}|{repair.Reason}|{repair.ConsecutiveMatchMisses}";
                             if (logThrottle.ShouldLog($"ALLOWLIST_REPAIR_NO_MATCH:{repair.GroupKey}", noMatchFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, options.Logging.LogAllowlistRepairEveryNCycles))
                                 Console.WriteLine($"[ALLOWLIST_REPAIR_NO_MATCH] Group={repair.GroupKey} ConsecutiveMisses={repair.ConsecutiveMatchMisses} RequiredForDowngrade={options.AllowlistRepair.MatchFailureDowngradeCycles}");
                         }
@@ -810,7 +821,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var rankingRowsWithReadiness = snapshot.VerifiedBaskets.Select(row => BuildVerifiedScreenerRow(row, stability, executionOptions, openGroupKeys, verifiedExecution)).Take(100).ToArray();
                     state.SetVerifiedBasketScreener(new VerifiedBasketScreenerDto(snapshot.ActiveProfile, snapshot.ExperimentalProfile, snapshot.Timestamp, verifiedRowsWithReadiness, rankingRowsWithReadiness, snapshot.NearExecutableBaskets.Cast<object>().Take(25).ToArray(), snapshot.ExperimentalCandidates.Cast<object>().Take(100).ToArray(), snapshot.StableExperimentalCandidates.Cast<object>().Take(100).ToArray(), snapshot.ActiveProfileExecutable.Cast<object>().Take(100).ToArray(), snapshot.DiagnosticsOnlyPositive.Cast<object>().Take(100).ToArray(), snapshot.Profiles, snapshot.BestByActiveProfile, snapshot.BestByRawEdge, snapshot.BestByConservative, snapshot.BestByPolymarketApprox, snapshot.BestByRaw, snapshot.BestNearExecutable, snapshot.UnresolvedConfiguredGroups, stability.ReadinessSummaries(executionOptions.RequiredConsecutiveExecutionReadyScans).Cast<object>().ToArray()));
                     profileComparisonCycle++;
-                    var profileComparisonFingerprint = string.Join("|", snapshot.VerifiedBaskets.Take(5).Select(row => $"{row.GroupKey}:{row.GrossEdge}:{row.ActiveProfileNetEdge}:{row.ExperimentalProfileNetEdge}"));
+                    var profileComparisonFingerprint = string.Join("|", snapshot.VerifiedBaskets.Take(5).Select(row => { var poly = row.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("PolymarketApprox", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? 0m; var raw = row.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? 0m; return $"{row.GroupKey}:{row.GrossEdge}:{row.ActiveProfileNetEdge}:{poly}:{raw}:{row.Classification}"; }));
                     var shouldLogProfileComparison = options.Logging.LogProfileComparisonSummary && logThrottle.ShouldLog("PROFILE_COMPARISON", profileComparisonFingerprint, options.Logging.LogProfileComparisonOnChangeOnly, options.Logging.LogProfileComparisonEveryNCycles);
                     if (shouldLogProfileComparison)
                     {
@@ -859,11 +870,13 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var bestPricing = pricingDiagnostics.Where(x=>x.SkipReason!="MissingNoAsk").OrderByDescending(x=>x.NetEdge).FirstOrDefault();
                     var snapshotExportPath = Path.Combine(contentRootPath, "exports/verified-executable-opportunities-latest.json");
                     verifiedExecution.ExportSnapshot(snapshotExportPath, options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile, promotedVerifiedOpportunities, preTradeResults, positionBook.OpenPositions);
+                    var significantDelta = Math.Max(1, options.Logging.CandidateScanSignificantCountDelta);
                     var candidateReasons = string.Join(",", multiOutcomeReport.RejectedByReason.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value}"));
+                    var candidateReasonsStable = string.Join(",", multiOutcomeReport.RejectedByReason.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value / significantDelta}"));
                     candidateScanCycle++;
                     var candidateCount = multiOutcomeReport.GroupsDetected;
                     var rejectedCount = Math.Max(0, multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified);
-                    var candidateFingerprint = $"{candidateCount}|{rejectedCount}|{multiOutcomeReport.TopSkipReason}|{candidateReasons}";
+                    var candidateFingerprint = $"{candidateCount / significantDelta}|{rejectedCount / significantDelta}|{multiOutcomeReport.TopSkipReason}|{candidateReasonsStable}";
                     var shouldLogCandidate = logThrottle.ShouldLog("MULTI_CANDIDATE_SCAN", candidateFingerprint, options.Logging.LogCandidateScanOnChangeOnly, options.Logging.LogCandidateScanEveryNCycles);
                     if (shouldLogCandidate)
                         Console.WriteLine($"[MULTI_CANDIDATE_SCAN] Candidates={multiOutcomeReport.GroupsDetected} Rejected={Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified)} TopReject={multiOutcomeReport.TopSkipReason} RejectedByReason={{{candidateReasons}}}");

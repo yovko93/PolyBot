@@ -20,6 +20,8 @@ public class AllowlistRepairServiceTests
         Assert.Equal(report.Healthy, healthHealthy);
         Assert.Equal(report.Broken, healthBroken);
         Assert.Equal(report.Summary.NeedsPricingPrune, report.NeedsPricingPrune);
+        Assert.Equal(report.Summary.Broken, report.CategoryCounts.BrokenTotal);
+        Assert.True(report.InvariantResult);
     }
 
     [Fact]
@@ -36,38 +38,71 @@ public class AllowlistRepairServiceTests
     }
 
     [Fact]
-    public void Nba_does_not_downgrade_after_one_missing_candidate_cycle()
+    public void Repair_action_does_not_change_within_same_snapshot()
     {
         var svc = new AllowlistRepairService();
         var first = svc.BuildReport(Configured(), ResolvedMismatches(), [], [NbaCandidate()]);
         var second = svc.BuildReport(Configured(), ResolvedMismatches(), [], []);
 
+        Assert.Equal(first.SnapshotId, second.SnapshotId);
         Assert.Equal("RefreshFromCandidateExport", first.Groups.Single(x => x.GroupKey.Contains("nba finals", StringComparison.OrdinalIgnoreCase)).RecommendedAction);
         Assert.Equal("RefreshFromCandidateExport", second.Groups.Single(x => x.GroupKey.Contains("nba finals", StringComparison.OrdinalIgnoreCase)).RecommendedAction);
     }
 
     [Fact]
-    public void Peru_repair_action_does_not_flip_flop_with_cached_candidate()
+    public void Peru_stable_refresh_from_candidate_export_with_cached_match()
     {
         var svc = new AllowlistRepairService();
         var first = svc.BuildReport(Configured(), ResolvedMismatches(), [], [PeruCandidate()]);
         var second = svc.BuildReport(Configured(), ResolvedMismatches(), [], []);
 
-        Assert.Equal(first.Groups.Single(x => x.GroupKey.Contains("peruvian", StringComparison.OrdinalIgnoreCase)).RecommendedAction,
-            second.Groups.Single(x => x.GroupKey.Contains("peruvian", StringComparison.OrdinalIgnoreCase)).RecommendedAction);
+        Assert.Equal(first.SnapshotId, second.SnapshotId);
+        Assert.Equal("RefreshFromCandidateExport", second.Groups.Single(x => x.GroupKey.Contains("peruvian", StringComparison.OrdinalIgnoreCase)).RecommendedAction);
     }
 
     [Fact]
-    public void Match_failure_downgrade_cycles_eventually_downgrades()
+    public void Repair_action_changes_only_when_snapshot_id_changes_and_downgrade_cycles_are_met()
     {
         var svc = new AllowlistRepairService();
-        var opts = new TradingBot.Options.AllowlistRepairOptions { MatchFailureDowngradeCycles = 2, PreferStableCachedMatches = true };
-        svc.BuildReport(Configured(), ResolvedMismatches(), [], [NbaCandidate()], opts);
-        var oneMiss = svc.BuildReport(Configured(), ResolvedMismatches(), [], [], opts);
-        var twoMisses = svc.BuildReport(Configured(), ResolvedMismatches(), [], [], opts);
+        var dir = Directory.CreateTempSubdirectory();
+        var opts = new TradingBot.Options.AllowlistRepairOptions { MatchFailureDowngradeCycles = 2, PreferStableCachedMatches = true, UseLatestCandidateExportForRepair = true };
+        WriteCandidateExport(dir.FullName, [NbaCandidate()]);
+        var first = svc.BuildReport(Configured(), ResolvedMismatches(), [], [], opts, dir.FullName);
+        WriteCandidateExport(dir.FullName, []);
+        var oneMiss = svc.BuildReport(Configured(), ResolvedMismatches(), [], [], opts, dir.FullName);
+        WriteCandidateExport(dir.FullName, [], "\n ");
+        var twoMisses = svc.BuildReport(Configured(), ResolvedMismatches(), [], [], opts, dir.FullName);
 
+        Assert.NotEqual(first.SnapshotId, oneMiss.SnapshotId);
         Assert.Equal("RefreshFromCandidateExport", oneMiss.Groups.Single(x => x.GroupKey.Contains("nba finals", StringComparison.OrdinalIgnoreCase)).RecommendedAction);
         Assert.Equal("NeedsManualReview", twoMisses.Groups.Single(x => x.GroupKey.Contains("nba finals", StringComparison.OrdinalIgnoreCase)).RecommendedAction);
+        Assert.Equal(2, twoMisses.Groups.Single(x => x.GroupKey.Contains("nba finals", StringComparison.OrdinalIgnoreCase)).ActionVersion);
+    }
+
+
+    [Fact]
+    public void Womens_us_open_does_not_flip_flop_within_same_snapshot()
+    {
+        var svc = new AllowlistRepairService();
+        var first = svc.BuildReport(Configured(), ResolvedMismatches(), [], [WomensCandidate()]);
+        var second = svc.BuildReport(Configured(), ResolvedMismatches(), [], []);
+        var womensFirst = first.Groups.Single(x => x.GroupKey.Contains("women s us open", StringComparison.OrdinalIgnoreCase));
+        var womensSecond = second.Groups.Single(x => x.GroupKey.Contains("women s us open", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal(first.SnapshotId, second.SnapshotId);
+        Assert.Equal(womensFirst.RecommendedAction, womensSecond.RecommendedAction);
+        Assert.Equal("RefreshFromCandidateExport", womensSecond.RecommendedAction);
+    }
+
+    [Fact]
+    public void Nba_stable_refresh_from_candidate_export_with_cached_match()
+    {
+        var svc = new AllowlistRepairService();
+        var first = svc.BuildReport(Configured(), ResolvedMismatches(), [], [NbaCandidate()]);
+        var second = svc.BuildReport(Configured(), ResolvedMismatches(), [], []);
+
+        Assert.Equal(first.SnapshotId, second.SnapshotId);
+        Assert.Equal("RefreshFromCandidateExport", second.Groups.Single(x => x.GroupKey.Contains("nba finals", StringComparison.OrdinalIgnoreCase)).RecommendedAction);
     }
 
     [Fact]
@@ -83,6 +118,8 @@ public class AllowlistRepairServiceTests
 
         Assert.NotEqual("OLD", File.ReadAllText(reportPath));
         Assert.Contains("repairSuggestions", File.ReadAllText(reportPath));
+        Assert.Contains("copyInstructions", File.ReadAllText(reportPath));
+        Assert.Contains("snapshotId", File.ReadAllText(reportPath));
     }
 
     [Fact]
@@ -97,6 +134,7 @@ public class AllowlistRepairServiceTests
 
         Assert.True(File.Exists(reportPath));
         Assert.True(File.Exists(suggestedPath));
+        Assert.Contains("snapshotId", File.ReadAllText(suggestedPath));
     }
 
     [Fact]
@@ -168,6 +206,7 @@ public class AllowlistRepairServiceTests
         var report = svc.BuildReport(Configured(), ResolvedWithColombianPricingProblem(), Pricing(), []);
         var suggested = svc.BuildSuggestedConfig(report);
 
+        Assert.Equal(report.SnapshotId, suggested.SnapshotId);
         Assert.Equal(Configured().Count, suggested.Groups.Count);
         Assert.Contains(suggested.Groups, x => x.GroupKey.Contains("colombian", StringComparison.OrdinalIgnoreCase));
     }
@@ -232,6 +271,23 @@ public class AllowlistRepairServiceTests
             MarketNode("peru-1", "peru-c1", "Will Candidate A win the 2026 Peruvian presidential election?"),
             MarketNode("peru-2", "peru-c2", "Will Candidate B win the 2026 Peruvian presidential election?"))
     };
+
+    private static JsonObject WomensCandidate() => new()
+    {
+        ["groupKey"] = "winner:2026 women s us open|kind:generic",
+        ["title"] = "Winner: 2026 Women s US Open",
+        ["markets"] = new JsonArray(
+            MarketNode("w-1", "w-c1", "Will Player A win the 2026 Women s US Open?"),
+            MarketNode("w-2", "w-c2", "Will Player B win the 2026 Women s US Open?"))
+    };
+
+    private static void WriteCandidateExport(string root, IReadOnlyList<JsonObject> candidates, string suffix = "")
+    {
+        var dir = Path.Combine(root, "exports");
+        Directory.CreateDirectory(dir);
+        var json = new JsonArray(candidates.Select(x => JsonNode.Parse(x.ToJsonString())).ToArray());
+        File.WriteAllText(Path.Combine(dir, "multi-outcome-candidates-latest.json"), json.ToJsonString() + suffix);
+    }
 
     private static JsonObject MarketNode(string id, string conditionId, string question) => new() { ["marketId"] = id, ["conditionId"] = conditionId, ["question"] = question, ["active"] = true, ["closed"] = false, ["archived"] = false };
 

@@ -70,6 +70,20 @@ public class AllowlistRepairLoggingTests
         Assert.True(changed);
     }
 
+
+    [Fact]
+    public void Profile_comparison_logs_are_throttled_by_stable_hash()
+    {
+        var throttle = new LogThrottle();
+        var first = throttle.ShouldLog("PROFILE_COMPARISON", "g|gross|active|poly|raw|classification", true, 25);
+        var second = throttle.ShouldLog("PROFILE_COMPARISON", "g|gross|active|poly|raw|classification", true, 25);
+        var changed = throttle.ShouldLog("PROFILE_COMPARISON", "g|gross|active2|poly|raw|classification", true, 25);
+
+        Assert.True(first);
+        Assert.False(second);
+        Assert.True(changed);
+    }
+
     private static VerifiedBasketScreener.ScreenResult Row(decimal active, decimal experimental) => new(
         "g",
         2,

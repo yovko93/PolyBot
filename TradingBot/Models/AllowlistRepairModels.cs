@@ -51,6 +51,30 @@ public sealed record AllowlistRepairClassification(
     AllowlistRepairMatch? RepairMatch,
     int ConsecutiveMatchMisses);
 
+public sealed record AllowlistRepairSnapshot(
+    string SnapshotId,
+    DateTime CreatedAt,
+    string DiscoveryId,
+    string CandidateExportPath,
+    int CandidateGroupsCount,
+    int VerifiedGroupsCount,
+    string Source,
+    IReadOnlyList<AllowlistRepairGroup> RepairResults);
+
+public sealed record AllowlistRepairCategoryCounts(
+    int Healthy,
+    int MonitoringOnly,
+    int NeedsPricingPrune,
+    int NeedsRefresh,
+    int BrokenConfig,
+    int Disabled,
+    int Ignored,
+    int BrokenTotal,
+    int HasMissingNoAsk,
+    int HasMarketMismatch,
+    int HasCandidateRefreshMatch,
+    int HasSuggestedTemplate);
+
 public sealed record AllowlistRepairSummary(
     int ConfiguredGroups,
     int Healthy,
@@ -72,8 +96,12 @@ public sealed record AllowlistRepairSuggestion(
     string CopyInstructions);
 
 public sealed record AllowlistRepairReport(
+    string SnapshotId,
     DateTime Timestamp,
     AllowlistRepairSummary Summary,
+    AllowlistRepairCategoryCounts CategoryCounts,
+    bool InvariantResult,
+    AllowlistRepairSnapshot Snapshot,
     int ConfiguredGroups,
     int Healthy,
     int MonitoringOnly,
@@ -88,6 +116,12 @@ public sealed record AllowlistRepairReport(
     string CopyInstructions);
 
 public sealed record AllowlistRepairGroup(
+    string RepairSnapshotId,
+    int ActionVersion,
+    string? PreviousAction,
+    string CurrentAction,
+    DateTime ActionChangedAt,
+    string ReasonForChange,
     string GroupKey,
     string Title,
     bool Enabled,
@@ -116,17 +150,26 @@ public sealed record AllowlistRepairGroup(
     string CopyInstructions);
 
 public sealed record AllowlistRepairSuggestedConfig(
+    string SnapshotId,
+    DateTime GeneratedAt,
     DateTime Timestamp,
     string Note,
     AllowlistRepairSummary Summary,
+    AllowlistRepairCategoryCounts CategoryCounts,
     IReadOnlyList<AllowlistRepairSuggestedGroup> Groups);
 
 public sealed record AllowlistRepairSuggestedGroup(
     string GroupKey,
     string Title,
     bool CurrentEnabled,
+    string HealthCategory,
+    string RecommendedAction,
+    string RepairConfidence,
     string SuggestedAction,
     bool SuggestedEnabled,
     JsonNode? SuggestedTemplate,
+    JsonNode? SuggestedPrunedTemplate,
+    JsonNode? SuggestedRefreshedTemplate,
     JsonNode? Diff,
-    IReadOnlyList<string> Notes);
+    IReadOnlyList<string> Notes,
+    string CopyInstructions);

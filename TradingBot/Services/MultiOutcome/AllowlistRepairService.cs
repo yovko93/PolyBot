@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -9,6 +11,10 @@ namespace TradingBot.Services.MultiOutcome;
 public sealed class AllowlistRepairService
 {
     private readonly VerifiedAllowlistGroupHealthClassifier _classifier = new();
+    private readonly Dictionary<string, ActionVersionState> _actionState = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _gate = new();
+    private string? _lastSnapshotId;
+    private AllowlistRepairReport? _lastReport;
 
     public AllowlistRepairReport BuildReport(
         IReadOnlyList<VerifiedMultiOutcomeGroupConfig> configuredGroups,
@@ -19,40 +25,69 @@ public sealed class AllowlistRepairService
         string? contentRootPath = null)
     {
         options ??= new AllowlistRepairOptions();
-        var candidates = MergeCandidates(candidateGroups, options, contentRootPath).ToArray();
-        var resolvedByGroup = resolvedGroups.ToDictionary(x => x.GroupKey, StringComparer.OrdinalIgnoreCase);
-        var pricingByGroup = verifiedPricingExport.Select(ToObject)
-            .Where(x => x is not null && x.TryGetPropertyValue("groupKey", out var g) && !string.IsNullOrWhiteSpace(g?.GetValue<string>()))
-            .ToDictionary(x => x!["groupKey"]!.GetValue<string>(), x => x!, StringComparer.OrdinalIgnoreCase);
+        var candidateSnapshot = BuildCandidateSnapshot(candidateGroups, configuredGroups.Count, options, contentRootPath);
+        lock (_gate)
+        {
+            if (_lastReport is not null && (_lastSnapshotId == candidateSnapshot.SnapshotId || candidateSnapshot.IsRollingFallback))
+                return _lastReport;
 
-        var rows = configuredGroups.Select(cfg => BuildGroup(
-            cfg,
-            resolvedByGroup.TryGetValue(cfg.GroupKey, out var resolved) ? resolved : null,
-            pricingByGroup.TryGetValue(cfg.GroupKey, out var pricing) ? pricing : null,
-            _classifier.Classify(cfg, resolvedByGroup.TryGetValue(cfg.GroupKey, out var r) ? r : null, pricingByGroup.TryGetValue(cfg.GroupKey, out var p) ? p : null, candidates, options))).ToArray();
-        var summary = BuildSummary(rows, configuredGroups.Count);
-        return new AllowlistRepairReport(
-            DateTime.UtcNow,
-            summary,
-            summary.ConfiguredGroups,
-            summary.Healthy + summary.MonitoringOnly,
-            summary.MonitoringOnly,
-            summary.Broken,
-            summary.NeedsRefresh,
-            summary.NeedsPricingPrune,
-            summary.BrokenConfig,
-            summary.Disabled,
-            summary.Ignored,
-            rows,
-            rows.Where(IsRepairable).Select(ToSuggestion).ToArray(),
-            "Review repairSuggestions. Copy suggestedJson/suggestedTemplate into config/verified-multi-outcome-groups.json only after manual verification. This workflow never overwrites live config.");
+            var resolvedByGroup = resolvedGroups.ToDictionary(x => x.GroupKey, StringComparer.OrdinalIgnoreCase);
+            var pricingByGroup = verifiedPricingExport.Select(ToObject)
+                .Where(x => x is not null && x.TryGetPropertyValue("groupKey", out var g) && !string.IsNullOrWhiteSpace(g?.GetValue<string>()))
+                .ToDictionary(x => x!["groupKey"]!.GetValue<string>(), x => x!, StringComparer.OrdinalIgnoreCase);
+
+            var now = DateTime.UtcNow;
+            var rows = configuredGroups.Select(cfg => BuildGroup(
+                candidateSnapshot.SnapshotId,
+                now,
+                cfg,
+                resolvedByGroup.TryGetValue(cfg.GroupKey, out var resolved) ? resolved : null,
+                pricingByGroup.TryGetValue(cfg.GroupKey, out var pricing) ? pricing : null,
+                _classifier.Classify(cfg, resolvedByGroup.TryGetValue(cfg.GroupKey, out var r) ? r : null, pricingByGroup.TryGetValue(cfg.GroupKey, out var p) ? p : null, candidateSnapshot.Candidates, options))).ToArray();
+            var summary = BuildSummary(rows, configuredGroups.Count);
+            var categoryCounts = BuildCategoryCounts(rows, summary);
+            var snapshot = new AllowlistRepairSnapshot(
+                candidateSnapshot.SnapshotId,
+                candidateSnapshot.CreatedAt,
+                candidateSnapshot.DiscoveryId,
+                candidateSnapshot.CandidateExportPath,
+                candidateSnapshot.CandidateGroupsCount,
+                configuredGroups.Count,
+                candidateSnapshot.Source,
+                rows);
+            var report = new AllowlistRepairReport(
+                candidateSnapshot.SnapshotId,
+                now,
+                summary,
+                categoryCounts,
+                summary.InvariantOk,
+                snapshot,
+                summary.ConfiguredGroups,
+                summary.Healthy + summary.MonitoringOnly,
+                summary.MonitoringOnly,
+                summary.Broken,
+                summary.NeedsRefresh,
+                summary.NeedsPricingPrune,
+                summary.BrokenConfig,
+                summary.Disabled,
+                summary.Ignored,
+                rows,
+                rows.Where(IsRepairable).Select(ToSuggestion).ToArray(),
+                "Review repairSuggestions. Copy suggestedJson/suggestedTemplate into config/verified-multi-outcome-groups.json only after manual verification. This workflow never overwrites live config.");
+            _lastSnapshotId = candidateSnapshot.SnapshotId;
+            _lastReport = report;
+            return report;
+        }
     }
 
     public AllowlistRepairSuggestedConfig BuildSuggestedConfig(AllowlistRepairReport report)
         => new(
+            report.SnapshotId,
+            DateTime.UtcNow,
             DateTime.UtcNow,
             "Suggested only. Does not overwrite config/verified-multi-outcome-groups.json. Review manually before copying.",
             report.Summary,
+            report.CategoryCounts,
             report.Groups.Select(g =>
             {
                 var template = Clone(g.SuggestedPrunedTemplate ?? g.SuggestedRefreshedTemplate);
@@ -60,11 +95,17 @@ public sealed class AllowlistRepairService
                     g.GroupKey,
                     g.Title,
                     g.Enabled,
+                    g.HealthCategory,
+                    g.RecommendedAction,
+                    g.RepairConfidence,
                     g.RecommendedAction,
                     SuggestedEnabled(g),
                     template,
+                    Clone(g.SuggestedPrunedTemplate),
+                    Clone(g.SuggestedRefreshedTemplate),
                     BuildDiff(g, template),
-                    g.Notes);
+                    g.Notes,
+                    g.CopyInstructions);
             }).ToArray());
 
     public (AllowlistRepairReport Report, AllowlistRepairSuggestedConfig SuggestedConfig) Export(
@@ -87,7 +128,7 @@ public sealed class AllowlistRepairService
         return (report, suggested);
     }
 
-    private static AllowlistRepairGroup BuildGroup(VerifiedMultiOutcomeGroupConfig cfg, ResolvedVerifiedGroup? resolved, JsonObject? pricing, AllowlistRepairClassification classification)
+    private AllowlistRepairGroup BuildGroup(string snapshotId, DateTime now, VerifiedMultiOutcomeGroupConfig cfg, ResolvedVerifiedGroup? resolved, JsonObject? pricing, AllowlistRepairClassification classification)
     {
         var noAskResolved = GetInt(pricing, "noAskResolvedCount");
         var missingNoAsk = GetInt(pricing, "missingNoAskCount");
@@ -102,7 +143,14 @@ public sealed class AllowlistRepairService
             _ => "NeedsRepair"
         };
         var notes = NotesFor(classification).ToArray();
+        var version = VersionAction(cfg.GroupKey, classification.RecommendedAction, snapshotId, now, classification.ConsecutiveMatchMisses);
         return new AllowlistRepairGroup(
+            snapshotId,
+            version.ActionVersion,
+            version.PreviousAction,
+            classification.RecommendedAction,
+            version.ActionChangedAt,
+            version.ReasonForChange,
             cfg.GroupKey,
             cfg.Title ?? cfg.GroupKey,
             cfg.Enabled,
@@ -131,6 +179,28 @@ public sealed class AllowlistRepairService
             "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config.");
     }
 
+    private ActionVersionState VersionAction(string groupKey, string currentAction, string snapshotId, DateTime now, int consecutiveSnapshotMisses)
+    {
+        if (!_actionState.TryGetValue(groupKey, out var previous))
+        {
+            var created = new ActionVersionState(1, null, currentAction, now, "InitialSnapshot", snapshotId, consecutiveSnapshotMisses);
+            _actionState[groupKey] = created;
+            return created;
+        }
+
+        if (previous.CurrentAction.Equals(currentAction, StringComparison.OrdinalIgnoreCase))
+        {
+            var same = previous with { SnapshotId = snapshotId, ConsecutiveSnapshotMisses = consecutiveSnapshotMisses };
+            _actionState[groupKey] = same;
+            return same;
+        }
+
+        var reason = consecutiveSnapshotMisses > 0 ? "NoMatchAcrossSnapshots" : "RepairSnapshotReclassified";
+        var changed = new ActionVersionState(previous.ActionVersion + 1, previous.CurrentAction, currentAction, now, reason, snapshotId, consecutiveSnapshotMisses);
+        _actionState[groupKey] = changed;
+        return changed;
+    }
+
     private static AllowlistRepairSummary BuildSummary(IReadOnlyList<AllowlistRepairGroup> rows, int configured)
     {
         var healthy = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.Healthy));
@@ -144,11 +214,26 @@ public sealed class AllowlistRepairService
         return new AllowlistRepairSummary(configured, healthy, monitoring, prune, refresh, brokenConfig, disabled, ignored, prune + refresh + brokenConfig, invariant);
     }
 
+    private static AllowlistRepairCategoryCounts BuildCategoryCounts(IReadOnlyList<AllowlistRepairGroup> rows, AllowlistRepairSummary summary)
+        => new(
+            summary.Healthy,
+            summary.MonitoringOnly,
+            summary.NeedsPricingPrune,
+            summary.NeedsRefresh,
+            summary.BrokenConfig,
+            summary.Disabled,
+            summary.Ignored,
+            summary.Broken,
+            rows.Count(x => x.MissingNoAsk > 0),
+            rows.Count(x => !string.IsNullOrWhiteSpace(x.MismatchReason)),
+            rows.Count(x => x.RepairMatch is not null),
+            rows.Count(x => x.SuggestedPrunedTemplate is not null || x.SuggestedRefreshedTemplate is not null));
+
     private static IEnumerable<string> NotesFor(AllowlistRepairClassification c)
     {
         if (c.HealthCategory == nameof(AllowlistRepairHealthCategory.NeedsPricingPrune)) yield return VerifiedAllowlistGroupHealthClassifier.PruneSettlementNote;
         if (c.RepairMatch is not null) yield return $"Stable candidate match: {c.RepairMatch.CandidateGroupKey} score={c.RepairMatch.Score:0.###}.";
-        if (c.ConsecutiveMatchMisses > 0) yield return $"Candidate match missing for {c.ConsecutiveMatchMisses} cycle(s); hysteresis prevents immediate downgrade.";
+        if (c.ConsecutiveMatchMisses > 0) yield return $"Candidate match missing for {c.ConsecutiveMatchMisses} repair snapshot(s); hysteresis prevents immediate downgrade.";
         yield return c.Reason;
     }
 
@@ -190,23 +275,30 @@ public sealed class AllowlistRepairService
         };
     }
 
-    private static IReadOnlyList<JsonObject> MergeCandidates(IReadOnlyList<object> candidateGroups, AllowlistRepairOptions options, string? contentRootPath)
+    private static CandidateSnapshot BuildCandidateSnapshot(IReadOnlyList<object> candidateGroups, int configuredCount, AllowlistRepairOptions options, string? contentRootPath)
     {
-        var list = candidateGroups.Select(ToObject).Where(x => x is not null).Cast<JsonObject>().ToList();
-        if (options.UseLatestCandidateExportForRepair && !string.IsNullOrWhiteSpace(contentRootPath))
+        var exportPath = !string.IsNullOrWhiteSpace(contentRootPath) ? Path.Combine(contentRootPath, "exports", "multi-outcome-candidates-latest.json") : string.Empty;
+        if (options.UseLatestCandidateExportForRepair && !string.IsNullOrWhiteSpace(exportPath) && File.Exists(exportPath))
         {
-            var path = Path.Combine(contentRootPath, "exports", "multi-outcome-candidates-latest.json");
-            if (File.Exists(path))
+            try
             {
-                try
-                {
-                    var node = JsonNode.Parse(File.ReadAllText(path)) as JsonArray;
-                    if (node is not null) list.AddRange(node.OfType<JsonObject>().Select(x => (JsonObject)Clone(x)!));
-                }
-                catch { }
+                var text = File.ReadAllText(exportPath);
+                var node = JsonNode.Parse(text) as JsonArray;
+                var candidates = (node ?? []).OfType<JsonObject>().Select(x => (JsonObject)Clone(x)!).ToArray();
+                var info = new FileInfo(exportPath);
+                var hash = StableHash(text);
+                var snapshotId = $"candidate-export-{info.LastWriteTimeUtc.Ticks:x}-{hash[..12]}";
+                return new CandidateSnapshot(snapshotId, info.LastWriteTimeUtc, snapshotId, exportPath, candidates.Length, "CandidateExportSnapshot", false, candidates);
+            }
+            catch
+            {
+                // Fall back to the supplied candidate set when the export is unreadable.
             }
         }
-        return list.GroupBy(x => x["groupKey"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N"), StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToArray();
+
+        var fallback = candidateGroups.Select(ToObject).Where(x => x is not null).Cast<JsonObject>().ToArray();
+        var fingerprint = StableHash(string.Join("|", fallback.Select(x => x["groupKey"]?.GetValue<string>() ?? x.ToJsonString())));
+        return new CandidateSnapshot($"in-memory-candidate-snapshot-{fingerprint[..12]}", DateTime.UtcNow, $"in-memory-{fingerprint[..12]}", exportPath, fallback.Length, "CandidateExportSnapshot", true, fallback);
     }
 
     internal static JsonObject? ToObject(object value)
@@ -219,6 +311,10 @@ public sealed class AllowlistRepairService
     internal static IReadOnlyList<string> ReadMarketIds(JsonObject? o, string name) => ((o?[name] as JsonArray) ?? []).Select(x => x?["marketId"]?.GetValue<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     internal static JsonArray ToArray(IEnumerable<string> values) { var arr = new JsonArray(); foreach (var v in values) arr.Add(v); return arr; }
     internal static JsonNode? Clone(JsonNode? node) => node is null ? null : JsonNode.Parse(node.ToJsonString());
+    private static string StableHash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+
+    private sealed record CandidateSnapshot(string SnapshotId, DateTime CreatedAt, string DiscoveryId, string CandidateExportPath, int CandidateGroupsCount, string Source, bool IsRollingFallback, IReadOnlyList<JsonObject> Candidates);
+    private sealed record ActionVersionState(int ActionVersion, string? PreviousAction, string CurrentAction, DateTime ActionChangedAt, string ReasonForChange, string SnapshotId, int ConsecutiveSnapshotMisses);
 }
 
 public sealed class VerifiedAllowlistGroupHealthClassifier
@@ -261,7 +357,7 @@ public sealed class VerifiedAllowlistGroupHealthClassifier
             var forceDisable = IsWomenUsOpen(cfg.GroupKey) && (resolved?.ResolvedMarkets.Count ?? 0) < 2;
             var action = forceDisable ? AllowlistRepairRecommendedAction.DisableMissingMarkets : AllowlistRepairRecommendedAction.NeedsManualReview;
             var category = forceDisable ? AllowlistRepairHealthCategory.BrokenConfig : AllowlistRepairHealthCategory.NeedsRefresh;
-            return Result(cfg, category, action, "Low", match.ConsecutiveMisses > 0 ? $"No stable candidate match yet. ConsecutiveMisses={match.ConsecutiveMisses}." : "No stable candidate match found; manual review required.", missingMarketIds, missingNoAskIds, misses: match.ConsecutiveMisses);
+            return Result(cfg, category, action, "Low", match.ConsecutiveMisses > 0 ? $"No stable candidate match yet. ConsecutiveSnapshotMisses={match.ConsecutiveMisses}." : "No stable candidate match found in repair snapshot; manual review required.", missingMarketIds, missingNoAskIds, misses: match.ConsecutiveMisses);
         }
 
         return Result(cfg, AllowlistRepairHealthCategory.Healthy, AllowlistRepairRecommendedAction.Keep, "High", "Group healthy.", missingMarketIds, missingNoAskIds);

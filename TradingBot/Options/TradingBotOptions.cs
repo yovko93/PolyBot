@@ -223,6 +223,7 @@ public class MultiOutcomeLoggingOptions
     public bool LogCandidateScanOnChangeOnly { get; set; } = true;
     public bool LogCandidateScanWhenExecutableOnly { get; set; } = true;
     public bool LogCandidateScanWhenRejectDistributionChanges { get; set; } = true;
+    public int CandidateScanSignificantCountDelta { get; set; } = 5;
     public int LogVerifiedScanEveryNCycles { get; set; } = 25;
     public int LogAllowlistHealthEveryNCycles { get; set; } = 25;
     public bool LogVerifiedScanOnChangeOnly { get; set; } = true;
@@ -239,7 +240,7 @@ public class MultiOutcomeLoggingOptions
     public bool LogAllowlistRepairSuggestionsOnChangeOnly { get; set; } = true;
     public int LogAllowlistRepairSuggestionsEveryNCycles { get; set; } = 50;
     public bool LogAllowlistRepairOnChangeOnly { get; set; } = true;
-    public int LogAllowlistRepairEveryNCycles { get; set; } = 25;
+    public int LogAllowlistRepairEveryNCycles { get; set; } = 50;
 }
 
 
