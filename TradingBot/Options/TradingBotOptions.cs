@@ -209,6 +209,7 @@ public class MultiOutcomeLoggingOptions
     public bool LogVerifiedBasketRanking { get; set; } = true;
     public int LogVerifiedBasketRankingEveryNCycles { get; set; } = 25;
     public bool LogVerifiedBasketOnlyOnChangeRanking { get; set; } = true;
+    public bool LogVerifiedBasketRankingOnChangeOnly { get; set; } = true;
     public bool LogScanConfigEachCycle { get; set; } = false;
     public bool LogVerifiedBasketDetailsOnChangeOnly { get; set; } = true;
     public int LogVerifiedBasketDetailsEveryNCycles { get; set; } = 50;
@@ -223,7 +224,7 @@ public class MultiOutcomeLoggingOptions
     public bool LogCandidateScanOnChangeOnly { get; set; } = true;
     public bool LogCandidateScanWhenExecutableOnly { get; set; } = true;
     public bool LogCandidateScanWhenRejectDistributionChanges { get; set; } = true;
-    public int CandidateScanSignificantCountDelta { get; set; } = 5;
+    public int CandidateScanSignificantCountDelta { get; set; } = 10;
     public int LogVerifiedScanEveryNCycles { get; set; } = 25;
     public int LogAllowlistHealthEveryNCycles { get; set; } = 25;
     public bool LogVerifiedScanOnChangeOnly { get; set; } = true;

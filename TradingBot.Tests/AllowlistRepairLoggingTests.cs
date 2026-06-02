@@ -58,16 +58,18 @@ public class AllowlistRepairLoggingTests
     }
 
     [Fact]
-    public void Candidate_scan_logs_are_throttled_by_stable_hash()
+    public void Candidate_scan_small_count_changes_do_not_log_every_cycle()
     {
         var throttle = new LogThrottle();
-        var first = throttle.ShouldLog("MULTI_CANDIDATE_SCAN", "10|3|Top|A:1", true, 25);
-        var second = throttle.ShouldLog("MULTI_CANDIDATE_SCAN", "10|3|Top|A:1", true, 25);
-        var changed = throttle.ShouldLog("MULTI_CANDIDATE_SCAN", "10|4|Top|A:2", true, 25);
+        var first = throttle.ShouldLog("MULTI_CANDIDATE_SCAN", "1|1|Top|A:1|exec:0", true, 25);
+        var second = throttle.ShouldLog("MULTI_CANDIDATE_SCAN", "1|1|Top|A:1|exec:0", true, 25);
+        var smallCountChangeSameBucket = throttle.ShouldLog("MULTI_CANDIDATE_SCAN", "1|1|Top|A:1|exec:0", true, 25);
+        var materialChange = throttle.ShouldLog("MULTI_CANDIDATE_SCAN", "2|2|Top|A:2|exec:0", true, 25);
 
         Assert.True(first);
         Assert.False(second);
-        Assert.True(changed);
+        Assert.False(smallCountChangeSameBucket);
+        Assert.True(materialChange);
     }
 
 
@@ -78,6 +80,20 @@ public class AllowlistRepairLoggingTests
         var first = throttle.ShouldLog("PROFILE_COMPARISON", "g|gross|active|poly|raw|classification", true, 25);
         var second = throttle.ShouldLog("PROFILE_COMPARISON", "g|gross|active|poly|raw|classification", true, 25);
         var changed = throttle.ShouldLog("PROFILE_COMPARISON", "g|gross|active2|poly|raw|classification", true, 25);
+
+        Assert.True(first);
+        Assert.False(second);
+        Assert.True(changed);
+    }
+
+
+    [Fact]
+    public void Ranking_logs_are_throttled_by_stable_hash()
+    {
+        var throttle = new LogThrottle();
+        var first = throttle.ShouldLog("VERIFIED_BASKET_RANKING", "5|1|best|Monitor|0", true, 25);
+        var second = throttle.ShouldLog("VERIFIED_BASKET_RANKING", "5|1|best|Monitor|0", true, 25);
+        var changed = throttle.ShouldLog("VERIFIED_BASKET_RANKING", "5|2|best|Monitor|0", true, 25);
 
         Assert.True(first);
         Assert.False(second);

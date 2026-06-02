@@ -173,3 +173,49 @@ public sealed record AllowlistRepairSuggestedGroup(
     JsonNode? Diff,
     IReadOnlyList<string> Notes,
     string CopyInstructions);
+
+
+public sealed record AllowlistRepairPatchPreview(
+    DateTime Timestamp,
+    string SnapshotId,
+    string SourceConfigPath,
+    string Mode,
+    bool WillOverwriteRealConfig,
+    AllowlistRepairPatchSummary Summary,
+    IReadOnlyList<AllowlistRepairPatchItem> Patches,
+    AllowlistRepairPostApplyValidationPlan PostApplyValidationPlan);
+
+public sealed record AllowlistRepairPatchSummary(
+    int TotalConfigured,
+    int PatchableHighConfidence,
+    int PatchableMediumConfidence,
+    int LowConfidenceReviewOnly,
+    int DisabledSuggested,
+    int ExpectedHealthyAfterApply);
+
+public sealed record AllowlistRepairPatchItem(
+    string GroupKey,
+    string CurrentAction,
+    string Confidence,
+    string PatchType,
+    JsonNode? CurrentGroup,
+    JsonNode? ProposedGroup,
+    JsonNode? Diff,
+    IReadOnlyList<string> RiskNotes,
+    string ManualInstructions,
+    string ExpectedResultAfterApply);
+
+public sealed record AllowlistRepairPostApplyValidationPlan(
+    IReadOnlyList<string> Steps,
+    int ExpectedConfiguredCount,
+    int ExpectedResolvedCount,
+    int ExpectedMissingNoAskCount,
+    IReadOnlyList<string> GroupsExpectedToBecomeHealthyOrResolved,
+    IReadOnlyList<string> GroupsStillExpectedReviewOnly,
+    IReadOnlyList<string> CommandsOrEndpointsToCheck,
+    IReadOnlyList<string> ExpectedOutcomes);
+
+public sealed record AllowlistRepairPatchExport(
+    AllowlistRepairPatchPreview PatchPreview,
+    JsonNode PatchedPreviewConfig,
+    JsonNode? PatchedPreviewWithMetadata);
