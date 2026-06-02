@@ -2,53 +2,70 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using TradingBot.Models;
+using TradingBot.Options;
 
 namespace TradingBot.Services.MultiOutcome;
 
 public sealed class AllowlistRepairService
 {
-    private const string ColombianPruneNote = "Pruned to priced mutually exclusive subset. Missing NO ask leg excluded.";
+    private readonly VerifiedAllowlistGroupHealthClassifier _classifier = new();
 
     public AllowlistRepairReport BuildReport(
         IReadOnlyList<VerifiedMultiOutcomeGroupConfig> configuredGroups,
         IReadOnlyList<ResolvedVerifiedGroup> resolvedGroups,
         IReadOnlyList<object> verifiedPricingExport,
-        IReadOnlyList<object> candidateGroups)
+        IReadOnlyList<object> candidateGroups,
+        AllowlistRepairOptions? options = null,
+        string? contentRootPath = null)
     {
+        options ??= new AllowlistRepairOptions();
+        var candidates = MergeCandidates(candidateGroups, options, contentRootPath).ToArray();
         var resolvedByGroup = resolvedGroups.ToDictionary(x => x.GroupKey, StringComparer.OrdinalIgnoreCase);
-        var pricingByGroup = verifiedPricingExport.Select(ToObject).Where(x => x is not null && x.TryGetPropertyValue("groupKey", out var g) && !string.IsNullOrWhiteSpace(g?.GetValue<string>())).ToDictionary(x => x!["groupKey"]!.GetValue<string>(), x => x!, StringComparer.OrdinalIgnoreCase);
-        var candidates = candidateGroups.Select(ToObject).Where(x => x is not null).Cast<JsonObject>().ToArray();
-        var rows = configuredGroups.Select(g => BuildGroup(g, resolvedByGroup.TryGetValue(g.GroupKey, out var r) ? r : null, pricingByGroup.TryGetValue(g.GroupKey, out var p) ? p : null, candidates)).ToArray();
+        var pricingByGroup = verifiedPricingExport.Select(ToObject)
+            .Where(x => x is not null && x.TryGetPropertyValue("groupKey", out var g) && !string.IsNullOrWhiteSpace(g?.GetValue<string>()))
+            .ToDictionary(x => x!["groupKey"]!.GetValue<string>(), x => x!, StringComparer.OrdinalIgnoreCase);
+
+        var rows = configuredGroups.Select(cfg => BuildGroup(
+            cfg,
+            resolvedByGroup.TryGetValue(cfg.GroupKey, out var resolved) ? resolved : null,
+            pricingByGroup.TryGetValue(cfg.GroupKey, out var pricing) ? pricing : null,
+            _classifier.Classify(cfg, resolvedByGroup.TryGetValue(cfg.GroupKey, out var r) ? r : null, pricingByGroup.TryGetValue(cfg.GroupKey, out var p) ? p : null, candidates, options))).ToArray();
+        var summary = BuildSummary(rows, configuredGroups.Count);
         return new AllowlistRepairReport(
             DateTime.UtcNow,
-            configuredGroups.Count,
-            rows.Count(x => x.HealthCategory == AllowlistRepairHealthCategory.Healthy.ToString() || x.HealthCategory == AllowlistRepairHealthCategory.MonitoringOnly.ToString()),
-            rows.Count(x => x.HealthCategory == AllowlistRepairHealthCategory.NeedsPricingPrune.ToString() || x.HealthCategory == AllowlistRepairHealthCategory.NeedsRefresh.ToString() || x.HealthCategory == AllowlistRepairHealthCategory.BrokenConfig.ToString()),
-            rows.Count(x => x.HealthCategory == AllowlistRepairHealthCategory.NeedsRefresh.ToString()),
-            rows.Count(x => x.HealthCategory == AllowlistRepairHealthCategory.NeedsPricingPrune.ToString()),
-            rows);
+            summary,
+            summary.ConfiguredGroups,
+            summary.Healthy + summary.MonitoringOnly,
+            summary.MonitoringOnly,
+            summary.Broken,
+            summary.NeedsRefresh,
+            summary.NeedsPricingPrune,
+            summary.BrokenConfig,
+            summary.Disabled,
+            summary.Ignored,
+            rows,
+            rows.Where(IsRepairable).Select(ToSuggestion).ToArray(),
+            "Review repairSuggestions. Copy suggestedJson/suggestedTemplate into config/verified-multi-outcome-groups.json only after manual verification. This workflow never overwrites live config.");
     }
 
     public AllowlistRepairSuggestedConfig BuildSuggestedConfig(AllowlistRepairReport report)
-    {
-        return new AllowlistRepairSuggestedConfig(
+        => new(
             DateTime.UtcNow,
             "Suggested only. Does not overwrite config/verified-multi-outcome-groups.json. Review manually before copying.",
+            report.Summary,
             report.Groups.Select(g =>
             {
                 var template = Clone(g.SuggestedPrunedTemplate ?? g.SuggestedRefreshedTemplate);
-                var suggestedEnabled = g.RecommendedAction is not ("DisableMissingMarkets" or "NeedsManualReview") && g.Enabled;
                 return new AllowlistRepairSuggestedGroup(
                     g.GroupKey,
                     g.Title,
                     g.Enabled,
                     g.RecommendedAction,
-                    suggestedEnabled,
+                    SuggestedEnabled(g),
                     template,
                     BuildDiff(g, template),
                     g.Notes);
             }).ToArray());
-    }
 
     public (AllowlistRepairReport Report, AllowlistRepairSuggestedConfig SuggestedConfig) Export(
         string reportPath,
@@ -56,112 +73,244 @@ public sealed class AllowlistRepairService
         IReadOnlyList<VerifiedMultiOutcomeGroupConfig> configuredGroups,
         IReadOnlyList<ResolvedVerifiedGroup> resolvedGroups,
         IReadOnlyList<object> verifiedPricingExport,
-        IReadOnlyList<object> candidateGroups)
+        IReadOnlyList<object> candidateGroups,
+        AllowlistRepairOptions? options = null,
+        string? contentRootPath = null)
     {
-        var report = BuildReport(configuredGroups, resolvedGroups, verifiedPricingExport, candidateGroups);
+        var report = BuildReport(configuredGroups, resolvedGroups, verifiedPricingExport, candidateGroups, options, contentRootPath);
         var suggested = BuildSuggestedConfig(report);
         Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
         Directory.CreateDirectory(Path.GetDirectoryName(suggestedConfigPath)!);
         var json = new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-        if (report.Broken > 0 || report.NeedsRefresh > 0 || report.NeedsPricingPrune > 0)
-            File.WriteAllText(reportPath, JsonSerializer.Serialize(report, json));
+        File.WriteAllText(reportPath, JsonSerializer.Serialize(report, json));
         File.WriteAllText(suggestedConfigPath, JsonSerializer.Serialize(suggested, json));
         return (report, suggested);
     }
 
-    private static AllowlistRepairGroup BuildGroup(VerifiedMultiOutcomeGroupConfig cfg, ResolvedVerifiedGroup? resolved, JsonObject? pricing, IReadOnlyList<JsonObject> candidates)
+    private static AllowlistRepairGroup BuildGroup(VerifiedMultiOutcomeGroupConfig cfg, ResolvedVerifiedGroup? resolved, JsonObject? pricing, AllowlistRepairClassification classification)
     {
-        var resolvedOk = resolved?.ValidationStatus == "VerifiedGroupResolved";
-        var resolvedMarketCount = resolved?.ResolvedMarkets.Count ?? 0;
-        var missingMarketIds = (resolved?.MissingMarketIds ?? cfg.MarketIds).Concat(resolved?.MissingConditionIds ?? Array.Empty<string>()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var noAskResolved = GetInt(pricing, "noAskResolvedCount");
         var missingNoAsk = GetInt(pricing, "missingNoAskCount");
-        var missingNoAskMarketIds = ReadMarketIds(pricing, "missingPriceLegs");
-        var candidate = FindCandidate(cfg, candidates);
-        var suggestedRefresh = candidate is null ? null : BuildRefreshTemplate(candidate);
-        var health = AllowlistRepairHealthCategory.Healthy;
-        var action = "KeepEnabled";
-        var confidence = "High";
-        var notes = new List<string>();
-        JsonNode? prune = null;
-
-        if (!cfg.Enabled)
+        var resolvedOk = resolved?.ValidationStatus == "VerifiedGroupResolved";
+        var evaluated = pricing is not null;
+        var status = classification.HealthCategory switch
         {
-            health = AllowlistRepairHealthCategory.Disabled;
-            action = "KeepDisabled";
-            confidence = "High";
-            notes.Add("Group disabled in current allowlist.");
-        }
-        else if (resolvedOk && missingNoAsk > 0 && noAskResolved >= 2)
-        {
-            health = AllowlistRepairHealthCategory.NeedsPricingPrune;
-            action = "PruneMissingNoAskLegs";
-            confidence = missingNoAsk == 1 ? "High" : "Medium";
-            prune = BuildPrunedTemplate(cfg, pricing, noAskResolved);
-            notes.Add(ColombianPruneNote);
-        }
-        else if (!resolvedOk)
-        {
-            if (suggestedRefresh is not null)
-            {
-                health = AllowlistRepairHealthCategory.NeedsRefresh;
-                action = "RefreshFromCandidateExport";
-                confidence = "Medium";
-                notes.Add("Candidate export contains a likely refreshed mutually exclusive winner group.");
-            }
-            else if (resolvedMarketCount < 2 && IsWomenUsOpen(cfg.GroupKey))
-            {
-                health = AllowlistRepairHealthCategory.BrokenConfig;
-                action = "DisableMissingMarkets";
-                confidence = "Low";
-                notes.Add("Resolved market count is below the safe pruning threshold; no executable pruned template generated.");
-            }
-            else
-            {
-                health = resolvedMarketCount >= 2 ? AllowlistRepairHealthCategory.NeedsRefresh : AllowlistRepairHealthCategory.BrokenConfig;
-                action = resolvedMarketCount >= 2 ? "NeedsManualReview" : "DisableMissingMarkets";
-                confidence = "Low";
-                notes.Add("No safe refreshed candidate template was found; manual review required.");
-            }
-        }
-        else if (pricing is not null)
-        {
-            health = AllowlistRepairHealthCategory.MonitoringOnly;
-            action = "KeepForMonitoring";
-            confidence = "High";
-        }
-
-        var status = health switch
-        {
-            AllowlistRepairHealthCategory.Healthy => "Healthy",
-            AllowlistRepairHealthCategory.MonitoringOnly => "MonitoringOnly",
-            AllowlistRepairHealthCategory.Disabled => "Disabled",
+            nameof(AllowlistRepairHealthCategory.Healthy) => "Healthy",
+            nameof(AllowlistRepairHealthCategory.MonitoringOnly) => "MonitoringOnly",
+            nameof(AllowlistRepairHealthCategory.Disabled) => "Disabled",
+            nameof(AllowlistRepairHealthCategory.Ignored) => "Ignored",
             _ => "NeedsRepair"
         };
-
+        var notes = NotesFor(classification).ToArray();
         return new AllowlistRepairGroup(
             cfg.GroupKey,
             cfg.Title ?? cfg.GroupKey,
             cfg.Enabled,
             status,
-            health.ToString(),
+            classification.HealthCategory,
             resolvedOk,
-            pricing is not null,
+            evaluated,
             cfg.MarketIds.Count,
-            resolvedMarketCount,
-            missingMarketIds.Length,
-            missingMarketIds,
+            resolved?.ResolvedMarkets.Count ?? 0,
+            classification.MissingMarketIds.Count,
+            classification.MissingMarketIds,
             noAskResolved,
             missingNoAsk,
-            missingNoAskMarketIds,
+            classification.MissingNoAskMarketIds,
             resolvedOk ? null : resolved?.RejectionReason ?? "ResolverMissingConfiguredGroup",
             missingNoAsk > 0 ? "MissingNoAsk" : null,
-            action,
-            confidence,
-            Clone(prune),
-            action == "RefreshFromCandidateExport" ? Clone(suggestedRefresh) : null,
+            classification.RecommendedAction,
+            classification.RepairConfidence,
+            classification.Reason,
+            Clone(classification.SuggestedPrunedTemplate),
+            Clone(classification.SuggestedRefreshedTemplate),
+            classification.RepairMatch,
+            classification.ConsecutiveMatchMisses,
             notes,
+            ExpectedResult(classification),
             "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config.");
+    }
+
+    private static AllowlistRepairSummary BuildSummary(IReadOnlyList<AllowlistRepairGroup> rows, int configured)
+    {
+        var healthy = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.Healthy));
+        var monitoring = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.MonitoringOnly));
+        var prune = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.NeedsPricingPrune));
+        var refresh = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.NeedsRefresh));
+        var brokenConfig = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.BrokenConfig));
+        var disabled = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.Disabled));
+        var ignored = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.Ignored));
+        var invariant = configured == healthy + monitoring + prune + refresh + brokenConfig + disabled + ignored;
+        return new AllowlistRepairSummary(configured, healthy, monitoring, prune, refresh, brokenConfig, disabled, ignored, prune + refresh + brokenConfig, invariant);
+    }
+
+    private static IEnumerable<string> NotesFor(AllowlistRepairClassification c)
+    {
+        if (c.HealthCategory == nameof(AllowlistRepairHealthCategory.NeedsPricingPrune)) yield return VerifiedAllowlistGroupHealthClassifier.PruneSettlementNote;
+        if (c.RepairMatch is not null) yield return $"Stable candidate match: {c.RepairMatch.CandidateGroupKey} score={c.RepairMatch.Score:0.###}.";
+        if (c.ConsecutiveMatchMisses > 0) yield return $"Candidate match missing for {c.ConsecutiveMatchMisses} cycle(s); hysteresis prevents immediate downgrade.";
+        yield return c.Reason;
+    }
+
+    private static string ExpectedResult(AllowlistRepairClassification c) => c.RecommendedAction switch
+    {
+        nameof(AllowlistRepairRecommendedAction.PruneMissingNoAskLegs) => "Configured group keeps only priced mutually exclusive legs for manual review; not automatically executable.",
+        nameof(AllowlistRepairRecommendedAction.RefreshFromCandidateExport) => "Configured market/condition ids are refreshed from a stable candidate after manual review.",
+        nameof(AllowlistRepairRecommendedAction.DisableMissingMarkets) => "Group remains in suggested config but disabled until markets can be manually repaired.",
+        nameof(AllowlistRepairRecommendedAction.NeedsManualReview) => "No automatic template is trusted; operator reviews candidate exports and current config.",
+        _ => "No repair action required."
+    };
+
+    private static bool SuggestedEnabled(AllowlistRepairGroup g) => g.Enabled && g.RecommendedAction is not (
+        nameof(AllowlistRepairRecommendedAction.DisableMissingMarkets) or
+        nameof(AllowlistRepairRecommendedAction.NeedsManualReview) or
+        nameof(AllowlistRepairRecommendedAction.RemoveFromAllowlist));
+
+    private static bool IsRepairable(AllowlistRepairGroup g) => g.RecommendedAction is
+        nameof(AllowlistRepairRecommendedAction.PruneMissingNoAskLegs) or
+        nameof(AllowlistRepairRecommendedAction.RefreshFromCandidateExport) or
+        nameof(AllowlistRepairRecommendedAction.DisableMissingMarkets) or
+        nameof(AllowlistRepairRecommendedAction.NeedsManualReview) or
+        nameof(AllowlistRepairRecommendedAction.DisableUntilBetterPricing) or
+        nameof(AllowlistRepairRecommendedAction.RemoveFromAllowlist);
+
+    private static AllowlistRepairSuggestion ToSuggestion(AllowlistRepairGroup g)
+        => new(g.GroupKey, g.RecommendedAction, g.RepairConfidence, Clone(g.SuggestedPrunedTemplate ?? g.SuggestedRefreshedTemplate), g.ExpectedResultAfterManualApply, g.CopyInstructions);
+
+    private static JsonObject? BuildDiff(AllowlistRepairGroup group, JsonNode? template)
+    {
+        if (template is null) return null;
+        var suggestedMarketIds = (template["marketIds"] as JsonArray)?.Select(x => x?.GetValue<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>().ToArray() ?? [];
+        return new JsonObject
+        {
+            ["suggestedMarketCount"] = suggestedMarketIds.Length,
+            ["removedMarketIds"] = ToArray(group.MissingMarketIds.Concat(group.MissingNoAskMarketIds).Distinct(StringComparer.OrdinalIgnoreCase)),
+            ["addedMarketIds"] = group.RepairMatch is null ? new JsonArray() : ToArray(group.RepairMatch.AddedMarketIds),
+            ["changedConditionIds"] = new JsonArray()
+        };
+    }
+
+    private static IReadOnlyList<JsonObject> MergeCandidates(IReadOnlyList<object> candidateGroups, AllowlistRepairOptions options, string? contentRootPath)
+    {
+        var list = candidateGroups.Select(ToObject).Where(x => x is not null).Cast<JsonObject>().ToList();
+        if (options.UseLatestCandidateExportForRepair && !string.IsNullOrWhiteSpace(contentRootPath))
+        {
+            var path = Path.Combine(contentRootPath, "exports", "multi-outcome-candidates-latest.json");
+            if (File.Exists(path))
+            {
+                try
+                {
+                    var node = JsonNode.Parse(File.ReadAllText(path)) as JsonArray;
+                    if (node is not null) list.AddRange(node.OfType<JsonObject>().Select(x => (JsonObject)Clone(x)!));
+                }
+                catch { }
+            }
+        }
+        return list.GroupBy(x => x["groupKey"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N"), StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToArray();
+    }
+
+    internal static JsonObject? ToObject(object value)
+    {
+        if (value is JsonObject obj) return (JsonObject?)Clone(obj);
+        return JsonSerializer.SerializeToNode(value) as JsonObject;
+    }
+
+    internal static int GetInt(JsonObject? o, string name) => o is not null && o.TryGetPropertyValue(name, out var n) && n is not null && n.GetValueKind() == JsonValueKind.Number ? n.GetValue<int>() : 0;
+    internal static IReadOnlyList<string> ReadMarketIds(JsonObject? o, string name) => ((o?[name] as JsonArray) ?? []).Select(x => x?["marketId"]?.GetValue<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    internal static JsonArray ToArray(IEnumerable<string> values) { var arr = new JsonArray(); foreach (var v in values) arr.Add(v); return arr; }
+    internal static JsonNode? Clone(JsonNode? node) => node is null ? null : JsonNode.Parse(node.ToJsonString());
+}
+
+public sealed class VerifiedAllowlistGroupHealthClassifier
+{
+    public const string PruneSettlementNote = "Pruned to priced mutually exclusive subset. Missing NO ask leg excluded.";
+    private readonly Dictionary<string, CachedRepairMatch> _cache = new(StringComparer.OrdinalIgnoreCase);
+
+    public AllowlistRepairClassification Classify(
+        VerifiedMultiOutcomeGroupConfig cfg,
+        ResolvedVerifiedGroup? resolved,
+        JsonObject? pricing,
+        IReadOnlyList<JsonObject> candidates,
+        AllowlistRepairOptions options)
+    {
+        var missingMarketIds = (resolved?.MissingMarketIds ?? cfg.MarketIds).Concat(resolved?.MissingConditionIds ?? Array.Empty<string>()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var noAskResolved = AllowlistRepairService.GetInt(pricing, "noAskResolvedCount");
+        var missingNoAsk = AllowlistRepairService.GetInt(pricing, "missingNoAskCount");
+        var missingNoAskIds = AllowlistRepairService.ReadMarketIds(pricing, "missingPriceLegs");
+        var resolvedOk = resolved?.ValidationStatus == "VerifiedGroupResolved";
+
+        if (!cfg.Enabled)
+            return Result(cfg, AllowlistRepairHealthCategory.Disabled, AllowlistRepairRecommendedAction.KeepMonitoring, "High", "Group disabled in current allowlist.", missingMarketIds, missingNoAskIds);
+
+        if (resolvedOk && missingNoAsk > 0 && noAskResolved >= 2)
+            return Result(cfg, AllowlistRepairHealthCategory.NeedsPricingPrune, AllowlistRepairRecommendedAction.PruneMissingNoAskLegs, missingNoAsk == 1 ? "High" : "Medium", "Resolved but one or more NO asks are unavailable.", missingMarketIds, missingNoAskIds, BuildPrunedTemplate(cfg, pricing, noAskResolved));
+
+        if (resolvedOk && pricing is not null)
+            return Result(cfg, AllowlistRepairHealthCategory.MonitoringOnly, AllowlistRepairRecommendedAction.KeepMonitoring, "High", "Resolved and evaluated; monitor pricing/execution status.", missingMarketIds, missingNoAskIds);
+
+        if (!resolvedOk)
+        {
+            var match = FindStableMatch(cfg, resolved, candidates, options);
+            if (match.Match is not null)
+            {
+                var template = BuildRefreshTemplate(cfg, match.Match.Candidate);
+                if (template is not null)
+                    return Result(cfg, AllowlistRepairHealthCategory.NeedsRefresh, AllowlistRepairRecommendedAction.RefreshFromCandidateExport, match.Match.Diagnostics.Confidence, "Market mismatch; stable refreshed candidate is available for manual review.", missingMarketIds, missingNoAskIds, refreshed: template, repairMatch: match.Match.Diagnostics, misses: match.ConsecutiveMisses);
+            }
+
+            var forceDisable = IsWomenUsOpen(cfg.GroupKey) && (resolved?.ResolvedMarkets.Count ?? 0) < 2;
+            var action = forceDisable ? AllowlistRepairRecommendedAction.DisableMissingMarkets : AllowlistRepairRecommendedAction.NeedsManualReview;
+            var category = forceDisable ? AllowlistRepairHealthCategory.BrokenConfig : AllowlistRepairHealthCategory.NeedsRefresh;
+            return Result(cfg, category, action, "Low", match.ConsecutiveMisses > 0 ? $"No stable candidate match yet. ConsecutiveMisses={match.ConsecutiveMisses}." : "No stable candidate match found; manual review required.", missingMarketIds, missingNoAskIds, misses: match.ConsecutiveMisses);
+        }
+
+        return Result(cfg, AllowlistRepairHealthCategory.Healthy, AllowlistRepairRecommendedAction.Keep, "High", "Group healthy.", missingMarketIds, missingNoAskIds);
+    }
+
+    private StableMatch FindStableMatch(VerifiedMultiOutcomeGroupConfig cfg, ResolvedVerifiedGroup? resolved, IReadOnlyList<JsonObject> candidates, AllowlistRepairOptions options)
+    {
+        var scored = candidates.Select(c => ScoreCandidate(cfg, resolved, c)).Where(x => x.Diagnostics.Score >= options.MinRefreshMatchScore).OrderByDescending(x => x.Diagnostics.Score).FirstOrDefault();
+        if (scored.Candidate is not null)
+        {
+            _cache[cfg.GroupKey] = new CachedRepairMatch(scored.Candidate, scored.Diagnostics, 0);
+            return new StableMatch(new CachedRepairMatch(scored.Candidate, scored.Diagnostics, 0), 0);
+        }
+
+        if (_cache.TryGetValue(cfg.GroupKey, out var cached))
+        {
+            var misses = cached.ConsecutiveMisses + 1;
+            if (options.PreferStableCachedMatches && misses < options.MatchFailureDowngradeCycles)
+            {
+                _cache[cfg.GroupKey] = cached with { ConsecutiveMisses = misses };
+                return new StableMatch(cached with { ConsecutiveMisses = misses }, misses);
+            }
+            _cache.Remove(cfg.GroupKey);
+            return new StableMatch(null, misses);
+        }
+
+        return new StableMatch(null, 0);
+    }
+
+    private static (JsonObject? Candidate, AllowlistRepairMatch Diagnostics) ScoreCandidate(VerifiedMultiOutcomeGroupConfig cfg, ResolvedVerifiedGroup? resolved, JsonObject candidate)
+    {
+        var candidateKey = candidate["groupKey"]?.GetValue<string>() ?? string.Empty;
+        var title = candidate["title"]?.GetValue<string>() ?? candidateKey;
+        var hay = Normalize(candidateKey + " " + title + " " + string.Join(" ", ((candidate["markets"] as JsonArray) ?? []).Select(m => m?["question"]?.GetValue<string>() ?? string.Empty)));
+        var wanted = Normalize(cfg.GroupKey + " " + cfg.Title);
+        var titleSimilarity = TokenSimilarity(wanted, hay);
+        if (Normalize(candidateKey) == Normalize(cfg.GroupKey)) titleSimilarity = 1m;
+        var semantic = SemanticScore(cfg.GroupKey, hay);
+        var marketIds = ReadCandidateArray(candidate, "marketId");
+        var conditionIds = ReadCandidateArray(candidate, "conditionId");
+        var marketOverlap = Overlap(cfg.MarketIds, marketIds);
+        var conditionOverlap = Overlap(cfg.ConditionIds, conditionIds);
+        var pricedLegs = marketIds.Length;
+        var score = Math.Clamp((titleSimilarity * 0.55m) + (semantic * 0.30m) + (marketOverlap * 0.10m) + (conditionOverlap * 0.05m), 0m, 1m);
+        if (marketIds.Length < 2) score = 0m;
+        var added = marketIds.Except(cfg.MarketIds, StringComparer.OrdinalIgnoreCase).ToArray();
+        var removed = cfg.MarketIds.Except(marketIds, StringComparer.OrdinalIgnoreCase).Concat(resolved?.MissingMarketIds ?? Array.Empty<string>()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var confidence = score >= 0.85m ? "High" : score >= 0.70m ? "Medium" : "Low";
+        return (candidate, new AllowlistRepairMatch(candidateKey, score, titleSimilarity, marketOverlap, conditionOverlap, semantic, pricedLegs, 0, added, removed, confidence));
     }
 
     private static JsonObject? BuildPrunedTemplate(VerifiedMultiOutcomeGroupConfig cfg, JsonObject? pricing, int noAskResolved)
@@ -178,17 +327,17 @@ public sealed class AllowlistRepairService
             ["verificationStatus"] = "Verified",
             ["groupType"] = "MutuallyExclusiveWinner",
             ["allowedStrategy"] = "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-            ["marketIds"] = ToArray(marketIds),
-            ["conditionIds"] = ToArray(conditionIds),
+            ["marketIds"] = AllowlistRepairService.ToArray(marketIds),
+            ["conditionIds"] = AllowlistRepairService.ToArray(conditionIds),
             ["requiredOutcomeCount"] = marketIds.Length,
             ["requireExactOutcomeCount"] = false,
-            ["settlementNotes"] = ColombianPruneNote,
+            ["settlementNotes"] = PruneSettlementNote,
             ["verifiedBy"] = "manual-review-required",
             ["verifiedAt"] = DateTime.UtcNow.ToString("yyyy-MM-dd")
         };
     }
 
-    private static JsonObject? BuildRefreshTemplate(JsonObject candidate)
+    private static JsonObject? BuildRefreshTemplate(VerifiedMultiOutcomeGroupConfig cfg, JsonObject candidate)
     {
         var markets = candidate["markets"] as JsonArray;
         if (markets is null) return null;
@@ -200,13 +349,13 @@ public sealed class AllowlistRepairService
         return new JsonObject
         {
             ["enabled"] = true,
-            ["groupKey"] = candidate["groupKey"]?.GetValue<string>() ?? string.Empty,
-            ["title"] = candidate["title"]?.GetValue<string>() ?? candidate["groupKey"]?.GetValue<string>() ?? string.Empty,
+            ["groupKey"] = cfg.GroupKey,
+            ["title"] = cfg.Title ?? candidate["title"]?.GetValue<string>() ?? cfg.GroupKey,
             ["verificationStatus"] = "Verified",
             ["groupType"] = "MutuallyExclusiveWinner",
             ["allowedStrategy"] = "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-            ["marketIds"] = ToArray(marketIds),
-            ["conditionIds"] = ToArray(conditionIds),
+            ["marketIds"] = AllowlistRepairService.ToArray(marketIds),
+            ["conditionIds"] = AllowlistRepairService.ToArray(conditionIds),
             ["requiredOutcomeCount"] = marketIds.Length,
             ["requireExactOutcomeCount"] = false,
             ["settlementNotes"] = "Refreshed from candidate export. Manually verify mutually exclusive settlement before enabling.",
@@ -215,47 +364,17 @@ public sealed class AllowlistRepairService
         };
     }
 
-    private static JsonObject? BuildDiff(AllowlistRepairGroup group, JsonNode? template)
-    {
-        if (template is null) return null;
-        var suggestedMarketIds = (template["marketIds"] as JsonArray)?.Select(x => x?.GetValue<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>().ToArray() ?? [];
-        var removed = group.MissingMarketIds.Concat(group.MissingNoAskMarketIds).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        return new JsonObject
-        {
-            ["suggestedMarketCount"] = suggestedMarketIds.Length,
-            ["removedMarketIds"] = ToArray(removed),
-            ["addedMarketIds"] = new JsonArray(),
-            ["changedConditionIds"] = new JsonArray()
-        };
-    }
+    private static AllowlistRepairClassification Result(VerifiedMultiOutcomeGroupConfig cfg, AllowlistRepairHealthCategory health, AllowlistRepairRecommendedAction action, string confidence, string reason, IReadOnlyList<string> missingMarkets, IReadOnlyList<string> missingNoAsk, JsonNode? pruned = null, JsonNode? refreshed = null, AllowlistRepairMatch? repairMatch = null, int misses = 0)
+        => new(cfg.GroupKey, health.ToString(), action.ToString(), confidence, reason, missingMarkets, missingNoAsk, AllowlistRepairService.Clone(pruned), AllowlistRepairService.Clone(refreshed), repairMatch, misses);
 
-    private static JsonObject? FindCandidate(VerifiedMultiOutcomeGroupConfig cfg, IReadOnlyList<JsonObject> candidates)
-    {
-        var wanted = Normalize(cfg.GroupKey + " " + cfg.Title);
-        return candidates.FirstOrDefault(c => Normalize(c["groupKey"]?.GetValue<string>() ?? string.Empty) == Normalize(cfg.GroupKey))
-            ?? candidates.FirstOrDefault(c =>
-            {
-                var hay = Normalize((c["groupKey"]?.GetValue<string>() ?? string.Empty) + " " + (c["title"]?.GetValue<string>() ?? string.Empty) + " " + string.Join(" ", ((c["markets"] as JsonArray) ?? []).Select(m => m?["question"]?.GetValue<string>() ?? string.Empty)));
-                if (IsNbaFinals(cfg.GroupKey)) return hay.Contains("2026 nba finals") || (hay.Contains("nba finals") && hay.Contains("winner"));
-                if (IsPeru(cfg.GroupKey)) return hay.Contains("2026 peruvian presidential") || hay.Contains("peru") && hay.Contains("presidential");
-                if (IsWomenUsOpen(cfg.GroupKey)) return hay.Contains("women s us open") || hay.Contains("womens us open") || hay.Contains("women us open");
-                return wanted.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(4).All(hay.Contains);
-            });
-    }
-
-    private static JsonObject? ToObject(object value)
-    {
-        if (value is JsonObject obj) return (JsonObject?)Clone(obj);
-        return JsonSerializer.SerializeToNode(value) as JsonObject;
-    }
-
-    private static JsonNode? Clone(JsonNode? node) => node is null ? null : JsonNode.Parse(node.ToJsonString());
-    private static int GetInt(JsonObject? o, string name) => o is not null && o.TryGetPropertyValue(name, out var n) && n is not null && n.GetValueKind() == JsonValueKind.Number ? n.GetValue<int>() : 0;
-    private static bool? GetBool(JsonNode? node, string name) => node is JsonObject o && o.TryGetPropertyValue(name, out var n) && n is not null && n.GetValueKind() is JsonValueKind.True or JsonValueKind.False ? n.GetValue<bool>() : null;
-    private static IReadOnlyList<string> ReadMarketIds(JsonObject? o, string name) => ((o?[name] as JsonArray) ?? []).Select(x => x?["marketId"]?.GetValue<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-    private static JsonArray ToArray(IEnumerable<string> values) { var arr = new JsonArray(); foreach (var v in values) arr.Add(v); return arr; }
+    private static string[] ReadCandidateArray(JsonObject c, string property) => ((c["markets"] as JsonArray) ?? []).Select(x => x?[property]?.GetValue<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    private static decimal Overlap(IReadOnlyList<string> expected, IReadOnlyList<string> actual) => expected.Count == 0 ? 0m : expected.Intersect(actual, StringComparer.OrdinalIgnoreCase).Count() / (decimal)expected.Count;
+    private static decimal TokenSimilarity(string a, string b) { var aa = a.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.OrdinalIgnoreCase); var bb = b.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.OrdinalIgnoreCase); return aa.Count == 0 ? 0m : aa.Intersect(bb, StringComparer.OrdinalIgnoreCase).Count() / (decimal)aa.Count; }
+    private static decimal SemanticScore(string groupKey, string candidateHaystack) { var n = Normalize(groupKey); if (n.Contains("nba finals")) return candidateHaystack.Contains("nba finals") && candidateHaystack.Contains("2026") ? 1m : 0m; if (n.Contains("peruvian presidential")) return (candidateHaystack.Contains("peru") || candidateHaystack.Contains("peruvian")) && candidateHaystack.Contains("presidential") ? 1m : 0m; if (n.Contains("women s us open")) return candidateHaystack.Contains("women") && candidateHaystack.Contains("us open") ? 1m : 0m; return candidateHaystack.Contains("winner") || candidateHaystack.Contains(" win ") ? 0.5m : 0m; }
+    private static bool IsWomenUsOpen(string groupKey) => Normalize(groupKey).Contains("women s us open");
     private static string Normalize(string s) => Regex.Replace(s.ToLowerInvariant().Replace("’", " ").Replace("'", " "), @"[^a-z0-9]+", " ").Trim();
-    private static bool IsNbaFinals(string s) => Normalize(s).Contains("2026 nba finals");
-    private static bool IsPeru(string s) => Normalize(s).Contains("2026 peruvian presidential");
-    private static bool IsWomenUsOpen(string s) => Normalize(s).Contains("2026 women s us open");
+    private static bool? GetBool(JsonNode? node, string name) => node is JsonObject o && o.TryGetPropertyValue(name, out var n) && n is not null && n.GetValueKind() is JsonValueKind.True or JsonValueKind.False ? n.GetValue<bool>() : null;
+
+    private sealed record StableMatch(CachedRepairMatch? Match, int ConsecutiveMisses);
+    private sealed record CachedRepairMatch(JsonObject Candidate, AllowlistRepairMatch Diagnostics, int ConsecutiveMisses);
 }

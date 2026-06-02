@@ -75,6 +75,7 @@ public class TradingBotOptions
     public MultiOutcomeArbitrageOptions MultiOutcomeArbitrage { get; set; } = new();
     public MultiOutcomeLoggingOptions Logging { get; set; } = new();
     public MultiOutcomeReviewOptions MultiOutcomeReview { get; set; } = new();
+    public AllowlistRepairOptions AllowlistRepair { get; set; } = new();
     public RuntimeStateOptions RuntimeState { get; set; } = new();
     public MarketDiscoveryOptions MarketDiscovery { get; set; } = new();
     public SignalROptions SignalR { get; set; } = new();
@@ -237,6 +238,8 @@ public class MultiOutcomeLoggingOptions
     public int LogVerifiedUnresolvedSamplesEveryNCycles { get; set; } = 50;
     public bool LogAllowlistRepairSuggestionsOnChangeOnly { get; set; } = true;
     public int LogAllowlistRepairSuggestionsEveryNCycles { get; set; } = 50;
+    public bool LogAllowlistRepairOnChangeOnly { get; set; } = true;
+    public int LogAllowlistRepairEveryNCycles { get; set; } = 25;
 }
 
 
@@ -260,6 +263,14 @@ public class MultiOutcomeReviewOptions
     public string ExportSuggestedVerifiedGroupsPath { get; set; } = "exports/verified-multi-outcome-groups-suggested.json";
     public string ExportAllowlistRepairReportPath { get; set; } = "exports/verified-allowlist-repair-report-latest.json";
     public string ExportAllowlistRepairSuggestedConfigPath { get; set; } = "exports/verified-multi-outcome-groups-repair-suggested.json";
+}
+
+public class AllowlistRepairOptions
+{
+    public int MatchFailureDowngradeCycles { get; set; } = 5;
+    public decimal MinRefreshMatchScore { get; set; } = 0.70m;
+    public bool PreferStableCachedMatches { get; set; } = true;
+    public bool UseLatestCandidateExportForRepair { get; set; } = true;
 }
 
 public class RuntimeStateOptions

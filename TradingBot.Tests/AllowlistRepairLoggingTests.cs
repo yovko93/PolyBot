@@ -32,6 +32,19 @@ public class AllowlistRepairLoggingTests
     }
 
     [Fact]
+    public void Repair_logs_are_throttled_by_stable_hash()
+    {
+        var throttle = new LogThrottle();
+        var first = throttle.ShouldLog("ALLOWLIST_REPAIR_REPORT", "counts|actions", true, 25);
+        var second = throttle.ShouldLog("ALLOWLIST_REPAIR_REPORT", "counts|actions", true, 25);
+        var changed = throttle.ShouldLog("ALLOWLIST_REPAIR_REPORT", "counts|actions2", true, 25);
+
+        Assert.True(first);
+        Assert.False(second);
+        Assert.True(changed);
+    }
+
+    [Fact]
     public void Unresolved_samples_are_throttled_by_stable_hash()
     {
         var throttle = new LogThrottle();

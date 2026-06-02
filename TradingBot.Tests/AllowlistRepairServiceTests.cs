@@ -9,6 +9,82 @@ namespace TradingBot.Tests;
 
 public class AllowlistRepairServiceTests
 {
+
+    [Fact]
+    public void Shared_classifier_counts_match_health_and_repair_report()
+    {
+        var report = new AllowlistRepairService().BuildReport(Configured(), ResolvedWithColombianPricingProblem(), Pricing(), [NbaCandidate()]);
+        var healthHealthy = report.Summary.Healthy + report.Summary.MonitoringOnly;
+        var healthBroken = report.Summary.Broken;
+
+        Assert.Equal(report.Healthy, healthHealthy);
+        Assert.Equal(report.Broken, healthBroken);
+        Assert.Equal(report.Summary.NeedsPricingPrune, report.NeedsPricingPrune);
+    }
+
+    [Fact]
+    public void Classification_invariant_passes_for_11_configured_groups()
+    {
+        var configured = Configured().Concat(Enumerable.Range(1, 7).Select(i => new VerifiedMultiOutcomeGroupConfig(true, $"winner:healthy-{i}|kind:generic", $"Healthy {i}", [$"h{i}"], [], 1, "Verified"))).ToArray();
+        var resolved = ResolvedWithColombianPricingProblem().Concat(Enumerable.Range(1, 7).Select(i => new ResolvedVerifiedGroup($"winner:healthy-{i}|kind:generic", $"Healthy {i}", [$"h{i}"], [], [Market($"h{i}")], [], [], "VerifiedGroupResolved", "VerifiedGroupResolved"))).ToArray();
+
+        var report = new AllowlistRepairService().BuildReport(configured, resolved, Pricing(), [NbaCandidate()]);
+
+        Assert.Equal(11, report.ConfiguredGroups);
+        Assert.True(report.Summary.InvariantOk);
+        Assert.Equal(11, report.Summary.Healthy + report.Summary.MonitoringOnly + report.Summary.NeedsPricingPrune + report.Summary.NeedsRefresh + report.Summary.BrokenConfig + report.Summary.Disabled + report.Summary.Ignored);
+    }
+
+    [Fact]
+    public void Nba_does_not_downgrade_after_one_missing_candidate_cycle()
+    {
+        var svc = new AllowlistRepairService();
+        var first = svc.BuildReport(Configured(), ResolvedMismatches(), [], [NbaCandidate()]);
+        var second = svc.BuildReport(Configured(), ResolvedMismatches(), [], []);
+
+        Assert.Equal("RefreshFromCandidateExport", first.Groups.Single(x => x.GroupKey.Contains("nba finals", StringComparison.OrdinalIgnoreCase)).RecommendedAction);
+        Assert.Equal("RefreshFromCandidateExport", second.Groups.Single(x => x.GroupKey.Contains("nba finals", StringComparison.OrdinalIgnoreCase)).RecommendedAction);
+    }
+
+    [Fact]
+    public void Peru_repair_action_does_not_flip_flop_with_cached_candidate()
+    {
+        var svc = new AllowlistRepairService();
+        var first = svc.BuildReport(Configured(), ResolvedMismatches(), [], [PeruCandidate()]);
+        var second = svc.BuildReport(Configured(), ResolvedMismatches(), [], []);
+
+        Assert.Equal(first.Groups.Single(x => x.GroupKey.Contains("peruvian", StringComparison.OrdinalIgnoreCase)).RecommendedAction,
+            second.Groups.Single(x => x.GroupKey.Contains("peruvian", StringComparison.OrdinalIgnoreCase)).RecommendedAction);
+    }
+
+    [Fact]
+    public void Match_failure_downgrade_cycles_eventually_downgrades()
+    {
+        var svc = new AllowlistRepairService();
+        var opts = new TradingBot.Options.AllowlistRepairOptions { MatchFailureDowngradeCycles = 2, PreferStableCachedMatches = true };
+        svc.BuildReport(Configured(), ResolvedMismatches(), [], [NbaCandidate()], opts);
+        var oneMiss = svc.BuildReport(Configured(), ResolvedMismatches(), [], [], opts);
+        var twoMisses = svc.BuildReport(Configured(), ResolvedMismatches(), [], [], opts);
+
+        Assert.Equal("RefreshFromCandidateExport", oneMiss.Groups.Single(x => x.GroupKey.Contains("nba finals", StringComparison.OrdinalIgnoreCase)).RecommendedAction);
+        Assert.Equal("NeedsManualReview", twoMisses.Groups.Single(x => x.GroupKey.Contains("nba finals", StringComparison.OrdinalIgnoreCase)).RecommendedAction);
+    }
+
+    [Fact]
+    public void Repair_report_export_is_overwritten()
+    {
+        var svc = new AllowlistRepairService();
+        var dir = Directory.CreateTempSubdirectory();
+        var reportPath = Path.Combine(dir.FullName, "verified-allowlist-repair-report-latest.json");
+        var suggestedPath = Path.Combine(dir.FullName, "verified-multi-outcome-groups-repair-suggested.json");
+        File.WriteAllText(reportPath, "OLD");
+
+        svc.Export(reportPath, suggestedPath, Configured(), ResolvedWithColombianPricingProblem(), Pricing(), []);
+
+        Assert.NotEqual("OLD", File.ReadAllText(reportPath));
+        Assert.Contains("repairSuggestions", File.ReadAllText(reportPath));
+    }
+
     [Fact]
     public void Repair_report_export_is_created_when_broken_exists()
     {
@@ -146,6 +222,15 @@ public class AllowlistRepairServiceTests
         ["markets"] = new JsonArray(
             MarketNode("nba-1", "nba-c1", "Will Boston win the 2026 NBA Finals?"),
             MarketNode("nba-2", "nba-c2", "Will Denver win the 2026 NBA Finals?"))
+    };
+
+    private static JsonObject PeruCandidate() => new()
+    {
+        ["groupKey"] = "winner:2026 peruvian presidential election|kind:person",
+        ["title"] = "Winner: 2026 Peruvian Presidential Election",
+        ["markets"] = new JsonArray(
+            MarketNode("peru-1", "peru-c1", "Will Candidate A win the 2026 Peruvian presidential election?"),
+            MarketNode("peru-2", "peru-c2", "Will Candidate B win the 2026 Peruvian presidential election?"))
     };
 
     private static JsonObject MarketNode(string id, string conditionId, string question) => new() { ["marketId"] = id, ["conditionId"] = conditionId, ["question"] = question, ["active"] = true, ["closed"] = false, ["archived"] = false };

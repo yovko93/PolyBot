@@ -13,14 +13,79 @@ public enum AllowlistRepairHealthCategory
     Ignored
 }
 
-public sealed record AllowlistRepairReport(
-    DateTime Timestamp,
+public enum AllowlistRepairRecommendedAction
+{
+    Keep,
+    KeepMonitoring,
+    PruneMissingNoAskLegs,
+    RefreshFromCandidateExport,
+    DisableMissingMarkets,
+    DisableUntilBetterPricing,
+    RemoveFromAllowlist,
+    NeedsManualReview
+}
+
+public sealed record AllowlistRepairMatch(
+    string CandidateGroupKey,
+    decimal Score,
+    decimal TitleSimilarity,
+    decimal MarketOverlap,
+    decimal ConditionOverlap,
+    decimal OutcomeSemanticScore,
+    int PricedLegs,
+    int MissingNoAsk,
+    IReadOnlyList<string> AddedMarketIds,
+    IReadOnlyList<string> RemovedMarketIds,
+    string Confidence);
+
+public sealed record AllowlistRepairClassification(
+    string GroupKey,
+    string HealthCategory,
+    string RecommendedAction,
+    string RepairConfidence,
+    string Reason,
+    IReadOnlyList<string> MissingMarketIds,
+    IReadOnlyList<string> MissingNoAskMarketIds,
+    JsonNode? SuggestedPrunedTemplate,
+    JsonNode? SuggestedRefreshedTemplate,
+    AllowlistRepairMatch? RepairMatch,
+    int ConsecutiveMatchMisses);
+
+public sealed record AllowlistRepairSummary(
     int ConfiguredGroups,
     int Healthy,
+    int MonitoringOnly,
+    int NeedsPricingPrune,
+    int NeedsRefresh,
+    int BrokenConfig,
+    int Disabled,
+    int Ignored,
+    int Broken,
+    bool InvariantOk);
+
+public sealed record AllowlistRepairSuggestion(
+    string GroupKey,
+    string Action,
+    string Confidence,
+    JsonNode? SuggestedJson,
+    string ExpectedResultAfterManualApply,
+    string CopyInstructions);
+
+public sealed record AllowlistRepairReport(
+    DateTime Timestamp,
+    AllowlistRepairSummary Summary,
+    int ConfiguredGroups,
+    int Healthy,
+    int MonitoringOnly,
     int Broken,
     int NeedsRefresh,
     int NeedsPricingPrune,
-    IReadOnlyList<AllowlistRepairGroup> Groups);
+    int BrokenConfig,
+    int Disabled,
+    int Ignored,
+    IReadOnlyList<AllowlistRepairGroup> Groups,
+    IReadOnlyList<AllowlistRepairSuggestion> RepairSuggestions,
+    string CopyInstructions);
 
 public sealed record AllowlistRepairGroup(
     string GroupKey,
@@ -41,14 +106,19 @@ public sealed record AllowlistRepairGroup(
     string? PricingReason,
     string RecommendedAction,
     string RepairConfidence,
+    string Reason,
     JsonNode? SuggestedPrunedTemplate,
     JsonNode? SuggestedRefreshedTemplate,
+    AllowlistRepairMatch? RepairMatch,
+    int ConsecutiveMatchMisses,
     IReadOnlyList<string> Notes,
+    string ExpectedResultAfterManualApply,
     string CopyInstructions);
 
 public sealed record AllowlistRepairSuggestedConfig(
     DateTime Timestamp,
     string Note,
+    AllowlistRepairSummary Summary,
     IReadOnlyList<AllowlistRepairSuggestedGroup> Groups);
 
 public sealed record AllowlistRepairSuggestedGroup(

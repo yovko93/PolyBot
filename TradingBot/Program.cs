@@ -724,41 +724,62 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     recommendedActions.Add("Check whether FeePerLeg config is realistic.");
                     var screenerPath = Path.Combine(contentRootPath, "exports/verified-basket-opportunity-screener-latest.json");
                     var unresolvedConfiguredGroups = resolved.Where(x => x.ValidationStatus != "VerifiedGroupResolved").Take(5).Select(x => (object)new { x.GroupKey, Reason = x.RejectionReason, x.ValidationStatus }).ToArray();
-                    var resolvedByGroup = resolved.ToDictionary(x => x.GroupKey, StringComparer.OrdinalIgnoreCase);
-                    var allowlistHealth = allowlistedGroups.Select(g =>
-                    {
-                        if (!resolvedByGroup.TryGetValue(g.GroupKey, out var rg))
-                        {
-                            return new { groupKey = g.GroupKey, enabled = g.Enabled, configuredMarketCount = g.MarketIds.Count, resolvedMarketCount = 0, missingMarketCount = g.MarketIds.Count, missingMarketIds = g.MarketIds, foundMarketIds = Array.Empty<string>(), status = "Broken", reason = "ResolverMissingConfiguredGroup", recommendedAction = "RefreshFromCandidateExport" };
-                        }
-                        return new { groupKey = rg.GroupKey, enabled = g.Enabled, configuredMarketCount = rg.MarketIds.Count, resolvedMarketCount = rg.ResolvedMarkets.Count, missingMarketCount = rg.MissingMarketIds.Count + rg.MissingConditionIds.Count, missingMarketIds = rg.MissingMarketIds, foundMarketIds = rg.ResolvedMarkets.Select(x => x.id).ToArray(), status = rg.ValidationStatus == "VerifiedGroupResolved" ? "Healthy" : "Broken", reason = rg.RejectionReason ?? (rg.ValidationStatus == "VerifiedGroupResolved" ? "Healthy" : "Unresolved"), recommendedAction = rg.ValidationStatus == "VerifiedGroupResolved" ? "PruneIfSafe" : (rg.ResolvedMarkets.Count < 2 ? "DisableMissingMarkets" : "RefreshFromCandidateExport") };
-                    }).ToArray();
-                    var healthyCount = allowlistHealth.Count(x=>x.status=="Healthy");
-                    var brokenCount = allowlistHealth.Count(x=>x.status=="Broken");
-                    var unresolvedCount = allowlistHealth.Count(x=>x.status!="Healthy");
-                    var disabledCount = 0; var ignoredCount = 0;
-                    var needsRefreshCount = allowlistHealth.Count(x=>x.status!="Healthy");
-                    var invariantTotal = healthyCount + brokenCount + disabledCount + ignoredCount;
-                    allowlistHealthCycle++;
-                    var allowlistFingerprint = $"{multiOutcomeValidator.LoadedAllowlistCount}|{healthyCount}|{brokenCount}|{disabledCount}|{ignoredCount}|{needsRefreshCount}";
-                    var shouldLogAllowlist = !options.Logging.LogAllowlistHealthOnChangeOnly || allowlistFingerprint != lastAllowlistHealthFingerprint || (options.Logging.LogAllowlistHealthEveryNCycles > 0 && allowlistHealthCycle % options.Logging.LogAllowlistHealthEveryNCycles == 0);
-                    lastAllowlistHealthFingerprint = allowlistFingerprint;
-                    if (shouldLogAllowlist) Console.WriteLine($"[ALLOWLIST_HEALTH] Configured={multiOutcomeValidator.LoadedAllowlistCount} Healthy={healthyCount} Broken={brokenCount} Disabled={disabledCount} NeedsRefresh={needsRefreshCount} Ignored={ignoredCount}");
-                    if (invariantTotal != multiOutcomeValidator.LoadedAllowlistCount) Console.WriteLine($"[ALLOWLIST_HEALTH_ERROR] Configured={multiOutcomeValidator.LoadedAllowlistCount} Healthy={healthyCount} Broken={brokenCount} Disabled={disabledCount} Ignored={ignoredCount}");
-                    var healthPath = Path.Combine(contentRootPath, "exports/verified-allowlist-health-latest.json"); Directory.CreateDirectory(Path.GetDirectoryName(healthPath)!); File.WriteAllText(healthPath, System.Text.Json.JsonSerializer.Serialize(new { configured = multiOutcomeValidator.LoadedAllowlistCount, healthy = healthyCount, broken = brokenCount, disabled = disabledCount, ignored = ignoredCount, unresolved = unresolvedCount, needsRefresh = needsRefreshCount, groups = allowlistHealth }, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
-                    var cleanup = new { metadata = new { generatedAtUtc = DateTime.UtcNow, note = "suggested only" }, groups = allowlistHealth.Select(h => new { h.groupKey, h.enabled, h.configuredMarketCount, h.resolvedMarketCount, h.missingMarketCount, h.missingMarketIds, suggestedEnabled = h.missingMarketCount > 0 ? false : h.enabled, reason = h.missingMarketCount > 0 ? "Missing markets in discovered pool" : "Healthy", suggestedPrunedTemplate = h.resolvedMarketCount >= 2 ? new { groupKey = h.groupKey, marketIds = h.foundMarketIds, requiredOutcomeCount = h.resolvedMarketCount } : null })};
-                    var cleanupPath = Path.Combine(contentRootPath, "exports/verified-allowlist-cleanup-suggested.json"); File.WriteAllText(cleanupPath, System.Text.Json.JsonSerializer.Serialize(cleanup, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
                     var repairReportPath = Path.Combine(contentRootPath, options.MultiOutcomeReview.ExportAllowlistRepairReportPath);
                     var repairSuggestedPath = Path.Combine(contentRootPath, options.MultiOutcomeReview.ExportAllowlistRepairSuggestedConfigPath);
-                    var repairExports = allowlistRepairService.Export(repairReportPath, repairSuggestedPath, allowlistedGroups, resolved, verifiedPricingExport, boundedCandidates);
+                    var repairExports = allowlistRepairService.Export(repairReportPath, repairSuggestedPath, allowlistedGroups, resolved, verifiedPricingExport, boundedCandidates, options.AllowlistRepair, contentRootPath);
                     var repairReport = repairExports.Report;
-                    Console.WriteLine($"[ALLOWLIST_REPAIR_REPORT] Groups={repairReport.ConfiguredGroups} Healthy={repairReport.Healthy} NeedsPricingPrune={repairReport.NeedsPricingPrune} NeedsRefresh={repairReport.NeedsRefresh} Broken={repairReport.Broken} Path={options.MultiOutcomeReview.ExportAllowlistRepairReportPath}");
+                    var summary = repairReport.Summary;
+                    var allowlistHealth = repairReport.Groups.Select(g => new
+                    {
+                        groupKey = g.GroupKey,
+                        enabled = g.Enabled,
+                        configuredMarketCount = g.ConfiguredMarketCount,
+                        resolvedMarketCount = g.ResolvedMarketCount,
+                        missingMarketCount = g.MissingMarketCount,
+                        missingMarketIds = g.MissingMarketIds,
+                        foundMarketIds = g.SuggestedPrunedTemplate?["marketIds"] is System.Text.Json.Nodes.JsonArray ids ? ids.Select(x => x?.GetValue<string>() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray() : Array.Empty<string>(),
+                        status = g.Status,
+                        healthCategory = g.HealthCategory,
+                        reason = g.Reason,
+                        recommendedAction = g.RecommendedAction,
+                        repairConfidence = g.RepairConfidence
+                    }).ToArray();
+                    var healthyCount = summary.Healthy + summary.MonitoringOnly;
+                    var brokenCount = summary.Broken;
+                    var unresolvedCount = brokenCount;
+                    var disabledCount = summary.Disabled; var ignoredCount = summary.Ignored;
+                    var needsRefreshCount = summary.NeedsRefresh;
+                    allowlistHealthCycle++;
+                    var allowlistFingerprint = $"{summary.ConfiguredGroups}|{healthyCount}|{brokenCount}|{disabledCount}|{ignoredCount}|{needsRefreshCount}|{summary.NeedsPricingPrune}|{summary.NeedsRefresh}|{summary.BrokenConfig}";
+                    var shouldLogAllowlist = !options.Logging.LogAllowlistHealthOnChangeOnly || allowlistFingerprint != lastAllowlistHealthFingerprint || (options.Logging.LogAllowlistHealthEveryNCycles > 0 && allowlistHealthCycle % options.Logging.LogAllowlistHealthEveryNCycles == 0);
+                    lastAllowlistHealthFingerprint = allowlistFingerprint;
+                    if (shouldLogAllowlist) Console.WriteLine($"[ALLOWLIST_HEALTH] Configured={summary.ConfiguredGroups} Healthy={healthyCount} Broken={brokenCount} Disabled={disabledCount} NeedsRefresh={needsRefreshCount} NeedsPricingPrune={summary.NeedsPricingPrune} BrokenConfig={summary.BrokenConfig} Ignored={ignoredCount}");
+                    if (!summary.InvariantOk) Console.WriteLine($"[ALLOWLIST_CLASSIFICATION_ERROR] Configured={summary.ConfiguredGroups} Healthy={summary.Healthy} MonitoringOnly={summary.MonitoringOnly} NeedsPricingPrune={summary.NeedsPricingPrune} NeedsRefresh={summary.NeedsRefresh} BrokenConfig={summary.BrokenConfig} Disabled={summary.Disabled} Ignored={summary.Ignored}");
+                    var healthPath = Path.Combine(contentRootPath, "exports/verified-allowlist-health-latest.json"); Directory.CreateDirectory(Path.GetDirectoryName(healthPath)!); File.WriteAllText(healthPath, System.Text.Json.JsonSerializer.Serialize(new { configured = summary.ConfiguredGroups, healthy = healthyCount, monitoringOnly = summary.MonitoringOnly, broken = brokenCount, disabled = disabledCount, ignored = ignoredCount, unresolved = unresolvedCount, needsRefresh = needsRefreshCount, needsPricingPrune = summary.NeedsPricingPrune, brokenConfig = summary.BrokenConfig, groups = allowlistHealth }, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
+                    var cleanup = new { metadata = new { generatedAtUtc = DateTime.UtcNow, note = "suggested only" }, groups = repairExports.SuggestedConfig.Groups };
+                    var cleanupPath = Path.Combine(contentRootPath, "exports/verified-allowlist-cleanup-suggested.json"); File.WriteAllText(cleanupPath, System.Text.Json.JsonSerializer.Serialize(cleanup, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
+                    var repairReportFingerprint = $"{summary.ConfiguredGroups}|{healthyCount}|{brokenCount}|{summary.NeedsPricingPrune}|{summary.NeedsRefresh}|{summary.BrokenConfig}|{string.Join(";", repairReport.Groups.Select(x => $"{x.GroupKey}:{x.HealthCategory}:{x.RecommendedAction}:{x.RepairConfidence}"))}";
+                    if (logThrottle.ShouldLog("ALLOWLIST_REPAIR_REPORT", repairReportFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, options.Logging.LogAllowlistRepairEveryNCycles))
+                        Console.WriteLine($"[ALLOWLIST_REPAIR_REPORT] Groups={repairReport.ConfiguredGroups} Healthy={repairReport.Healthy} NeedsPricingPrune={repairReport.NeedsPricingPrune} NeedsRefresh={repairReport.NeedsRefresh} Broken={repairReport.Broken} Path={options.MultiOutcomeReview.ExportAllowlistRepairReportPath}");
                     foreach (var repair in repairReport.Groups.Where(x => x.RecommendedAction is "PruneMissingNoAskLegs" or "RefreshFromCandidateExport" or "DisableMissingMarkets" or "NeedsManualReview"))
                     {
                         var suggestedLegs = repair.SuggestedPrunedTemplate?["marketIds"] is System.Text.Json.Nodes.JsonArray ids ? ids.Count : 0;
-                        var repairFingerprint = $"{repair.GroupKey}|{repair.RecommendedAction}|{repair.MissingNoAsk}|{suggestedLegs}|{repair.RepairConfidence}";
-                        if (logThrottle.ShouldLog($"ALLOWLIST_REPAIR_SUGGESTION:{repair.GroupKey}", repairFingerprint, options.Logging.LogAllowlistRepairSuggestionsOnChangeOnly, options.Logging.LogAllowlistRepairSuggestionsEveryNCycles))
+                        var repairFingerprint = $"{repair.GroupKey}|{repair.RecommendedAction}|{repair.MissingNoAsk}|{suggestedLegs}|{repair.RepairConfidence}|{repair.RepairMatch?.CandidateGroupKey}|{repair.RepairMatch?.Score}";
+                        if (logThrottle.ShouldLog($"ALLOWLIST_REPAIR_SUGGESTION:{repair.GroupKey}", repairFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, options.Logging.LogAllowlistRepairEveryNCycles))
                             Console.WriteLine($"[ALLOWLIST_REPAIR_SUGGESTION] Group={repair.GroupKey} Action={repair.RecommendedAction} MissingNoAsk={repair.MissingNoAsk} SuggestedLegs={suggestedLegs} Confidence={repair.RepairConfidence}");
+                        if (repair.RepairMatch is not null)
+                        {
+                            var m = repair.RepairMatch;
+                            var matchFingerprint = $"{repair.GroupKey}|{m.CandidateGroupKey}|{m.Score}|{m.Confidence}|{string.Join(',', m.AddedMarketIds)}|{string.Join(',', m.RemovedMarketIds)}";
+                            if (logThrottle.ShouldLog($"ALLOWLIST_REPAIR_MATCH:{repair.GroupKey}", matchFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, options.Logging.LogAllowlistRepairEveryNCycles))
+                                Console.WriteLine($"[ALLOWLIST_REPAIR_MATCH] Group={repair.GroupKey} Candidate={m.CandidateGroupKey} Score={m.Score:0.##} Confidence={m.Confidence} Added={m.AddedMarketIds.Count} Removed={m.RemovedMarketIds.Count}");
+                        }
+                        if (repair.ConsecutiveMatchMisses > 0 || repair.RecommendedAction == "NeedsManualReview" || repair.RecommendedAction == "DisableMissingMarkets")
+                        {
+                            var noMatchFingerprint = $"{repair.GroupKey}|{repair.RecommendedAction}|{repair.Reason}|{repair.ConsecutiveMatchMisses}";
+                            if (logThrottle.ShouldLog($"ALLOWLIST_REPAIR_NO_MATCH:{repair.GroupKey}", noMatchFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, options.Logging.LogAllowlistRepairEveryNCycles))
+                                Console.WriteLine($"[ALLOWLIST_REPAIR_NO_MATCH] Group={repair.GroupKey} ConsecutiveMisses={repair.ConsecutiveMatchMisses} RequiredForDowngrade={options.AllowlistRepair.MatchFailureDowngradeCycles}");
+                        }
                     }
                     var snapshot = VerifiedBasketScreener.BuildSnapshot(options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile, "PolymarketApprox", verifiedScreenResults, unresolvedConfiguredGroups);
                     VerifiedBasketScreener.Export(screenerPath, snapshot);
