@@ -791,6 +791,15 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var patchPreviewFingerprint = $"{patchPreview.SnapshotId}|{patchableCount}|{reviewOnlyCount}|{string.Join(";", patchPreview.Patches.Select(x => $"{x.GroupKey}:{x.PatchType}:{x.Confidence}"))}";
                     if (logThrottle.ShouldLog("ALLOWLIST_REPAIR_PATCH_PREVIEW", patchPreviewFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, options.Logging.LogAllowlistRepairEveryNCycles))
                         Console.WriteLine($"[ALLOWLIST_REPAIR_PATCH_PREVIEW] Snapshot={patchPreview.SnapshotId} Patchable={patchableCount} ReviewOnly={reviewOnlyCount} Output=exports/verified-allowlist-repair-patch-preview-latest.json");
+                    var patchedPreviewValidation = patchPreview.PatchedPreviewValidation;
+                    var patchedPreviewValidationFingerprint = $"{patchPreview.SnapshotId}|{patchedPreviewValidation.TotalGroups}|{patchedPreviewValidation.UniqueGroupKeys}|{patchedPreviewValidation.DuplicateGroupKeys}|{patchedPreviewValidation.Valid}|{string.Join(';', patchedPreviewValidation.Reasons)}";
+                    if (logThrottle.ShouldLog("ALLOWLIST_PATCHED_PREVIEW_VALIDATION", patchedPreviewValidationFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, options.Logging.LogAllowlistRepairEveryNCycles))
+                    {
+                        if (patchedPreviewValidation.Valid)
+                            Console.WriteLine($"[ALLOWLIST_PATCHED_PREVIEW_VALIDATION] Total={patchedPreviewValidation.TotalGroups} UniqueGroupKeys={patchedPreviewValidation.UniqueGroupKeys} DuplicateGroupKeys={patchedPreviewValidation.DuplicateGroupKeys} Valid=true");
+                        else
+                            Console.WriteLine($"[ALLOWLIST_PATCHED_PREVIEW_INVALID] Reason={string.Join('|', patchedPreviewValidation.Reasons)} Total={patchedPreviewValidation.TotalGroups} UniqueGroupKeys={patchedPreviewValidation.UniqueGroupKeys} DuplicateGroupKeys={patchedPreviewValidation.DuplicateGroupKeys}");
+                    }
                     foreach (var patch in patchPreview.Patches.Where(x => (x.PatchType is "ReplaceGroup" or "PruneGroup" or "DisableGroup") && (x.Confidence is "High" or "Medium")))
                     {
                         var removed = patch.Diff?["removedMarketIds"] is System.Text.Json.Nodes.JsonArray rm ? string.Join(",", rm.Select(x => x?.GetValue<string>()).Where(x => !string.IsNullOrWhiteSpace(x))) : string.Empty;
@@ -922,7 +931,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var significantDelta = Math.Max(10, options.Logging.CandidateScanSignificantCountDelta);
                     var candidateReasons = string.Join(",", multiOutcomeReport.RejectedByReason.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value}"));
                     candidateScanCycle++;
-                    var candidateFingerprint = ScanLogSummaryService.CandidateScanFingerprint(multiOutcomeReport.GroupsDetected, multiOutcomeReport.TopSkipReason, multiOutcomeReport.RejectedByReason, significantDelta);
+                    var candidateFingerprint = ScanLogSummaryService.CandidateScanFingerprint(multiOutcomeReport.GroupsDetected, multiOutcomeReport.TopSkipReason, multiOutcomeReport.RejectedByReason, significantDelta, multiOutcomeReport.ExecutableGroups);
                     var shouldLogCandidate = logThrottle.ShouldLog("MULTI_CANDIDATE_SCAN", candidateFingerprint, options.Logging.LogCandidateScanOnChangeOnly, options.Logging.LogCandidateScanEveryNCycles);
                     if (shouldLogCandidate)
                         Console.WriteLine($"[MULTI_CANDIDATE_SCAN] Candidates={multiOutcomeReport.GroupsDetected} Rejected={Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified)} TopReject={multiOutcomeReport.TopSkipReason} RejectedByReason={{{candidateReasons}}}");
@@ -939,16 +948,26 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         || !options.Logging.LogVerifiedScanOnChangeOnly
                         || verifiedScanFingerprint != lastVerifiedScanFingerprint
                         || (options.Logging.LogVerifiedScanEveryNCycles > 0 && verifiedScanCycle % options.Logging.LogVerifiedScanEveryNCycles == 0);
-                    if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} UnresolvedSamplesShown={Math.Min(Math.Max(0, options.Logging.MaxVerifiedUnresolvedSamplesToLog), unresolved)} UnresolvedTotal={unresolved} Evaluated={verifiedEvaluated} ActiveExecutable={activeExecutable} ExperimentalCandidates={experimentalCandidates} DiagnosticsOnlyPositive={diagnosticsOnlyPositive} PaperOpened={paperOpenedCount} SuppressedDuplicate={suppressedDuplicateCount} Mismatch={verifiedMismatch} BestActiveNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestExperimentalNet={bestExperimentalText} BestAlternateProfileNet={bestAlternateProfileNet} BestRaw={bestRaw}");
+                    var unresolvedSampleDecisions = resolved
+                        .Where(x => x.ValidationStatus != "VerifiedGroupResolved")
+                        .Take(Math.Max(0, options.Logging.MaxVerifiedUnresolvedSamplesToLog))
+                        .Select(ug =>
+                        {
+                            var sampleFingerprint = $"{ug.GroupKey}|{ug.RejectionReason}|{ug.ValidationStatus}|{string.Join(",", ug.MissingMarketIds.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}|{string.Join(",", ug.ResolvedMarkets.Select(x => x.id).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}";
+                            var shouldLogSample = logThrottle.ShouldLog($"VERIFIED_UNRESOLVED_SAMPLE:{ug.GroupKey}", sampleFingerprint, options.Logging.LogVerifiedUnresolvedSamplesOnChangeOnly, options.Logging.LogVerifiedUnresolvedSamplesEveryNCycles);
+                            return new { Group = ug, ShouldLog = shouldLogSample };
+                        })
+                        .ToArray();
+                    var unresolvedSamplesShown = unresolvedSampleDecisions.Count(x => x.ShouldLog);
+                    if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} UnresolvedSamplesShown={unresolvedSamplesShown} UnresolvedTotal={unresolved} Evaluated={verifiedEvaluated} ActiveExecutable={activeExecutable} ExperimentalCandidates={experimentalCandidates} DiagnosticsOnlyPositive={diagnosticsOnlyPositive} PaperOpened={paperOpenedCount} SuppressedDuplicate={suppressedDuplicateCount} Mismatch={verifiedMismatch} BestActiveNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestExperimentalNet={bestExperimentalText} BestAlternateProfileNet={bestAlternateProfileNet} BestRaw={bestRaw}");
                     lastVerifiedScanFingerprint = verifiedScanFingerprint;
-                    var unresolvedSummary = ScanLogSummaryService.UnresolvedSampleSummary(unresolved, options.Logging.MaxVerifiedUnresolvedSamplesToLog);
-                    if (unresolvedSummary.More > 0 && logThrottle.ShouldLog("VERIFIED_UNRESOLVED_SUMMARY", $"{unresolvedSummary.Total}|{unresolvedSummary.SamplesShown}|{unresolvedSummary.More}", options.Logging.LogVerifiedUnresolvedSamplesOnChangeOnly, options.Logging.LogVerifiedUnresolvedSamplesEveryNCycles))
+                    var unresolvedSummary = ScanLogSummaryService.UnresolvedSampleSummary(unresolved, unresolvedSamplesShown);
+                    if (unresolvedSummary.Suppressed > 0 && (shouldLogVerifiedScan || logThrottle.ShouldLog("VERIFIED_UNRESOLVED_SUMMARY", $"{unresolvedSummary.Total}|{unresolvedSummary.SamplesShown}|{unresolvedSummary.Suppressed}", options.Logging.LogVerifiedUnresolvedSamplesOnChangeOnly, options.Logging.LogVerifiedUnresolvedSamplesEveryNCycles)))
                         Console.WriteLine(unresolvedSummary.ToLogLine());
-                    foreach (var ug in resolved.Where(x => x.ValidationStatus != "VerifiedGroupResolved").Take(Math.Max(0, options.Logging.MaxVerifiedUnresolvedSamplesToLog)))
+                    foreach (var decision in unresolvedSampleDecisions.Where(x => x.ShouldLog))
                     {
-                        var sampleFingerprint = $"{ug.GroupKey}|{ug.RejectionReason}|{ug.ValidationStatus}|{string.Join(",", ug.MissingMarketIds.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}|{string.Join(",", ug.ResolvedMarkets.Select(x => x.id).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}";
-                        if (logThrottle.ShouldLog($"VERIFIED_UNRESOLVED_SAMPLE:{ug.GroupKey}", sampleFingerprint, options.Logging.LogVerifiedUnresolvedSamplesOnChangeOnly, options.Logging.LogVerifiedUnresolvedSamplesEveryNCycles))
-                            Console.WriteLine($"[VERIFIED_UNRESOLVED_SAMPLE] {System.Text.Json.JsonSerializer.Serialize(new { ug.GroupKey, Reason = ug.RejectionReason, ug.ValidationStatus })}");
+                        var ug = decision.Group;
+                        Console.WriteLine($"[VERIFIED_UNRESOLVED_SAMPLE] {System.Text.Json.JsonSerializer.Serialize(new { ug.GroupKey, Reason = ug.RejectionReason, ug.ValidationStatus })}");
                     }
 
                     var triageRows = resolved.Select(g =>

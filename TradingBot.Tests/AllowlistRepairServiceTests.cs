@@ -395,6 +395,68 @@ public class AllowlistRepairServiceTests
         Assert.Contains("558954", validation.RemovedMarketIds);
     }
 
+
+    [Fact]
+    public void Patched_preview_validation_passes_with_11_total_and_unique_group_keys()
+    {
+        var configured = ExpandedConfiguredForPreview();
+        var report = new AllowlistRepairService().BuildReport(configured, ExpandedResolvedForPreview(configured), ExpandedPricingForPreview(), [PeruReplacementCandidate()]);
+        var export = new AllowlistRepairService().BuildPatchPreview(report, configured);
+
+        Assert.Equal(11, export.PatchPreview.PatchedPreviewValidation.TotalGroups);
+        Assert.Equal(11, export.PatchPreview.PatchedPreviewValidation.UniqueGroupKeys);
+        Assert.Equal(0, export.PatchPreview.PatchedPreviewValidation.DuplicateGroupKeys);
+        Assert.True(export.PatchPreview.PatchedPreviewValidation.Valid, string.Join(";", export.PatchPreview.PatchedPreviewValidation.Reasons));
+        Assert.Contains(export.PatchPreview.ManualApplyInstructions.GroupsToApply, x => x.Contains("fifa world cup", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Patched_preview_validation_fails_on_duplicate_group_key()
+    {
+        var configured = ExpandedConfiguredForPreview();
+        var report = new AllowlistRepairService().BuildReport(configured, ExpandedResolvedForPreview(configured), ExpandedPricingForPreview(), [PeruReplacementCandidate()]);
+        var export = new AllowlistRepairService().BuildPatchPreview(report, configured);
+        var duplicated = export.PatchedPreviewConfig.AsArray().Select(x => JsonNode.Parse(x!.ToJsonString())).ToArray();
+        duplicated = duplicated.Concat([JsonNode.Parse(duplicated[0]!.ToJsonString())]).ToArray();
+
+        var validation = AllowlistRepairService.ValidatePatchedPreview(new JsonArray(duplicated), export.PatchPreview.Patches);
+
+        Assert.False(validation.Valid);
+        Assert.Equal(12, validation.TotalGroups);
+        Assert.Equal(11, validation.UniqueGroupKeys);
+        Assert.Equal(1, validation.DuplicateGroupKeys);
+    }
+
+    [Fact]
+    public void Peru_patch_diff_is_reflected_in_patched_preview()
+    {
+        var configured = ExpandedConfiguredForPreview();
+        var report = new AllowlistRepairService().BuildReport(configured, ExpandedResolvedForPreview(configured), ExpandedPricingForPreview(), [PeruReplacementCandidate()]);
+        var export = new AllowlistRepairService().BuildPatchPreview(report, configured);
+        var peruPatch = export.PatchPreview.Patches.Single(x => x.GroupKey.Contains("peruvian", StringComparison.OrdinalIgnoreCase));
+        var peruGroup = export.PatchedPreviewConfig.AsArray().OfType<JsonObject>().Single(x => x["groupKey"]!.GetValue<string>().Contains("peruvian", StringComparison.OrdinalIgnoreCase));
+        var marketIds = peruGroup["marketIds"]!.AsArray().Select(x => x!.GetValue<string>()).ToArray();
+
+        Assert.Equal("ReplaceGroup", peruPatch.PatchType);
+        Assert.Contains("947269", peruPatch.Diff!["removedMarketIds"]!.AsArray().Select(x => x!.GetValue<string>()));
+        Assert.DoesNotContain("947269", marketIds);
+    }
+
+    [Fact]
+    public void Low_confidence_review_only_groups_remain_unchanged_in_patched_preview()
+    {
+        var configured = ExpandedConfiguredForPreview();
+        var report = new AllowlistRepairService().BuildReport(configured, ExpandedResolvedForPreview(configured), ExpandedPricingForPreview(), [PeruReplacementCandidate()]);
+        var export = new AllowlistRepairService().BuildPatchPreview(report, configured);
+        var groups = export.PatchedPreviewConfig.AsArray().OfType<JsonObject>().ToArray();
+
+        var womens = groups.Single(x => x["groupKey"]!.GetValue<string>().Contains("women s us open", StringComparison.OrdinalIgnoreCase));
+        var firstRound = groups.Single(x => x["groupKey"]!.GetValue<string>().Contains("1st round", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal("w-us-open-old", womens["marketIds"]!.AsArray().Single()!.GetValue<string>());
+        Assert.Equal("round-old", firstRound["marketIds"]!.AsArray().Single()!.GetValue<string>());
+    }
+
     [Fact]
     public void Post_apply_validation_plan_is_included()
     {
@@ -422,6 +484,45 @@ public class AllowlistRepairServiceTests
         Assert.True(node["patches"]!.AsArray().Count > 0);
     }
 
+
+
+    private static IReadOnlyList<VerifiedMultiOutcomeGroupConfig> ExpandedConfiguredForPreview() =>
+    [
+        FifaConfigured()[0],
+        new(true, "winner:2026 peruvian presidential election|kind:person", "2026 Peruvian Presidential Election", ["947269", "peru-2"], ["peru-old-c", "peru-c2"], 2, "Verified"),
+        new(true, "winner:2026 women s us open|kind:generic", "2026 Women s US Open", ["w-us-open-old"], ["w-us-open-c"], 1, "Verified"),
+        new(true, "winner:1st round of 2026 colombian presidential election|kind:person", "1st round Colombia", ["round-old"], ["round-c"], 1, "Verified"),
+        ..Enumerable.Range(1, 7).Select(i => new VerifiedMultiOutcomeGroupConfig(true, $"winner:healthy-{i}|kind:generic", $"Healthy {i}", [$"healthy-{i}"], [$"healthy-c{i}"], 1, "Verified"))
+    ];
+
+    private static IReadOnlyList<ResolvedVerifiedGroup> ExpandedResolvedForPreview(IReadOnlyList<VerifiedMultiOutcomeGroupConfig> configured)
+        => configured.Select(cfg => cfg.GroupKey switch
+        {
+            "winner:2026 fifa world cup|kind:generic" => FifaResolved()[0],
+            "winner:2026 peruvian presidential election|kind:person" => new ResolvedVerifiedGroup(cfg.GroupKey, cfg.Title!, cfg.MarketIds, cfg.ConditionIds, [], ["947269"], [], "Rejected", "VerifiedGroupMarketMismatch"),
+            "winner:2026 women s us open|kind:generic" => new ResolvedVerifiedGroup(cfg.GroupKey, cfg.Title!, cfg.MarketIds, cfg.ConditionIds, [], ["w-us-open-old"], [], "Rejected", "VerifiedGroupMarketMismatch"),
+            "winner:1st round of 2026 colombian presidential election|kind:person" => new ResolvedVerifiedGroup(cfg.GroupKey, cfg.Title!, cfg.MarketIds, cfg.ConditionIds, [], ["round-old"], [], "Rejected", "VerifiedGroupMarketMismatch"),
+            _ => new ResolvedVerifiedGroup(cfg.GroupKey, cfg.Title!, cfg.MarketIds, cfg.ConditionIds, cfg.MarketIds.Select(Market).ToArray(), [], [], "VerifiedGroupResolved", "VerifiedGroupResolved")
+        }).ToArray();
+
+    private static IReadOnlyList<object> ExpandedPricingForPreview()
+        => FifaPricing().Concat(Enumerable.Range(1, 7).Select(i => (object)new
+        {
+            groupKey = $"winner:healthy-{i}|kind:generic",
+            noAskResolvedCount = 1,
+            missingNoAskCount = 0,
+            pricedLegs = new[] { Leg($"healthy-{i}", $"healthy-c{i}") },
+            missingPriceLegs = Array.Empty<object>()
+        })).ToArray();
+
+    private static JsonObject PeruReplacementCandidate() => new()
+    {
+        ["groupKey"] = "winner:2026 peruvian presidential election|kind:person",
+        ["title"] = "Winner: 2026 Peruvian Presidential Election",
+        ["markets"] = new JsonArray(
+            MarketNode("peru-1", "peru-c1", "Will Candidate A win the 2026 Peruvian presidential election?"),
+            MarketNode("peru-2", "peru-c2", "Will Candidate B win the 2026 Peruvian presidential election?"))
+    };
 
     private static IReadOnlyList<VerifiedMultiOutcomeGroupConfig> FifaConfigured() =>
     [

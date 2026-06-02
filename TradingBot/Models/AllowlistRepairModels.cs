@@ -184,7 +184,9 @@ public sealed record AllowlistRepairPatchPreview(
     bool WillOverwriteRealConfig,
     AllowlistRepairPatchSummary Summary,
     IReadOnlyList<AllowlistRepairPatchItem> Patches,
-    AllowlistRepairPostApplyValidationPlan PostApplyValidationPlan);
+    AllowlistRepairPostApplyValidationPlan PostApplyValidationPlan,
+    AllowlistRepairManualApplyInstructions ManualApplyInstructions,
+    AllowlistPatchedPreviewValidation PatchedPreviewValidation);
 
 public sealed record AllowlistRepairPatchSummary(
     int TotalConfigured,
@@ -205,6 +207,21 @@ public sealed record AllowlistRepairPatchItem(
     IReadOnlyList<string> RiskNotes,
     string ManualInstructions,
     string ExpectedResultAfterApply);
+
+public sealed record AllowlistRepairManualApplyInstructions(
+    string SourcePreviewFile,
+    string TargetRealConfigPath,
+    IReadOnlyList<string> BackupInstructions,
+    IReadOnlyList<string> GroupsToApply,
+    IReadOnlyList<string> GroupsNotToApply,
+    IReadOnlyList<string> ExpectedLogsAfterRestart);
+
+public sealed record AllowlistPatchedPreviewValidation(
+    int TotalGroups,
+    int UniqueGroupKeys,
+    int DuplicateGroupKeys,
+    bool Valid,
+    IReadOnlyList<string> Reasons);
 
 public sealed record AllowlistRepairPostApplyValidationPlan(
     IReadOnlyList<string> Steps,

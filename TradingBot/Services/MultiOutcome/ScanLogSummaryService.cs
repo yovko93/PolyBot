@@ -7,9 +7,9 @@ public sealed record DiscoveryHealthSummary(bool Healthy, bool Degraded, int Pag
     public string ToLogLine() => $"[DISCOVERY_HEALTH] Healthy={Healthy.ToString().ToLowerInvariant()} Degraded={Degraded.ToString().ToLowerInvariant()} Pages={Pages} Active={Active} Reason={Reason} ScanConfidence={ScanConfidence} ExpectedMinActive={ExpectedMinActive}";
 }
 
-public sealed record VerifiedUnresolvedSampleSummary(int Total, int SamplesShown, int More)
+public sealed record VerifiedUnresolvedSampleSummary(int Total, int SamplesShown, int Suppressed)
 {
-    public string ToLogLine() => $"[VERIFIED_UNRESOLVED_SUMMARY] Total={Total} SamplesShown={SamplesShown} More={More}";
+    public string ToLogLine() => $"[VERIFIED_UNRESOLVED_SUMMARY] Total={Total} SamplesShown={SamplesShown} Suppressed={Suppressed}";
 }
 
 public sealed record AllowlistConfigValidationSummary(int Total, int UniqueGroupKeys, int DuplicateGroupKeys, int Enabled, int Disabled)
@@ -36,11 +36,13 @@ public static class ScanLogSummaryService
         return values.Length == 0 ? null : values.Max();
     }
 
-    public static string CandidateScanFingerprint(int candidateCount, string topReject, IReadOnlyDictionary<string, int> rejectedByReason, int countBucketSize)
+    public static string CandidateScanFingerprint(int candidateCount, string topReject, IReadOnlyDictionary<string, int> rejectedByReason, int countBucketSize, int executableAutoCandidates = 0)
     {
         var bucket = Math.Max(1, countBucketSize);
-        var reasonBuckets = string.Join(",", rejectedByReason.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value / bucket}"));
-        return $"count:{candidateCount / bucket}|top:{topReject}|reasons:{reasonBuckets}";
+        var candidateCountBucket = (int)Math.Floor(candidateCount / (decimal)bucket);
+        var reasonBuckets = string.Join(",", rejectedByReason.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{(int)Math.Floor(x.Value / (decimal)bucket)}"));
+        var executableBucket = executableAutoCandidates > 0 ? $"exec:{executableAutoCandidates}" : "exec:0";
+        return $"count:{candidateCountBucket}|top:{topReject}|reasons:{reasonBuckets}|{executableBucket}";
     }
 
     public static string ProfileComparisonFingerprint(IReadOnlyList<VerifiedBasketScreener.ScreenResult> rows, decimal netDelta)
@@ -55,11 +57,8 @@ public static class ScanLogSummaryService
         }));
     }
 
-    public static VerifiedUnresolvedSampleSummary UnresolvedSampleSummary(int total, int sampleLimit)
-    {
-        var shown = Math.Min(Math.Max(0, sampleLimit), Math.Max(0, total));
-        return new VerifiedUnresolvedSampleSummary(total, shown, Math.Max(0, total - shown));
-    }
+    public static VerifiedUnresolvedSampleSummary UnresolvedSampleSummary(int total, int samplesShown)
+        => new(total, Math.Max(0, samplesShown), Math.Max(0, total - Math.Max(0, samplesShown)));
 
     public static AllowlistConfigValidationSummary AllowlistConfigValidation(IReadOnlyList<VerifiedMultiOutcomeGroupConfig> groups)
     {

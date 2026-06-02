@@ -95,8 +95,45 @@ public class AllowlistRepairLoggingTests
 
         Assert.Equal(3, summary.Total);
         Assert.Equal(2, summary.SamplesShown);
-        Assert.Equal(1, summary.More);
-        Assert.Contains("More=1", summary.ToLogLine());
+        Assert.Equal(1, summary.Suppressed);
+        Assert.Contains("Suppressed=1", summary.ToLogLine());
+    }
+
+
+    [Fact]
+    public void Unresolved_samples_shown_matches_actual_logged_sample_count()
+    {
+        var throttle = new LogThrottle();
+        var logged = new[]
+        {
+            throttle.ShouldLog("VERIFIED_UNRESOLVED_SAMPLE:g1", "g1|reason", true, 50),
+            throttle.ShouldLog("VERIFIED_UNRESOLVED_SAMPLE:g2", "g2|reason", true, 50),
+            throttle.ShouldLog("VERIFIED_UNRESOLVED_SAMPLE:g3", "g3|reason", true, 50)
+        }.Count(x => x);
+
+        var summary = ScanLogSummaryService.UnresolvedSampleSummary(3, logged);
+
+        Assert.Equal(3, summary.SamplesShown);
+        Assert.Equal(0, summary.Suppressed);
+    }
+
+    [Fact]
+    public void Unresolved_summary_reports_suppressed_count_when_sample_is_throttled()
+    {
+        var throttle = new LogThrottle();
+        Assert.True(throttle.ShouldLog("VERIFIED_UNRESOLVED_SAMPLE:g1", "g1|reason", true, 50));
+        var logged = new[]
+        {
+            throttle.ShouldLog("VERIFIED_UNRESOLVED_SAMPLE:g1", "g1|reason", true, 50),
+            throttle.ShouldLog("VERIFIED_UNRESOLVED_SAMPLE:g2", "g2|reason", true, 50),
+            throttle.ShouldLog("VERIFIED_UNRESOLVED_SAMPLE:g3", "g3|reason", true, 50)
+        }.Count(x => x);
+
+        var summary = ScanLogSummaryService.UnresolvedSampleSummary(3, logged);
+
+        Assert.Equal(2, summary.SamplesShown);
+        Assert.Equal(1, summary.Suppressed);
+        Assert.Contains("Suppressed=1", summary.ToLogLine());
     }
 
     [Fact]

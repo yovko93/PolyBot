@@ -189,8 +189,10 @@ public sealed class AllowlistRepairService
             groupsExpectedResolved,
             reviewOnlyGroups,
             ["GET /api/bot/verified-allowlist-health", "GET /api/bot/verified-allowlist-repair-report", "GET /api/bot/allowlist-repair-patch-preview", "Check logs for [ALLOWLIST_HEALTH] and [ALLOWLIST_REPAIR_REPORT]."],
-            ["Colombian presidential election should no longer show MissingNoAsk=1.", "Peru should no longer show VerifiedGroupMarketMismatch if refreshed candidate is correct.", "NBA Finals should no longer show VerifiedGroupMarketMismatch if refreshed candidate is correct.", "Women’s US Open remains BrokenConfig/ReviewOnly unless manually handled.", "1st round Colombian remains NeedsManualReview."]);
-        var preview = new AllowlistRepairPatchPreview(now, report.SnapshotId, sourceConfigRelativePath, "ManualPreviewOnly", false, summary, patches, plan);
+            ["FIFA should have Legs=35 and MissingNoAsk=0 after the manually applied prune.", "[ALLOWLIST_CONFIG_REPAIR_REMAINING] for FIFA should disappear after restart if the real config was updated.", "Peru should no longer show the removed market id if the ReplaceGroup patch is correct.", "Women’s US Open remains review-only unless manually handled.", "1st round Colombian remains review-only unless manually handled."]);
+        var manualInstructions = BuildManualApplyInstructions(sourceConfigRelativePath, report.ConfiguredGroups, patchable, reviewOnlyGroups);
+        var patchedValidation = ValidatePatchedPreview(patchedConfig, patches, originalConfig);
+        var preview = new AllowlistRepairPatchPreview(now, report.SnapshotId, sourceConfigRelativePath, "ManualPreviewOnly", false, summary, patches, plan, manualInstructions, patchedValidation);
         var wrapped = new JsonObject
         {
             ["metadata"] = new JsonObject
@@ -200,13 +202,118 @@ public sealed class AllowlistRepairService
                 ["mode"] = "ManualPreviewOnly",
                 ["willOverwriteRealConfig"] = false,
                 ["sourceConfigPath"] = sourceConfigRelativePath,
-                ["note"] = "Preview only. Manually copy after review; this file is not loaded automatically."
+                ["note"] = "Preview only. Manually copy after review; this file is not loaded automatically.",
+                ["patchedPreviewValidation"] = JsonSerializer.SerializeToNode(patchedValidation),
+                ["manualApplyInstructions"] = JsonSerializer.SerializeToNode(manualInstructions)
             },
             ["groups"] = Clone(patchedConfig)
         };
         return new AllowlistRepairPatchExport(preview, patchedConfig, wrapped);
     }
 
+
+    private static AllowlistRepairManualApplyInstructions BuildManualApplyInstructions(string sourceConfigRelativePath, int expectedTotalGroups, IReadOnlyList<AllowlistRepairPatchItem> patchable, IReadOnlyList<string> reviewOnlyGroups)
+    {
+        var groupsToApply = patchable.Select(x => $"{x.GroupKey} ({x.PatchType}, {x.Confidence})").ToArray();
+        var expected = new List<string>
+        {
+            $"[ALLOWLIST_CONFIG_VALIDATION] Total={expectedTotalGroups} UniqueGroupKeys={expectedTotalGroups} DuplicateGroupKeys=0",
+            $"[ALLOWLIST_PATCHED_PREVIEW_VALIDATION] Total={expectedTotalGroups} UniqueGroupKeys={expectedTotalGroups} DuplicateGroupKeys=0 Valid=true"
+        };
+        if (patchable.Any(x => x.GroupKey.Contains("fifa world cup", StringComparison.OrdinalIgnoreCase)))
+        {
+            expected.Add("[ALLOWLIST_CONFIG_REPAIR_REMAINING] for FIFA should disappear after restart.");
+            expected.Add("FIFA should have Legs=35 and MissingNoAsk=0.");
+        }
+        if (patchable.Any(x => x.GroupKey.Contains("peruvian presidential", StringComparison.OrdinalIgnoreCase)))
+            expected.Add("Peru should no longer show the removed market id after restart if the patch is correct.");
+
+        return new AllowlistRepairManualApplyInstructions(
+            "exports/verified-multi-outcome-groups-patched-preview.json",
+            sourceConfigRelativePath,
+            [
+                $"cp {sourceConfigRelativePath} {sourceConfigRelativePath}.bak.$(date -u +%Y%m%dT%H%M%SZ)",
+                "Keep the backup until [ALLOWLIST_HEALTH] and [MULTI_VERIFIED_SCAN] are reviewed after restart."
+            ],
+            groupsToApply,
+            reviewOnlyGroups,
+            expected);
+    }
+
+    public static AllowlistPatchedPreviewValidation ValidatePatchedPreview(JsonNode patchedPreviewConfig, IReadOnlyList<AllowlistRepairPatchItem> patches, JsonArray? originalConfig = null)
+    {
+        var groups = patchedPreviewConfig is JsonArray arr
+            ? arr.OfType<JsonObject>().ToArray()
+            : patchedPreviewConfig["groups"] is JsonArray wrapped
+                ? wrapped.OfType<JsonObject>().ToArray()
+                : [];
+        var reasons = new List<string>();
+        var total = groups.Length;
+        var unique = groups.Select(x => x["groupKey"]?.GetValue<string>() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        var duplicate = Math.Max(0, total - unique);
+        if (duplicate > 0) reasons.Add($"DuplicateGroupKeys={duplicate}");
+
+        var byKey = groups
+            .Where(x => !string.IsNullOrWhiteSpace(x["groupKey"]?.GetValue<string>()))
+            .GroupBy(x => x["groupKey"]!.GetValue<string>(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+        foreach (var group in groups)
+        {
+            var key = group["groupKey"]?.GetValue<string>() ?? "<missing>";
+            var marketIds = ReadStringArray(group, "marketIds");
+            var conditionIds = ReadStringArray(group, "conditionIds");
+            if (marketIds.Count != conditionIds.Count)
+                reasons.Add($"Group={key} MarketConditionCountMismatch MarketIds={marketIds.Count} ConditionIds={conditionIds.Count}");
+            var required = GetNullableInt(group, "requiredOutcomeCount");
+            if (required.HasValue && required.Value > marketIds.Count)
+                reasons.Add($"Group={key} RequiredOutcomeCountExceedsMarketIds Required={required.Value} MarketIds={marketIds.Count}");
+        }
+
+        foreach (var patch in patches.Where(IsPatchablePatch))
+        {
+            if (!byKey.TryGetValue(patch.GroupKey, out var group))
+            {
+                reasons.Add($"PatchGroupMissing={patch.GroupKey}");
+                continue;
+            }
+            var marketIds = ReadStringArray(group, "marketIds");
+            var removed = patch.Diff?["removedMarketIds"] is JsonArray rm
+                ? rm.Select(x => x?.GetValue<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
+                : [];
+            foreach (var id in removed.Where(id => marketIds.Contains(id, StringComparer.OrdinalIgnoreCase)))
+                reasons.Add($"Group={patch.GroupKey} RemovedMarketStillPresent={id}");
+        }
+
+        foreach (var patch in patches.Where(x => x.Confidence.Equals("Low", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (originalConfig is null || !byKey.TryGetValue(patch.GroupKey, out var finalGroup)) continue;
+            var original = originalConfig.OfType<JsonObject>().FirstOrDefault(x => string.Equals(x["groupKey"]?.GetValue<string>(), patch.GroupKey, StringComparison.OrdinalIgnoreCase));
+            if (original is not null && !JsonEquivalent(original, finalGroup))
+                reasons.Add($"LowConfidenceGroupModified={patch.GroupKey}");
+        }
+
+        if (byKey.TryGetValue("winner:2026 fifa world cup|kind:generic", out var fifa))
+        {
+            var fifaMarketIds = ReadStringArray(fifa, "marketIds");
+            if (fifaMarketIds.Contains("558954", StringComparer.OrdinalIgnoreCase)) reasons.Add("FifaRemovedMarketStillPresent=558954");
+            if (patches.Any(x => x.GroupKey.Equals("winner:2026 fifa world cup|kind:generic", StringComparison.OrdinalIgnoreCase) && IsPatchablePatch(x)) && fifaMarketIds.Count != 35) reasons.Add($"FifaFinalLegs={fifaMarketIds.Count}");
+        }
+        if (byKey.TryGetValue("winner:2026 peruvian presidential election|kind:person", out var peru))
+        {
+            var peruMarketIds = ReadStringArray(peru, "marketIds");
+            if (patches.Any(x => x.GroupKey.Equals("winner:2026 peruvian presidential election|kind:person", StringComparison.OrdinalIgnoreCase)
+                && IsPatchablePatch(x)
+                && x.Diff?["removedMarketIds"] is JsonArray rm
+                && rm.Any(id => string.Equals(id?.GetValue<string>(), "947269", StringComparison.OrdinalIgnoreCase)))
+                && peruMarketIds.Contains("947269", StringComparer.OrdinalIgnoreCase))
+                reasons.Add("PeruRemovedMarketStillPresent=947269");
+        }
+
+        return new AllowlistPatchedPreviewValidation(total, unique, duplicate, reasons.Count == 0, reasons);
+    }
+
+    private static bool JsonEquivalent(JsonNode left, JsonNode right)
+        => JsonNode.DeepEquals(JsonNode.Parse(left.ToJsonString()), JsonNode.Parse(right.ToJsonString()));
 
     public static AllowlistPatchValidationResult ValidatePatchItem(AllowlistRepairPatchItem patch)
     {
