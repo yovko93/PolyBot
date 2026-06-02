@@ -75,6 +75,7 @@ public class TradingBotOptions
     public MultiOutcomeArbitrageOptions MultiOutcomeArbitrage { get; set; } = new();
     public MultiOutcomeLoggingOptions Logging { get; set; } = new();
     public MultiOutcomeReviewOptions MultiOutcomeReview { get; set; } = new();
+    public AllowlistRepairOptions AllowlistRepair { get; set; } = new();
     public RuntimeStateOptions RuntimeState { get; set; } = new();
     public MarketDiscoveryOptions MarketDiscovery { get; set; } = new();
     public SignalROptions SignalR { get; set; } = new();
@@ -87,6 +88,7 @@ public class MarketDiscoveryOptions
     public int RetryBackoffMs { get; set; } = 1000;
     public bool ContinueWithPartialDiscoveryOnError { get; set; } = true;
     public bool TreatSafetyCapAsWarning { get; set; } = false;
+    public int MinHealthyActiveMarkets { get; set; } = 8000;
 }
 
 public class DiagnosticsOptions
@@ -221,6 +223,7 @@ public class MultiOutcomeLoggingOptions
     public bool LogCandidateScanOnChangeOnly { get; set; } = true;
     public bool LogCandidateScanWhenExecutableOnly { get; set; } = true;
     public bool LogCandidateScanWhenRejectDistributionChanges { get; set; } = true;
+    public int CandidateScanSignificantCountDelta { get; set; } = 5;
     public int LogVerifiedScanEveryNCycles { get; set; } = 25;
     public int LogAllowlistHealthEveryNCycles { get; set; } = 25;
     public bool LogVerifiedScanOnChangeOnly { get; set; } = true;
@@ -232,6 +235,12 @@ public class MultiOutcomeLoggingOptions
     public int LogPaperMtmEveryNCycles { get; set; } = 25;
     public bool LogExecutionSuppressionSummary { get; set; } = true;
     public bool LogRepeatedSizingForOpenPosition { get; set; } = false;
+    public bool LogVerifiedUnresolvedSamplesOnChangeOnly { get; set; } = true;
+    public int LogVerifiedUnresolvedSamplesEveryNCycles { get; set; } = 50;
+    public bool LogAllowlistRepairSuggestionsOnChangeOnly { get; set; } = true;
+    public int LogAllowlistRepairSuggestionsEveryNCycles { get; set; } = 50;
+    public bool LogAllowlistRepairOnChangeOnly { get; set; } = true;
+    public int LogAllowlistRepairEveryNCycles { get; set; } = 50;
 }
 
 
@@ -253,6 +262,16 @@ public class MultiOutcomeReviewOptions
     public string ExportVerifiedTriagePath { get; set; } = "exports/verified-group-triage-latest.json";
     public string ExportNextGroupsToVerifyPath { get; set; } = "exports/next-groups-to-verify-latest.json";
     public string ExportSuggestedVerifiedGroupsPath { get; set; } = "exports/verified-multi-outcome-groups-suggested.json";
+    public string ExportAllowlistRepairReportPath { get; set; } = "exports/verified-allowlist-repair-report-latest.json";
+    public string ExportAllowlistRepairSuggestedConfigPath { get; set; } = "exports/verified-multi-outcome-groups-repair-suggested.json";
+}
+
+public class AllowlistRepairOptions
+{
+    public int MatchFailureDowngradeCycles { get; set; } = 5;
+    public decimal MinRefreshMatchScore { get; set; } = 0.70m;
+    public bool PreferStableCachedMatches { get; set; } = true;
+    public bool UseLatestCandidateExportForRepair { get; set; } = true;
 }
 
 public class RuntimeStateOptions

@@ -27,6 +27,51 @@ public sealed class VerifiedBasketExecutionCoordinator
     public IReadOnlyList<BasketOrderPlan> ListDryRunPlans(int limit = 50) => _dryRunPlans.TakeLast(Math.Clamp(limit, 1, 500)).ToArray();
     public IReadOnlyList<FillSimulationResult> ListFillSimulations(int limit = 50) => _fillSimulations.TakeLast(Math.Clamp(limit, 1, 500)).ToArray();
 
+    public IReadOnlyList<object> ListDryRunPlanSummaries(int limit = 50)
+    {
+        var sims = ListFillSimulations(500).GroupBy(x => x.OrderPlanId).ToDictionary(g => g.Key, g => g.Last());
+        return ListDryRunPlans(Math.Clamp(limit, 1, 500)).Select(p =>
+        {
+            sims.TryGetValue(p.Id, out var sim);
+            return (object)new
+            {
+                plan = p,
+                p.Id,
+                p.OpportunityId,
+                p.GroupKey,
+                p.Title,
+                p.Strategy,
+                p.ActiveProfile,
+                p.DryRunOnly,
+                p.CreatedAt,
+                p.ExpiresAt,
+                status = p.Status.ToString(),
+                p.LegsCount,
+                p.PlannedQty,
+                p.GuaranteedPayout,
+                p.CostPerBasket,
+                p.TotalEstimatedCost,
+                p.ExpectedProfit,
+                p.NetEdge,
+                p.MaxNotional,
+                p.Orders,
+                p.ValidationWarnings,
+                p.ValidationErrors,
+                latestFillSimulationStatus = sim?.Status.ToString(),
+                fullyFillableQty = sim?.FullyFillableQty,
+                partialFillRisk = sim?.PartialFillRisk,
+                worstLeg = sim?.WorstLeg,
+                estimatedFilledCost = sim?.EstimatedFilledCost,
+                plannedGrossEdgePerBasket = sim?.PlannedGrossEdgePerBasket,
+                plannedNetEdgePerBasket = sim?.PlannedNetEdgePerBasket,
+                fillAdjustedGrossEdgePerBasket = sim?.FillAdjustedGrossEdgePerBasket,
+                fillAdjustedNetEdgePerBasket = sim?.FillAdjustedNetEdgePerBasket,
+                plannedExpectedProfit = sim?.PlannedExpectedProfit,
+                fillAdjustedExpectedProfit = sim?.FillAdjustedExpectedProfit
+            };
+        }).ToArray();
+    }
+
     public void Audit(ExecutionAuditEvent e)
     {
         _audit.Enqueue(e);
@@ -168,8 +213,22 @@ public sealed class VerifiedBasketExecutionCoordinator
         return approved;
     }
 
-    public PaperPosition? OpenPaperPosition(VerifiedMultiOutcomeOpportunity opp, VerifiedBasketPreTradeValidationResult check, PaperPositionBook book, FillSimulationResult? fillSimulation)
+    public PaperPosition? OpenPaperPosition(VerifiedMultiOutcomeOpportunity opp, VerifiedBasketPreTradeValidationResult check, PaperPositionBook book, BasketOrderPlan? orderPlan, FillSimulationResult? fillSimulation)
     {
+        if (orderPlan is null)
+        {
+            Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PaperOpenBlocked", "Blocked", "DryRunOrderPlanMissing", check.NetEdge, check.ExpectedProfit, check.EstimatedCost, check.Quantity, ""));
+            Console.WriteLine($"[PAPER_OPEN_BLOCKED] Group={opp.GroupKey} Reason=DryRunOrderPlanMissing");
+            return null;
+        }
+
+        if (!IsValidPaperOnlyOrderPlan(opp, check, orderPlan, out var planReason))
+        {
+            Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PaperOpenBlocked", "Blocked", planReason, check.NetEdge, check.ExpectedProfit, check.EstimatedCost, check.Quantity, $"OrderPlanId={orderPlan.Id}"));
+            Console.WriteLine($"[PAPER_OPEN_BLOCKED] Group={opp.GroupKey} Reason={planReason}");
+            return null;
+        }
+
         AuditEvent(opp, "PaperOpenStarted", "Started", "PaperExecutionStart");
         if (fillSimulation is null)
         {
@@ -221,6 +280,20 @@ public sealed class VerifiedBasketExecutionCoordinator
         return opened;
     }
 
+
+    private static bool IsValidPaperOnlyOrderPlan(VerifiedMultiOutcomeOpportunity opp, VerifiedBasketPreTradeValidationResult check, BasketOrderPlan plan, out string reason)
+    {
+        const decimal tolerance = 0.000001m;
+        if (!string.Equals(plan.OpportunityId, opp.Id, StringComparison.OrdinalIgnoreCase)) { reason = "DryRunOrderPlanOpportunityMismatch"; return false; }
+        if (!string.Equals(plan.GroupKey, opp.GroupKey, StringComparison.OrdinalIgnoreCase)) { reason = "DryRunOrderPlanGroupMismatch"; return false; }
+        if (plan.Status is not (BasketOrderPlanStatus.PaperOnly or BasketOrderPlanStatus.Validated)) { reason = "DryRunOrderPlanNotValidated"; return false; }
+        if (!plan.DryRunOnly || plan.Orders.Any(x => !x.DryRunOnly)) { reason = "DryRunOrderPlanNotDryRunOnly"; return false; }
+        if (plan.ValidationErrors.Count > 0) { reason = plan.ValidationErrors[0]; return false; }
+        if (Math.Abs(plan.PlannedQty - check.Quantity) > tolerance) { reason = "DryRunOrderPlanQuantityMismatch"; return false; }
+        if (plan.Orders.Count != opp.LegsCount) { reason = "DryRunOrderPlanLegCountMismatch"; return false; }
+        reason = string.Empty;
+        return true;
+    }
 
     private static bool ValidatePaperOpenInvariants(VerifiedMultiOutcomeOpportunity opp, decimal qty, decimal totalCost, decimal expectedProfitAtOpen, decimal netEdgeAtOpen, decimal grossEdgeAtOpen, FillSimulationResult fillSimulation, out string reason)
     {

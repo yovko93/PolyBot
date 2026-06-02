@@ -12,9 +12,15 @@ public sealed class DisabledExchangeOrderExecutor : IExchangeOrderExecutor
 {
     public Task SubmitAsync(OrderIntent intent, ExecutionOptions options, CancellationToken ct = default)
     {
-        if (options.PaperOnly || !options.EnableLiveOrderSubmission)
+        if (options.PaperOnly)
         {
             Console.WriteLine("[LIVE_EXECUTION_BLOCKED] Reason=PaperOnly");
+            throw new InvalidOperationException("LiveExecutionDisabled");
+        }
+
+        if (!options.EnableLiveOrderSubmission)
+        {
+            Console.WriteLine("[LIVE_EXECUTION_BLOCKED] Reason=LiveOrderSubmissionDisabled");
             throw new InvalidOperationException("LiveExecutionDisabled");
         }
 
