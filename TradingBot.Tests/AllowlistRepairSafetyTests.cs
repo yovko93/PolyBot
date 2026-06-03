@@ -177,6 +177,118 @@ public class AllowlistRepairSafetyTests
         }
     }
 
+
+    [Fact]
+    public void DuplicateLockedGroups_AreDedupedOnce_AndProviderReturnsOnePeruLock()
+    {
+        var originalOut = Console.Out;
+        using var writer = new StringWriter();
+        Console.SetOut(writer);
+        try
+        {
+            var provider = new AllowlistRepairLockProvider([
+                new AllowlistRepairLockedGroupOptions { GroupKey = PeruGroupKey, Reason = "older", AllowPatchPreview = true },
+                new AllowlistRepairLockedGroupOptions { GroupKey = PeruGroupKey, Reason = "latest", AllowPatchPreview = false }
+            ]);
+
+            Assert.Equal(2, provider.TotalConfigured);
+            Assert.Equal(1, provider.UniqueGroupKeys);
+            Assert.Equal(1, provider.DuplicateGroupKeys);
+            Assert.Single(provider.LockedGroups);
+            Assert.True(provider.IsHardLocked(PeruGroupKey));
+            Assert.Equal("latest", provider.LockedGroups[PeruGroupKey].Reason);
+            var output = writer.ToString();
+            Assert.Single(Occurrences(output, "[ALLOWLIST_REPAIR_LOCKS_VALIDATION]"));
+            Assert.Single(Occurrences(output, "[ALLOWLIST_REPAIR_LOCKED] Group=" + PeruGroupKey));
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+        }
+    }
+
+    [Fact]
+    public void LockedGroupsDuplicateWarning_DoesNotRepeatAcrossRepairCycles()
+    {
+        var originalOut = Console.Out;
+        using var writer = new StringWriter();
+        Console.SetOut(writer);
+        try
+        {
+            var provider = new AllowlistRepairLockProvider([
+                new AllowlistRepairLockedGroupOptions { GroupKey = PeruGroupKey, Reason = "older", AllowPatchPreview = true },
+                new AllowlistRepairLockedGroupOptions { GroupKey = PeruGroupKey, Reason = "latest", AllowPatchPreview = false }
+            ]);
+            var service = new AllowlistRepairService(provider);
+            service.BuildReport([], [], [], [], new AllowlistRepairOptions { UseLatestCandidateExportForRepair = false, LockedGroups = [] });
+
+            service.BuildPatchPreview(BuildReport("locked-cycle-1", addMarket: true), [PeruConfig(includeOscillatingMarket: false)]);
+            service.BuildPatchPreview(BuildReport("locked-cycle-2", addMarket: true), [PeruConfig(includeOscillatingMarket: false)]);
+
+            var output = writer.ToString();
+            Assert.Single(Occurrences(output, "[ALLOWLIST_REPAIR_LOCKS_VALIDATION]"));
+            Assert.DoesNotContain("Source=AllowlistRepair.LockedGroups", output);
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+        }
+    }
+
+    [Fact]
+    public void RepairHistoryValidation_LogsOnce_WhenFileStatusDoesNotChange()
+    {
+        var temp = Directory.CreateTempSubdirectory("repair-history-validation-quiet-").FullName;
+        var originalOut = Console.Out;
+        using var writer = new StringWriter();
+        Console.SetOut(writer);
+        try
+        {
+            var exports = Path.Combine(temp, "exports");
+            Directory.CreateDirectory(exports);
+            File.WriteAllText(Path.Combine(exports, "allowlist-repair-history-latest.json"), $$"""
+            {
+              "timestamp": "2026-06-03T00:00:00Z",
+              "groups": [
+                {
+                  "groupKey": "{{PeruGroupKey}}",
+                  "snapshots": [{ "groupKey": "{{PeruGroupKey}}", "snapshotId": "s1", "action": "Remove", "addedMarketIds": [], "removedMarketIds": ["{{PeruOscillatingMarketId}}"], "timestamp": "2026-06-03T00:00:00Z" }]
+                }
+              ]
+            }
+            """);
+            var service = new AllowlistRepairService();
+            var options = new AllowlistRepairOptions { UseLatestCandidateExportForRepair = false, LockedGroups = [] };
+            var logging = new MultiOutcomeLoggingOptions { LogRepairHistoryValidationOnChangeOnly = true, LogRepairHistoryValidationEveryNCycles = 100 };
+
+            service.BuildReport([], [], [], [], options, temp, logging);
+            service.BuildReport([], [], [], [], options, temp, logging);
+
+            Assert.Single(Occurrences(writer.ToString(), "[ALLOWLIST_REPAIR_HISTORY_VALIDATION]"));
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+            Directory.Delete(temp, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void LockedPeruPatchPreview_RemainsLockedAndNotPatchable_WithProvider()
+    {
+        var provider = new AllowlistRepairLockProvider([AllowlistRepairLockProvider.DefaultPeruLock()], logValidation: false);
+        var service = new AllowlistRepairService(provider);
+        service.BuildReport([], [], [], [], new AllowlistRepairOptions { UseLatestCandidateExportForRepair = false, LockedGroups = [] });
+
+        var preview = service.BuildPatchPreview(BuildReport("provider-locked", addMarket: true), [PeruConfig(includeOscillatingMarket: false)]);
+        var patch = Assert.Single(preview.PatchPreview.Patches);
+
+        Assert.Equal(1, preview.PatchPreview.Summary.Locked);
+        Assert.Equal(0, preview.PatchPreview.Summary.PatchableHighConfidence + preview.PatchPreview.Summary.PatchableMediumConfidence);
+        Assert.Equal("ReviewOnly", patch.PatchType);
+        Assert.Equal(nameof(AllowlistRepairRecommendedAction.NeedsManualReview), patch.CurrentAction);
+    }
+
     private static VerifiedMultiOutcomeGroupConfig PeruConfig(bool includeOscillatingMarket)
         => new(
             true,
@@ -299,5 +411,15 @@ public class AllowlistRepairSafetyTests
         var arr = new JsonArray();
         foreach (var value in values) arr.Add(value);
         return arr;
+    }
+
+    private static IEnumerable<int> Occurrences(string text, string value)
+    {
+        var index = 0;
+        while ((index = text.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
+        {
+            yield return index;
+            index += value.Length;
+        }
     }
 }

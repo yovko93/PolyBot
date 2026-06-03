@@ -35,6 +35,7 @@ builder.Services.AddSingleton<ExecutionAuditLog>();
 builder.Services.AddSingleton<VerifiedBasketExecutionCoordinator>();
 builder.Services.AddSingleton<VerifiedBasketDryRunOrderBuilder>();
 builder.Services.AddSingleton<DryRunFillSimulator>();
+builder.Services.AddSingleton<AllowlistRepairLockProvider>();
 builder.Services.AddSingleton<AllowlistRepairService>();
 builder.Services.AddSingleton<MemoryGuard>();
 builder.Services.AddSingleton<IExchangeOrderExecutor, DisabledExchangeOrderExecutor>();
@@ -251,10 +252,10 @@ _ = Task.Run(async () =>
     }
 });
 
-await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>(), app.Services.GetRequiredService<VerifiedBasketDryRunOrderBuilder>(), app.Services.GetRequiredService<DryRunFillSimulator>(), app.Services.GetRequiredService<AllowlistRepairService>(), app.Services.GetRequiredService<MemoryGuard>(), app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value, options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping);
+await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>(), app.Services.GetRequiredService<VerifiedBasketDryRunOrderBuilder>(), app.Services.GetRequiredService<DryRunFillSimulator>(), app.Services.GetRequiredService<AllowlistRepairService>(), app.Services.GetRequiredService<AllowlistRepairLockProvider>(), app.Services.GetRequiredService<MemoryGuard>(), app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value, options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping);
 await apiTask;
 
-static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, VerifiedBasketExecutionCoordinator verifiedExecution, VerifiedBasketDryRunOrderBuilder dryRunBuilder, DryRunFillSimulator fillSimulator, AllowlistRepairService allowlistRepairService, MemoryGuard memoryGuard, ExecutionOptions executionOptions, TradingBotOptions options, OpportunityFilteringOptions filtering, string contentRootPath, CancellationToken stoppingToken)
+static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, VerifiedBasketExecutionCoordinator verifiedExecution, VerifiedBasketDryRunOrderBuilder dryRunBuilder, DryRunFillSimulator fillSimulator, AllowlistRepairService allowlistRepairService, AllowlistRepairLockProvider lockProvider, MemoryGuard memoryGuard, ExecutionOptions executionOptions, TradingBotOptions options, OpportunityFilteringOptions filtering, string contentRootPath, CancellationToken stoppingToken)
 {
     var scannerInstanceId = Guid.NewGuid().ToString("N");
     var scannerStartedAt = DateTime.UtcNow;
@@ -763,7 +764,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     AllowlistRepairPatchPreview patchPreview;
                     try
                     {
-                        var repairExports = allowlistRepairService.Export(repairReportPath, repairSuggestedPath, allowlistedGroups, resolved, verifiedPricingExport, boundedCandidates, options.AllowlistRepair, contentRootPath);
+                        var repairExports = allowlistRepairService.Export(repairReportPath, repairSuggestedPath, allowlistedGroups, resolved, verifiedPricingExport, boundedCandidates, options.AllowlistRepair, contentRootPath, options.Logging);
                         repairReport = repairExports.Report;
                         patchPreview = allowlistRepairService.ExportPatchPreview(patchPreviewPath, patchedPreviewPath, patchedPreviewMetadataPath, repairReport, allowlistedGroups, contentRootPath).PatchPreview;
                     }
@@ -877,6 +878,12 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 var noopFingerprint = $"{repair.GroupKey}|{m.CandidateGroupKey}|{m.Score}|NoDiff";
                                 if (logThrottle.ShouldLog($"ALLOWLIST_REPAIR_NOOP:{repair.GroupKey}", noopFingerprint, true, 0))
                                     Console.WriteLine($"[ALLOWLIST_REPAIR_NOOP] Group={repair.GroupKey} Score={m.Score:0.##} Reason=NoDiff");
+                            }
+                            else if (lockProvider.IsHardLocked(repair.GroupKey))
+                            {
+                                var ignoredFingerprint = $"{repair.GroupKey}|{m.CandidateGroupKey}|{m.Score}|LockedGroup";
+                                if (logThrottle.ShouldLog($"ALLOWLIST_REPAIR_LOCKED_MATCH_IGNORED:{repair.GroupKey}", ignoredFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, options.Logging.LogAllowlistRepairEveryNCycles))
+                                    Console.WriteLine($"[ALLOWLIST_REPAIR_LOCKED_MATCH_IGNORED] Group={repair.GroupKey} Candidate={m.CandidateGroupKey} Score={m.Score:0.##} Reason=LockedGroup");
                             }
                             else
                             {

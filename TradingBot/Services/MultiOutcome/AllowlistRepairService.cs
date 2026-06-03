@@ -19,8 +19,19 @@ public sealed class AllowlistRepairService
     private AllowlistRepairOptions _lastOptions = new();
     private readonly Dictionary<string, List<AllowlistRepairHistoryEntry>> _repairHistory = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, RepairHistoryStatus> _repairHistoryStatus = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _loggedRepairLockFingerprints = new(StringComparer.OrdinalIgnoreCase);
     private const int MaxRepairHistorySnapshotsPerGroup = 5;
+    private readonly AllowlistRepairLockProvider? _lockProvider;
+    private IReadOnlyDictionary<string, AllowlistRepairLockedGroupOptions> _cachedOptionLocks = new Dictionary<string, AllowlistRepairLockedGroupOptions>(StringComparer.OrdinalIgnoreCase);
+    private string _cachedOptionLocksFingerprint = "<unset>";
+    private string _lastRepairHistoryValidationFingerprint = string.Empty;
+    private int _repairHistoryValidationCycle;
     private int _repairHistoryDuplicateWarnings;
+
+    public AllowlistRepairService(AllowlistRepairLockProvider? lockProvider = null)
+    {
+        _lockProvider = lockProvider;
+    }
 
     public AllowlistRepairReport BuildReport(
         IReadOnlyList<VerifiedMultiOutcomeGroupConfig> configuredGroups,
@@ -28,14 +39,15 @@ public sealed class AllowlistRepairService
         IReadOnlyList<object> verifiedPricingExport,
         IReadOnlyList<object> candidateGroups,
         AllowlistRepairOptions? options = null,
-        string? contentRootPath = null)
+        string? contentRootPath = null,
+        MultiOutcomeLoggingOptions? loggingOptions = null)
     {
         options ??= new AllowlistRepairOptions();
         var candidateSnapshot = BuildCandidateSnapshot(candidateGroups, configuredGroups.Count, options, contentRootPath);
         lock (_gate)
         {
             _lastOptions = options;
-            LoadRepairHistoryIfPresent(contentRootPath, options);
+            LoadRepairHistoryIfPresent(contentRootPath, options, loggingOptions ?? new MultiOutcomeLoggingOptions());
             if (_lastReport is not null && (_lastSnapshotId == candidateSnapshot.SnapshotId || candidateSnapshot.IsRollingFallback))
                 return _lastReport;
 
@@ -128,9 +140,10 @@ public sealed class AllowlistRepairService
         IReadOnlyList<object> verifiedPricingExport,
         IReadOnlyList<object> candidateGroups,
         AllowlistRepairOptions? options = null,
-        string? contentRootPath = null)
+        string? contentRootPath = null,
+        MultiOutcomeLoggingOptions? loggingOptions = null)
     {
-        var report = BuildReport(configuredGroups, resolvedGroups, verifiedPricingExport, candidateGroups, options, contentRootPath);
+        var report = BuildReport(configuredGroups, resolvedGroups, verifiedPricingExport, candidateGroups, options, contentRootPath, loggingOptions);
         var suggested = BuildSuggestedConfig(report);
         Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
         Directory.CreateDirectory(Path.GetDirectoryName(suggestedConfigPath)!);
@@ -180,11 +193,7 @@ public sealed class AllowlistRepairService
             DuplicateGroupKeyPolicy.KeepFirst);
 
         var options = _lastOptions ?? new AllowlistRepairOptions();
-        var locks = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(
-            options.LockedGroups.Where(x => !string.IsNullOrWhiteSpace(x.GroupKey)),
-            x => x.GroupKey,
-            "AllowlistRepair.LockedGroups",
-            DuplicateGroupKeyPolicy.KeepLatest);
+        var locks = GetLockedGroups(options);
         var patches = report.Groups
             .Where(IsPatchPreviewCandidate)
             .Select(g => BuildPatchItem(report.SnapshotId, g, byKey.TryGetValue(g.GroupKey, out var current) ? current : ConfigToJson(configuredGroups.FirstOrDefault(x => x.GroupKey.Equals(g.GroupKey, StringComparison.OrdinalIgnoreCase)))))
@@ -437,7 +446,7 @@ public sealed class AllowlistRepairService
 
         if (status.OscillationDetected && !string.IsNullOrWhiteSpace(status.PreviousAction) && !string.IsNullOrWhiteSpace(status.CurrentAction))
             Console.WriteLine($"[ALLOWLIST_REPAIR_OSCILLATION_DETECTED] Group={patch.GroupKey} MarketIds=[{string.Join(',', status.OscillatingMarketIds)}] Previous={status.PreviousAction} Current={status.CurrentAction}");
-        if (status.Locked)
+        if (status.Locked && !locked && _loggedRepairLockFingerprints.Add($"{patch.GroupKey}|{status.Reason}"))
             Console.WriteLine($"[ALLOWLIST_REPAIR_LOCKED] Group={patch.GroupKey} Reason={status.Reason}");
         if (status.Quarantined)
             Console.WriteLine($"[ALLOWLIST_REPAIR_QUARANTINED] Group={patch.GroupKey} Reason={status.Reason} MarketIds=[{string.Join(',', status.OscillatingMarketIds)}]");
@@ -553,15 +562,15 @@ public sealed class AllowlistRepairService
     private static string DiffHash(IReadOnlyList<string> added, IReadOnlyList<string> removed)
         => StableHash($"add:{string.Join(',', added.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}|remove:{string.Join(',', removed.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}");
 
-    private void LoadRepairHistoryIfPresent(string? contentRootPath, AllowlistRepairOptions options)
+    private void LoadRepairHistoryIfPresent(string? contentRootPath, AllowlistRepairOptions options, MultiOutcomeLoggingOptions loggingOptions)
     {
         if (string.IsNullOrWhiteSpace(contentRootPath)) return;
         var exportsDir = Path.Combine(contentRootPath, "exports");
-        LoadRepairHistoryExport(Path.Combine(exportsDir, "allowlist-repair-history-latest.json"));
+        LoadRepairHistoryExport(Path.Combine(exportsDir, "allowlist-repair-history-latest.json"), loggingOptions);
         LoadPreviousPatchPreviewAsHistory(Path.Combine(exportsDir, "verified-allowlist-repair-patch-preview-latest.json"));
     }
 
-    private void LoadRepairHistoryExport(string path)
+    private void LoadRepairHistoryExport(string path, MultiOutcomeLoggingOptions loggingOptions)
     {
         if (!File.Exists(path)) return;
         try
@@ -626,13 +635,17 @@ public sealed class AllowlistRepairService
             }
 
             var unique = nodes.Select(x => x["groupKey"]?.GetValue<string>() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).Count();
-            Console.WriteLine($"[ALLOWLIST_REPAIR_HISTORY_VALIDATION] Total={total} UniqueGroupKeys={unique} DuplicateGroupKeys={duplicateGroupKeys} Merged={merged} MaxSnapshotsPerGroup={MaxRepairHistorySnapshotsPerGroup} InvalidEntries={invalid}");
+            var validationFingerprint = $"{File.GetLastWriteTimeUtc(path).Ticks}|{total}|{unique}|{duplicateGroupKeys}|{merged}|{invalid}|{MaxRepairHistorySnapshotsPerGroup}";
+            if (ShouldLogRepairHistoryValidation(validationFingerprint, loggingOptions))
+                Console.WriteLine($"[ALLOWLIST_REPAIR_HISTORY_VALIDATION] Total={total} UniqueGroupKeys={unique} DuplicateGroupKeys={duplicateGroupKeys} Merged={merged} MaxSnapshotsPerGroup={MaxRepairHistorySnapshotsPerGroup} InvalidEntries={invalid}");
             if (duplicateGroupKeys > 0 || invalid > 0 || merged > 0)
                 ExportRepairHistory(path);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ALLOWLIST_REPAIR_HISTORY_VALIDATION] Total=0 UniqueGroupKeys=0 DuplicateGroupKeys=0 Merged=0 InvalidEntries=1 Error={ex.Message.Replace(' ', '_')}");
+            var validationFingerprint = $"error|{path}|{ex.Message}";
+            if (ShouldLogRepairHistoryValidation(validationFingerprint, loggingOptions))
+                Console.WriteLine($"[ALLOWLIST_REPAIR_HISTORY_VALIDATION] Total=0 UniqueGroupKeys=0 DuplicateGroupKeys=0 Merged=0 InvalidEntries=1 Error={ex.Message.Replace(' ', '_')}");
         }
     }
 
@@ -923,10 +936,55 @@ public sealed class AllowlistRepairService
     }
 
 
+    private IReadOnlyDictionary<string, AllowlistRepairLockedGroupOptions> GetLockedGroups(AllowlistRepairOptions options)
+    {
+        if (_lockProvider is not null) return _lockProvider.LockedGroups;
+        var fingerprint = string.Join("|", (options.LockedGroups ?? [])
+            .Where(x => !string.IsNullOrWhiteSpace(x.GroupKey))
+            .Select(x => $"{x.GroupKey.Trim()}::{x.Reason?.Trim()}::{x.AllowPatchPreview}")
+            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+        if (fingerprint.Equals(_cachedOptionLocksFingerprint, StringComparison.Ordinal)) return _cachedOptionLocks;
+
+        var rawLocks = (options.LockedGroups ?? [])
+            .Where(x => !string.IsNullOrWhiteSpace(x.GroupKey))
+            .Select(x => new AllowlistRepairLockedGroupOptions
+            {
+                GroupKey = x.GroupKey.Trim(),
+                Reason = string.IsNullOrWhiteSpace(x.Reason) ? "ManualLock" : x.Reason.Trim(),
+                AllowPatchPreview = x.AllowPatchPreview
+            })
+            .ToList();
+        _cachedOptionLocks = rawLocks
+            .GroupBy(x => x.GroupKey, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Last(), StringComparer.OrdinalIgnoreCase);
+        _cachedOptionLocksFingerprint = fingerprint;
+        return _cachedOptionLocks;
+    }
+
+    private bool TryGetLockedGroup(string groupKey, out AllowlistRepairLockedGroupOptions lockedGroup)
+    {
+        if (_lockProvider is not null)
+            return _lockProvider.TryGetLock(groupKey, out lockedGroup);
+        return GetLockedGroups(_lastOptions).TryGetValue(groupKey, out lockedGroup!);
+    }
+
+    private bool ShouldLogRepairHistoryValidation(string fingerprint, MultiOutcomeLoggingOptions loggingOptions)
+    {
+        _repairHistoryValidationCycle++;
+        var changed = !_lastRepairHistoryValidationFingerprint.Equals(fingerprint, StringComparison.Ordinal);
+        var periodic = loggingOptions.LogRepairHistoryValidationEveryNCycles > 0
+            && _repairHistoryValidationCycle % loggingOptions.LogRepairHistoryValidationEveryNCycles == 0;
+        if (changed || periodic || !loggingOptions.LogRepairHistoryValidationOnChangeOnly)
+        {
+            _lastRepairHistoryValidationFingerprint = fingerprint;
+            return true;
+        }
+        return false;
+    }
+
     private AllowlistRepairClassification ApplyRepairStatusOverride(VerifiedMultiOutcomeGroupConfig cfg, AllowlistRepairClassification classification)
     {
-        var locked = _lastOptions.LockedGroups.FirstOrDefault(x => x.GroupKey.Equals(cfg.GroupKey, StringComparison.OrdinalIgnoreCase) && !x.AllowPatchPreview);
-        if (locked is not null)
+        if (TryGetLockedGroup(cfg.GroupKey, out var locked) && !locked.AllowPatchPreview)
         {
             return classification with
             {
