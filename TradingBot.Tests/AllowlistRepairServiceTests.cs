@@ -251,7 +251,7 @@ public class AllowlistRepairServiceTests
     public void Patch_preview_marks_high_confidence_repairs_patchable_and_low_confidence_review_only()
     {
         var svc = new AllowlistRepairService();
-        var report = svc.BuildReport(Configured(), ResolvedWithColombianPricingProblem(), Pricing(), [NbaCandidate(), PeruCandidate()]);
+        var report = svc.BuildReport(Configured(), ResolvedWithColombianPricingProblem(), Pricing(), [NbaCandidate(), PeruCandidate()], StableRepairOptions());
         var export = svc.BuildPatchPreview(report, Configured());
         var patches = export.PatchPreview.Patches;
 
@@ -298,7 +298,7 @@ public class AllowlistRepairServiceTests
     public void Patched_preview_includes_all_original_groups_and_applies_only_high_medium()
     {
         var svc = new AllowlistRepairService();
-        var report = svc.BuildReport(Configured(), ResolvedWithColombianPricingProblem(), Pricing(), [NbaCandidate(), PeruCandidate()]);
+        var report = svc.BuildReport(Configured(), ResolvedWithColombianPricingProblem(), Pricing(), [NbaCandidate(), PeruCandidate()], StableRepairOptions());
         var export = svc.BuildPatchPreview(report, Configured());
         var groups = export.PatchedPreviewConfig.AsArray();
 
@@ -400,8 +400,9 @@ public class AllowlistRepairServiceTests
     public void Patched_preview_validation_passes_with_11_total_and_unique_group_keys()
     {
         var configured = ExpandedConfiguredForPreview();
-        var report = new AllowlistRepairService().BuildReport(configured, ExpandedResolvedForPreview(configured), ExpandedPricingForPreview(), [PeruReplacementCandidate()]);
-        var export = new AllowlistRepairService().BuildPatchPreview(report, configured);
+        var svc = new AllowlistRepairService();
+        var report = svc.BuildReport(configured, ExpandedResolvedForPreview(configured), ExpandedPricingForPreview(), [PeruReplacementCandidate()], StableRepairOptions());
+        var export = svc.BuildPatchPreview(report, configured);
 
         Assert.Equal(11, export.PatchPreview.PatchedPreviewValidation.TotalGroups);
         Assert.Equal(11, export.PatchPreview.PatchedPreviewValidation.UniqueGroupKeys);
@@ -414,8 +415,9 @@ public class AllowlistRepairServiceTests
     public void Patched_preview_validation_fails_on_duplicate_group_key()
     {
         var configured = ExpandedConfiguredForPreview();
-        var report = new AllowlistRepairService().BuildReport(configured, ExpandedResolvedForPreview(configured), ExpandedPricingForPreview(), [PeruReplacementCandidate()]);
-        var export = new AllowlistRepairService().BuildPatchPreview(report, configured);
+        var svc = new AllowlistRepairService();
+        var report = svc.BuildReport(configured, ExpandedResolvedForPreview(configured), ExpandedPricingForPreview(), [PeruReplacementCandidate()], StableRepairOptions());
+        var export = svc.BuildPatchPreview(report, configured);
         var duplicated = export.PatchedPreviewConfig.AsArray().Select(x => JsonNode.Parse(x!.ToJsonString())).ToArray();
         duplicated = duplicated.Concat([JsonNode.Parse(duplicated[0]!.ToJsonString())]).ToArray();
 
@@ -431,8 +433,9 @@ public class AllowlistRepairServiceTests
     public void Peru_patch_diff_is_reflected_in_patched_preview()
     {
         var configured = ExpandedConfiguredForPreview();
-        var report = new AllowlistRepairService().BuildReport(configured, ExpandedResolvedForPreview(configured), ExpandedPricingForPreview(), [PeruReplacementCandidate()]);
-        var export = new AllowlistRepairService().BuildPatchPreview(report, configured);
+        var svc = new AllowlistRepairService();
+        var report = svc.BuildReport(configured, ExpandedResolvedForPreview(configured), ExpandedPricingForPreview(), [PeruReplacementCandidate()], StableRepairOptions());
+        var export = svc.BuildPatchPreview(report, configured);
         var peruPatch = export.PatchPreview.Patches.Single(x => x.GroupKey.Contains("peruvian", StringComparison.OrdinalIgnoreCase));
         var peruGroup = export.PatchedPreviewConfig.AsArray().OfType<JsonObject>().Single(x => x["groupKey"]!.GetValue<string>().Contains("peruvian", StringComparison.OrdinalIgnoreCase));
         var marketIds = peruGroup["marketIds"]!.AsArray().Select(x => x!.GetValue<string>()).ToArray();
@@ -446,8 +449,9 @@ public class AllowlistRepairServiceTests
     public void Low_confidence_review_only_groups_remain_unchanged_in_patched_preview()
     {
         var configured = ExpandedConfiguredForPreview();
-        var report = new AllowlistRepairService().BuildReport(configured, ExpandedResolvedForPreview(configured), ExpandedPricingForPreview(), [PeruReplacementCandidate()]);
-        var export = new AllowlistRepairService().BuildPatchPreview(report, configured);
+        var svc = new AllowlistRepairService();
+        var report = svc.BuildReport(configured, ExpandedResolvedForPreview(configured), ExpandedPricingForPreview(), [PeruReplacementCandidate()], StableRepairOptions());
+        var export = svc.BuildPatchPreview(report, configured);
         var groups = export.PatchedPreviewConfig.AsArray().OfType<JsonObject>().ToArray();
 
         var womens = groups.Single(x => x["groupKey"]!.GetValue<string>().Contains("women s us open", StringComparison.OrdinalIgnoreCase));
@@ -485,6 +489,142 @@ public class AllowlistRepairServiceTests
     }
 
 
+
+    [Fact]
+    public void Repair_history_detects_removed_then_added_market_as_oscillation()
+    {
+        var svc = new AllowlistRepairService();
+        var dir = Directory.CreateTempSubdirectory();
+        var opts = new TradingBot.Options.AllowlistRepairOptions { RequiredStableRepairSnapshots = 2, UseLatestCandidateExportForRepair = true };
+        var configuredRemove = PeruConfigured(["947269", "peru-2", "peru-3"]);
+        WriteCandidateExport(dir.FullName, [PeruCandidateWithout947269()]);
+        var reportRemove = svc.BuildReport(configuredRemove, PeruResolved(configuredRemove), [], [], opts, dir.FullName);
+        _ = svc.BuildPatchPreview(reportRemove, configuredRemove);
+        var configuredAdd = PeruConfigured(["peru-2", "peru-3"]);
+        WriteCandidateExport(dir.FullName, [PeruCandidateWith947269()], "
+ ");
+        var reportAdd = svc.BuildReport(configuredAdd, PeruResolved(configuredAdd), [], [], opts, dir.FullName);
+
+        var preview = svc.BuildPatchPreview(reportAdd, configuredAdd).PatchPreview;
+        var peru = preview.Patches.Single();
+        var history = svc.BuildRepairHistoryExport().Groups.Single(x => x.GroupKey.Contains("peruvian", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal("ReviewOnly", peru.PatchType);
+        Assert.Equal("NeedsManualReview", peru.CurrentAction);
+        Assert.Equal("Low", peru.Confidence);
+        Assert.Contains(peru.RiskNotes, x => x.Contains("RepairDiffOscillation", StringComparison.OrdinalIgnoreCase));
+        Assert.True(history.OscillationDetected);
+        Assert.Contains("947269", history.AddedMarketIds.Concat(history.RemovedMarketIds));
+    }
+
+    [Fact]
+    public void Oscillating_group_is_not_patchable_and_counted_as_quarantined()
+    {
+        var svc = new AllowlistRepairService();
+        var dir = Directory.CreateTempSubdirectory();
+        var opts = new TradingBot.Options.AllowlistRepairOptions { RequiredStableRepairSnapshots = 2, UseLatestCandidateExportForRepair = true };
+        var configuredRemove = PeruConfigured(["947269", "peru-2", "peru-3"]);
+        WriteCandidateExport(dir.FullName, [PeruCandidateWithout947269()]);
+        _ = svc.BuildPatchPreview(svc.BuildReport(configuredRemove, PeruResolved(configuredRemove), [], [], opts, dir.FullName), configuredRemove);
+        var configuredAdd = PeruConfigured(["peru-2", "peru-3"]);
+        WriteCandidateExport(dir.FullName, [PeruCandidateWith947269()], "
+ ");
+        var preview = svc.BuildPatchPreview(svc.BuildReport(configuredAdd, PeruResolved(configuredAdd), [], [], opts, dir.FullName), configuredAdd).PatchPreview;
+
+        Assert.Equal(0, preview.Summary.PatchableHighConfidence + preview.Summary.PatchableMediumConfidence);
+        Assert.Equal(1, preview.Summary.Quarantined);
+    }
+
+    [Fact]
+    public void Locked_group_is_never_patchable()
+    {
+        var svc = new AllowlistRepairService();
+        var configured = PeruConfigured(["peru-old"]);
+        var opts = new TradingBot.Options.AllowlistRepairOptions
+        {
+            RequiredStableRepairSnapshots = 1,
+            UseLatestCandidateExportForRepair = false,
+            LockedGroups = [new TradingBot.Options.AllowlistRepairLockedGroupOptions { GroupKey = configured[0].GroupKey, Reason = "manual lock", AllowPatchPreview = false }]
+        };
+        var report = svc.BuildReport(configured, PeruResolved(configured), [], [PeruCandidateWith947269()], opts);
+
+        var patch = svc.BuildPatchPreview(report, configured).PatchPreview.Patches.Single();
+
+        Assert.Equal("ReviewOnly", patch.PatchType);
+        Assert.Equal("NeedsManualReview", patch.CurrentAction);
+        Assert.Contains(patch.RiskNotes, x => x.Contains("manual lock", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Same_stable_diff_across_required_snapshots_becomes_patchable()
+    {
+        var svc = new AllowlistRepairService();
+        var dir = Directory.CreateTempSubdirectory();
+        var configured = PeruConfigured(["peru-old"]);
+        var opts = new TradingBot.Options.AllowlistRepairOptions { RequiredStableRepairSnapshots = 2, UseLatestCandidateExportForRepair = true };
+        WriteCandidateExport(dir.FullName, [PeruCandidateWith947269()]);
+        var first = svc.BuildPatchPreview(svc.BuildReport(configured, PeruResolved(configured), [], [], opts, dir.FullName), configured).PatchPreview.Patches.Single();
+        WriteCandidateExport(dir.FullName, [PeruCandidateWith947269()], "\n ");
+        var second = svc.BuildPatchPreview(svc.BuildReport(configured, PeruResolved(configured), [], [], opts, dir.FullName), configured).PatchPreview.Patches.Single();
+
+        Assert.Equal("ReviewOnly", first.PatchType);
+        Assert.Equal("ReplaceGroup", second.PatchType);
+    }
+
+    [Fact]
+    public void Repair_history_export_contains_peru_oscillation()
+    {
+        var svc = new AllowlistRepairService();
+        var dir = Directory.CreateTempSubdirectory();
+        var opts = new TradingBot.Options.AllowlistRepairOptions { RequiredStableRepairSnapshots = 2, UseLatestCandidateExportForRepair = true };
+        var configuredRemove = PeruConfigured(["947269", "peru-2", "peru-3"]);
+        WriteCandidateExport(dir.FullName, [PeruCandidateWithout947269()]);
+        _ = svc.BuildPatchPreview(svc.BuildReport(configuredRemove, PeruResolved(configuredRemove), [], [], opts, dir.FullName), configuredRemove);
+        var configuredAdd = PeruConfigured(["peru-2", "peru-3"]);
+        WriteCandidateExport(dir.FullName, [PeruCandidateWith947269()], "
+ ");
+        _ = svc.BuildPatchPreview(svc.BuildReport(configuredAdd, PeruResolved(configuredAdd), [], [], opts, dir.FullName), configuredAdd);
+
+        var history = svc.BuildRepairHistoryExport();
+        var peru = history.Groups.Single(x => x.GroupKey.Contains("peruvian", StringComparison.OrdinalIgnoreCase));
+
+        Assert.True(peru.OscillationDetected);
+        Assert.Equal("NeedsManualReview", peru.RecommendedAction);
+        Assert.Equal("RepairDiffOscillation", peru.Reason);
+    }
+
+
+
+    private static TradingBot.Options.AllowlistRepairOptions StableRepairOptions() => new() { RequiredStableRepairSnapshots = 1, UseLatestCandidateExportForRepair = false };
+
+    private static IReadOnlyList<VerifiedMultiOutcomeGroupConfig> PeruConfigured(IReadOnlyList<string> marketIds) =>
+    [
+        new(true, "winner:2026 peruvian presidential election|kind:person", "2026 Peruvian Presidential Election", marketIds, marketIds.Select(x => "c-" + x).ToArray(), marketIds.Count, "Verified")
+    ];
+
+    private static IReadOnlyList<ResolvedVerifiedGroup> PeruResolved(IReadOnlyList<VerifiedMultiOutcomeGroupConfig> configured) =>
+    [
+        new(configured[0].GroupKey, configured[0].Title!, configured[0].MarketIds, configured[0].ConditionIds, [], configured[0].MarketIds, [], "Rejected", "VerifiedGroupMarketMismatch")
+    ];
+
+    private static JsonObject PeruCandidateWith947269() => new()
+    {
+        ["groupKey"] = "winner:2026 peruvian presidential election|kind:person",
+        ["title"] = "Winner: 2026 Peruvian Presidential Election",
+        ["markets"] = new JsonArray(
+            MarketNode("947269", "c-947269", "Will Candidate A win the 2026 Peruvian presidential election?"),
+            MarketNode("peru-2", "c-peru-2", "Will Candidate B win the 2026 Peruvian presidential election?"),
+            MarketNode("peru-3", "c-peru-3", "Will Candidate C win the 2026 Peruvian presidential election?"))
+    };
+
+    private static JsonObject PeruCandidateWithout947269() => new()
+    {
+        ["groupKey"] = "winner:2026 peruvian presidential election|kind:person",
+        ["title"] = "Winner: 2026 Peruvian Presidential Election",
+        ["markets"] = new JsonArray(
+            MarketNode("peru-2", "c-peru-2", "Will Candidate B win the 2026 Peruvian presidential election?"),
+            MarketNode("peru-3", "c-peru-3", "Will Candidate C win the 2026 Peruvian presidential election?"))
+    };
 
     private static IReadOnlyList<VerifiedMultiOutcomeGroupConfig> ExpandedConfiguredForPreview() =>
     [

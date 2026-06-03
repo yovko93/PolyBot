@@ -15,6 +15,9 @@ public sealed class AllowlistRepairService
     private readonly object _gate = new();
     private string? _lastSnapshotId;
     private AllowlistRepairReport? _lastReport;
+    private AllowlistRepairOptions _lastOptions = new();
+    private readonly Dictionary<string, List<AllowlistRepairHistoryEntry>> _repairHistory = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, RepairHistoryStatus> _repairHistoryStatus = new(StringComparer.OrdinalIgnoreCase);
 
     public AllowlistRepairReport BuildReport(
         IReadOnlyList<VerifiedMultiOutcomeGroupConfig> configuredGroups,
@@ -28,6 +31,8 @@ public sealed class AllowlistRepairService
         var candidateSnapshot = BuildCandidateSnapshot(candidateGroups, configuredGroups.Count, options, contentRootPath);
         lock (_gate)
         {
+            _lastOptions = options;
+            LoadRepairHistoryIfPresent(contentRootPath, options);
             if (_lastReport is not null && (_lastSnapshotId == candidateSnapshot.SnapshotId || candidateSnapshot.IsRollingFallback))
                 return _lastReport;
 
@@ -146,6 +151,7 @@ public sealed class AllowlistRepairService
         File.WriteAllText(patchedPreviewPath, export.PatchedPreviewConfig.ToJsonString(json));
         if (export.PatchedPreviewWithMetadata is not null)
             File.WriteAllText(patchedPreviewMetadataPath, export.PatchedPreviewWithMetadata.ToJsonString(json));
+        ExportRepairHistory(Path.Combine(Path.GetDirectoryName(patchPreviewPath)!, "allowlist-repair-history-latest.json"));
         return export;
     }
 
@@ -164,9 +170,14 @@ public sealed class AllowlistRepairService
             .Where(x => !string.IsNullOrWhiteSpace(x["groupKey"]?.GetValue<string>()))
             .ToDictionary(x => x["groupKey"]!.GetValue<string>(), x => x, StringComparer.OrdinalIgnoreCase);
 
+        var options = _lastOptions ?? new AllowlistRepairOptions();
+        var locks = options.LockedGroups
+            .Where(x => !string.IsNullOrWhiteSpace(x.GroupKey))
+            .ToDictionary(x => x.GroupKey, x => x, StringComparer.OrdinalIgnoreCase);
         var patches = report.Groups
             .Where(IsPatchPreviewCandidate)
             .Select(g => BuildPatchItem(report.SnapshotId, g, byKey.TryGetValue(g.GroupKey, out var current) ? current : ConfigToJson(configuredGroups.FirstOrDefault(x => x.GroupKey.Equals(g.GroupKey, StringComparison.OrdinalIgnoreCase)))))
+            .Select(p => ApplyRepairHistoryPolicy(report.SnapshotId, p, options, locks))
             .ToArray();
         var patchable = patches.Where(IsPatchablePatch).ToArray();
         var patchedByKey = patchable.Where(x => x.ProposedGroup is not null).ToDictionary(x => x.GroupKey, x => x.ProposedGroup!, StringComparer.OrdinalIgnoreCase);
@@ -180,7 +191,9 @@ public sealed class AllowlistRepairService
             patchable.Count(x => x.Confidence.Equals("Medium", StringComparison.OrdinalIgnoreCase)),
             patches.Count(x => x.Confidence.Equals("Low", StringComparison.OrdinalIgnoreCase) && !IsPatchablePatch(x)),
             patches.Count(x => x.CurrentAction.Equals(nameof(AllowlistRepairRecommendedAction.DisableMissingMarkets), StringComparison.OrdinalIgnoreCase)),
-            expectedHealthy);
+            expectedHealthy,
+            patches.Count(IsQuarantinedPatch),
+            patches.Count(IsNoOpPatch));
         var plan = new AllowlistRepairPostApplyValidationPlan(
             ["Manually review exports/verified-allowlist-repair-patch-preview-latest.json.", "Copy the reviewed contents from exports/verified-multi-outcome-groups-patched-preview.json into config/verified-multi-outcome-groups.json.", "Restart the bot or call the safe allowlist reload endpoint if enabled.", "Re-run the scanner and inspect allowlist health/repair logs."],
             report.ConfiguredGroups,
@@ -209,6 +222,42 @@ public sealed class AllowlistRepairService
             ["groups"] = Clone(patchedConfig)
         };
         return new AllowlistRepairPatchExport(preview, patchedConfig, wrapped);
+    }
+
+
+    public AllowlistRepairHistoryExport BuildRepairHistoryExport()
+    {
+        lock (_gate)
+        {
+            return new AllowlistRepairHistoryExport(
+                DateTime.UtcNow,
+                _repairHistory.Keys
+                    .Union(_repairHistoryStatus.Keys, StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+                    .Select(groupKey =>
+                    {
+                        _repairHistory.TryGetValue(groupKey, out var entries);
+                        _repairHistoryStatus.TryGetValue(groupKey, out var status);
+                        var last = (entries ?? []).TakeLast(10).ToArray();
+                        return new AllowlistRepairHistoryGroup(
+                            groupKey,
+                            last,
+                            last.SelectMany(x => x.AddedMarketIds).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                            last.SelectMany(x => x.RemovedMarketIds).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                            status?.OscillationDetected ?? false,
+                            status?.Locked ?? false,
+                            status?.RecommendedAction ?? string.Empty,
+                            status?.Reason ?? string.Empty);
+                    })
+                    .ToArray());
+        }
+    }
+
+    public void ExportRepairHistory(string historyPath)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(historyPath)!);
+        var json = new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        File.WriteAllText(historyPath, JsonSerializer.Serialize(BuildRepairHistoryExport(), json));
     }
 
 
@@ -339,6 +388,160 @@ public sealed class AllowlistRepairService
             && !string.IsNullOrWhiteSpace(snapshot);
         return new AllowlistPatchValidationResult(patch.GroupKey, removed, valid, marketIds.Count);
     }
+
+
+    private AllowlistRepairPatchItem ApplyRepairHistoryPolicy(string snapshotId, AllowlistRepairPatchItem patch, AllowlistRepairOptions options, IReadOnlyDictionary<string, AllowlistRepairLockedGroupOptions> locks)
+    {
+        var locked = locks.TryGetValue(patch.GroupKey, out var lockOptions) && !lockOptions.AllowPatchPreview;
+        var entry = BuildHistoryEntry(snapshotId, patch);
+        var hasDiff = HasRepairMarketDiff(entry);
+        if (hasDiff) RecordRepairHistory(entry);
+
+        var status = EvaluateRepairHistoryStatus(patch.GroupKey, patch, entry, options, locked, lockOptions?.Reason ?? string.Empty);
+        _repairHistoryStatus[patch.GroupKey] = status;
+
+        if (status.OscillationDetected)
+            Console.WriteLine($"[ALLOWLIST_REPAIR_OSCILLATION_DETECTED] Group={patch.GroupKey} MarketIds=[{string.Join(',', status.OscillatingMarketIds)}] PreviousAction={status.PreviousAction} CurrentAction={status.CurrentAction}");
+        if (status.Locked)
+            Console.WriteLine($"[ALLOWLIST_REPAIR_LOCKED] Group={patch.GroupKey} Reason={status.Reason}");
+        if (status.Quarantined)
+            Console.WriteLine($"[ALLOWLIST_REPAIR_QUARANTINED] Group={patch.GroupKey} Reason={status.Reason}");
+
+        if (status.Quarantined || status.Locked || status.NoOp || status.Unstable)
+            return MakeReviewOnlyPatch(patch, status);
+
+        return patch;
+    }
+
+    private RepairHistoryStatus EvaluateRepairHistoryStatus(string groupKey, AllowlistRepairPatchItem patch, AllowlistRepairHistoryEntry entry, AllowlistRepairOptions options, bool locked, string lockReason)
+    {
+        var noOp = patch.PatchType == "None" || (patch.PatchType == "ReplaceGroup" && !HasRepairMarketDiff(entry) && !HasRealPatchDiff(patch));
+        if (locked)
+            return new RepairHistoryStatus(false, true, false, noOp, false, [], string.Empty, string.Empty, nameof(AllowlistRepairRecommendedAction.NeedsManualReview), string.IsNullOrWhiteSpace(lockReason) ? "ManualLock" : lockReason);
+
+        var history = _repairHistory.TryGetValue(groupKey, out var list) ? list : [];
+        var inverse = history
+            .Where(x => !x.SnapshotId.Equals(entry.SnapshotId, StringComparison.OrdinalIgnoreCase))
+            .Reverse<AllowlistRepairHistoryEntry>()
+            .FirstOrDefault(x => x.DiffHash.Equals(entry.InverseDiffHash, StringComparison.OrdinalIgnoreCase));
+        if (inverse is not null && HasRepairMarketDiff(entry))
+        {
+            var ids = entry.AddedMarketIds.Intersect(inverse.RemovedMarketIds, StringComparer.OrdinalIgnoreCase)
+                .Concat(entry.RemovedMarketIds.Intersect(inverse.AddedMarketIds, StringComparer.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var previousAction = inverse.RemovedMarketIds.Count > 0 ? "Remove" : inverse.AddedMarketIds.Count > 0 ? "Add" : inverse.Action;
+            var currentAction = entry.AddedMarketIds.Count > 0 ? "Add" : entry.RemovedMarketIds.Count > 0 ? "Remove" : entry.Action;
+            return new RepairHistoryStatus(true, false, true, false, false, ids, previousAction, currentAction, nameof(AllowlistRepairRecommendedAction.NeedsManualReview), "RepairDiffOscillation");
+        }
+
+        if (noOp)
+            return new RepairHistoryStatus(false, false, false, true, false, [], string.Empty, string.Empty, patch.CurrentAction, "NoOpDiff");
+
+        if (patch.PatchType == "ReplaceGroup" && IsPatchablePatch(patch))
+        {
+            var required = Math.Max(1, options.RequiredStableRepairSnapshots);
+            var stableCount = ConsecutiveSameDiffCount(history, entry.DiffHash);
+            if (stableCount < required)
+                return new RepairHistoryStatus(false, false, false, false, true, [], string.Empty, string.Empty, nameof(AllowlistRepairRecommendedAction.NeedsManualReview), $"RepairDiffNotStable StableSnapshots={stableCount}/{required}");
+        }
+
+        return new RepairHistoryStatus(false, false, false, noOp, false, [], string.Empty, string.Empty, patch.CurrentAction, string.Empty);
+    }
+
+    private static int ConsecutiveSameDiffCount(IReadOnlyList<AllowlistRepairHistoryEntry> history, string diffHash)
+    {
+        var count = 0;
+        for (var i = history.Count - 1; i >= 0; i--)
+        {
+            if (!history[i].DiffHash.Equals(diffHash, StringComparison.OrdinalIgnoreCase)) break;
+            count++;
+        }
+        return count;
+    }
+
+    private void RecordRepairHistory(AllowlistRepairHistoryEntry entry)
+    {
+        if (!_repairHistory.TryGetValue(entry.GroupKey, out var list))
+        {
+            list = [];
+            _repairHistory[entry.GroupKey] = list;
+        }
+        if (list.Any(x => x.SnapshotId.Equals(entry.SnapshotId, StringComparison.OrdinalIgnoreCase) && x.DiffHash.Equals(entry.DiffHash, StringComparison.OrdinalIgnoreCase)))
+            return;
+        list.Add(entry);
+        if (list.Count > 20) list.RemoveRange(0, list.Count - 20);
+    }
+
+    private static AllowlistRepairPatchItem MakeReviewOnlyPatch(AllowlistRepairPatchItem patch, RepairHistoryStatus status)
+    {
+        var notes = patch.RiskNotes.Concat([status.Reason]).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var action = status.RecommendedAction;
+        var confidence = status.Quarantined || status.Locked || status.Unstable ? "Low" : patch.Confidence;
+        return patch with
+        {
+            CurrentAction = action,
+            Confidence = confidence,
+            PatchType = "ReviewOnly",
+            ProposedGroup = null,
+            RiskNotes = notes,
+            ManualInstructions = "No trusted automatic config change. Review diagnostics manually; this group is quarantined/review-only until repair diff stability is proven.",
+            ExpectedResultAfterApply = status.Reason
+        };
+    }
+
+    private static AllowlistRepairHistoryEntry BuildHistoryEntry(string snapshotId, AllowlistRepairPatchItem patch)
+    {
+        var added = ReadDiffArray(patch.Diff, "addedMarketIds");
+        var removed = ReadDiffArray(patch.Diff, "removedMarketIds");
+        var action = added.Count > 0 && removed.Count > 0 ? "Replace" : added.Count > 0 ? "Add" : removed.Count > 0 ? "Remove" : patch.PatchType;
+        return new AllowlistRepairHistoryEntry(
+            patch.GroupKey,
+            snapshotId,
+            action,
+            added,
+            removed,
+            DiffHash(added, removed),
+            DiffHash(removed, added),
+            DateTime.UtcNow);
+    }
+
+    private static bool HasRepairMarketDiff(AllowlistRepairHistoryEntry entry)
+        => entry.AddedMarketIds.Count > 0 || entry.RemovedMarketIds.Count > 0;
+
+    private static IReadOnlyList<string> ReadDiffArray(JsonNode? diff, string property)
+        => diff?[property] is JsonArray arr ? arr.Select(x => x?.GetValue<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>().Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray() : [];
+
+    private static string DiffHash(IReadOnlyList<string> added, IReadOnlyList<string> removed)
+        => StableHash($"add:{string.Join(',', added.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}|remove:{string.Join(',', removed.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}");
+
+    private void LoadRepairHistoryIfPresent(string? contentRootPath, AllowlistRepairOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(contentRootPath)) return;
+        var path = Path.Combine(contentRootPath, "exports", "allowlist-repair-history-latest.json");
+        if (!File.Exists(path)) return;
+        try
+        {
+            var export = JsonSerializer.Deserialize<AllowlistRepairHistoryExport>(File.ReadAllText(path), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (export is null) return;
+            foreach (var group in export.Groups)
+            {
+                if (!_repairHistory.ContainsKey(group.GroupKey))
+                    _repairHistory[group.GroupKey] = group.LastSnapshots.TakeLast(20).ToList();
+                _repairHistoryStatus[group.GroupKey] = new RepairHistoryStatus(group.OscillationDetected, group.Locked, group.OscillationDetected, false, false, [], string.Empty, string.Empty, group.RecommendedAction, group.Reason);
+            }
+        }
+        catch
+        {
+            // Ignore unreadable history exports; new history will be written by the next preview.
+        }
+    }
+
+    private static bool IsQuarantinedPatch(AllowlistRepairPatchItem p)
+        => p.RiskNotes.Any(x => x.Contains("RepairDiffOscillation", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsNoOpPatch(AllowlistRepairPatchItem p)
+        => p.PatchType == "None" || p.RiskNotes.Any(x => x.Contains("NoOpDiff", StringComparison.OrdinalIgnoreCase));
 
     private static bool IsPatchPreviewCandidate(AllowlistRepairGroup g)
         => g.RecommendedAction is nameof(AllowlistRepairRecommendedAction.PruneMissingNoAskLegs)
@@ -512,6 +715,7 @@ public sealed class AllowlistRepairService
 
     private AllowlistRepairGroup BuildGroup(string snapshotId, DateTime now, VerifiedMultiOutcomeGroupConfig cfg, ResolvedVerifiedGroup? resolved, JsonObject? pricing, AllowlistRepairClassification classification)
     {
+        classification = ApplyRepairStatusOverride(cfg, classification);
         var noAskResolved = GetInt(pricing, "noAskResolvedCount");
         var missingNoAsk = GetInt(pricing, "missingNoAskCount");
         var resolvedOk = resolved?.ValidationStatus == "VerifiedGroupResolved";
@@ -559,6 +763,39 @@ public sealed class AllowlistRepairService
             notes,
             ExpectedResult(classification),
             "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config.");
+    }
+
+
+    private AllowlistRepairClassification ApplyRepairStatusOverride(VerifiedMultiOutcomeGroupConfig cfg, AllowlistRepairClassification classification)
+    {
+        var locked = _lastOptions.LockedGroups.FirstOrDefault(x => x.GroupKey.Equals(cfg.GroupKey, StringComparison.OrdinalIgnoreCase) && !x.AllowPatchPreview);
+        if (locked is not null)
+        {
+            return classification with
+            {
+                HealthCategory = nameof(AllowlistRepairHealthCategory.NeedsRefresh),
+                RecommendedAction = nameof(AllowlistRepairRecommendedAction.NeedsManualReview),
+                RepairConfidence = "Low",
+                Reason = string.IsNullOrWhiteSpace(locked.Reason) ? "ManualLock" : locked.Reason,
+                SuggestedPrunedTemplate = null,
+                SuggestedRefreshedTemplate = null
+            };
+        }
+
+        if (_repairHistoryStatus.TryGetValue(cfg.GroupKey, out var status) && (status.OscillationDetected || status.Quarantined || status.Locked))
+        {
+            return classification with
+            {
+                HealthCategory = nameof(AllowlistRepairHealthCategory.NeedsRefresh),
+                RecommendedAction = nameof(AllowlistRepairRecommendedAction.NeedsManualReview),
+                RepairConfidence = "Low",
+                Reason = string.IsNullOrWhiteSpace(status.Reason) ? "RepairDiffOscillation" : status.Reason,
+                SuggestedPrunedTemplate = null,
+                SuggestedRefreshedTemplate = null
+            };
+        }
+
+        return classification;
     }
 
     private ActionVersionState VersionAction(string groupKey, string currentAction, string snapshotId, DateTime now, int consecutiveSnapshotMisses)
@@ -697,6 +934,7 @@ public sealed class AllowlistRepairService
 
     private sealed record CandidateSnapshot(string SnapshotId, DateTime CreatedAt, string DiscoveryId, string CandidateExportPath, int CandidateGroupsCount, string Source, bool IsRollingFallback, IReadOnlyList<JsonObject> Candidates);
     private sealed record ActionVersionState(int ActionVersion, string? PreviousAction, string CurrentAction, DateTime ActionChangedAt, string ReasonForChange, string SnapshotId, int ConsecutiveSnapshotMisses);
+    private sealed record RepairHistoryStatus(bool OscillationDetected, bool Locked, bool Quarantined, bool NoOp, bool Unstable, IReadOnlyList<string> OscillatingMarketIds, string PreviousAction, string CurrentAction, string RecommendedAction, string Reason);
 }
 
 public sealed class VerifiedAllowlistGroupHealthClassifier

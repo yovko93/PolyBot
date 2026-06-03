@@ -194,7 +194,9 @@ public sealed record AllowlistRepairPatchSummary(
     int PatchableMediumConfidence,
     int LowConfidenceReviewOnly,
     int DisabledSuggested,
-    int ExpectedHealthyAfterApply);
+    int ExpectedHealthyAfterApply,
+    int Quarantined,
+    int NoOp);
 
 public sealed record AllowlistRepairPatchItem(
     string GroupKey,
@@ -239,3 +241,25 @@ public sealed record AllowlistRepairPatchExport(
     JsonNode? PatchedPreviewWithMetadata);
 
 public sealed record AllowlistPatchValidationResult(string GroupKey, IReadOnlyList<string> RemovedMarketIds, bool Valid, int FinalLegs);
+
+public sealed record AllowlistRepairHistoryEntry(
+    string GroupKey,
+    string SnapshotId,
+    string Action,
+    IReadOnlyList<string> AddedMarketIds,
+    IReadOnlyList<string> RemovedMarketIds,
+    string DiffHash,
+    string InverseDiffHash,
+    DateTime Timestamp);
+
+public sealed record AllowlistRepairHistoryGroup(
+    string GroupKey,
+    IReadOnlyList<AllowlistRepairHistoryEntry> LastSnapshots,
+    IReadOnlyList<string> AddedMarketIds,
+    IReadOnlyList<string> RemovedMarketIds,
+    bool OscillationDetected,
+    bool Locked,
+    string RecommendedAction,
+    string Reason);
+
+public sealed record AllowlistRepairHistoryExport(DateTime Timestamp, IReadOnlyList<AllowlistRepairHistoryGroup> Groups);

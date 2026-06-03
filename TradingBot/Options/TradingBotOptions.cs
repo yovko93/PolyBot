@@ -279,6 +279,15 @@ public class AllowlistRepairOptions
     public decimal MinRefreshMatchScore { get; set; } = 0.70m;
     public bool PreferStableCachedMatches { get; set; } = true;
     public bool UseLatestCandidateExportForRepair { get; set; } = true;
+    public int RequiredStableRepairSnapshots { get; set; } = 2;
+    public List<AllowlistRepairLockedGroupOptions> LockedGroups { get; set; } = new();
+}
+
+public class AllowlistRepairLockedGroupOptions
+{
+    public string GroupKey { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+    public bool AllowPatchPreview { get; set; } = false;
 }
 
 public class RuntimeStateOptions
