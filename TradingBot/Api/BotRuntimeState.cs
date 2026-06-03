@@ -25,26 +25,100 @@ public class BotRuntimeState
     private readonly ConcurrentQueue<TerminalLogEntryDto> _logs = new();
     private readonly ConcurrentQueue<EquityPointDto> _equity = new();
     private readonly ConcurrentQueue<ScannerStatsDto> _scannerStatsHistory = new();
-    private static void Trim<T>(ConcurrentQueue<T> q,int max){ while(q.Count>max) q.TryDequeue(out _); }
+    private readonly ConcurrentQueue<string> _candidateSnapshots = new();
+    private readonly ConcurrentQueue<object> _unresolvedDiagnostics = new();
+    private readonly ConcurrentQueue<object> _signalREventBuffer = new();
+    private int _repairHistoryCount;
+    private int _dryRunOrderPlansCount;
+    private int _fillSimulationsCount;
+    private int _executionAuditCount;
+    private int _orderbookCacheCount;
+    private int _marketCacheCount;
+    private int _exportQueueCount;
+    private int _patchPreviewItemsCount;
+
+    private static void Trim<T>(ConcurrentQueue<T> q,int max){ var capped = Math.Max(0, max); while(q.Count>capped) q.TryDequeue(out _); }
+    private void TrimAll()
+    {
+        Trim(_logs,_runtime.MaxRecentLogs);
+        Trim(_scannerStatsHistory, Math.Min(_runtime.MaxScannerStatsHistory, _runtime.MaxScannerHistory));
+        Trim(_candidateSnapshots,_runtime.MaxCandidateSnapshots);
+        Trim(_unresolvedDiagnostics,_runtime.MaxUnresolvedDiagnostics);
+        Trim(_signalREventBuffer,_runtime.MaxSignalREventBuffer);
+        Trim(_opps,_runtime.MaxCandidateGroupsInMemory);
+        Trim(_positions,_runtime.MaxPaperPositions);
+        Trim(_equity,500);
+        Trim(_trades,500);
+    }
+
     public int ScannerStatsHistoryCount => _scannerStatsHistory.Count;
+    public int CandidateSnapshotCount => _candidateSnapshots.Count;
+    public int RepairHistoryCount => Volatile.Read(ref _repairHistoryCount);
+    public int UnresolvedDiagnosticsCount => _unresolvedDiagnostics.Count;
+    public int DryRunOrderPlansCount => Volatile.Read(ref _dryRunOrderPlansCount);
+    public int FillSimulationsCount => Volatile.Read(ref _fillSimulationsCount);
+    public int ExecutionAuditCount => Volatile.Read(ref _executionAuditCount);
+    public int SignalREventBufferCount => _signalREventBuffer.Count;
+    public int OrderbookCacheCount => Volatile.Read(ref _orderbookCacheCount);
+    public int MarketCacheCount => Volatile.Read(ref _marketCacheCount);
+    public int ExportQueueCount => Volatile.Read(ref _exportQueueCount);
+    public int PatchPreviewItemsCount => Volatile.Read(ref _patchPreviewItemsCount);
     public long NextSeq()=>Interlocked.Increment(ref _seq);
     public void SetStatus(BotStatusDto s){lock(_gate) Status=s;}
-    public void SetScannerStats(ScannerStatsDto s){lock(_gate) ScannerStats=s; _scannerStatsHistory.Enqueue(s); Trim(_scannerStatsHistory, _runtime.MaxScannerStatsHistory);}    
+    public void SetScannerStats(ScannerStatsDto s){lock(_gate) ScannerStats=s; _scannerStatsHistory.Enqueue(s); Trim(_scannerStatsHistory, Math.Min(_runtime.MaxScannerStatsHistory, _runtime.MaxScannerHistory));}
     public void SetRisk(RiskStateDto r){lock(_gate) Risk=r;}
     public void SetOpportunityDiagnostics(TradingBot.Models.OpportunityDiagnosticsSnapshot? d){lock(_gate) OpportunityDiagnostics=d;}
     public void SetMultiOutcomeDiagnostics(MultiOutcomeDiagnosticsDto? d){lock(_gate) MultiOutcomeDiagnostics=d;}
-    public void SetMultiOutcomeCandidates(IEnumerable<object> items){lock(_gate) MultiOutcomeCandidates = items.Take(_runtime.MaxRejectedCandidateSamples).ToArray();}
+    public void SetMultiOutcomeCandidates(IEnumerable<object> items){lock(_gate) { MultiOutcomeCandidates = items.Take(_runtime.MaxCandidateGroupsInMemory).ToArray(); _candidateSnapshots.Enqueue(DateTime.UtcNow.ToString("O")); Trim(_candidateSnapshots,_runtime.MaxCandidateSnapshots); }}
     public void SetMultiOutcomeReviewReport(IEnumerable<object> items){lock(_gate) MultiOutcomeReviewReport = items.Take(_runtime.MaxRejectedCandidateSamples).ToArray();}
     public void SetVerifiedBasketScreener(VerifiedBasketScreenerDto? d){lock(_gate) VerifiedBasketScreener=d;}
     public void SetControls(BotControlStateDto c){lock(_gate) Controls=c;}
-    public void AddOpportunity(OpportunityDto o){_opps.Enqueue(o); Trim(_opps,500);}    
-    public void ReplaceOpportunities(IEnumerable<OpportunityDto> items){while(_opps.TryDequeue(out _)){} foreach(var i in items) _opps.Enqueue(i); Trim(_opps,500);}    
-    public void AddTrade(TradeLogEntryDto t){_trades.Enqueue(t); Trim(_trades,500);}    
-    public void ReplaceTrades(IEnumerable<TradeLogEntryDto> items){while(_trades.TryDequeue(out _)){} foreach(var i in items) _trades.Enqueue(i); Trim(_trades,500);}    
-    public void AddPosition(PaperPositionDto p){_positions.Enqueue(p); Trim(_positions,200);}    
-    public void ReplacePositions(IEnumerable<PaperPositionDto> items){while(_positions.TryDequeue(out _)){} foreach(var i in items) _positions.Enqueue(i); Trim(_positions,200);}    
-    public void AddLog(TerminalLogEntryDto l){_logs.Enqueue(l); Trim(_logs,_runtime.MaxRecentLogs);}    
-    public void AddEquity(EquityPointDto e){_equity.Enqueue(e); Trim(_equity,1000);}    
+    public void AddOpportunity(OpportunityDto o){_opps.Enqueue(o); Trim(_opps,_runtime.MaxCandidateGroupsInMemory);}
+    public void ReplaceOpportunities(IEnumerable<OpportunityDto> items){while(_opps.TryDequeue(out _)){} foreach(var i in items.Take(_runtime.MaxCandidateGroupsInMemory)) _opps.Enqueue(i); Trim(_opps,_runtime.MaxCandidateGroupsInMemory);}
+    public void AddTrade(TradeLogEntryDto t){_trades.Enqueue(t); Trim(_trades,500);}
+    public void ReplaceTrades(IEnumerable<TradeLogEntryDto> items){while(_trades.TryDequeue(out _)){} foreach(var i in items.Take(500)) _trades.Enqueue(i); Trim(_trades,500);}
+    public void AddPosition(PaperPositionDto p){_positions.Enqueue(p); Trim(_positions,_runtime.MaxPaperPositions);}
+    public void ReplacePositions(IEnumerable<PaperPositionDto> items){while(_positions.TryDequeue(out _)){} foreach(var i in items.Take(_runtime.MaxPaperPositions)) _positions.Enqueue(i); Trim(_positions,_runtime.MaxPaperPositions);}
+    public void AddLog(TerminalLogEntryDto l){_logs.Enqueue(l); Trim(_logs,_runtime.MaxRecentLogs);}
+    public void AddEquity(EquityPointDto e){_equity.Enqueue(e); Trim(_equity,500);}
+    public void AddSignalREvent(string eventName){_signalREventBuffer.Enqueue($"{DateTime.UtcNow:O}|{eventName}"); Trim(_signalREventBuffer,_runtime.MaxSignalREventBuffer);}
+    public void AddUnresolvedDiagnostics(IEnumerable<object> items){foreach(var item in items.Take(_runtime.MaxUnresolvedDiagnostics)) _unresolvedDiagnostics.Enqueue(item); Trim(_unresolvedDiagnostics,_runtime.MaxUnresolvedDiagnostics);}
+    public void SetRuntimeCounts(int? repairHistoryCount = null, int? dryRunOrderPlansCount = null, int? fillSimulationsCount = null, int? executionAuditCount = null, int? orderbookCacheCount = null, int? marketCacheCount = null, int? exportQueueCount = null, int? patchPreviewItemsCount = null)
+    {
+        if (repairHistoryCount is int rh) Interlocked.Exchange(ref _repairHistoryCount, rh);
+        if (dryRunOrderPlansCount is int drp) Interlocked.Exchange(ref _dryRunOrderPlansCount, drp);
+        if (fillSimulationsCount is int fs) Interlocked.Exchange(ref _fillSimulationsCount, fs);
+        if (executionAuditCount is int ea) Interlocked.Exchange(ref _executionAuditCount, ea);
+        if (orderbookCacheCount is int ob) Interlocked.Exchange(ref _orderbookCacheCount, ob);
+        if (marketCacheCount is int mc) Interlocked.Exchange(ref _marketCacheCount, mc);
+        if (exportQueueCount is int eq) Interlocked.Exchange(ref _exportQueueCount, eq);
+        if (patchPreviewItemsCount is int pp) Interlocked.Exchange(ref _patchPreviewItemsCount, pp);
+    }
+    public IReadOnlyDictionary<string,int> GetRuntimeCollectionCounts() => new Dictionary<string,int>
+    {
+        ["recentLogs"] = Logs().Length,
+        ["scannerHistory"] = ScannerStatsHistoryCount,
+        ["candidateSnapshots"] = CandidateSnapshotCount,
+        ["repairHistory"] = RepairHistoryCount,
+        ["unresolvedDiagnostics"] = UnresolvedDiagnosticsCount,
+        ["dryRunOrderPlans"] = DryRunOrderPlansCount,
+        ["fillSimulations"] = FillSimulationsCount,
+        ["executionAudit"] = ExecutionAuditCount,
+        ["signalREventBuffer"] = SignalREventBufferCount,
+        ["orderbookCache"] = OrderbookCacheCount,
+        ["marketCache"] = MarketCacheCount,
+        ["exports"] = ExportQueueCount,
+        ["patchPreviewItems"] = PatchPreviewItemsCount
+    };
+    public void ClearNonEssentialRuntimeState()
+    {
+        while(_unresolvedDiagnostics.TryDequeue(out _)){}
+        while(_candidateSnapshots.TryDequeue(out _)){}
+        while(_scannerStatsHistory.Count > Math.Min(50, _runtime.MaxScannerHistory) && _scannerStatsHistory.TryDequeue(out _)){}
+        while(_logs.Count > Math.Min(100, _runtime.MaxRecentLogs) && _logs.TryDequeue(out _)){}
+        while(_signalREventBuffer.TryDequeue(out _)){}
+        TrimAll();
+    }
     public OpportunityDto[] Opportunities()=>_opps.ToArray();
     public TradeLogEntryDto[] Trades()=>_trades.ToArray();
     public PaperPositionDto[] Positions()=>_positions.ToArray();

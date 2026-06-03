@@ -73,7 +73,7 @@ public sealed class MultiOutcomeCandidateExportService
     public IReadOnlyList<object> BuildReviewReport(IReadOnlyList<MultiOutcomeGroupArbEngine.CandidateGroupReview> groups, bool allowUnpricedLegsInTemplate = false)
     {
         var allowlistedKeys = LoadAllowlistedKeys();
-        var rows = groups.Select(g => EvaluateCandidate(g, allowlistedKeys, allowUnpricedLegsInTemplate)).OrderByDescending(x => x.candidateQualityScore).ThenByDescending(x => x.estimatedNetEdgeConservative ?? decimal.MinValue).ToArray();
+        var rows = groups.Take(Math.Max(1, _options.TopCandidateGroupsForReview)).Select(g => EvaluateCandidate(g, allowlistedKeys, allowUnpricedLegsInTemplate)).OrderByDescending(x => x.candidateQualityScore).ThenByDescending(x => x.estimatedNetEdgeConservative ?? decimal.MinValue).Take(Math.Max(1, _options.TopCandidateGroupsForReview)).ToArray();
         return rows.Cast<object>().ToArray();
     }
 

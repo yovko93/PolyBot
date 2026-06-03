@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using TradingBot.Models;
 using TradingBot.Options;
+using TradingBot.Services;
 
 namespace TradingBot.Services.MultiOutcome;
 
@@ -18,6 +19,19 @@ public sealed class AllowlistRepairService
     private AllowlistRepairOptions _lastOptions = new();
     private readonly Dictionary<string, List<AllowlistRepairHistoryEntry>> _repairHistory = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, RepairHistoryStatus> _repairHistoryStatus = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _loggedRepairLockFingerprints = new(StringComparer.OrdinalIgnoreCase);
+    private const int MaxRepairHistorySnapshotsPerGroup = 5;
+    private readonly AllowlistRepairLockProvider? _lockProvider;
+    private IReadOnlyDictionary<string, AllowlistRepairLockedGroupOptions> _cachedOptionLocks = new Dictionary<string, AllowlistRepairLockedGroupOptions>(StringComparer.OrdinalIgnoreCase);
+    private string _cachedOptionLocksFingerprint = "<unset>";
+    private string _lastRepairHistoryValidationFingerprint = string.Empty;
+    private int _repairHistoryValidationCycle;
+    private int _repairHistoryDuplicateWarnings;
+
+    public AllowlistRepairService(AllowlistRepairLockProvider? lockProvider = null)
+    {
+        _lockProvider = lockProvider;
+    }
 
     public AllowlistRepairReport BuildReport(
         IReadOnlyList<VerifiedMultiOutcomeGroupConfig> configuredGroups,
@@ -25,21 +39,26 @@ public sealed class AllowlistRepairService
         IReadOnlyList<object> verifiedPricingExport,
         IReadOnlyList<object> candidateGroups,
         AllowlistRepairOptions? options = null,
-        string? contentRootPath = null)
+        string? contentRootPath = null,
+        MultiOutcomeLoggingOptions? loggingOptions = null)
     {
         options ??= new AllowlistRepairOptions();
         var candidateSnapshot = BuildCandidateSnapshot(candidateGroups, configuredGroups.Count, options, contentRootPath);
         lock (_gate)
         {
             _lastOptions = options;
-            LoadRepairHistoryIfPresent(contentRootPath, options);
+            LoadRepairHistoryIfPresent(contentRootPath, options, loggingOptions ?? new MultiOutcomeLoggingOptions());
             if (_lastReport is not null && (_lastSnapshotId == candidateSnapshot.SnapshotId || candidateSnapshot.IsRollingFallback))
                 return _lastReport;
 
-            var resolvedByGroup = resolvedGroups.ToDictionary(x => x.GroupKey, StringComparer.OrdinalIgnoreCase);
-            var pricingByGroup = verifiedPricingExport.Select(ToObject)
-                .Where(x => x is not null && x.TryGetPropertyValue("groupKey", out var g) && !string.IsNullOrWhiteSpace(g?.GetValue<string>()))
-                .ToDictionary(x => x!["groupKey"]!.GetValue<string>(), x => x!, StringComparer.OrdinalIgnoreCase);
+            var resolvedByGroup = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(resolvedGroups, x => x.GroupKey, "AllowlistRepair.ResolvedGroups", DuplicateGroupKeyPolicy.KeepLatest);
+            var pricingByGroup = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(
+                verifiedPricingExport.Select(ToObject)
+                    .Where(x => x is not null && x.TryGetPropertyValue("groupKey", out var g) && !string.IsNullOrWhiteSpace(g?.GetValue<string>()))
+                    .Select(x => x!),
+                x => x["groupKey"]?.GetValue<string>(),
+                "AllowlistRepair.VerifiedPricing",
+                DuplicateGroupKeyPolicy.KeepLatest);
 
             var now = DateTime.UtcNow;
             var rows = configuredGroups.Select(cfg => BuildGroup(
@@ -77,7 +96,7 @@ public sealed class AllowlistRepairService
                 summary.Disabled,
                 summary.Ignored,
                 rows,
-                rows.Where(IsRepairable).Select(ToSuggestion).ToArray(),
+                GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(rows.Where(IsRepairable).Select(ToSuggestion), x => x.GroupKey, "AllowlistRepair.Report.Suggestions", DuplicateGroupKeyPolicy.KeepMostRestrictive).Values.ToArray(),
                 "Review repairSuggestions. Copy suggestedJson/suggestedTemplate into config/verified-multi-outcome-groups.json only after manual verification. This workflow never overwrites live config.");
             _lastSnapshotId = candidateSnapshot.SnapshotId;
             _lastReport = report;
@@ -93,7 +112,7 @@ public sealed class AllowlistRepairService
             "Suggested only. Does not overwrite config/verified-multi-outcome-groups.json. Review manually before copying.",
             report.Summary,
             report.CategoryCounts,
-            report.Groups.Select(g =>
+            GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(report.Groups, x => x.GroupKey, "AllowlistRepair.SuggestedConfig.Groups", DuplicateGroupKeyPolicy.KeepMostRestrictive).Values.Select(g =>
             {
                 var template = Clone(g.SuggestedPrunedTemplate ?? g.SuggestedRefreshedTemplate);
                 return new AllowlistRepairSuggestedGroup(
@@ -121,9 +140,10 @@ public sealed class AllowlistRepairService
         IReadOnlyList<object> verifiedPricingExport,
         IReadOnlyList<object> candidateGroups,
         AllowlistRepairOptions? options = null,
-        string? contentRootPath = null)
+        string? contentRootPath = null,
+        MultiOutcomeLoggingOptions? loggingOptions = null)
     {
-        var report = BuildReport(configuredGroups, resolvedGroups, verifiedPricingExport, candidateGroups, options, contentRootPath);
+        var report = BuildReport(configuredGroups, resolvedGroups, verifiedPricingExport, candidateGroups, options, contentRootPath, loggingOptions);
         var suggested = BuildSuggestedConfig(report);
         Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
         Directory.CreateDirectory(Path.GetDirectoryName(suggestedConfigPath)!);
@@ -166,21 +186,28 @@ public sealed class AllowlistRepairService
             ? Path.Combine(contentRootPath, sourceConfigRelativePath.Replace('/', Path.DirectorySeparatorChar))
             : string.Empty;
         var originalConfig = ReadSourceConfig(sourceFullPath, configuredGroups);
-        var byKey = originalConfig.OfType<JsonObject>()
-            .Where(x => !string.IsNullOrWhiteSpace(x["groupKey"]?.GetValue<string>()))
-            .ToDictionary(x => x["groupKey"]!.GetValue<string>(), x => x, StringComparer.OrdinalIgnoreCase);
+        var byKey = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(
+            originalConfig.OfType<JsonObject>().Where(x => !string.IsNullOrWhiteSpace(x["groupKey"]?.GetValue<string>())),
+            x => x["groupKey"]?.GetValue<string>(),
+            "AllowlistRepair.PatchPreview.SourceConfig",
+            DuplicateGroupKeyPolicy.KeepFirst);
 
         var options = _lastOptions ?? new AllowlistRepairOptions();
-        var locks = options.LockedGroups
-            .Where(x => !string.IsNullOrWhiteSpace(x.GroupKey))
-            .ToDictionary(x => x.GroupKey, x => x, StringComparer.OrdinalIgnoreCase);
+        var locks = GetLockedGroups(options);
         var patches = report.Groups
             .Where(IsPatchPreviewCandidate)
             .Select(g => BuildPatchItem(report.SnapshotId, g, byKey.TryGetValue(g.GroupKey, out var current) ? current : ConfigToJson(configuredGroups.FirstOrDefault(x => x.GroupKey.Equals(g.GroupKey, StringComparison.OrdinalIgnoreCase)))))
             .Select(p => ApplyRepairHistoryPolicy(report.SnapshotId, p, options, locks))
+            .GroupBy(p => p.GroupKey, StringComparer.OrdinalIgnoreCase)
+            .SelectMany(g => GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(g, p => p.GroupKey, "AllowlistRepair.PatchPreview.Patches", DuplicateGroupKeyPolicy.KeepMostRestrictive).Values)
             .ToArray();
         var patchable = patches.Where(IsPatchablePatch).ToArray();
-        var patchedByKey = patchable.Where(x => x.ProposedGroup is not null).ToDictionary(x => x.GroupKey, x => x.ProposedGroup!, StringComparer.OrdinalIgnoreCase);
+        var patchedByKey = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(
+            patchable.Where(x => x.ProposedGroup is not null),
+            x => x.GroupKey,
+            "AllowlistRepair.PatchPreview.Patchable",
+            DuplicateGroupKeyPolicy.KeepMostRestrictive)
+            .ToDictionary(x => x.Key, x => x.Value.ProposedGroup!, StringComparer.OrdinalIgnoreCase);
         var patchedConfig = new JsonArray(originalConfig.Select(x => patchedByKey.TryGetValue((x as JsonObject)?["groupKey"]?.GetValue<string>() ?? string.Empty, out var replacement) ? Clone(replacement) : Clone(x)).ToArray());
         var reviewOnlyGroups = patches.Where(x => !IsPatchablePatch(x)).Select(x => x.GroupKey).ToArray();
         var groupsExpectedResolved = patchable.Select(x => x.GroupKey).ToArray();
@@ -239,13 +266,14 @@ public sealed class AllowlistRepairService
                     {
                         _repairHistory.TryGetValue(groupKey, out var entries);
                         _repairHistoryStatus.TryGetValue(groupKey, out var status);
-                        var last = (entries ?? []).TakeLast(10).ToArray();
+                        var last = (entries ?? []).TakeLast(MaxRepairHistorySnapshotsPerGroup).ToArray();
                         var current = last.LastOrDefault();
                         var previous = last.Length >= 2 ? last[^2] : null;
                         return new AllowlistRepairHistoryGroup(
                             groupKey,
                             last,
                             current?.DiffHash ?? string.Empty,
+                            current?.InverseDiffHash ?? string.Empty,
                             current?.AddedMarketIds ?? Array.Empty<string>(),
                             current?.RemovedMarketIds ?? Array.Empty<string>(),
                             previous?.AddedMarketIds ?? Array.Empty<string>(),
@@ -259,11 +287,14 @@ public sealed class AllowlistRepairService
                             new AllowlistRepairHistoryDiff(current?.AddedMarketIds ?? Array.Empty<string>(), current?.RemovedMarketIds ?? Array.Empty<string>()),
                             new AllowlistRepairHistoryDiff(previous?.AddedMarketIds ?? Array.Empty<string>(), previous?.RemovedMarketIds ?? Array.Empty<string>()),
                             status?.RecommendedAction ?? string.Empty,
+                            status?.RepairConfidence ?? string.Empty,
                             status?.Reason ?? string.Empty);
                     })
                     .ToArray());
         }
     }
+
+    public int RepairHistorySnapshotCount { get { lock (_gate) return _repairHistory.Values.Sum(x => x.Count); } }
 
     public void ExportRepairHistory(string historyPath)
     {
@@ -314,10 +345,11 @@ public sealed class AllowlistRepairService
         var duplicate = Math.Max(0, total - unique);
         if (duplicate > 0) reasons.Add($"DuplicateGroupKeys={duplicate}");
 
-        var byKey = groups
-            .Where(x => !string.IsNullOrWhiteSpace(x["groupKey"]?.GetValue<string>()))
-            .GroupBy(x => x["groupKey"]!.GetValue<string>(), StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+        var byKey = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(
+            groups.Where(x => !string.IsNullOrWhiteSpace(x["groupKey"]?.GetValue<string>())),
+            x => x["groupKey"]?.GetValue<string>(),
+            "AllowlistRepair.PatchedPreview.Validation",
+            DuplicateGroupKeyPolicy.KeepFirst);
         foreach (var group in groups)
         {
             var key = group["groupKey"]?.GetValue<string>() ?? "<missing>";
@@ -414,7 +446,7 @@ public sealed class AllowlistRepairService
 
         if (status.OscillationDetected && !string.IsNullOrWhiteSpace(status.PreviousAction) && !string.IsNullOrWhiteSpace(status.CurrentAction))
             Console.WriteLine($"[ALLOWLIST_REPAIR_OSCILLATION_DETECTED] Group={patch.GroupKey} MarketIds=[{string.Join(',', status.OscillatingMarketIds)}] Previous={status.PreviousAction} Current={status.CurrentAction}");
-        if (status.Locked)
+        if (status.Locked && !locked && _loggedRepairLockFingerprints.Add($"{patch.GroupKey}|{status.Reason}"))
             Console.WriteLine($"[ALLOWLIST_REPAIR_LOCKED] Group={patch.GroupKey} Reason={status.Reason}");
         if (status.Quarantined)
             Console.WriteLine($"[ALLOWLIST_REPAIR_QUARANTINED] Group={patch.GroupKey} Reason={status.Reason} MarketIds=[{string.Join(',', status.OscillatingMarketIds)}]");
@@ -429,9 +461,9 @@ public sealed class AllowlistRepairService
     {
         var noOp = patch.PatchType == "None" || (patch.PatchType == "ReplaceGroup" && !HasRepairMarketDiff(entry) && !HasRealPatchDiff(patch));
         if (locked)
-            return new RepairHistoryStatus(false, true, false, noOp, false, [], string.Empty, string.Empty, nameof(AllowlistRepairRecommendedAction.NeedsManualReview), string.IsNullOrWhiteSpace(lockReason) ? "ManualLock" : $"ManualLock: {lockReason}");
+            return new RepairHistoryStatus(false, true, false, noOp, false, [], string.Empty, string.Empty, nameof(AllowlistRepairRecommendedAction.NeedsManualReview), "Unsafe", string.IsNullOrWhiteSpace(lockReason) ? "ManualLock" : lockReason);
         if (_repairHistoryStatus.TryGetValue(groupKey, out var previousStatus) && previousStatus.OscillationDetected)
-            return previousStatus with { Quarantined = true, RecommendedAction = nameof(AllowlistRepairRecommendedAction.NeedsManualReview), Reason = string.IsNullOrWhiteSpace(previousStatus.Reason) ? "RepairDiffOscillation" : previousStatus.Reason };
+            return previousStatus with { Quarantined = true, RecommendedAction = nameof(AllowlistRepairRecommendedAction.NeedsManualReview), RepairConfidence = "Unsafe", Reason = string.IsNullOrWhiteSpace(previousStatus.Reason) ? "RepairDiffOscillation" : previousStatus.Reason };
 
         var history = _repairHistory.TryGetValue(groupKey, out var list) ? list : [];
         var inverse = history
@@ -446,21 +478,21 @@ public sealed class AllowlistRepairService
                 .ToArray();
             var previousAction = inverse.RemovedMarketIds.Count > 0 ? "Remove" : inverse.AddedMarketIds.Count > 0 ? "Add" : inverse.Action;
             var currentAction = entry.AddedMarketIds.Count > 0 ? "Add" : entry.RemovedMarketIds.Count > 0 ? "Remove" : entry.Action;
-            return new RepairHistoryStatus(true, false, true, false, false, ids, previousAction, currentAction, nameof(AllowlistRepairRecommendedAction.NeedsManualReview), "RepairDiffOscillation");
+            return new RepairHistoryStatus(true, false, true, false, false, ids, previousAction, currentAction, nameof(AllowlistRepairRecommendedAction.NeedsManualReview), "Unsafe", "RepairDiffOscillation");
         }
 
         if (noOp)
-            return new RepairHistoryStatus(false, false, false, true, false, [], string.Empty, string.Empty, patch.CurrentAction, "NoOpDiff");
+            return new RepairHistoryStatus(false, false, false, true, false, [], string.Empty, string.Empty, patch.CurrentAction, patch.Confidence, "NoOpDiff");
 
         if (patch.PatchType == "ReplaceGroup" && IsPatchablePatch(patch))
         {
             var required = Math.Max(1, options.RequiredStableRepairSnapshots);
             var stableCount = ConsecutiveSameDiffCount(history, entry.DiffHash);
             if (stableCount < required)
-                return new RepairHistoryStatus(false, false, false, false, true, [], string.Empty, string.Empty, nameof(AllowlistRepairRecommendedAction.NeedsManualReview), $"RepairDiffNotStable StableSnapshots={stableCount}/{required}");
+                return new RepairHistoryStatus(false, false, false, false, true, [], string.Empty, string.Empty, nameof(AllowlistRepairRecommendedAction.NeedsManualReview), "Low", $"RepairDiffNotStable StableSnapshots={stableCount}/{required}");
         }
 
-        return new RepairHistoryStatus(false, false, false, noOp, false, [], string.Empty, string.Empty, patch.CurrentAction, string.Empty);
+        return new RepairHistoryStatus(false, false, false, noOp, false, [], string.Empty, string.Empty, patch.CurrentAction, patch.Confidence, string.Empty);
     }
 
     private static int ConsecutiveSameDiffCount(IReadOnlyList<AllowlistRepairHistoryEntry> history, string diffHash)
@@ -484,14 +516,15 @@ public sealed class AllowlistRepairService
         if (list.Any(x => x.SnapshotId.Equals(entry.SnapshotId, StringComparison.OrdinalIgnoreCase) && x.DiffHash.Equals(entry.DiffHash, StringComparison.OrdinalIgnoreCase)))
             return;
         list.Add(entry);
-        if (list.Count > 20) list.RemoveRange(0, list.Count - 20);
+        if (list.Count > MaxRepairHistorySnapshotsPerGroup) list.RemoveRange(0, list.Count - MaxRepairHistorySnapshotsPerGroup);
     }
 
     private static AllowlistRepairPatchItem MakeReviewOnlyPatch(AllowlistRepairPatchItem patch, RepairHistoryStatus status)
     {
-        var notes = patch.RiskNotes.Concat([status.Reason]).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var statusNotes = new[] { status.Locked ? "ManualLock" : string.Empty, status.Reason }.Where(x => !string.IsNullOrWhiteSpace(x));
+        var notes = patch.RiskNotes.Concat(statusNotes).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var action = status.RecommendedAction;
-        var confidence = status.Quarantined || status.Locked || status.Unstable ? "Low" : patch.Confidence;
+        var confidence = !string.IsNullOrWhiteSpace(status.RepairConfidence) ? status.RepairConfidence : (status.Quarantined || status.Locked || status.Unstable ? "Low" : patch.Confidence);
         return patch with
         {
             CurrentAction = action,
@@ -529,53 +562,109 @@ public sealed class AllowlistRepairService
     private static string DiffHash(IReadOnlyList<string> added, IReadOnlyList<string> removed)
         => StableHash($"add:{string.Join(',', added.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}|remove:{string.Join(',', removed.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}");
 
-    private void LoadRepairHistoryIfPresent(string? contentRootPath, AllowlistRepairOptions options)
+    private void LoadRepairHistoryIfPresent(string? contentRootPath, AllowlistRepairOptions options, MultiOutcomeLoggingOptions loggingOptions)
     {
         if (string.IsNullOrWhiteSpace(contentRootPath)) return;
         var exportsDir = Path.Combine(contentRootPath, "exports");
-        LoadRepairHistoryExport(Path.Combine(exportsDir, "allowlist-repair-history-latest.json"));
+        LoadRepairHistoryExport(Path.Combine(exportsDir, "allowlist-repair-history-latest.json"), loggingOptions);
         LoadPreviousPatchPreviewAsHistory(Path.Combine(exportsDir, "verified-allowlist-repair-patch-preview-latest.json"));
     }
 
-    private void LoadRepairHistoryExport(string path)
+    private void LoadRepairHistoryExport(string path, MultiOutcomeLoggingOptions loggingOptions)
     {
         if (!File.Exists(path)) return;
         try
         {
             var root = JsonNode.Parse(File.ReadAllText(path)) as JsonObject;
             if (root?["groups"] is not JsonArray groups) return;
-            foreach (var groupNode in groups.OfType<JsonObject>())
+            var nodes = groups.OfType<JsonObject>().ToArray();
+            var total = nodes.Length;
+            var invalid = 0;
+            var duplicateGroupKeys = 0;
+            var merged = 0;
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var grouping in nodes.GroupBy(x => x["groupKey"]?.GetValue<string>() ?? string.Empty, StringComparer.OrdinalIgnoreCase))
             {
-                var groupKey = groupNode["groupKey"]?.GetValue<string>() ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(groupKey)) continue;
-                var snapshotsNode = groupNode["snapshots"] as JsonArray ?? groupNode["lastSnapshots"] as JsonArray ?? new JsonArray();
-                var entries = snapshotsNode.OfType<JsonObject>().Select(ReadHistoryEntry).Where(x => x is not null).Cast<AllowlistRepairHistoryEntry>().ToArray();
-                if (entries.Length == 0)
+                var groupKey = grouping.Key;
+                var groupNodes = grouping.ToArray();
+                if (string.IsNullOrWhiteSpace(groupKey))
                 {
-                    var added = ReadStringArray(groupNode, "lastAddedMarketIds");
-                    var removed = ReadStringArray(groupNode, "lastRemovedMarketIds");
-                    if (added.Count == 0 && removed.Count == 0)
-                    {
-                        added = ReadStringArray(groupNode, "addedMarketIds");
-                        removed = ReadStringArray(groupNode, "removedMarketIds");
-                    }
-                    if (added.Count > 0 || removed.Count > 0)
-                        entries = [new AllowlistRepairHistoryEntry(groupKey, "loaded-history-export", added.Count > 0 && removed.Count > 0 ? "Replace" : added.Count > 0 ? "Add" : "Remove", added, removed, DiffHash(added, removed), DiffHash(removed, added), DateTime.UtcNow.AddSeconds(-2))];
+                    invalid += groupNodes.Length;
+                    continue;
                 }
-                if (entries.Length > 0 && !_repairHistory.ContainsKey(groupKey))
-                    _repairHistory[groupKey] = entries.TakeLast(20).ToList();
-                var oscillationDetected = GetNullableBool(groupNode, "oscillationDetected") == true;
-                var locked = GetNullableBool(groupNode, "locked") == true;
-                var reason = groupNode["quarantineReason"]?.GetValue<string>() ?? groupNode["reason"]?.GetValue<string>() ?? string.Empty;
-                var oscillatingMarketIds = ReadStringArray(groupNode, "oscillatingMarketIds");
-                if (oscillationDetected || locked || !string.IsNullOrWhiteSpace(reason))
-                    _repairHistoryStatus[groupKey] = new RepairHistoryStatus(oscillationDetected, locked, oscillationDetected, false, false, oscillatingMarketIds, string.Empty, string.Empty, groupNode["recommendedAction"]?.GetValue<string>() ?? string.Empty, reason);
+                if (!seen.Add(groupKey)) duplicateGroupKeys++;
+                if (groupNodes.Length > 1)
+                {
+                    duplicateGroupKeys++;
+                    merged += groupNodes.Length - 1;
+                    Interlocked.Increment(ref _repairHistoryDuplicateWarnings);
+                    Console.WriteLine($"[DUPLICATE_GROUPKEY_DETECTED] Source=AllowlistRepair.HistoryFile GroupKey={groupKey} Count={groupNodes.Length} Policy={DuplicateGroupKeyPolicy.MergeRepairHistory}");
+                }
+
+                var entries = groupNodes.SelectMany(ReadHistoryEntriesFromGroupNode).OrderBy(x => x.Timestamp).TakeLast(MaxRepairHistorySnapshotsPerGroup).ToList();
+                if (entries.Count > 0)
+                {
+                    if (!_repairHistory.TryGetValue(groupKey, out var existing))
+                    {
+                        existing = [];
+                        _repairHistory[groupKey] = existing;
+                    }
+                    foreach (var entry in entries)
+                    {
+                        if (!existing.Any(x => x.SnapshotId.Equals(entry.SnapshotId, StringComparison.OrdinalIgnoreCase) && x.DiffHash.Equals(entry.DiffHash, StringComparison.OrdinalIgnoreCase)))
+                            existing.Add(entry);
+                    }
+                    existing.Sort((a, b) => a.Timestamp.CompareTo(b.Timestamp));
+                    if (existing.Count > MaxRepairHistorySnapshotsPerGroup) existing.RemoveRange(0, existing.Count - MaxRepairHistorySnapshotsPerGroup);
+                }
+
+                var statusNodes = groupNodes.Where(x => GetNullableBool(x, "oscillationDetected") == true || GetNullableBool(x, "locked") == true || !string.IsNullOrWhiteSpace(x["quarantineReason"]?.GetValue<string>() ?? x["reason"]?.GetValue<string>())).ToArray();
+                if (statusNodes.Length > 0)
+                {
+                    var statusNode = statusNodes.Last();
+                    var oscillationDetected = statusNodes.Any(x => GetNullableBool(x, "oscillationDetected") == true);
+                    var locked = statusNodes.Any(x => GetNullableBool(x, "locked") == true);
+                    var reason = statusNodes.Select(x => x["quarantineReason"]?.GetValue<string>() ?? x["reason"]?.GetValue<string>() ?? string.Empty).LastOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? string.Empty;
+                    var oscillatingMarketIds = statusNodes.SelectMany(x => ReadStringArray(x, "oscillatingMarketIds")).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                    _repairHistoryStatus[groupKey] = new RepairHistoryStatus(oscillationDetected, locked, oscillationDetected, false, false, oscillatingMarketIds, string.Empty, string.Empty, statusNode["recommendedAction"]?.GetValue<string>() ?? string.Empty, statusNode["repairConfidence"]?.GetValue<string>() ?? (locked || oscillationDetected ? "Unsafe" : string.Empty), reason);
+                }
+
+                if (groupNodes.Length > 1)
+                    Console.WriteLine($"[DUPLICATE_GROUPKEY_RESOLVED] Source=AllowlistRepair.HistoryFile GroupKey={groupKey} Kept=MergedRepairHistory Dropped={groupNodes.Length - 1}");
             }
+
+            var unique = nodes.Select(x => x["groupKey"]?.GetValue<string>() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+            var validationFingerprint = $"{File.GetLastWriteTimeUtc(path).Ticks}|{total}|{unique}|{duplicateGroupKeys}|{merged}|{invalid}|{MaxRepairHistorySnapshotsPerGroup}";
+            if (ShouldLogRepairHistoryValidation(validationFingerprint, loggingOptions))
+                Console.WriteLine($"[ALLOWLIST_REPAIR_HISTORY_VALIDATION] Total={total} UniqueGroupKeys={unique} DuplicateGroupKeys={duplicateGroupKeys} Merged={merged} MaxSnapshotsPerGroup={MaxRepairHistorySnapshotsPerGroup} InvalidEntries={invalid}");
+            if (duplicateGroupKeys > 0 || invalid > 0 || merged > 0)
+                ExportRepairHistory(path);
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore unreadable history exports; new history will be written by the next preview.
+            var validationFingerprint = $"error|{path}|{ex.Message}";
+            if (ShouldLogRepairHistoryValidation(validationFingerprint, loggingOptions))
+                Console.WriteLine($"[ALLOWLIST_REPAIR_HISTORY_VALIDATION] Total=0 UniqueGroupKeys=0 DuplicateGroupKeys=0 Merged=0 InvalidEntries=1 Error={ex.Message.Replace(' ', '_')}");
         }
+    }
+
+    private static IEnumerable<AllowlistRepairHistoryEntry> ReadHistoryEntriesFromGroupNode(JsonObject groupNode)
+    {
+        var groupKey = groupNode["groupKey"]?.GetValue<string>() ?? string.Empty;
+        var snapshotsNode = groupNode["snapshots"] as JsonArray ?? groupNode["lastSnapshots"] as JsonArray ?? new JsonArray();
+        var entries = snapshotsNode.OfType<JsonObject>().Select(ReadHistoryEntry).Where(x => x is not null).Cast<AllowlistRepairHistoryEntry>().ToArray();
+        if (entries.Length > 0) return entries;
+        var added = ReadStringArray(groupNode, "lastAddedMarketIds");
+        var removed = ReadStringArray(groupNode, "lastRemovedMarketIds");
+        if (added.Count == 0 && removed.Count == 0)
+        {
+            added = ReadStringArray(groupNode, "addedMarketIds");
+            removed = ReadStringArray(groupNode, "removedMarketIds");
+        }
+        return added.Count > 0 || removed.Count > 0
+            ? [new AllowlistRepairHistoryEntry(groupKey, "loaded-history-export", added.Count > 0 && removed.Count > 0 ? "Replace" : added.Count > 0 ? "Add" : "Remove", added, removed, DiffHash(added, removed), DiffHash(removed, added), DateTime.UtcNow.AddSeconds(-2))]
+            : [];
     }
 
     private void LoadPreviousPatchPreviewAsHistory(string path)
@@ -847,10 +936,55 @@ public sealed class AllowlistRepairService
     }
 
 
+    private IReadOnlyDictionary<string, AllowlistRepairLockedGroupOptions> GetLockedGroups(AllowlistRepairOptions options)
+    {
+        if (_lockProvider is not null) return _lockProvider.LockedGroups;
+        var fingerprint = string.Join("|", (options.LockedGroups ?? [])
+            .Where(x => !string.IsNullOrWhiteSpace(x.GroupKey))
+            .Select(x => $"{x.GroupKey.Trim()}::{x.Reason?.Trim()}::{x.AllowPatchPreview}")
+            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+        if (fingerprint.Equals(_cachedOptionLocksFingerprint, StringComparison.Ordinal)) return _cachedOptionLocks;
+
+        var rawLocks = (options.LockedGroups ?? [])
+            .Where(x => !string.IsNullOrWhiteSpace(x.GroupKey))
+            .Select(x => new AllowlistRepairLockedGroupOptions
+            {
+                GroupKey = x.GroupKey.Trim(),
+                Reason = string.IsNullOrWhiteSpace(x.Reason) ? "ManualLock" : x.Reason.Trim(),
+                AllowPatchPreview = x.AllowPatchPreview
+            })
+            .ToList();
+        _cachedOptionLocks = rawLocks
+            .GroupBy(x => x.GroupKey, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Last(), StringComparer.OrdinalIgnoreCase);
+        _cachedOptionLocksFingerprint = fingerprint;
+        return _cachedOptionLocks;
+    }
+
+    private bool TryGetLockedGroup(string groupKey, out AllowlistRepairLockedGroupOptions lockedGroup)
+    {
+        if (_lockProvider is not null)
+            return _lockProvider.TryGetLock(groupKey, out lockedGroup);
+        return GetLockedGroups(_lastOptions).TryGetValue(groupKey, out lockedGroup!);
+    }
+
+    private bool ShouldLogRepairHistoryValidation(string fingerprint, MultiOutcomeLoggingOptions loggingOptions)
+    {
+        _repairHistoryValidationCycle++;
+        var changed = !_lastRepairHistoryValidationFingerprint.Equals(fingerprint, StringComparison.Ordinal);
+        var periodic = loggingOptions.LogRepairHistoryValidationEveryNCycles > 0
+            && _repairHistoryValidationCycle % loggingOptions.LogRepairHistoryValidationEveryNCycles == 0;
+        if (changed || periodic || !loggingOptions.LogRepairHistoryValidationOnChangeOnly)
+        {
+            _lastRepairHistoryValidationFingerprint = fingerprint;
+            return true;
+        }
+        return false;
+    }
+
     private AllowlistRepairClassification ApplyRepairStatusOverride(VerifiedMultiOutcomeGroupConfig cfg, AllowlistRepairClassification classification)
     {
-        var locked = _lastOptions.LockedGroups.FirstOrDefault(x => x.GroupKey.Equals(cfg.GroupKey, StringComparison.OrdinalIgnoreCase) && !x.AllowPatchPreview);
-        if (locked is not null)
+        if (TryGetLockedGroup(cfg.GroupKey, out var locked) && !locked.AllowPatchPreview)
         {
             return classification with
             {
@@ -1015,7 +1149,7 @@ public sealed class AllowlistRepairService
 
     private sealed record CandidateSnapshot(string SnapshotId, DateTime CreatedAt, string DiscoveryId, string CandidateExportPath, int CandidateGroupsCount, string Source, bool IsRollingFallback, IReadOnlyList<JsonObject> Candidates);
     private sealed record ActionVersionState(int ActionVersion, string? PreviousAction, string CurrentAction, DateTime ActionChangedAt, string ReasonForChange, string SnapshotId, int ConsecutiveSnapshotMisses);
-    private sealed record RepairHistoryStatus(bool OscillationDetected, bool Locked, bool Quarantined, bool NoOp, bool Unstable, IReadOnlyList<string> OscillatingMarketIds, string PreviousAction, string CurrentAction, string RecommendedAction, string Reason);
+    private sealed record RepairHistoryStatus(bool OscillationDetected, bool Locked, bool Quarantined, bool NoOp, bool Unstable, IReadOnlyList<string> OscillatingMarketIds, string PreviousAction, string CurrentAction, string RecommendedAction, string RepairConfidence, string Reason);
 }
 
 public sealed class VerifiedAllowlistGroupHealthClassifier

@@ -259,6 +259,7 @@ public sealed record AllowlistRepairHistoryGroup(
     string GroupKey,
     IReadOnlyList<AllowlistRepairHistoryEntry> Snapshots,
     string LastDiffHash,
+    string InverseDiffHash,
     IReadOnlyList<string> LastAddedMarketIds,
     IReadOnlyList<string> LastRemovedMarketIds,
     IReadOnlyList<string> PreviousAddedMarketIds,
@@ -272,11 +273,13 @@ public sealed record AllowlistRepairHistoryGroup(
     AllowlistRepairHistoryDiff CurrentDiff,
     AllowlistRepairHistoryDiff PreviousDiff,
     string RecommendedAction,
+    string RepairConfidence,
     string Reason)
 {
     public IReadOnlyList<AllowlistRepairHistoryEntry> LastSnapshots => Snapshots;
     public IReadOnlyList<string> AddedMarketIds => LastAddedMarketIds;
     public IReadOnlyList<string> RemovedMarketIds => LastRemovedMarketIds;
+    public string DiffHash => LastDiffHash;
 }
 
 public sealed record AllowlistRepairHistoryExport(DateTime Timestamp, IReadOnlyList<AllowlistRepairHistoryGroup> Groups);

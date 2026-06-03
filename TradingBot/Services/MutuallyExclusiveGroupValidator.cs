@@ -40,7 +40,7 @@ public class MutuallyExclusiveGroupValidator
     {
         _options = options;
         _contentRootPath = string.IsNullOrWhiteSpace(contentRootPath) ? Directory.GetCurrentDirectory() : contentRootPath;
-        _verifiedGroups = LoadAllowlist(_contentRootPath).ToDictionary(x => x.GroupKey, StringComparer.OrdinalIgnoreCase);
+        _verifiedGroups = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(LoadAllowlist(_contentRootPath), x => x.GroupKey, "Allowlist.RealConfig", DuplicateGroupKeyPolicy.ThrowForConfig);
     }
 
     public int LoadedAllowlistCount => _verifiedGroups.Count;

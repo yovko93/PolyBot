@@ -11,7 +11,9 @@ public class BotEventPublisher(BotRuntimeState state, IHubContext<BotHub> hub)
     {
         var status = state.Status with { LastHeartbeat = DateTime.UtcNow, ConnectionStatus = "CONNECTED" };
         state.SetStatus(status);
+        state.AddSignalREvent("heartbeat");
         await hub.Clients.All.SendAsync("heartbeat", new { timestamp = DateTime.UtcNow, sequence = state.NextSeq() });
+        state.AddSignalREvent("botStatusUpdated");
         await hub.Clients.All.SendAsync("botStatusUpdated", status);
     }
 
@@ -19,6 +21,7 @@ public class BotEventPublisher(BotRuntimeState state, IHubContext<BotHub> hub)
     {
         var entry = new TerminalLogEntryDto(Guid.NewGuid().ToString("N"), DateTime.UtcNow, level, source, message, state.NextSeq());
         state.AddLog(entry);
+        state.AddSignalREvent("terminalLogAdded");
         _ = hub.Clients.All.SendAsync("terminalLogAdded", entry);
     }
 }

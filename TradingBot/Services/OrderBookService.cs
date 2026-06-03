@@ -29,7 +29,8 @@ public class OrderBookService : IOrderBookProvider
     private readonly Dictionary<string, (DateTime Time, ClobOrderBook? Book)> _bookCache = new();
     private readonly Dictionary<string, (DateTime Time, BinaryOrderBookSnapshot? Snapshot)> _snapshotCache = new();
 
-    private readonly TimeSpan _cacheTtl = TimeSpan.FromSeconds(60);
+    private TimeSpan _cacheTtl = TimeSpan.FromSeconds(60);
+    private int _maxCacheEntries = 5000;
 
     public OrderBookService(HttpClient http)
     {
@@ -39,6 +40,10 @@ public class OrderBookService : IOrderBookProvider
 
     public bool DisableSingleBookHttpFallback { get; set; } = false;
     public bool LogPrefetchDetails { get; set; } = false;
+    public int BookCacheCount { get { lock (_cacheLock) return _bookCache.Count; } }
+    public int SnapshotCacheCount { get { lock (_cacheLock) return _snapshotCache.Count; } }
+    public int CacheEntryCount { get { lock (_cacheLock) return _bookCache.Count + _snapshotCache.Count; } }
+    public void ConfigureCache(TimeSpan ttl, int maxEntries) { _cacheTtl = ttl; _maxCacheEntries = Math.Max(1, maxEntries); }
 
     public async Task<BinaryOrderBookSnapshot?> GetBinarySnapshotAsync(
         Market market,
@@ -93,6 +98,7 @@ public class OrderBookService : IOrderBookProvider
         lock (_cacheLock)
         {
             _snapshotCache[snapshotCacheKey] = (DateTime.UtcNow, snapshot);
+            TrimCacheLocked();
         }
 
         return snapshot;
@@ -183,6 +189,7 @@ public class OrderBookService : IOrderBookProvider
                 _snapshotCache[market.id] = (now, snapshot);
                 snapshotsLoaded++;
             }
+            TrimCacheLocked();
         }
 
         if (LogPrefetchDetails)
@@ -285,6 +292,7 @@ public class OrderBookService : IOrderBookProvider
                 lock (_cacheLock)
                 {
                     _bookCache[tokenId] = (DateTime.UtcNow, book);
+                    TrimCacheLocked();
                 }
 
                 return book;
@@ -344,6 +352,16 @@ public class OrderBookService : IOrderBookProvider
         }
     }
 
+    public void ClearAllCache()
+    {
+        lock (_cacheLock)
+        {
+            _bookCache.Clear();
+            _snapshotCache.Clear();
+            while (_bookCacheMissSamples.TryDequeue(out _)) { }
+        }
+    }
+
     public void ClearExpiredCache()
     {
         lock (_cacheLock)
@@ -365,6 +383,26 @@ public class OrderBookService : IOrderBookProvider
             {
                 _snapshotCache.Remove(key);
             }
+        }
+    }
+
+
+    private void TrimCacheLocked()
+    {
+        var now = DateTime.UtcNow;
+        foreach (var key in _bookCache.Where(x => now - x.Value.Time > _cacheTtl).Select(x => x.Key).ToList()) _bookCache.Remove(key);
+        foreach (var key in _snapshotCache.Where(x => now - x.Value.Time > _cacheTtl).Select(x => x.Key).ToList()) _snapshotCache.Remove(key);
+        while (_bookCache.Count > _maxCacheEntries)
+        {
+            var oldest = _bookCache.OrderBy(x => x.Value.Time).FirstOrDefault().Key;
+            if (string.IsNullOrWhiteSpace(oldest)) break;
+            _bookCache.Remove(oldest);
+        }
+        while (_snapshotCache.Count > _maxCacheEntries)
+        {
+            var oldest = _snapshotCache.OrderBy(x => x.Value.Time).FirstOrDefault().Key;
+            if (string.IsNullOrWhiteSpace(oldest)) break;
+            _snapshotCache.Remove(oldest);
         }
     }
 
@@ -442,6 +480,7 @@ public class OrderBookService : IOrderBookProvider
                 {
                     _bookCache[assetId] = (DateTime.UtcNow, book);
                     result[assetId] = book;
+                    TrimCacheLocked();
                 }
 
                 loaded++;
