@@ -1,16 +1,19 @@
 {
-  "timestamp": "2026-06-02T19:46:09.5932613Z",
-  "snapshotId": "candidate-export-8dec0defe509c7f-e86c8b795571",
+  "timestamp": "2026-06-03T09:59:05.4376526Z",
+  "snapshotId": "candidate-export-8dec1569f1bfb42-9915e071a98d",
   "sourceConfigPath": "config/verified-multi-outcome-groups.json",
   "mode": "ManualPreviewOnly",
   "willOverwriteRealConfig": false,
   "summary": {
     "totalConfigured": 11,
-    "patchableHighConfidence": 0,
+    "patchableHighConfidence": 1,
     "patchableMediumConfidence": 0,
     "lowConfidenceReviewOnly": 2,
     "disabledSuggested": 1,
-    "expectedHealthyAfterApply": 9
+    "expectedHealthyAfterApply": 9,
+    "quarantined": 0,
+    "noOp": 0,
+    "locked": 0
   },
   "patches": [
     {
@@ -121,6 +124,80 @@
       ],
       "manualInstructions": "No trusted automatic config change. Review diagnostics manually; do not copy an executable group from this preview.",
       "expectedResultAfterApply": "No automatic template is trusted; operator reviews candidate exports and current config."
+    },
+    {
+      "groupKey": "winner:2026 peruvian presidential election|kind:person",
+      "currentAction": "RefreshFromCandidateExport",
+      "confidence": "High",
+      "patchType": "ReplaceGroup",
+      "currentGroup": {
+        "enabled": true,
+        "groupKey": "winner:2026 peruvian presidential election|kind:person",
+        "title": "winner:2026 peruvian presidential election|kind:person",
+        "verificationStatus": "Verified",
+        "groupType": "MutuallyExclusiveWinner",
+        "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+        "marketIds": [
+          "947289",
+          "947268"
+        ],
+        "conditionIds": [
+          "0x2cd24d17f5680dc6e7b7d67c712a223ae85550745597e81bd2d2b8d073443951",
+          "0xae6d3d20bc8f742922dc40880cd8a8671c10385a9912fa7cd670fba0643dfe96"
+        ],
+        "requiredOutcomeCount": 2,
+        "requireExactOutcomeCount": false,
+        "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+        "verifiedBy": "manual",
+        "verifiedAt": "2026-06-02",
+        "repairSourceSnapshotId": "candidate-export-8dec0de724b7f0a-2622bb8f0120",
+        "repairAction": "RefreshFromCandidateExport"
+      },
+      "proposedGroup": {
+        "enabled": true,
+        "groupKey": "winner:2026 peruvian presidential election|kind:person",
+        "title": "winner:2026 peruvian presidential election|kind:person",
+        "verificationStatus": "Verified",
+        "groupType": "MutuallyExclusiveWinner",
+        "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+        "marketIds": [
+          "947289",
+          "947269",
+          "947268"
+        ],
+        "conditionIds": [
+          "0x2cd24d17f5680dc6e7b7d67c712a223ae85550745597e81bd2d2b8d073443951",
+          "0xc4c3dbcc37a957a817599b0bf9fb5bd6b62b19210b0f527fec57cb75c7ed150a",
+          "0xae6d3d20bc8f742922dc40880cd8a8671c10385a9912fa7cd670fba0643dfe96"
+        ],
+        "requiredOutcomeCount": 3,
+        "requireExactOutcomeCount": false,
+        "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+        "verifiedBy": "manual",
+        "verifiedAt": "2026-06-03",
+        "repairSourceSnapshotId": "candidate-export-8dec1569f1bfb42-9915e071a98d",
+        "repairAction": "RefreshFromCandidateExport"
+      },
+      "diff": {
+        "addedMarketIds": [
+          "947269"
+        ],
+        "removedMarketIds": [],
+        "changedConditionIds": [
+          "0xc4c3dbcc37a957a817599b0bf9fb5bd6b62b19210b0f527fec57cb75c7ed150a"
+        ],
+        "missingNoAskMarketIds": [],
+        "requiredOutcomeCountBefore": 2,
+        "requiredOutcomeCountAfter": 3,
+        "enabledBefore": true,
+        "enabledAfter": true
+      },
+      "riskNotes": [
+        "Preview only; this workflow never overwrites config/verified-multi-outcome-groups.json.",
+        "Refresh replaces marketIds/conditionIds from the candidate export; verify settlement remains mutually exclusive."
+      ],
+      "manualInstructions": "Review currentGroup, proposedGroup, and diff. If acceptable, manually copy the matching group from exports/verified-multi-outcome-groups-patched-preview.json into config/verified-multi-outcome-groups.json, then restart/reload allowlist.",
+      "expectedResultAfterApply": "Configured market/condition ids are refreshed from a stable candidate after manual review."
     }
   ],
   "postApplyValidationPlan": {
@@ -133,7 +210,9 @@
     "expectedConfiguredCount": 11,
     "expectedResolvedCount": 9,
     "expectedMissingNoAskCount": 0,
-    "groupsExpectedToBecomeHealthyOrResolved": [],
+    "groupsExpectedToBecomeHealthyOrResolved": [
+      "winner:2026 peruvian presidential election|kind:person"
+    ],
     "groupsStillExpectedReviewOnly": [
       "winner:2026 women s us open|kind:generic",
       "winner:1st round of 2026 colombian presidential election|kind:person"
@@ -159,14 +238,17 @@
       "cp config/verified-multi-outcome-groups.json config/verified-multi-outcome-groups.json.bak.$(date -u \u002B%Y%m%dT%H%M%SZ)",
       "Keep the backup until [ALLOWLIST_HEALTH] and [MULTI_VERIFIED_SCAN] are reviewed after restart."
     ],
-    "groupsToApply": [],
+    "groupsToApply": [
+      "winner:2026 peruvian presidential election|kind:person (ReplaceGroup, High)"
+    ],
     "groupsNotToApply": [
       "winner:2026 women s us open|kind:generic",
       "winner:1st round of 2026 colombian presidential election|kind:person"
     ],
     "expectedLogsAfterRestart": [
       "[ALLOWLIST_CONFIG_VALIDATION] Total=11 UniqueGroupKeys=11 DuplicateGroupKeys=0",
-      "[ALLOWLIST_PATCHED_PREVIEW_VALIDATION] Total=11 UniqueGroupKeys=11 DuplicateGroupKeys=0 Valid=true"
+      "[ALLOWLIST_PATCHED_PREVIEW_VALIDATION] Total=11 UniqueGroupKeys=11 DuplicateGroupKeys=0 Valid=true",
+      "Peru should no longer show the removed market id after restart if the patch is correct."
     ]
   },
   "patchedPreviewValidation": {

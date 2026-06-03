@@ -338,18 +338,20 @@
     "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
     "marketIds": [
       "947289",
+      "947269",
       "947268"
     ],
     "conditionIds": [
       "0x2cd24d17f5680dc6e7b7d67c712a223ae85550745597e81bd2d2b8d073443951",
+      "0xc4c3dbcc37a957a817599b0bf9fb5bd6b62b19210b0f527fec57cb75c7ed150a",
       "0xae6d3d20bc8f742922dc40880cd8a8671c10385a9912fa7cd670fba0643dfe96"
     ],
-    "requiredOutcomeCount": 2,
+    "requiredOutcomeCount": 3,
     "requireExactOutcomeCount": false,
     "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
     "verifiedBy": "manual",
-    "verifiedAt": "2026-06-02",
-    "repairSourceSnapshotId": "candidate-export-8dec0de724b7f0a-2622bb8f0120",
+    "verifiedAt": "2026-06-03",
+    "repairSourceSnapshotId": "candidate-export-8dec1569f1bfb42-9915e071a98d",
     "repairAction": "RefreshFromCandidateExport"
   }
 ]

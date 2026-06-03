@@ -1,7 +1,45 @@
 [
   {
-    "groupKey": "winner:on 2026 06 05|kind:generic",
-    "title": "winner:on 2026 06 05|kind:generic",
+    "groupKey": "winner:2027 nfl league championship|kind:generic",
+    "title": "winner:2027 nfl league championship|kind:generic",
+    "detectedMarketsCount": 4,
+    "pricedLegs": 4,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:2027 nfl league championship|kind:generic",
+      "title": "winner:2027 nfl league championship|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "1357373",
+        "1357379",
+        "1357398",
+        "1357377"
+      ],
+      "conditionIds": [
+        "0xbd1d0889e5037c451bb1e45163749786fe4acc10af2ab40477e7052766054712",
+        "0x93158447b78290c1abb5ccf3e025dd03290865972b3fc9c8d2803aa64ae1cbfd",
+        "0x6099e6b30c4ee1d3121e5ebe4760ebff446ec5d7eef1b9c43dd2e9cfd59a556c",
+        "0xd855563532f3fc1326ff9965890733a3df564a83d0ad18d459368bf9307a376b"
+      ],
+      "requiredOutcomeCount": 4,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-06-03"
+    }
+  },
+  {
+    "groupKey": "winner:on 2026 06 17|kind:generic",
+    "title": "winner:on 2026 06 17|kind:generic",
     "detectedMarketsCount": 3,
     "pricedLegs": 3,
     "missingNoAsk": 0,
@@ -13,31 +51,67 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:on 2026 06 05|kind:generic",
-      "title": "winner:on 2026 06 05|kind:generic",
+      "groupKey": "winner:on 2026 06 17|kind:generic",
+      "title": "winner:on 2026 06 17|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "2321129",
-        "2211868",
-        "2316740"
+        "1897097",
+        "1897103",
+        "1897105"
       ],
       "conditionIds": [
-        "0x2278336f1626154de2ae49310b506326e739ccc98aa42a16b3fd2376bcf3e9c1",
-        "0xcf9f40c487e8a6122fe214a7f5b0705737f5dff4865c8efd2555a76bd0647537",
-        "0x80e7c0995eff162f6a74550aef42f91b7b00f417c72d899a48da68d0cf8632c6"
+        "0xb361c29b5481164886627cb175ed76792df30902e66ec329c0a3853f807fe8e9",
+        "0x0ef9d17aff09c873dc47a93cfb13c42ab6274b4493e022fed1f228193714540d",
+        "0x2f00e48e914ba6606867a6347e90c48cc1fd4da66cc196a191786637f40848e9"
       ],
       "requiredOutcomeCount": 3,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-06-02"
+      "verifiedAt": "2026-06-03"
     }
   },
   {
-    "groupKey": "winner:best musical at 2026 tony awards|kind:generic",
-    "title": "winner:best musical at 2026 tony awards|kind:generic",
+    "groupKey": "winner:on 2026 06 04|kind:generic",
+    "title": "winner:on 2026 06 04|kind:generic",
+    "detectedMarketsCount": 3,
+    "pricedLegs": 3,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:on 2026 06 04|kind:generic",
+      "title": "winner:on 2026 06 04|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "2211825",
+        "2189193",
+        "2189186"
+      ],
+      "conditionIds": [
+        "0xf35b7d5e88aac03261ed07a307b716c880bbb0dc9168206e54aa08c9aa5d5554",
+        "0x51221ee56ff6a9f1062740a8dc618af6a4363231504d176053636c39f623f959",
+        "0x96357c12031363831610b1ee427a96b057d017f6b910f9e841a0e89906e29a9b"
+      ],
+      "requiredOutcomeCount": 3,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-06-03"
+    }
+  },
+  {
+    "groupKey": "winner:group k in 2026 fifa world cup|kind:generic",
+    "title": "winner:group k in 2026 fifa world cup|kind:generic",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
     "missingNoAsk": 0,
@@ -49,29 +123,29 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:best musical at 2026 tony awards|kind:generic",
-      "title": "winner:best musical at 2026 tony awards|kind:generic",
+      "groupKey": "winner:group k in 2026 fifa world cup|kind:generic",
+      "title": "winner:group k in 2026 fifa world cup|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "2261583",
-        "2261582"
+        "840171",
+        "840174"
       ],
       "conditionIds": [
-        "0x6b10ac1b8f21a4baef2c63d2c27211760860884896784b18a098879c1414505a",
-        "0x5661524495eb9a764f2c2f39db9a625b1186d333d5289daed2773283353f7bf3"
+        "0x4795571ed1c6992ca07b6d34853d07d07ef4977b892660b4205cd2f3752c4826",
+        "0x881c23cb7b27ca775bfc550550ee94e6dc980a1b4dff7ca7f6f5f24e95bff060"
       ],
       "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-06-02"
+      "verifiedAt": "2026-06-03"
     }
   },
   {
-    "groupKey": "winner:most seats in 2026 mecklenburg vorpommern parliamentary elections|kind:generic",
-    "title": "winner:most seats in 2026 mecklenburg vorpommern parliamentary elections|kind:generic",
+    "groupKey": "winner:2026 f1 monaco grand prix|kind:generic",
+    "title": "winner:2026 f1 monaco grand prix|kind:generic",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
     "missingNoAsk": 0,
@@ -83,126 +157,24 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:most seats in 2026 mecklenburg vorpommern parliamentary elections|kind:generic",
-      "title": "winner:most seats in 2026 mecklenburg vorpommern parliamentary elections|kind:generic",
+      "groupKey": "winner:2026 f1 monaco grand prix|kind:generic",
+      "title": "winner:2026 f1 monaco grand prix|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "1364104",
-        "1364106"
+        "2209908",
+        "2209897"
       ],
       "conditionIds": [
-        "0x012485913d6e71ad76d7a43a9be02c23ab4b10467ab3eb506b0b543e0333825e",
-        "0x02499104ee8929190420b93957bbf9ee73c4a1e12599c4dce5cbbd0b8d8030d9"
+        "0xe8fbed5148ea09f199fac28c06084175b08223c150bd2c0d20d95ab98e3634d1",
+        "0x427a6b47590aab053b2e03423fffb5b757b8e879d639b10af496b0e76c65f62e"
       ],
       "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-06-02"
-    }
-  },
-  {
-    "groupKey": "winner:lpl 2026 split 2|kind:generic",
-    "title": "winner:lpl 2026 split 2|kind:generic",
-    "detectedMarketsCount": 2,
-    "pricedLegs": 2,
-    "missingNoAsk": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "rawOnlyEdge": null,
-    "candidateQualityScore": 90,
-    "safetyClassification": "SafeForManualVerification",
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:lpl 2026 split 2|kind:generic",
-      "title": "winner:lpl 2026 split 2|kind:generic",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "1901248",
-        "1901259"
-      ],
-      "conditionIds": [
-        "0xcbf2e173d92a989f9abba89988417b08d37711c0e9c9ae699a64ec4a2b91d416",
-        "0x6dd82fd9ac84082a0dce524d8e5dd7c4ee8cdd5e1d2418c6b04895977361ccd5"
-      ],
-      "requiredOutcomeCount": 2,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-06-02"
-    }
-  },
-  {
-    "groupKey": "winner:liga endesa|kind:generic",
-    "title": "winner:liga endesa|kind:generic",
-    "detectedMarketsCount": 2,
-    "pricedLegs": 2,
-    "missingNoAsk": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "rawOnlyEdge": null,
-    "candidateQualityScore": 90,
-    "safetyClassification": "SafeForManualVerification",
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:liga endesa|kind:generic",
-      "title": "winner:liga endesa|kind:generic",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "1834190",
-        "1834178"
-      ],
-      "conditionIds": [
-        "0x2236c2e6f8f746217cfbe980d71df7d2a60ffba24a4ad38d58a3cd5e78e83b83",
-        "0xc0a906a04e7538c3c936e116798eaa51d49eb8c7f59cb3d477955a23bbf1392e"
-      ],
-      "requiredOutcomeCount": 2,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-06-02"
-    }
-  },
-  {
-    "groupKey": "winner:on 2026 06 06|kind:generic",
-    "title": "winner:on 2026 06 06|kind:generic",
-    "detectedMarketsCount": 2,
-    "pricedLegs": 2,
-    "missingNoAsk": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "rawOnlyEdge": null,
-    "candidateQualityScore": 90,
-    "safetyClassification": "SafeForManualVerification",
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:on 2026 06 06|kind:generic",
-      "title": "winner:on 2026 06 06|kind:generic",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "2373232",
-        "2222178"
-      ],
-      "conditionIds": [
-        "0x20d82c92aef4711de1934df76df4f933fbe61c064bc4e504d55024b44fa16706",
-        "0x8efa35eccfcd94ab09b9e31038f0c94c6a74be6f8f06d30d4b10659eaa9c984f"
-      ],
-      "requiredOutcomeCount": 2,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-06-02"
+      "verifiedAt": "2026-06-03"
     }
   }
 ]

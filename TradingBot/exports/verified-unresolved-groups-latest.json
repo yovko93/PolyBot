@@ -1,0 +1,61 @@
+{
+  "timestamp": "2026-06-03T09:59:05.5520944Z",
+  "total": 3,
+  "categoryCounts": {
+    "total": 3,
+    "brokenConfig": 1,
+    "needsRefresh": 1,
+    "reviewOnly": 1,
+    "monitoringOnly": 0,
+    "other": 0,
+    "samplesShown": 0,
+    "suppressed": 3,
+    "categoryTotal": 3,
+    "sampleTotal": 3,
+    "invariantOk": true
+  },
+  "groups": [
+    {
+      "groupKey": "winner:1st round of 2026 colombian presidential election|kind:person",
+      "reason": "VerifiedGroupNotFoundInDiscoveredPool",
+      "validationStatus": "Rejected",
+      "healthCategory": "ReviewOnly",
+      "recommendedAction": "NeedsManualReview",
+      "repairConfidence": "Low",
+      "isReviewOnly": true,
+      "isBrokenConfig": false,
+      "isNeedsRefresh": false,
+      "isMonitoringOnly": false,
+      "sampleLogged": false,
+      "suppressedInConsole": true
+    },
+    {
+      "groupKey": "winner:2026 peruvian presidential election|kind:person",
+      "reason": "ResolverMissingConfiguredGroup",
+      "validationStatus": "NeedsRepair",
+      "healthCategory": "NeedsRefresh",
+      "recommendedAction": "RefreshFromCandidateExport",
+      "repairConfidence": "High",
+      "isReviewOnly": false,
+      "isBrokenConfig": false,
+      "isNeedsRefresh": true,
+      "isMonitoringOnly": false,
+      "sampleLogged": false,
+      "suppressedInConsole": true
+    },
+    {
+      "groupKey": "winner:2026 women s us open|kind:generic",
+      "reason": "VerifiedGroupNotFoundInDiscoveredPool",
+      "validationStatus": "Rejected",
+      "healthCategory": "BrokenConfig",
+      "recommendedAction": "DisableMissingMarkets",
+      "repairConfidence": "Low",
+      "isReviewOnly": false,
+      "isBrokenConfig": true,
+      "isNeedsRefresh": false,
+      "isMonitoringOnly": false,
+      "sampleLogged": false,
+      "suppressedInConsole": true
+    }
+  ]
+}
