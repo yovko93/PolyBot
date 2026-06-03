@@ -28,6 +28,9 @@ public sealed record RuntimeHealthSnapshot(
     int MarketCacheCount,
     int ExportQueueCount)
 {
+    public string ToLogLine()
+        => $"[RUNTIME_HEALTH] ProcessMb={ProcessMemoryMb} GcMb={GcTotalMemoryMb} WorkingSetMb={WorkingSetMb} Logs={RecentLogsCount} ScannerHistory={ScannerHistoryCount} CandidateSnapshots={CandidateSnapshotCount} RepairHistory={RepairHistoryCount} ExecutionAudit={ExecutionAuditCount} SignalRBuffer={SignalREventBufferCount} OrderbookCache={OrderbookCacheCount} MarketCache={MarketCacheCount} Uptime={Uptime}";
+
     public static RuntimeHealthSnapshot From(BotRuntimeState state)
     {
         var p = Process.GetCurrentProcess();

@@ -282,7 +282,15 @@ public class AllowlistRepairOptions
     public bool PreferStableCachedMatches { get; set; } = true;
     public bool UseLatestCandidateExportForRepair { get; set; } = true;
     public int RequiredStableRepairSnapshots { get; set; } = 2;
-    public List<AllowlistRepairLockedGroupOptions> LockedGroups { get; set; } = new();
+    public List<AllowlistRepairLockedGroupOptions> LockedGroups { get; set; } = new()
+    {
+        new AllowlistRepairLockedGroupOptions
+        {
+            GroupKey = "winner:2026 peruvian presidential election|kind:person",
+            Reason = "Manual review required due to repair diff oscillation on marketId 947269",
+            AllowPatchPreview = false
+        }
+    };
 }
 
 public class AllowlistRepairLockedGroupOptions
@@ -329,6 +337,7 @@ public class SignalROptions
 public class RuntimeHealthOptions
 {
     public bool Enabled { get; set; } = true;
+    public bool LogOnStartup { get; set; } = true;
     public int LogEveryMinutes { get; set; } = 2;
 }
 

@@ -247,6 +247,7 @@ public sealed class AllowlistRepairService
                             groupKey,
                             last,
                             current?.DiffHash ?? string.Empty,
+                            current?.InverseDiffHash ?? string.Empty,
                             current?.AddedMarketIds ?? Array.Empty<string>(),
                             current?.RemovedMarketIds ?? Array.Empty<string>(),
                             previous?.AddedMarketIds ?? Array.Empty<string>(),
@@ -260,6 +261,7 @@ public sealed class AllowlistRepairService
                             new AllowlistRepairHistoryDiff(current?.AddedMarketIds ?? Array.Empty<string>(), current?.RemovedMarketIds ?? Array.Empty<string>()),
                             new AllowlistRepairHistoryDiff(previous?.AddedMarketIds ?? Array.Empty<string>(), previous?.RemovedMarketIds ?? Array.Empty<string>()),
                             status?.RecommendedAction ?? string.Empty,
+                            status?.RepairConfidence ?? string.Empty,
                             status?.Reason ?? string.Empty);
                     })
                     .ToArray());
@@ -432,9 +434,9 @@ public sealed class AllowlistRepairService
     {
         var noOp = patch.PatchType == "None" || (patch.PatchType == "ReplaceGroup" && !HasRepairMarketDiff(entry) && !HasRealPatchDiff(patch));
         if (locked)
-            return new RepairHistoryStatus(false, true, false, noOp, false, [], string.Empty, string.Empty, nameof(AllowlistRepairRecommendedAction.NeedsManualReview), string.IsNullOrWhiteSpace(lockReason) ? "ManualLock" : $"ManualLock: {lockReason}");
+            return new RepairHistoryStatus(false, true, false, noOp, false, [], string.Empty, string.Empty, nameof(AllowlistRepairRecommendedAction.NeedsManualReview), "Unsafe", string.IsNullOrWhiteSpace(lockReason) ? "ManualLock" : lockReason);
         if (_repairHistoryStatus.TryGetValue(groupKey, out var previousStatus) && previousStatus.OscillationDetected)
-            return previousStatus with { Quarantined = true, RecommendedAction = nameof(AllowlistRepairRecommendedAction.NeedsManualReview), Reason = string.IsNullOrWhiteSpace(previousStatus.Reason) ? "RepairDiffOscillation" : previousStatus.Reason };
+            return previousStatus with { Quarantined = true, RecommendedAction = nameof(AllowlistRepairRecommendedAction.NeedsManualReview), RepairConfidence = "Unsafe", Reason = string.IsNullOrWhiteSpace(previousStatus.Reason) ? "RepairDiffOscillation" : previousStatus.Reason };
 
         var history = _repairHistory.TryGetValue(groupKey, out var list) ? list : [];
         var inverse = history
@@ -449,21 +451,21 @@ public sealed class AllowlistRepairService
                 .ToArray();
             var previousAction = inverse.RemovedMarketIds.Count > 0 ? "Remove" : inverse.AddedMarketIds.Count > 0 ? "Add" : inverse.Action;
             var currentAction = entry.AddedMarketIds.Count > 0 ? "Add" : entry.RemovedMarketIds.Count > 0 ? "Remove" : entry.Action;
-            return new RepairHistoryStatus(true, false, true, false, false, ids, previousAction, currentAction, nameof(AllowlistRepairRecommendedAction.NeedsManualReview), "RepairDiffOscillation");
+            return new RepairHistoryStatus(true, false, true, false, false, ids, previousAction, currentAction, nameof(AllowlistRepairRecommendedAction.NeedsManualReview), "Unsafe", "RepairDiffOscillation");
         }
 
         if (noOp)
-            return new RepairHistoryStatus(false, false, false, true, false, [], string.Empty, string.Empty, patch.CurrentAction, "NoOpDiff");
+            return new RepairHistoryStatus(false, false, false, true, false, [], string.Empty, string.Empty, patch.CurrentAction, patch.Confidence, "NoOpDiff");
 
         if (patch.PatchType == "ReplaceGroup" && IsPatchablePatch(patch))
         {
             var required = Math.Max(1, options.RequiredStableRepairSnapshots);
             var stableCount = ConsecutiveSameDiffCount(history, entry.DiffHash);
             if (stableCount < required)
-                return new RepairHistoryStatus(false, false, false, false, true, [], string.Empty, string.Empty, nameof(AllowlistRepairRecommendedAction.NeedsManualReview), $"RepairDiffNotStable StableSnapshots={stableCount}/{required}");
+                return new RepairHistoryStatus(false, false, false, false, true, [], string.Empty, string.Empty, nameof(AllowlistRepairRecommendedAction.NeedsManualReview), "Low", $"RepairDiffNotStable StableSnapshots={stableCount}/{required}");
         }
 
-        return new RepairHistoryStatus(false, false, false, noOp, false, [], string.Empty, string.Empty, patch.CurrentAction, string.Empty);
+        return new RepairHistoryStatus(false, false, false, noOp, false, [], string.Empty, string.Empty, patch.CurrentAction, patch.Confidence, string.Empty);
     }
 
     private static int ConsecutiveSameDiffCount(IReadOnlyList<AllowlistRepairHistoryEntry> history, string diffHash)
@@ -492,9 +494,10 @@ public sealed class AllowlistRepairService
 
     private static AllowlistRepairPatchItem MakeReviewOnlyPatch(AllowlistRepairPatchItem patch, RepairHistoryStatus status)
     {
-        var notes = patch.RiskNotes.Concat([status.Reason]).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var statusNotes = new[] { status.Locked ? "ManualLock" : string.Empty, status.Reason }.Where(x => !string.IsNullOrWhiteSpace(x));
+        var notes = patch.RiskNotes.Concat(statusNotes).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var action = status.RecommendedAction;
-        var confidence = status.Quarantined || status.Locked || status.Unstable ? "Low" : patch.Confidence;
+        var confidence = !string.IsNullOrWhiteSpace(status.RepairConfidence) ? status.RepairConfidence : (status.Quarantined || status.Locked || status.Unstable ? "Low" : patch.Confidence);
         return patch with
         {
             CurrentAction = action,
@@ -572,7 +575,7 @@ public sealed class AllowlistRepairService
                 var reason = groupNode["quarantineReason"]?.GetValue<string>() ?? groupNode["reason"]?.GetValue<string>() ?? string.Empty;
                 var oscillatingMarketIds = ReadStringArray(groupNode, "oscillatingMarketIds");
                 if (oscillationDetected || locked || !string.IsNullOrWhiteSpace(reason))
-                    _repairHistoryStatus[groupKey] = new RepairHistoryStatus(oscillationDetected, locked, oscillationDetected, false, false, oscillatingMarketIds, string.Empty, string.Empty, groupNode["recommendedAction"]?.GetValue<string>() ?? string.Empty, reason);
+                    _repairHistoryStatus[groupKey] = new RepairHistoryStatus(oscillationDetected, locked, oscillationDetected, false, false, oscillatingMarketIds, string.Empty, string.Empty, groupNode["recommendedAction"]?.GetValue<string>() ?? string.Empty, groupNode["repairConfidence"]?.GetValue<string>() ?? (locked || oscillationDetected ? "Unsafe" : string.Empty), reason);
             }
         }
         catch
@@ -1018,7 +1021,7 @@ public sealed class AllowlistRepairService
 
     private sealed record CandidateSnapshot(string SnapshotId, DateTime CreatedAt, string DiscoveryId, string CandidateExportPath, int CandidateGroupsCount, string Source, bool IsRollingFallback, IReadOnlyList<JsonObject> Candidates);
     private sealed record ActionVersionState(int ActionVersion, string? PreviousAction, string CurrentAction, DateTime ActionChangedAt, string ReasonForChange, string SnapshotId, int ConsecutiveSnapshotMisses);
-    private sealed record RepairHistoryStatus(bool OscillationDetected, bool Locked, bool Quarantined, bool NoOp, bool Unstable, IReadOnlyList<string> OscillatingMarketIds, string PreviousAction, string CurrentAction, string RecommendedAction, string Reason);
+    private sealed record RepairHistoryStatus(bool OscillationDetected, bool Locked, bool Quarantined, bool NoOp, bool Unstable, IReadOnlyList<string> OscillatingMarketIds, string PreviousAction, string CurrentAction, string RecommendedAction, string RepairConfidence, string Reason);
 }
 
 public sealed class VerifiedAllowlistGroupHealthClassifier

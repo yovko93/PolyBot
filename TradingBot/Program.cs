@@ -356,6 +356,12 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     Console.WriteLine($"[ALLOWLIST] Loaded verified multi-outcome groups: {multiOutcomeValidator.LoadedAllowlistCount}");
     var startupAllowlistValidation = ScanLogSummaryService.AllowlistConfigValidation(multiOutcomeValidator.GetAllowlistedGroups());
     Console.WriteLine(startupAllowlistValidation.ToLogLine());
+    if (options.RuntimeHealth.Enabled && options.RuntimeHealth.LogOnStartup)
+    {
+        state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);
+        Console.WriteLine(RuntimeHealthSnapshot.From(state).ToLogLine());
+        runtimeHealthLastLoggedAt = DateTime.UtcNow;
+    }
     while (!stoppingToken.IsCancellationRequested)
     {
         var started = DateTime.UtcNow;
@@ -381,7 +387,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             {
                 runtimeHealthLastLoggedAt = DateTime.UtcNow;
                 var health = RuntimeHealthSnapshot.From(state);
-                Console.WriteLine($"[RUNTIME_HEALTH] ProcessMb={health.ProcessMemoryMb} GcMb={health.GcTotalMemoryMb} Logs={health.RecentLogsCount} CandidateSnapshots={health.CandidateSnapshotCount} RepairHistory={health.RepairHistoryCount} OrderbookCache={health.OrderbookCacheCount} Uptime={health.Uptime}");
+                Console.WriteLine(health.ToLogLine());
             }
             await PushUiUpdates(state, hub, uiLogger, options, verifiedExecution, contentRootPath);
                 uiLogger.LogInfo("scanner", "{\"event\":\"scan_skipped\",\"reason\":\"PAUSED\"}");
@@ -1184,7 +1190,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             {
                 runtimeHealthLastLoggedAt = DateTime.UtcNow;
                 var health = RuntimeHealthSnapshot.From(state);
-                Console.WriteLine($"[RUNTIME_HEALTH] ProcessMb={health.ProcessMemoryMb} GcMb={health.GcTotalMemoryMb} Logs={health.RecentLogsCount} CandidateSnapshots={health.CandidateSnapshotCount} RepairHistory={health.RepairHistoryCount} OrderbookCache={health.OrderbookCacheCount} Uptime={health.Uptime}");
+                Console.WriteLine(health.ToLogLine());
             }
             await PushUiUpdates(state, hub, uiLogger, options, verifiedExecution, contentRootPath);
             uiLogger.LogInfo("scanner", $"{{\"event\":\"scan_end\",\"durationMs\":{(long)(DateTime.UtcNow - started).TotalMilliseconds},\"marketsScanned\":{filtered.Count},\"detected\":{cycleTop.Count},\"executable\":{executableCount}}}");
@@ -1253,18 +1259,10 @@ static async Task PushUiUpdates(BotRuntimeState state, IHubContext<BotHub> hub, 
 
 static T[] TrimPayload<T>(BotRuntimeState state, string eventName, T[] items, TradingBotOptions options)
 {
-    var before = items.Length;
-    var afterLimit = Math.Min(options.SignalR.MaxPayloadItems, before);
-    var payload = items.TakeLast(afterLimit).ToArray();
-    var bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(payload).Length;
-    while (payload.Length > 1 && bytes > options.SignalR.MaxPayloadBytes)
-    {
-        payload = payload.TakeLast(Math.Max(1, payload.Length / 2)).ToArray();
-        bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(payload).Length;
-    }
-    if (payload.Length != before)
-        Console.WriteLine($"[SIGNALR_PAYLOAD_TRIMMED] Event={eventName} ItemsBefore={before} ItemsAfter={payload.Length}");
-    return payload;
+    var result = SignalRPayloadGuard.Trim(items, options.SignalR);
+    if (result.Trimmed)
+        Console.WriteLine($"[SIGNALR_PAYLOAD_TRIMMED] Event={eventName} ItemsBefore={result.ItemsBefore} ItemsAfter={result.ItemsAfter}");
+    return result.Items;
 }
 
 static List<Market> BuildRollingBatch(List<Market> markets, ref int offset, int batchSize, TradingBotOptions options)
