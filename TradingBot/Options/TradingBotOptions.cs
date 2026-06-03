@@ -108,6 +108,7 @@ public class DiagnosticsOptions
     public bool EnableNearMissDiagnostics { get; set; } = true;
     public bool EnableMultiOutcomeNearMisses { get; set; } = true;
     public bool DebuggerSafeMode { get; set; } = false;
+    public bool OperationalQuietMode { get; set; } = true;
     public int MultiOutcomeNearMissTopN { get; set; } = 25;
     public decimal MultiOutcomeNearMissMaxNegativeEdge { get; set; } = 0.05m;
 }
@@ -213,19 +214,21 @@ public class MultiOutcomeLoggingOptions
     public bool LogScanConfigEachCycle { get; set; } = false;
     public bool LogVerifiedBasketDetailsOnChangeOnly { get; set; } = true;
     public int LogVerifiedBasketDetailsEveryNCycles { get; set; } = 50;
-    public int LogProfileComparisonEveryNCycles { get; set; } = 25;
+    public int LogProfileComparisonEveryNCycles { get; set; } = 50;
     public bool LogProfileComparisonOnChangeOnly { get; set; } = true;
     public int LogExperimentalCandidateEveryNCycles { get; set; } = 50;
     public bool LogExperimentalCandidateOnChangeOnly { get; set; } = true;
     public bool LogOnlyOnChange { get; set; } = true;
     public bool LogProfileComparisonSummary { get; set; } = true;
-    public decimal ProfileComparisonSignificantNetDelta { get; set; } = 0.002m;
+    public decimal ProfileComparisonSignificantNetDelta { get; set; } = 0.005m;
     public bool LogNearExecutableOnlyOnChange { get; set; } = true;
-    public int LogCandidateScanEveryNCycles { get; set; } = 25;
+    public int LogCandidateScanEveryNCycles { get; set; } = 50;
     public bool LogCandidateScanOnChangeOnly { get; set; } = true;
     public bool LogCandidateScanWhenExecutableOnly { get; set; } = true;
     public bool LogCandidateScanWhenRejectDistributionChanges { get; set; } = true;
-    public int CandidateScanSignificantCountDelta { get; set; } = 10;
+    public int CandidateScanSignificantCountDelta { get; set; } = 15;
+    public int CandidateScanBucketSize { get; set; } = 10;
+    public bool LogCandidateScanWhenOnlyRejected { get; set; } = false;
     public int LogVerifiedScanEveryNCycles { get; set; } = 25;
     public int LogAllowlistHealthEveryNCycles { get; set; } = 25;
     public bool LogVerifiedScanOnChangeOnly { get; set; } = true;
@@ -267,6 +270,7 @@ public class MultiOutcomeReviewOptions
     public string ExportSuggestedVerifiedGroupsPath { get; set; } = "exports/verified-multi-outcome-groups-suggested.json";
     public string ExportAllowlistRepairReportPath { get; set; } = "exports/verified-allowlist-repair-report-latest.json";
     public string ExportAllowlistRepairSuggestedConfigPath { get; set; } = "exports/verified-multi-outcome-groups-repair-suggested.json";
+    public string ExportVerifiedUnresolvedGroupsPath { get; set; } = "exports/verified-unresolved-groups-latest.json";
 }
 
 public class AllowlistRepairOptions
@@ -275,6 +279,15 @@ public class AllowlistRepairOptions
     public decimal MinRefreshMatchScore { get; set; } = 0.70m;
     public bool PreferStableCachedMatches { get; set; } = true;
     public bool UseLatestCandidateExportForRepair { get; set; } = true;
+    public int RequiredStableRepairSnapshots { get; set; } = 2;
+    public List<AllowlistRepairLockedGroupOptions> LockedGroups { get; set; } = new();
+}
+
+public class AllowlistRepairLockedGroupOptions
+{
+    public string GroupKey { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+    public bool AllowPatchPreview { get; set; } = false;
 }
 
 public class RuntimeStateOptions
