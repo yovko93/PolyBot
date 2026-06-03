@@ -228,24 +228,89 @@ public class AllowlistRepairLoggingTests
 
         Assert.Equal(3, export.Total);
         Assert.Equal(new[] { "g1", "g2", "g3" }, export.Groups.Select(x => x.GroupKey).ToArray());
-        Assert.True(export.Groups.Single(x => x.GroupKey == "g3").IsSuppressedInConsole);
+        Assert.True(export.Groups.Single(x => x.GroupKey == "g3").SuppressedInConsole);
     }
 
     [Fact]
     public void Console_can_show_two_samples_while_export_contains_all_three()
     {
-        var export = new VerifiedUnresolvedExport(DateTime.UnixEpoch, 3,
-        [
-            new VerifiedUnresolvedExportRow("g1", "r", "Rejected", "NeedsRefresh", "RefreshFromCandidateExport", "Medium", true, false),
-            new VerifiedUnresolvedExportRow("g2", "r", "Rejected", "BrokenConfig", "DisableMissingMarkets", "High", true, false),
-            new VerifiedUnresolvedExportRow("g3", "r", "Rejected", "ReviewOnly", "NeedsManualReview", "Low", false, true)
-        ]);
+        var diagnostics = CurrentRunUnresolvedDiagnostics(new HashSet<string>([WomenUsOpen, ColombiaFirstRound], StringComparer.OrdinalIgnoreCase));
+        var export = ScanLogSummaryService.BuildUnresolvedExport(diagnostics, DateTime.UnixEpoch);
 
-        var summary = ScanLogSummaryService.UnresolvedSampleSummary(export.Total, export.Groups.Count(x => x.IsSampleLogged), export.Groups.Where(x => x.IsSuppressedInConsole).Select(x => x.GroupKey).ToArray());
+        var summary = ScanLogSummaryService.UnresolvedSampleSummary(export.Total, export.Groups.Count(x => x.SampleLogged), export.Groups.Where(x => x.SuppressedInConsole).Select(x => x.GroupKey).ToArray());
 
+        Assert.Equal(3, export.Total);
         Assert.Equal(2, summary.SamplesShown);
         Assert.Equal(1, summary.Suppressed);
-        Assert.Equal("g3", Assert.Single(summary.SuppressedGroupKeys!));
+        Assert.Equal(Peru, Assert.Single(summary.SuppressedGroupKeys!));
+    }
+
+    [Fact]
+    public void Unresolved_diagnostics_collection_with_three_groups_produces_total_three()
+    {
+        var diagnostics = CurrentRunUnresolvedDiagnostics(new HashSet<string>([WomenUsOpen, ColombiaFirstRound], StringComparer.OrdinalIgnoreCase));
+        var counts = ScanLogSummaryService.UnresolvedCategoryCounts(diagnostics);
+
+        Assert.Equal(3, counts.Total);
+        Assert.Equal(3, diagnostics.Count);
+    }
+
+    [Fact]
+    public void Breakdown_counters_and_sample_counters_match_unresolved_total()
+    {
+        var diagnostics = CurrentRunUnresolvedDiagnostics(new HashSet<string>([WomenUsOpen, ColombiaFirstRound], StringComparer.OrdinalIgnoreCase));
+        var counts = ScanLogSummaryService.UnresolvedCategoryCounts(diagnostics);
+
+        Assert.Equal(counts.Total, counts.CategoryTotal);
+        Assert.Equal(counts.Total, counts.SampleTotal);
+        Assert.True(counts.InvariantOk);
+    }
+
+    [Fact]
+    public void Export_contains_peru_manual_review_even_when_suppressed_in_console()
+    {
+        var diagnostics = CurrentRunUnresolvedDiagnostics(new HashSet<string>([WomenUsOpen, ColombiaFirstRound], StringComparer.OrdinalIgnoreCase));
+        var export = ScanLogSummaryService.BuildUnresolvedExport(diagnostics, DateTime.UnixEpoch);
+        var peru = export.Groups.Single(x => x.GroupKey == Peru);
+
+        Assert.Equal("ReviewOnly", peru.HealthCategory);
+        Assert.Equal("NeedsManualReview", peru.RecommendedAction);
+        Assert.False(peru.SampleLogged);
+        Assert.True(peru.SuppressedInConsole);
+    }
+
+    [Fact]
+    public void Multi_verified_scan_counters_match_breakdown_counters()
+    {
+        var diagnostics = CurrentRunUnresolvedDiagnostics(new HashSet<string>([WomenUsOpen, ColombiaFirstRound], StringComparer.OrdinalIgnoreCase));
+        var counts = ScanLogSummaryService.UnresolvedCategoryCounts(diagnostics);
+        var scanLine = $"[MULTI_VERIFIED_SCAN] Unresolved={counts.Total} BrokenConfigCount={counts.BrokenConfig} NeedsRefreshCount={counts.NeedsRefresh} ReviewOnlyCount={counts.ReviewOnly} MonitoringOnlyUnresolvedCount={counts.MonitoringOnly} OtherUnresolvedCount={counts.Other} UnresolvedSamplesShown={counts.SamplesShown} SuppressedUnresolvedSamples={counts.Suppressed} UnresolvedTotal={counts.Total}";
+        var breakdownLine = counts.ToBreakdownLogLine();
+
+        Assert.Contains($"BrokenConfigCount={counts.BrokenConfig}", scanLine);
+        Assert.Contains($"ReviewOnlyCount={counts.ReviewOnly}", scanLine);
+        Assert.Contains($"SuppressedUnresolvedSamples={counts.Suppressed}", scanLine);
+        Assert.Contains($"BrokenConfig={counts.BrokenConfig}", breakdownLine);
+        Assert.Contains($"ReviewOnly={counts.ReviewOnly}", breakdownLine);
+        Assert.Contains($"Suppressed={counts.Suppressed}", breakdownLine);
+    }
+
+    [Fact]
+    public void Counter_invariant_failure_has_counter_error_log_line()
+    {
+        var bad = new VerifiedUnresolvedCategoryCounts(Total: 3, BrokenConfig: 1, NeedsRefresh: 1, ReviewOnly: 0, MonitoringOnly: 0, Other: 0, SamplesShown: 2, Suppressed: 1);
+
+        Assert.False(bad.InvariantOk);
+        Assert.Equal("[VERIFIED_UNRESOLVED_COUNTER_ERROR] UnresolvedTotal=3 BreakdownTotal=2 SamplesShown=2 Suppressed=1", bad.ToCounterErrorLogLine());
+    }
+
+    [Fact]
+    public void Operational_quiet_mode_startup_log_is_emitted()
+    {
+        var enabled = true;
+        var logLine = $"[DIAGNOSTICS] OperationalQuietMode={enabled.ToString().ToLowerInvariant()}";
+
+        Assert.Equal("[DIAGNOSTICS] OperationalQuietMode=true", logLine);
     }
 
     [Fact]
@@ -315,6 +380,33 @@ public class AllowlistRepairLoggingTests
         var repairNoOp = match.Score >= 1m && match.AddedMarketIds.Count == 0 && match.RemovedMarketIds.Count == 0;
 
         Assert.True(repairNoOp);
+    }
+
+    private const string WomenUsOpen = "winner:2026 women s us open|kind:generic";
+    private const string ColombiaFirstRound = "winner:1st round of 2026 colombian presidential election|kind:person";
+    private const string Peru = "winner:2026 peruvian presidential election|kind:person";
+
+    private static IReadOnlyList<VerifiedUnresolvedGroupDiagnostic> CurrentRunUnresolvedDiagnostics(IReadOnlySet<string> loggedGroupKeys)
+    {
+        var allowlist = new[]
+        {
+            new TradingBot.Services.VerifiedMultiOutcomeGroupConfig(true, WomenUsOpen, WomenUsOpen, ["us-open-m1"], [], 1, "Verified"),
+            new TradingBot.Services.VerifiedMultiOutcomeGroupConfig(true, ColombiaFirstRound, ColombiaFirstRound, ["colombia-m1"], [], 1, "Verified"),
+            new TradingBot.Services.VerifiedMultiOutcomeGroupConfig(true, Peru, Peru, ["peru-m1"], [], 1, "Verified")
+        };
+        var resolved = new[]
+        {
+            Resolved(WomenUsOpen, "Rejected", "VerifiedGroupNotFoundInDiscoveredPool"),
+            Resolved(ColombiaFirstRound, "Rejected", "VerifiedGroupNotFoundInDiscoveredPool")
+        };
+        var repair = new Dictionary<string, AllowlistRepairGroup>(StringComparer.OrdinalIgnoreCase)
+        {
+            [WomenUsOpen] = Repair(WomenUsOpen, "BrokenConfig", "DisableMissingMarkets", "Low"),
+            [ColombiaFirstRound] = Repair(ColombiaFirstRound, "NeedsRefresh", "NeedsManualReview", "Low"),
+            [Peru] = Repair(Peru, "NeedsRefresh", "NeedsManualReview", "Low")
+        };
+
+        return ScanLogSummaryService.BuildUnresolvedDiagnostics(allowlist, resolved, repair, loggedGroupKeys);
     }
 
     private static VerifiedBasketScreener.ScreenResult Row(decimal active, decimal experimental, string classification = "Monitor") => new(

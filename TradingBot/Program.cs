@@ -970,40 +970,43 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     verifiedScanCycle++;
                     var bestExperimentalText = bestExperimentalNet.HasValue ? bestExperimentalNet.Value.ToString("0.####") : "N/A";
                     var verifiedScanFingerprint = $"{multiOutcomeValidator.LoadedAllowlistCount}|{verifiedResolved}|{unresolved}|{verifiedEvaluated}|{activeExecutable}|{experimentalCandidates}|{diagnosticsOnlyPositive}|{paperOpenedCount}|{suppressedDuplicateCount}|{verifiedMismatch}|{bestConservativeNet}|{bestExperimentalText}|{bestAlternateProfileNet}|{bestRaw}";
-                    var shouldLogVerifiedScan = string.IsNullOrEmpty(lastVerifiedScanFingerprint)
-                        || !options.Logging.LogVerifiedScanOnChangeOnly
-                        || verifiedScanFingerprint != lastVerifiedScanFingerprint
-                        || (options.Logging.LogVerifiedScanEveryNCycles > 0 && verifiedScanCycle % options.Logging.LogVerifiedScanEveryNCycles == 0);
-                    var unresolvedGroups = resolved.Where(x => x.ValidationStatus != "VerifiedGroupResolved").ToArray();
-                    var unresolvedSampleDecisions = unresolvedGroups
+                    var repairByGroupKey = repairReport.Groups.ToDictionary(x => x.GroupKey, StringComparer.OrdinalIgnoreCase);
+                    var unresolvedDiagnosticsForSampling = ScanLogSummaryService.BuildUnresolvedDiagnostics(allowlistedGroups, resolved, repairByGroupKey, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+                    var unresolvedSampleDecisions = unresolvedDiagnosticsForSampling
                         .Take(Math.Max(0, options.Logging.MaxVerifiedUnresolvedSamplesToLog))
                         .Select(ug =>
                         {
-                            var sampleFingerprint = $"{ug.GroupKey}|{ug.RejectionReason}|{ug.ValidationStatus}|{string.Join(",", ug.MissingMarketIds.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}|{string.Join(",", ug.ResolvedMarkets.Select(x => x.id).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}";
+                            var sampleFingerprint = $"{ug.GroupKey}|{ug.Reason}|{ug.ValidationStatus}|{ug.HealthCategory}|{ug.RecommendedAction}|{ug.RepairConfidence}";
                             var shouldLogSample = logThrottle.ShouldLog($"VERIFIED_UNRESOLVED_SAMPLE:{ug.GroupKey}", sampleFingerprint, options.Logging.LogVerifiedUnresolvedSamplesOnChangeOnly, options.Logging.LogVerifiedUnresolvedSamplesEveryNCycles);
                             return new { Group = ug, ShouldLog = shouldLogSample };
                         })
                         .ToArray();
                     var loggedUnresolvedGroupKeys = unresolvedSampleDecisions.Where(x => x.ShouldLog).Select(x => x.Group.GroupKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                    var repairByGroupKey = repairReport.Groups.ToDictionary(x => x.GroupKey, StringComparer.OrdinalIgnoreCase);
-                    var unresolvedExport = ScanLogSummaryService.BuildUnresolvedExport(unresolvedGroups, repairByGroupKey, loggedUnresolvedGroupKeys, DateTime.UtcNow);
+                    var unresolvedDiagnostics = ScanLogSummaryService.BuildUnresolvedDiagnostics(allowlistedGroups, resolved, repairByGroupKey, loggedUnresolvedGroupKeys);
+                    var unresolvedCounts = ScanLogSummaryService.UnresolvedCategoryCounts(unresolvedDiagnostics);
+                    unresolved = unresolvedCounts.Total;
+                    var unresolvedExport = ScanLogSummaryService.BuildUnresolvedExport(unresolvedDiagnostics, DateTime.UtcNow);
                     var unresolvedExportPath = Path.Combine(contentRootPath, options.MultiOutcomeReview.ExportVerifiedUnresolvedGroupsPath);
                     Directory.CreateDirectory(Path.GetDirectoryName(unresolvedExportPath)!);
                     File.WriteAllText(unresolvedExportPath, System.Text.Json.JsonSerializer.Serialize(unresolvedExport, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
-                    var unresolvedSamplesShown = unresolvedSampleDecisions.Count(x => x.ShouldLog);
-                    var unresolvedBreakdown = ScanLogSummaryService.UnresolvedBreakdown(unresolvedExport.Groups, unresolvedSamplesShown);
-                    var suppressedUnresolvedKeys = unresolvedExport.Groups.Where(x => x.IsSuppressedInConsole).Select(x => x.GroupKey).ToArray();
-                    if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} BrokenConfigCount={unresolvedBreakdown.BrokenConfig} NeedsRefreshCount={unresolvedBreakdown.NeedsRefresh} ReviewOnlyCount={unresolvedBreakdown.ReviewOnly} MonitoringOnlyUnresolvedCount={unresolvedBreakdown.MonitoringOnly} UnresolvedSamplesShown={unresolvedSamplesShown} SuppressedUnresolvedSamples={unresolvedBreakdown.Suppressed} UnresolvedTotal={unresolved} Evaluated={verifiedEvaluated} ActiveExecutable={activeExecutable} ExperimentalCandidates={experimentalCandidates} DiagnosticsOnlyPositive={diagnosticsOnlyPositive} PaperOpened={paperOpenedCount} SuppressedDuplicate={suppressedDuplicateCount} Mismatch={verifiedMismatch} BestActiveNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestExperimentalNet={bestExperimentalText} BestAlternateProfileNet={bestAlternateProfileNet} BestRaw={bestRaw}");
-                    if (shouldLogVerifiedScan || logThrottle.ShouldLog("VERIFIED_UNRESOLVED_BREAKDOWN", unresolvedBreakdown.ToLogLine(), options.Logging.LogVerifiedUnresolvedSamplesOnChangeOnly, options.Logging.LogVerifiedUnresolvedSamplesEveryNCycles))
-                        Console.WriteLine(unresolvedBreakdown.ToLogLine());
+                    var suppressedUnresolvedKeys = unresolvedDiagnostics.Where(x => x.SuppressedInConsole).Select(x => x.GroupKey).ToArray();
+                    verifiedScanFingerprint = $"{verifiedScanFingerprint}|{unresolvedCounts.BrokenConfig}|{unresolvedCounts.NeedsRefresh}|{unresolvedCounts.ReviewOnly}|{unresolvedCounts.MonitoringOnly}|{unresolvedCounts.Other}|{unresolvedCounts.SamplesShown}|{unresolvedCounts.Suppressed}";
+                    var shouldLogVerifiedScan = string.IsNullOrEmpty(lastVerifiedScanFingerprint)
+                        || !options.Logging.LogVerifiedScanOnChangeOnly
+                        || verifiedScanFingerprint != lastVerifiedScanFingerprint
+                        || (options.Logging.LogVerifiedScanEveryNCycles > 0 && verifiedScanCycle % options.Logging.LogVerifiedScanEveryNCycles == 0);
+                    if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} BrokenConfigCount={unresolvedCounts.BrokenConfig} NeedsRefreshCount={unresolvedCounts.NeedsRefresh} ReviewOnlyCount={unresolvedCounts.ReviewOnly} MonitoringOnlyUnresolvedCount={unresolvedCounts.MonitoringOnly} OtherUnresolvedCount={unresolvedCounts.Other} UnresolvedSamplesShown={unresolvedCounts.SamplesShown} SuppressedUnresolvedSamples={unresolvedCounts.Suppressed} UnresolvedTotal={unresolvedCounts.Total} Evaluated={verifiedEvaluated} ActiveExecutable={activeExecutable} ExperimentalCandidates={experimentalCandidates} DiagnosticsOnlyPositive={diagnosticsOnlyPositive} PaperOpened={paperOpenedCount} SuppressedDuplicate={suppressedDuplicateCount} Mismatch={verifiedMismatch} BestActiveNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestExperimentalNet={bestExperimentalText} BestAlternateProfileNet={bestAlternateProfileNet} BestRaw={bestRaw}");
+                    if (!unresolvedCounts.InvariantOk)
+                        Console.WriteLine(unresolvedCounts.ToCounterErrorLogLine());
+                    if (shouldLogVerifiedScan || logThrottle.ShouldLog("VERIFIED_UNRESOLVED_BREAKDOWN", unresolvedCounts.ToBreakdownLogLine(), options.Logging.LogVerifiedUnresolvedSamplesOnChangeOnly, options.Logging.LogVerifiedUnresolvedSamplesEveryNCycles))
+                        Console.WriteLine(unresolvedCounts.ToBreakdownLogLine());
                     lastVerifiedScanFingerprint = verifiedScanFingerprint;
-                    var unresolvedSummary = ScanLogSummaryService.UnresolvedSampleSummary(unresolved, unresolvedSamplesShown, suppressedUnresolvedKeys);
+                    var unresolvedSummary = ScanLogSummaryService.UnresolvedSampleSummary(unresolvedCounts.Total, unresolvedCounts.SamplesShown, suppressedUnresolvedKeys);
                     if (unresolvedSummary.Suppressed > 0 && (shouldLogVerifiedScan || logThrottle.ShouldLog("VERIFIED_UNRESOLVED_SUMMARY", $"{unresolvedSummary.Total}|{unresolvedSummary.SamplesShown}|{unresolvedSummary.Suppressed}", options.Logging.LogVerifiedUnresolvedSamplesOnChangeOnly, options.Logging.LogVerifiedUnresolvedSamplesEveryNCycles)))
                         Console.WriteLine(unresolvedSummary.ToLogLine());
-                    foreach (var decision in unresolvedSampleDecisions.Where(x => x.ShouldLog))
+                    foreach (var ug in unresolvedDiagnostics.Where(x => x.SampleLogged))
                     {
-                        var ug = decision.Group;
-                        Console.WriteLine($"[VERIFIED_UNRESOLVED_SAMPLE] {System.Text.Json.JsonSerializer.Serialize(new { ug.GroupKey, Reason = ug.RejectionReason, ug.ValidationStatus })}");
+                        Console.WriteLine($"[VERIFIED_UNRESOLVED_SAMPLE] {System.Text.Json.JsonSerializer.Serialize(new { ug.GroupKey, ug.Reason, ug.ValidationStatus, ug.HealthCategory, ug.RecommendedAction, ug.RepairConfidence })}");
                     }
 
                     var triageRows = resolved.Select(g =>

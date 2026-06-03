@@ -13,14 +13,37 @@ public sealed record VerifiedUnresolvedSampleSummary(int Total, int SamplesShown
     public string ToLogLine() => $"[VERIFIED_UNRESOLVED_SUMMARY] Total={Total} SamplesShown={SamplesShown} Suppressed={Suppressed}";
 }
 
+public sealed record VerifiedUnresolvedCategoryCounts(int Total, int BrokenConfig, int NeedsRefresh, int ReviewOnly, int MonitoringOnly, int Other, int SamplesShown, int Suppressed)
+{
+    public int CategoryTotal => BrokenConfig + NeedsRefresh + ReviewOnly + MonitoringOnly + Other;
+    public int SampleTotal => SamplesShown + Suppressed;
+    public bool InvariantOk => Total == CategoryTotal && Total == SampleTotal;
+    public string ToBreakdownLogLine() => $"[VERIFIED_UNRESOLVED_BREAKDOWN] Total={Total} BrokenConfig={BrokenConfig} NeedsRefresh={NeedsRefresh} ReviewOnly={ReviewOnly} MonitoringOnly={MonitoringOnly} Other={Other} SamplesShown={SamplesShown} Suppressed={Suppressed}";
+    public string ToCounterErrorLogLine() => $"[VERIFIED_UNRESOLVED_COUNTER_ERROR] UnresolvedTotal={Total} BreakdownTotal={CategoryTotal} SamplesShown={SamplesShown} Suppressed={Suppressed}";
+}
+
 public sealed record VerifiedUnresolvedBreakdown(int Total, int BrokenConfig, int NeedsRefresh, int ReviewOnly, int MonitoringOnly, int SamplesShown, int Suppressed)
 {
     public string ToLogLine() => $"[VERIFIED_UNRESOLVED_BREAKDOWN] Total={Total} BrokenConfig={BrokenConfig} NeedsRefresh={NeedsRefresh} ReviewOnly={ReviewOnly} MonitoringOnly={MonitoringOnly} SamplesShown={SamplesShown} Suppressed={Suppressed}";
 }
 
-public sealed record VerifiedUnresolvedExportRow(string GroupKey, string Reason, string ValidationStatus, string HealthCategory, string RecommendedAction, string RepairConfidence, bool IsSampleLogged, bool IsSuppressedInConsole);
+public sealed record VerifiedUnresolvedGroupDiagnostic(
+    string GroupKey,
+    string Reason,
+    string ValidationStatus,
+    string HealthCategory,
+    string RecommendedAction,
+    string RepairConfidence,
+    bool IsReviewOnly,
+    bool IsBrokenConfig,
+    bool IsNeedsRefresh,
+    bool IsMonitoringOnly,
+    bool SampleLogged,
+    bool SuppressedInConsole);
 
-public sealed record VerifiedUnresolvedExport(DateTime Timestamp, int Total, IReadOnlyList<VerifiedUnresolvedExportRow> Groups);
+public sealed record VerifiedUnresolvedExport(DateTime Timestamp, int Total, VerifiedUnresolvedCategoryCounts CategoryCounts, IReadOnlyList<VerifiedUnresolvedGroupDiagnostic> Groups);
+
+public sealed record VerifiedUnresolvedExportRow(string GroupKey, string Reason, string ValidationStatus, string HealthCategory, string RecommendedAction, string RepairConfidence, bool IsSampleLogged, bool IsSuppressedInConsole);
 
 public sealed record AllowlistConfigValidationSummary(int Total, int UniqueGroupKeys, int DuplicateGroupKeys, int Enabled, int Disabled)
 {
@@ -56,7 +79,6 @@ public static class ScanLogSummaryService
         return $"count2:{materialCountBucket}|top:{topReject}|reasons:{reasonBuckets}|{executableBucket}";
     }
 
-
     public static bool ShouldSuppressRejectedOnlyCandidateScan(bool operationalQuietMode, bool logCandidateScanWhenOnlyRejected, bool rejectedOnlyCandidateScan, string currentFingerprint, string lastFingerprint, bool periodic)
         => operationalQuietMode
             && !logCandidateScanWhenOnlyRejected
@@ -79,26 +101,68 @@ public static class ScanLogSummaryService
     public static VerifiedUnresolvedSampleSummary UnresolvedSampleSummary(int total, int samplesShown, IReadOnlyList<string>? suppressedGroupKeys = null)
         => new(total, Math.Max(0, samplesShown), Math.Max(0, total - Math.Max(0, samplesShown)), suppressedGroupKeys ?? Array.Empty<string>());
 
-    public static VerifiedUnresolvedBreakdown UnresolvedBreakdown(IReadOnlyList<VerifiedUnresolvedExportRow> groups, int samplesShown)
+    public static VerifiedUnresolvedCategoryCounts UnresolvedCategoryCounts(IReadOnlyList<VerifiedUnresolvedGroupDiagnostic> groups)
     {
         var total = groups.Count;
-        var brokenConfig = groups.Count(x => x.HealthCategory.Equals("BrokenConfig", StringComparison.OrdinalIgnoreCase));
-        var needsRefresh = groups.Count(x => x.HealthCategory.Equals("NeedsRefresh", StringComparison.OrdinalIgnoreCase));
-        var monitoringOnly = groups.Count(x => x.HealthCategory.Equals("MonitoringOnly", StringComparison.OrdinalIgnoreCase));
-        var reviewOnly = groups.Count(x =>
-            (x.HealthCategory.Equals("ReviewOnly", StringComparison.OrdinalIgnoreCase) || x.RecommendedAction.Equals("NeedsManualReview", StringComparison.OrdinalIgnoreCase))
-            && !x.HealthCategory.Equals("BrokenConfig", StringComparison.OrdinalIgnoreCase)
-            && !x.HealthCategory.Equals("NeedsRefresh", StringComparison.OrdinalIgnoreCase)
-            && !x.HealthCategory.Equals("MonitoringOnly", StringComparison.OrdinalIgnoreCase));
-        return new VerifiedUnresolvedBreakdown(
+        var samplesShown = groups.Count(x => x.SampleLogged);
+        var suppressed = groups.Count(x => x.SuppressedInConsole);
+        return new VerifiedUnresolvedCategoryCounts(
             total,
-            brokenConfig,
-            needsRefresh,
-            reviewOnly,
-            monitoringOnly,
-            Math.Max(0, samplesShown),
-            Math.Max(0, total - Math.Max(0, samplesShown)));
+            groups.Count(x => x.IsBrokenConfig),
+            groups.Count(x => x.IsNeedsRefresh),
+            groups.Count(x => x.IsReviewOnly),
+            groups.Count(x => x.IsMonitoringOnly),
+            groups.Count(x => !x.IsBrokenConfig && !x.IsNeedsRefresh && !x.IsReviewOnly && !x.IsMonitoringOnly),
+            samplesShown,
+            suppressed);
     }
+
+    public static VerifiedUnresolvedBreakdown UnresolvedBreakdown(IReadOnlyList<VerifiedUnresolvedExportRow> groups, int samplesShown)
+    {
+        var diagnostics = groups.Select(x =>
+        {
+            var category = NormalizeUnresolvedHealthCategory(x.HealthCategory, x.RecommendedAction);
+            return new VerifiedUnresolvedGroupDiagnostic(
+                x.GroupKey,
+                x.Reason,
+                x.ValidationStatus,
+                category,
+                x.RecommendedAction,
+                x.RepairConfidence,
+                category.Equals("ReviewOnly", StringComparison.OrdinalIgnoreCase),
+                category.Equals("BrokenConfig", StringComparison.OrdinalIgnoreCase),
+                category.Equals("NeedsRefresh", StringComparison.OrdinalIgnoreCase),
+                category.Equals("MonitoringOnly", StringComparison.OrdinalIgnoreCase),
+                x.IsSampleLogged,
+                x.IsSuppressedInConsole);
+        }).ToArray();
+        var counts = UnresolvedCategoryCounts(diagnostics);
+        return new VerifiedUnresolvedBreakdown(counts.Total, counts.BrokenConfig, counts.NeedsRefresh, counts.ReviewOnly, counts.MonitoringOnly, Math.Max(0, samplesShown), Math.Max(0, counts.Total - Math.Max(0, samplesShown)));
+    }
+
+    public static IReadOnlyList<VerifiedUnresolvedGroupDiagnostic> BuildUnresolvedDiagnostics(
+        IReadOnlyList<VerifiedMultiOutcomeGroupConfig> allowlist,
+        IReadOnlyList<ResolvedVerifiedGroup> resolvedGroups,
+        IReadOnlyDictionary<string, AllowlistRepairGroup> repairByGroupKey,
+        IReadOnlySet<string> loggedGroupKeys)
+    {
+        var resolvedByGroupKey = resolvedGroups
+            .GroupBy(x => x.GroupKey, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.Last(), StringComparer.OrdinalIgnoreCase);
+        var verifiedResolvedKeys = resolvedGroups
+            .Where(x => x.ValidationStatus.Equals("VerifiedGroupResolved", StringComparison.OrdinalIgnoreCase))
+            .Select(x => x.GroupKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return allowlist
+            .Where(x => x.Enabled && !verifiedResolvedKeys.Contains(x.GroupKey))
+            .Select(config => BuildUnresolvedDiagnostic(config, resolvedByGroupKey, repairByGroupKey, loggedGroupKeys))
+            .OrderBy(x => x.GroupKey, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    public static VerifiedUnresolvedExport BuildUnresolvedExport(IReadOnlyList<VerifiedUnresolvedGroupDiagnostic> diagnostics, DateTime timestampUtc)
+        => new(timestampUtc, diagnostics.Count, UnresolvedCategoryCounts(diagnostics), diagnostics);
 
     public static VerifiedUnresolvedExport BuildUnresolvedExport(
         IReadOnlyList<ResolvedVerifiedGroup> unresolvedGroups,
@@ -106,27 +170,11 @@ public static class ScanLogSummaryService
         IReadOnlySet<string> loggedGroupKeys,
         DateTime timestampUtc)
     {
-        var rows = unresolvedGroups.Select(g =>
-        {
-            repairByGroupKey.TryGetValue(g.GroupKey, out var repair);
-            var healthCategory = repair?.HealthCategory ?? "ReviewOnly";
-            var recommendedAction = repair?.RecommendedAction ?? "NeedsManualReview";
-            var repairConfidence = repair?.RepairConfidence ?? "None";
-            if (healthCategory.Equals("MonitoringOnly", StringComparison.OrdinalIgnoreCase) && recommendedAction.Equals("NeedsManualReview", StringComparison.OrdinalIgnoreCase))
-                healthCategory = "ReviewOnly";
-            var logged = loggedGroupKeys.Contains(g.GroupKey);
-            return new VerifiedUnresolvedExportRow(
-                g.GroupKey,
-                g.RejectionReason,
-                g.ValidationStatus,
-                healthCategory,
-                recommendedAction,
-                repairConfidence,
-                logged,
-                !logged);
-        }).ToArray();
-
-        return new VerifiedUnresolvedExport(timestampUtc, rows.Length, rows);
+        var allowlist = unresolvedGroups
+            .Select(x => new VerifiedMultiOutcomeGroupConfig(true, x.GroupKey, x.Title, x.MarketIds, x.ConditionIds, null, "Verified"))
+            .ToArray();
+        var diagnostics = BuildUnresolvedDiagnostics(allowlist, unresolvedGroups, repairByGroupKey, loggedGroupKeys);
+        return BuildUnresolvedExport(diagnostics, timestampUtc);
     }
 
     public static AllowlistConfigValidationSummary AllowlistConfigValidation(IReadOnlyList<VerifiedMultiOutcomeGroupConfig> groups)
@@ -134,5 +182,46 @@ public static class ScanLogSummaryService
         var total = groups.Count;
         var unique = groups.Select(x => x.GroupKey).Distinct(StringComparer.OrdinalIgnoreCase).Count();
         return new AllowlistConfigValidationSummary(total, unique, Math.Max(0, total - unique), groups.Count(x => x.Enabled), groups.Count(x => !x.Enabled));
+    }
+
+    private static VerifiedUnresolvedGroupDiagnostic BuildUnresolvedDiagnostic(
+        VerifiedMultiOutcomeGroupConfig config,
+        IReadOnlyDictionary<string, ResolvedVerifiedGroup> resolvedByGroupKey,
+        IReadOnlyDictionary<string, AllowlistRepairGroup> repairByGroupKey,
+        IReadOnlySet<string> loggedGroupKeys)
+    {
+        resolvedByGroupKey.TryGetValue(config.GroupKey, out var resolved);
+        repairByGroupKey.TryGetValue(config.GroupKey, out var repair);
+
+        var recommendedAction = repair?.RecommendedAction ?? "NeedsManualReview";
+        var repairConfidence = repair?.RepairConfidence ?? "None";
+        var healthCategory = NormalizeUnresolvedHealthCategory(repair?.HealthCategory, recommendedAction);
+        var validationStatus = resolved?.ValidationStatus ?? repair?.Status ?? "NotEvaluatedThisCycle";
+        var reason = resolved?.RejectionReason ?? repair?.MismatchReason ?? repair?.Reason ?? "VerifiedGroupNotEvaluatedThisCycle";
+        var sampleLogged = loggedGroupKeys.Contains(config.GroupKey);
+
+        return new VerifiedUnresolvedGroupDiagnostic(
+            config.GroupKey,
+            reason,
+            validationStatus,
+            healthCategory,
+            recommendedAction,
+            repairConfidence,
+            healthCategory.Equals("ReviewOnly", StringComparison.OrdinalIgnoreCase),
+            healthCategory.Equals("BrokenConfig", StringComparison.OrdinalIgnoreCase),
+            healthCategory.Equals("NeedsRefresh", StringComparison.OrdinalIgnoreCase),
+            healthCategory.Equals("MonitoringOnly", StringComparison.OrdinalIgnoreCase),
+            sampleLogged,
+            !sampleLogged);
+    }
+
+    private static string NormalizeUnresolvedHealthCategory(string? healthCategory, string recommendedAction)
+    {
+        if (recommendedAction.Equals("NeedsManualReview", StringComparison.OrdinalIgnoreCase)) return "ReviewOnly";
+        if (recommendedAction.Equals("DisableMissingMarkets", StringComparison.OrdinalIgnoreCase) || string.Equals(healthCategory, "BrokenConfig", StringComparison.OrdinalIgnoreCase)) return "BrokenConfig";
+        if (recommendedAction.Equals("RefreshFromCandidateExport", StringComparison.OrdinalIgnoreCase) || string.Equals(healthCategory, "NeedsRefresh", StringComparison.OrdinalIgnoreCase)) return "NeedsRefresh";
+        if (recommendedAction.Equals("KeepMonitoring", StringComparison.OrdinalIgnoreCase) || string.Equals(healthCategory, "MonitoringOnly", StringComparison.OrdinalIgnoreCase)) return "MonitoringOnly";
+        if (recommendedAction.Equals("PruneMissingNoAskLegs", StringComparison.OrdinalIgnoreCase) || string.Equals(healthCategory, "NeedsPricingPrune", StringComparison.OrdinalIgnoreCase)) return "ReviewOnly";
+        return string.IsNullOrWhiteSpace(healthCategory) ? "Other" : healthCategory;
     }
 }
