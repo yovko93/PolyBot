@@ -196,7 +196,8 @@ public sealed record AllowlistRepairPatchSummary(
     int DisabledSuggested,
     int ExpectedHealthyAfterApply,
     int Quarantined,
-    int NoOp);
+    int NoOp,
+    int Locked);
 
 public sealed record AllowlistRepairPatchItem(
     string GroupKey,
@@ -252,14 +253,30 @@ public sealed record AllowlistRepairHistoryEntry(
     string InverseDiffHash,
     DateTime Timestamp);
 
+public sealed record AllowlistRepairHistoryDiff(IReadOnlyList<string> AddedMarketIds, IReadOnlyList<string> RemovedMarketIds);
+
 public sealed record AllowlistRepairHistoryGroup(
     string GroupKey,
-    IReadOnlyList<AllowlistRepairHistoryEntry> LastSnapshots,
-    IReadOnlyList<string> AddedMarketIds,
-    IReadOnlyList<string> RemovedMarketIds,
+    IReadOnlyList<AllowlistRepairHistoryEntry> Snapshots,
+    string LastDiffHash,
+    IReadOnlyList<string> LastAddedMarketIds,
+    IReadOnlyList<string> LastRemovedMarketIds,
+    IReadOnlyList<string> PreviousAddedMarketIds,
+    IReadOnlyList<string> PreviousRemovedMarketIds,
     bool OscillationDetected,
+    IReadOnlyList<string> OscillatingMarketIds,
     bool Locked,
+    string QuarantineReason,
+    DateTime LastUpdatedAt,
+    bool Patchable,
+    AllowlistRepairHistoryDiff CurrentDiff,
+    AllowlistRepairHistoryDiff PreviousDiff,
     string RecommendedAction,
-    string Reason);
+    string Reason)
+{
+    public IReadOnlyList<AllowlistRepairHistoryEntry> LastSnapshots => Snapshots;
+    public IReadOnlyList<string> AddedMarketIds => LastAddedMarketIds;
+    public IReadOnlyList<string> RemovedMarketIds => LastRemovedMarketIds;
+}
 
 public sealed record AllowlistRepairHistoryExport(DateTime Timestamp, IReadOnlyList<AllowlistRepairHistoryGroup> Groups);

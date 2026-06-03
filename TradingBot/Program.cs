@@ -340,6 +340,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var mtmCycle = 0;
     var lastAllowlistHealthFingerprint = string.Empty;
     var lastCandidateScanFingerprint = string.Empty;
+    var lastRejectedOnlyCandidateScanFingerprint = string.Empty;
     var lastVerifiedScanFingerprint = string.Empty;
     var lastPortfolioFingerprint = string.Empty;
     var lastMtmFingerprint = string.Empty;
@@ -797,10 +798,11 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var patchableCount = patchPreview.Summary.PatchableHighConfidence + patchPreview.Summary.PatchableMediumConfidence;
                     var quarantinedCount = patchPreview.Summary.Quarantined;
                     var noOpCount = patchPreview.Summary.NoOp;
+                    var lockedCount = patchPreview.Summary.Locked;
                     var reviewOnlyCount = patchPreview.Patches.Count - patchableCount;
-                    var patchPreviewFingerprint = $"{patchPreview.SnapshotId}|{patchableCount}|{reviewOnlyCount}|{quarantinedCount}|{noOpCount}|{string.Join(";", patchPreview.Patches.Select(x => $"{x.GroupKey}:{x.PatchType}:{x.Confidence}:{string.Join(',', x.RiskNotes)}"))}";
+                    var patchPreviewFingerprint = $"{patchPreview.SnapshotId}|{patchableCount}|{reviewOnlyCount}|{quarantinedCount}|{noOpCount}|{lockedCount}|{string.Join(";", patchPreview.Patches.Select(x => $"{x.GroupKey}:{x.PatchType}:{x.Confidence}:{string.Join(',', x.RiskNotes)}"))}";
                     if (logThrottle.ShouldLog("ALLOWLIST_REPAIR_PATCH_PREVIEW", patchPreviewFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, options.Logging.LogAllowlistRepairEveryNCycles))
-                        Console.WriteLine($"[ALLOWLIST_REPAIR_PATCH_PREVIEW] Snapshot={patchPreview.SnapshotId} Patchable={patchableCount} ReviewOnly={reviewOnlyCount} Quarantined={quarantinedCount} NoOp={noOpCount} Output=exports/verified-allowlist-repair-patch-preview-latest.json");
+                        Console.WriteLine($"[ALLOWLIST_REPAIR_PATCH_PREVIEW] Snapshot={patchPreview.SnapshotId} Patchable={patchableCount} ReviewOnly={reviewOnlyCount} Quarantined={quarantinedCount} NoOp={noOpCount} Locked={lockedCount} Output=exports/verified-allowlist-repair-patch-preview-latest.json");
                     var patchedPreviewValidation = patchPreview.PatchedPreviewValidation;
                     var patchedPreviewValidationFingerprint = $"{patchPreview.SnapshotId}|{patchedPreviewValidation.TotalGroups}|{patchedPreviewValidation.UniqueGroupKeys}|{patchedPreviewValidation.DuplicateGroupKeys}|{patchedPreviewValidation.Valid}|{string.Join(';', patchedPreviewValidation.Reasons)}";
                     if (logThrottle.ShouldLog("ALLOWLIST_PATCHED_PREVIEW_VALIDATION", patchedPreviewValidationFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, options.Logging.LogAllowlistRepairEveryNCycles))
@@ -958,13 +960,16 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var rejectedCandidates = Math.Max(0, multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified);
                     var rejectedOnlyCandidateScan = multiOutcomeReport.GroupsDetected > 0 && rejectedCandidates == multiOutcomeReport.GroupsDetected && multiOutcomeReport.ExecutableGroups == 0;
                     var candidateFingerprint = ScanLogSummaryService.CandidateScanFingerprint(multiOutcomeReport.GroupsDetected, multiOutcomeReport.TopSkipReason, multiOutcomeReport.RejectedByReason, candidateBucket, multiOutcomeReport.ExecutableGroups);
-                    var shouldLogCandidate = logThrottle.ShouldLog("MULTI_CANDIDATE_SCAN", candidateFingerprint, options.Logging.LogCandidateScanOnChangeOnly, options.Logging.LogCandidateScanEveryNCycles);
+                    var rejectedOnlyMaterialFingerprint = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint(multiOutcomeReport.TopSkipReason, multiOutcomeReport.RejectedByReason, Math.Max(1, options.Logging.CandidateScanSignificantCountDelta));
+                    var throttleFingerprint = rejectedOnlyCandidateScan && options.Diagnostics.OperationalQuietMode ? rejectedOnlyMaterialFingerprint : candidateFingerprint;
+                    var shouldLogCandidate = logThrottle.ShouldLog("MULTI_CANDIDATE_SCAN", throttleFingerprint, options.Logging.LogCandidateScanOnChangeOnly, options.Logging.LogCandidateScanEveryNCycles);
                     var candidatePeriodic = options.Logging.LogCandidateScanEveryNCycles > 0 && candidateScanCycle % options.Logging.LogCandidateScanEveryNCycles == 0;
-                    if (ScanLogSummaryService.ShouldSuppressRejectedOnlyCandidateScan(options.Diagnostics.OperationalQuietMode, options.Logging.LogCandidateScanWhenOnlyRejected, rejectedOnlyCandidateScan, candidateFingerprint, lastCandidateScanFingerprint, candidatePeriodic))
+                    if (rejectedOnlyCandidateScan && ScanLogSummaryService.ShouldSuppressRejectedOnlyCandidateScan(options.Diagnostics.OperationalQuietMode, options.Logging.LogCandidateScanWhenOnlyRejected, true, rejectedOnlyMaterialFingerprint, lastRejectedOnlyCandidateScanFingerprint, candidatePeriodic))
                         shouldLogCandidate = false;
                     if (shouldLogCandidate)
                         Console.WriteLine($"[MULTI_CANDIDATE_SCAN] Candidates={multiOutcomeReport.GroupsDetected} Rejected={rejectedCandidates} TopReject={multiOutcomeReport.TopSkipReason} RejectedByReason={{{candidateReasons}}}");
                     lastCandidateScanFingerprint = candidateFingerprint;
+                    if (rejectedOnlyCandidateScan) lastRejectedOnlyCandidateScanFingerprint = rejectedOnlyMaterialFingerprint;
                     var bestConservativeNet = snapshot.BestByConservative?.ActiveProfileNetEdge;
                     decimal? bestExperimentalNet = ScanLogSummaryService.BestExperimentalNet(snapshot.ExperimentalCandidates);
                     var bestAlternateProfileNet = ScanLogSummaryService.BestAlternateProfileNet(snapshot.VerifiedBaskets, "PolymarketApprox") ?? decimal.MinValue;

@@ -79,6 +79,13 @@ public static class ScanLogSummaryService
         return $"count2:{materialCountBucket}|top:{topReject}|reasons:{reasonBuckets}|{executableBucket}";
     }
 
+
+    public static string RejectedOnlyCandidateScanFingerprint(string topReject, IReadOnlyDictionary<string, int> rejectedByReason, int reasonBucketSize)
+    {
+        var reasonKeys = string.Join(",", rejectedByReason.Keys.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+        return $"top:{topReject}|reasons:{reasonKeys}";
+    }
+
     public static bool ShouldSuppressRejectedOnlyCandidateScan(bool operationalQuietMode, bool logCandidateScanWhenOnlyRejected, bool rejectedOnlyCandidateScan, string currentFingerprint, string lastFingerprint, bool periodic)
         => operationalQuietMode
             && !logCandidateScanWhenOnlyRejected

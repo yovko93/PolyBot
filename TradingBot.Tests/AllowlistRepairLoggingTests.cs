@@ -327,6 +327,16 @@ public class AllowlistRepairLoggingTests
         Assert.True(suppressedByQuietMode);
     }
 
+
+    [Fact]
+    public void Rejected_only_material_fingerprint_ignores_candidate_count_churn()
+    {
+        var first = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint("AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 17 }, 100);
+        var second = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint("AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 20 }, 100);
+
+        Assert.Equal(first, second);
+    }
+
     [Fact]
     public void Top_reject_material_change_logs_once()
     {

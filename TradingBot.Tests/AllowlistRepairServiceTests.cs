@@ -490,6 +490,29 @@ public class AllowlistRepairServiceTests
 
 
 
+
+    [Fact]
+    public void Repair_history_is_persisted_and_loaded_across_scanner_restarts()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        var opts = new TradingBot.Options.AllowlistRepairOptions { RequiredStableRepairSnapshots = 2, UseLatestCandidateExportForRepair = true };
+        var configuredRemove = PeruConfigured(["947269", "peru-2", "peru-3"]);
+        WriteCandidateExport(dir.FullName, [PeruCandidateWithout947269()]);
+        var firstSvc = new AllowlistRepairService();
+        var firstReport = firstSvc.BuildReport(configuredRemove, PeruResolved(configuredRemove), [], [], opts, dir.FullName);
+        firstSvc.ExportPatchPreview(Path.Combine(dir.FullName, "exports/verified-allowlist-repair-patch-preview-latest.json"), Path.Combine(dir.FullName, "exports/verified-multi-outcome-groups-patched-preview.json"), Path.Combine(dir.FullName, "exports/verified-multi-outcome-groups-patched-preview.with-metadata.json"), firstReport, configuredRemove, dir.FullName);
+
+        var configuredAdd = PeruConfigured(["peru-2", "peru-3"]);
+        WriteCandidateExport(dir.FullName, [PeruCandidateWith947269()], "\n ");
+        var restartedSvc = new AllowlistRepairService();
+        var secondReport = restartedSvc.BuildReport(configuredAdd, PeruResolved(configuredAdd), [], [], opts, dir.FullName);
+        var second = restartedSvc.ExportPatchPreview(Path.Combine(dir.FullName, "exports/verified-allowlist-repair-patch-preview-latest.json"), Path.Combine(dir.FullName, "exports/verified-multi-outcome-groups-patched-preview.json"), Path.Combine(dir.FullName, "exports/verified-multi-outcome-groups-patched-preview.with-metadata.json"), secondReport, configuredAdd, dir.FullName).PatchPreview;
+
+        Assert.Equal("ReviewOnly", second.Patches.Single().PatchType);
+        Assert.Equal(1, second.Summary.Quarantined);
+        Assert.True(File.Exists(Path.Combine(dir.FullName, "exports/allowlist-repair-history-latest.json")));
+    }
+
     [Fact]
     public void Repair_history_detects_removed_then_added_market_as_oscillation()
     {
@@ -501,8 +524,7 @@ public class AllowlistRepairServiceTests
         var reportRemove = svc.BuildReport(configuredRemove, PeruResolved(configuredRemove), [], [], opts, dir.FullName);
         _ = svc.BuildPatchPreview(reportRemove, configuredRemove);
         var configuredAdd = PeruConfigured(["peru-2", "peru-3"]);
-        WriteCandidateExport(dir.FullName, [PeruCandidateWith947269()], "
- ");
+        WriteCandidateExport(dir.FullName, [PeruCandidateWith947269()], "\n ");
         var reportAdd = svc.BuildReport(configuredAdd, PeruResolved(configuredAdd), [], [], opts, dir.FullName);
 
         var preview = svc.BuildPatchPreview(reportAdd, configuredAdd).PatchPreview;
@@ -527,8 +549,7 @@ public class AllowlistRepairServiceTests
         WriteCandidateExport(dir.FullName, [PeruCandidateWithout947269()]);
         _ = svc.BuildPatchPreview(svc.BuildReport(configuredRemove, PeruResolved(configuredRemove), [], [], opts, dir.FullName), configuredRemove);
         var configuredAdd = PeruConfigured(["peru-2", "peru-3"]);
-        WriteCandidateExport(dir.FullName, [PeruCandidateWith947269()], "
- ");
+        WriteCandidateExport(dir.FullName, [PeruCandidateWith947269()], "\n ");
         var preview = svc.BuildPatchPreview(svc.BuildReport(configuredAdd, PeruResolved(configuredAdd), [], [], opts, dir.FullName), configuredAdd).PatchPreview;
 
         Assert.Equal(0, preview.Summary.PatchableHighConfidence + preview.Summary.PatchableMediumConfidence);
@@ -553,6 +574,7 @@ public class AllowlistRepairServiceTests
         Assert.Equal("ReviewOnly", patch.PatchType);
         Assert.Equal("NeedsManualReview", patch.CurrentAction);
         Assert.Contains(patch.RiskNotes, x => x.Contains("manual lock", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(1, svc.BuildPatchPreview(report, configured).PatchPreview.Summary.Locked);
     }
 
     [Fact]
@@ -581,16 +603,19 @@ public class AllowlistRepairServiceTests
         WriteCandidateExport(dir.FullName, [PeruCandidateWithout947269()]);
         _ = svc.BuildPatchPreview(svc.BuildReport(configuredRemove, PeruResolved(configuredRemove), [], [], opts, dir.FullName), configuredRemove);
         var configuredAdd = PeruConfigured(["peru-2", "peru-3"]);
-        WriteCandidateExport(dir.FullName, [PeruCandidateWith947269()], "
- ");
+        WriteCandidateExport(dir.FullName, [PeruCandidateWith947269()], "\n ");
         _ = svc.BuildPatchPreview(svc.BuildReport(configuredAdd, PeruResolved(configuredAdd), [], [], opts, dir.FullName), configuredAdd);
 
         var history = svc.BuildRepairHistoryExport();
         var peru = history.Groups.Single(x => x.GroupKey.Contains("peruvian", StringComparison.OrdinalIgnoreCase));
 
         Assert.True(peru.OscillationDetected);
+        Assert.False(peru.Patchable);
         Assert.Equal("NeedsManualReview", peru.RecommendedAction);
-        Assert.Equal("RepairDiffOscillation", peru.Reason);
+        Assert.Equal("RepairDiffOscillation", peru.QuarantineReason);
+        Assert.Contains("947269", peru.OscillatingMarketIds);
+        Assert.Contains("947269", peru.LastAddedMarketIds);
+        Assert.Contains("947269", peru.PreviousRemovedMarketIds);
     }
 
 
