@@ -80,6 +80,8 @@ public class TradingBotOptions
     public MarketDiscoveryOptions MarketDiscovery { get; set; } = new();
     public SignalROptions SignalR { get; set; } = new();
     public RuntimeHealthOptions RuntimeHealth { get; set; } = new();
+    public RuntimeMemoryOptions RuntimeMemory { get; set; } = new();
+    public CacheOptions Caches { get; set; } = new();
 }
 public class MarketDiscoveryOptions
 {
@@ -214,7 +216,7 @@ public class MultiOutcomeLoggingOptions
     public bool LogScanConfigEachCycle { get; set; } = false;
     public bool LogVerifiedBasketDetailsOnChangeOnly { get; set; } = true;
     public int LogVerifiedBasketDetailsEveryNCycles { get; set; } = 50;
-    public int LogProfileComparisonEveryNCycles { get; set; } = 50;
+    public int LogProfileComparisonEveryNCycles { get; set; } = 100;
     public bool LogProfileComparisonOnChangeOnly { get; set; } = true;
     public int LogExperimentalCandidateEveryNCycles { get; set; } = 50;
     public bool LogExperimentalCandidateOnChangeOnly { get; set; } = true;
@@ -222,14 +224,14 @@ public class MultiOutcomeLoggingOptions
     public bool LogProfileComparisonSummary { get; set; } = true;
     public decimal ProfileComparisonSignificantNetDelta { get; set; } = 0.005m;
     public bool LogNearExecutableOnlyOnChange { get; set; } = true;
-    public int LogCandidateScanEveryNCycles { get; set; } = 50;
+    public int LogCandidateScanEveryNCycles { get; set; } = 100;
     public bool LogCandidateScanOnChangeOnly { get; set; } = true;
     public bool LogCandidateScanWhenExecutableOnly { get; set; } = true;
     public bool LogCandidateScanWhenRejectDistributionChanges { get; set; } = true;
     public int CandidateScanSignificantCountDelta { get; set; } = 15;
     public int CandidateScanBucketSize { get; set; } = 10;
     public bool LogCandidateScanWhenOnlyRejected { get; set; } = false;
-    public int LogVerifiedScanEveryNCycles { get; set; } = 25;
+    public int LogVerifiedScanEveryNCycles { get; set; } = 100;
     public int LogAllowlistHealthEveryNCycles { get; set; } = 25;
     public bool LogVerifiedScanOnChangeOnly { get; set; } = true;
     public int LogPortfolioEveryNCycles { get; set; } = 25;
@@ -241,12 +243,12 @@ public class MultiOutcomeLoggingOptions
     public bool LogExecutionSuppressionSummary { get; set; } = true;
     public bool LogRepeatedSizingForOpenPosition { get; set; } = false;
     public bool LogVerifiedUnresolvedSamplesOnChangeOnly { get; set; } = true;
-    public int LogVerifiedUnresolvedSamplesEveryNCycles { get; set; } = 50;
+    public int LogVerifiedUnresolvedSamplesEveryNCycles { get; set; } = 100;
     public int MaxVerifiedUnresolvedSamplesToLog { get; set; } = 5;
     public bool LogAllowlistRepairSuggestionsOnChangeOnly { get; set; } = true;
-    public int LogAllowlistRepairSuggestionsEveryNCycles { get; set; } = 50;
+    public int LogAllowlistRepairSuggestionsEveryNCycles { get; set; } = 100;
     public bool LogAllowlistRepairOnChangeOnly { get; set; } = true;
-    public int LogAllowlistRepairEveryNCycles { get; set; } = 50;
+    public int LogAllowlistRepairEveryNCycles { get; set; } = 100;
 }
 
 
@@ -298,10 +300,20 @@ public class RuntimeStateOptions
     public int MaxMultiOutcomeDiagnosticsHistory { get; set; } = 100;
     public int MaxRecentLogs { get; set; } = 500;
     public int MaxScannerStatsHistory { get; set; } = 500;
-    public int MaxProfileComparisonHistory { get; set; } = 200;
-    public int MaxRejectedCandidateSamples { get; set; } = 100;
+    public int MaxScannerHistory { get; set; } = 500;
+    public int MaxCandidateSnapshots { get; set; } = 2;
+    public int MaxCandidateGroupsInMemory { get; set; } = 250;
+    public int MaxRepairHistorySnapshotsPerGroup { get; set; } = 5;
+    public int MaxUnresolvedDiagnostics { get; set; } = 100;
     public int MaxExecutionAuditEvents { get; set; } = 500;
+    public int MaxDryRunOrderPlans { get; set; } = 100;
+    public int MaxFillSimulations { get; set; } = 100;
+    public int MaxPaperPositions { get; set; } = 100;
     public int MaxSignalREventBuffer { get; set; } = 100;
+    public int MaxProfileComparisonHistory { get; set; } = 100;
+    public int MaxVerifiedRankingHistory { get; set; } = 100;
+    public int MaxCandidateScanHistory { get; set; } = 100;
+    public int MaxRejectedCandidateSamples { get; set; } = 100;
     public int OrderbookCacheTtlSeconds { get; set; } = 30;
     public int MarketCacheTtlMinutes { get; set; } = 30;
 }
@@ -311,10 +323,31 @@ public class SignalROptions
     public int MaxPayloadItems { get; set; } = 100;
     public int MaxRecentLogsToBroadcast { get; set; } = 100;
     public int MaxDiagnosticsItemsToBroadcast { get; set; } = 50;
+    public int MaxPayloadBytes { get; set; } = 262144;
 }
 
 public class RuntimeHealthOptions
 {
     public bool Enabled { get; set; } = true;
-    public int LogEveryMinutes { get; set; } = 5;
+    public int LogEveryMinutes { get; set; } = 2;
+}
+
+public class RuntimeMemoryOptions
+{
+    public int MaxProcessMemoryMb { get; set; } = 1200;
+    public int WarningProcessMemoryMb { get; set; } = 900;
+    public int CriticalProcessMemoryMb { get; set; } = 1100;
+    public bool PauseScannerOnCriticalMemory { get; set; } = true;
+    public bool ClearNonEssentialCachesOnCriticalMemory { get; set; } = true;
+    public bool ForceGcOnCriticalMemory { get; set; } = true;
+    public bool WriteMemorySnapshotOnCritical { get; set; } = true;
+}
+
+public class CacheOptions
+{
+    public int OrderbookCacheTtlSeconds { get; set; } = 30;
+    public int MarketCacheTtlMinutes { get; set; } = 30;
+    public int MaxOrderbookCacheEntries { get; set; } = 5000;
+    public int MaxMarketCacheEntries { get; set; } = 12000;
+    public bool ClearOrderbookCacheAfterScan { get; set; } = true;
 }

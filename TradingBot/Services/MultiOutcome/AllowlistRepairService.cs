@@ -18,6 +18,7 @@ public sealed class AllowlistRepairService
     private AllowlistRepairOptions _lastOptions = new();
     private readonly Dictionary<string, List<AllowlistRepairHistoryEntry>> _repairHistory = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, RepairHistoryStatus> _repairHistoryStatus = new(StringComparer.OrdinalIgnoreCase);
+    private const int MaxRepairHistorySnapshotsPerGroup = 5;
 
     public AllowlistRepairReport BuildReport(
         IReadOnlyList<VerifiedMultiOutcomeGroupConfig> configuredGroups,
@@ -239,7 +240,7 @@ public sealed class AllowlistRepairService
                     {
                         _repairHistory.TryGetValue(groupKey, out var entries);
                         _repairHistoryStatus.TryGetValue(groupKey, out var status);
-                        var last = (entries ?? []).TakeLast(10).ToArray();
+                        var last = (entries ?? []).TakeLast(MaxRepairHistorySnapshotsPerGroup).ToArray();
                         var current = last.LastOrDefault();
                         var previous = last.Length >= 2 ? last[^2] : null;
                         return new AllowlistRepairHistoryGroup(
@@ -264,6 +265,8 @@ public sealed class AllowlistRepairService
                     .ToArray());
         }
     }
+
+    public int RepairHistorySnapshotCount { get { lock (_gate) return _repairHistory.Values.Sum(x => x.Count); } }
 
     public void ExportRepairHistory(string historyPath)
     {
@@ -484,7 +487,7 @@ public sealed class AllowlistRepairService
         if (list.Any(x => x.SnapshotId.Equals(entry.SnapshotId, StringComparison.OrdinalIgnoreCase) && x.DiffHash.Equals(entry.DiffHash, StringComparison.OrdinalIgnoreCase)))
             return;
         list.Add(entry);
-        if (list.Count > 20) list.RemoveRange(0, list.Count - 20);
+        if (list.Count > MaxRepairHistorySnapshotsPerGroup) list.RemoveRange(0, list.Count - MaxRepairHistorySnapshotsPerGroup);
     }
 
     private static AllowlistRepairPatchItem MakeReviewOnlyPatch(AllowlistRepairPatchItem patch, RepairHistoryStatus status)
@@ -563,7 +566,7 @@ public sealed class AllowlistRepairService
                         entries = [new AllowlistRepairHistoryEntry(groupKey, "loaded-history-export", added.Count > 0 && removed.Count > 0 ? "Replace" : added.Count > 0 ? "Add" : "Remove", added, removed, DiffHash(added, removed), DiffHash(removed, added), DateTime.UtcNow.AddSeconds(-2))];
                 }
                 if (entries.Length > 0 && !_repairHistory.ContainsKey(groupKey))
-                    _repairHistory[groupKey] = entries.TakeLast(20).ToList();
+                    _repairHistory[groupKey] = entries.TakeLast(MaxRepairHistorySnapshotsPerGroup).ToList();
                 var oscillationDetected = GetNullableBool(groupNode, "oscillationDetected") == true;
                 var locked = GetNullableBool(groupNode, "locked") == true;
                 var reason = groupNode["quarantineReason"]?.GetValue<string>() ?? groupNode["reason"]?.GetValue<string>() ?? string.Empty;

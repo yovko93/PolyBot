@@ -36,6 +36,7 @@ builder.Services.AddSingleton<VerifiedBasketExecutionCoordinator>();
 builder.Services.AddSingleton<VerifiedBasketDryRunOrderBuilder>();
 builder.Services.AddSingleton<DryRunFillSimulator>();
 builder.Services.AddSingleton<AllowlistRepairService>();
+builder.Services.AddSingleton<MemoryGuard>();
 builder.Services.AddSingleton<IExchangeOrderExecutor, DisabledExchangeOrderExecutor>();
 builder.Services.AddSingleton<DryRunLiveExecutor>();
 builder.Services.AddSingleton(sp => new BotRuntimeState(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value.RuntimeState));
@@ -187,7 +188,9 @@ app.MapPost("/api/bot/controls/pause", async (BotRuntimeState s, IHubContext<Bot
 {
     s.SetControls(new BotControlStateDto(true, "MANUAL_PAUSE", DateTime.UtcNow, s.NextSeq()));
     s.SetStatus(s.Status with { ScannerActive = false, LastScanTime = DateTime.UtcNow });
+    s.AddSignalREvent("controlsUpdated");
     await hub.Clients.All.SendAsync("controlsUpdated", s.Controls);
+    s.AddSignalREvent("botStatusUpdated");
     await hub.Clients.All.SendAsync("botStatusUpdated", s.Status);
     return Results.Ok(s.Controls);
 });
@@ -197,29 +200,15 @@ app.MapPost("/api/bot/controls/resume", async (BotRuntimeState s, IHubContext<Bo
 {
     s.SetControls(new BotControlStateDto(false, "RUNNING", DateTime.UtcNow, s.NextSeq()));
     s.SetStatus(s.Status with { ScannerActive = true, LastScanTime = DateTime.UtcNow });
+    s.AddSignalREvent("controlsUpdated");
     await hub.Clients.All.SendAsync("controlsUpdated", s.Controls);
+    s.AddSignalREvent("botStatusUpdated");
     await hub.Clients.All.SendAsync("botStatusUpdated", s.Status);
     return Results.Ok(s.Controls);
 });
 app.MapGet("/api/bot/logs/recent", (BotRuntimeState s, int? limit) => s.Logs().TakeLast(Math.Clamp(limit ?? 300, 1, 1000)).ToArray());
 app.MapGet("/api/bot/equity", (BotRuntimeState s, int? limit) => s.Equity().TakeLast(Math.Clamp(limit ?? 500, 1, 1000)).ToArray());
-app.MapGet("/api/bot/runtime-health", (BotRuntimeState s) => Results.Ok(new {
-    processMemoryMb = Math.Round(System.Diagnostics.Process.GetCurrentProcess().WorkingSet64 / 1024d / 1024d, 2),
-    gcTotalMemoryMb = Math.Round(GC.GetTotalMemory(false) / 1024d / 1024d, 2),
-    gen0Collections = GC.CollectionCount(0),
-    gen1Collections = GC.CollectionCount(1),
-    gen2Collections = GC.CollectionCount(2),
-    recentLogsCount = s.Logs().Length,
-    scannerStatsHistoryCount = s.ScannerStatsHistoryCount,
-    verifiedGroupsCount = s.VerifiedBasketScreener?.VerifiedGroups?.Count ?? 0,
-    candidateGroupsCount = s.MultiOutcomeCandidates.Length,
-    rejectedSamplesCount = s.MultiOutcomeReviewReport.Length,
-    signalRClientsCount = (int?)null,
-    orderbookCacheCount = 0,
-    marketCacheCount = 0,
-    uptime = DateTime.UtcNow - System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime(),
-    lastScanId = s.ScannerStats.Sequence
-}));
+app.MapGet("/api/bot/runtime-health", (BotRuntimeState s) => Results.Ok(RuntimeHealthSnapshot.From(s)));
 app.MapHub<BotHub>("/hubs/bot");
 
 var apiTask = app.RunAsync(listenUrl);
@@ -256,15 +245,16 @@ _ = Task.Run(async () =>
     while (!app.Lifetime.ApplicationStopping.IsCancellationRequested)
     {
         state.SetStatus(state.Status with { LastHeartbeat = DateTime.UtcNow, ConnectionStatus = "CONNECTED" });
+        state.AddSignalREvent("heartbeat");
         await hub.Clients.All.SendAsync("heartbeat", new { timestamp = DateTime.UtcNow, sequence = state.NextSeq() });
         await Task.Delay(options.HeartbeatIntervalMs);
     }
 });
 
-await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>(), app.Services.GetRequiredService<VerifiedBasketDryRunOrderBuilder>(), app.Services.GetRequiredService<DryRunFillSimulator>(), app.Services.GetRequiredService<AllowlistRepairService>(), app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value, options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping);
+await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>(), app.Services.GetRequiredService<VerifiedBasketDryRunOrderBuilder>(), app.Services.GetRequiredService<DryRunFillSimulator>(), app.Services.GetRequiredService<AllowlistRepairService>(), app.Services.GetRequiredService<MemoryGuard>(), app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value, options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping);
 await apiTask;
 
-static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, VerifiedBasketExecutionCoordinator verifiedExecution, VerifiedBasketDryRunOrderBuilder dryRunBuilder, DryRunFillSimulator fillSimulator, AllowlistRepairService allowlistRepairService, ExecutionOptions executionOptions, TradingBotOptions options, OpportunityFilteringOptions filtering, string contentRootPath, CancellationToken stoppingToken)
+static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, VerifiedBasketExecutionCoordinator verifiedExecution, VerifiedBasketDryRunOrderBuilder dryRunBuilder, DryRunFillSimulator fillSimulator, AllowlistRepairService allowlistRepairService, MemoryGuard memoryGuard, ExecutionOptions executionOptions, TradingBotOptions options, OpportunityFilteringOptions filtering, string contentRootPath, CancellationToken stoppingToken)
 {
     var scannerInstanceId = Guid.NewGuid().ToString("N");
     var scannerStartedAt = DateTime.UtcNow;
@@ -275,6 +265,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
 
     var marketService = new MarketDataService(http);
     var orderbookService = new OrderBookService(http) { DisableSingleBookHttpFallback = true, LogPrefetchDetails = options.LogPrefetchDetails, LogBookCacheMissDetails = options.Logging.LogBookCacheMissDetails, BookCacheMissSampleSize = options.Logging.BookCacheMissSampleSize };
+    orderbookService.ConfigureCache(TimeSpan.FromSeconds(Math.Max(1, options.Caches.OrderbookCacheTtlSeconds)), options.Caches.MaxOrderbookCacheEntries);
     var crossOptions = new CrossExchangeOptions();
     options.GetType();
     var feeOptions = new ExchangeFeesOptions();
@@ -371,14 +362,26 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         string? lastError = null;
         try
         {
+            memoryGuard.Check(state, options, () => orderbookService.ClearAllCache(), contentRootPath);
+            state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);
+            if (memoryGuard.ShouldSkipScannerCycle())
+            {
+                state.SetStatus(state.Status with { ScannerActive = false, LastScanTime = DateTime.UtcNow });
+                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                continue;
+            }
             uiLogger.LogInfo("scanner", "{\"event\":\"scan_start\",\"timestamp\":\"" + started.ToString("O") + "\"}");
             if (state.Controls.IsPaused)
             {
                 state.SetStatus(state.Status with { ScannerActive = false, LastScanTime = DateTime.UtcNow });
-                if (options.RuntimeHealth.Enabled && (runtimeHealthLastLoggedAt == DateTime.MinValue || DateTime.UtcNow - runtimeHealthLastLoggedAt >= TimeSpan.FromMinutes(Math.Max(1, options.RuntimeHealth.LogEveryMinutes))))
+                if (options.Caches.ClearOrderbookCacheAfterScan) orderbookService.ClearExpiredCache();
+            state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);
+            memoryGuard.Check(state, options, () => orderbookService.ClearAllCache(), contentRootPath);
+            if (options.RuntimeHealth.Enabled && (runtimeHealthLastLoggedAt == DateTime.MinValue || DateTime.UtcNow - runtimeHealthLastLoggedAt >= TimeSpan.FromMinutes(Math.Max(1, options.RuntimeHealth.LogEveryMinutes))))
             {
                 runtimeHealthLastLoggedAt = DateTime.UtcNow;
-                Console.WriteLine($"[RUNTIME_HEALTH] MemoryMb={Math.Round(System.Diagnostics.Process.GetCurrentProcess().WorkingSet64/1024d/1024d,2)} Logs={state.Logs().Length} ScannerHistory={state.ScannerStatsHistoryCount} OrderbookCache=0 Uptime={(DateTime.UtcNow - System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime())}");
+                var health = RuntimeHealthSnapshot.From(state);
+                Console.WriteLine($"[RUNTIME_HEALTH] ProcessMb={health.ProcessMemoryMb} GcMb={health.GcTotalMemoryMb} Logs={health.RecentLogsCount} CandidateSnapshots={health.CandidateSnapshotCount} RepairHistory={health.RepairHistoryCount} OrderbookCache={health.OrderbookCacheCount} Uptime={health.Uptime}");
             }
             await PushUiUpdates(state, hub, uiLogger, options, verifiedExecution, contentRootPath);
                 uiLogger.LogInfo("scanner", "{\"event\":\"scan_skipped\",\"reason\":\"PAUSED\"}");
@@ -993,7 +996,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var unresolvedDiagnostics = ScanLogSummaryService.BuildUnresolvedDiagnostics(allowlistedGroups, resolved, repairByGroupKey, loggedUnresolvedGroupKeys);
                     var unresolvedCounts = ScanLogSummaryService.UnresolvedCategoryCounts(unresolvedDiagnostics);
                     unresolved = unresolvedCounts.Total;
-                    var unresolvedExport = ScanLogSummaryService.BuildUnresolvedExport(unresolvedDiagnostics, DateTime.UtcNow);
+                    state.AddUnresolvedDiagnostics(unresolvedDiagnostics.Cast<object>());
+                    var unresolvedExport = ScanLogSummaryService.BuildUnresolvedExport(unresolvedDiagnostics.Take(options.RuntimeState.MaxUnresolvedDiagnostics).ToArray(), DateTime.UtcNow);
                     var unresolvedExportPath = Path.Combine(contentRootPath, options.MultiOutcomeReview.ExportVerifiedUnresolvedGroupsPath);
                     Directory.CreateDirectory(Path.GetDirectoryName(unresolvedExportPath)!);
                     File.WriteAllText(unresolvedExportPath, System.Text.Json.JsonSerializer.Serialize(unresolvedExport, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
@@ -1173,10 +1177,14 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             }
             monitor.FlushCsv();
             SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, filtered.Count, started, null, scanStats, filtering, lastDiscoverySummary, rollingOffset, options.ScanBatchSize, discoveredMarkets.Count, discoveryStartedAt, discoveryCompletedAt, emptyCycles, options.MarketScanLimit, effectiveMarketLimit, options.MaxMarketsToDiscover, options, poolLimitReason, multiOutcomeReport);
+            if (options.Caches.ClearOrderbookCacheAfterScan) orderbookService.ClearExpiredCache();
+            state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);
+            memoryGuard.Check(state, options, () => orderbookService.ClearAllCache(), contentRootPath);
             if (options.RuntimeHealth.Enabled && (runtimeHealthLastLoggedAt == DateTime.MinValue || DateTime.UtcNow - runtimeHealthLastLoggedAt >= TimeSpan.FromMinutes(Math.Max(1, options.RuntimeHealth.LogEveryMinutes))))
             {
                 runtimeHealthLastLoggedAt = DateTime.UtcNow;
-                Console.WriteLine($"[RUNTIME_HEALTH] MemoryMb={Math.Round(System.Diagnostics.Process.GetCurrentProcess().WorkingSet64/1024d/1024d,2)} Logs={state.Logs().Length} ScannerHistory={state.ScannerStatsHistoryCount} OrderbookCache=0 Uptime={(DateTime.UtcNow - System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime())}");
+                var health = RuntimeHealthSnapshot.From(state);
+                Console.WriteLine($"[RUNTIME_HEALTH] ProcessMb={health.ProcessMemoryMb} GcMb={health.GcTotalMemoryMb} Logs={health.RecentLogsCount} CandidateSnapshots={health.CandidateSnapshotCount} RepairHistory={health.RepairHistoryCount} OrderbookCache={health.OrderbookCacheCount} Uptime={health.Uptime}");
             }
             await PushUiUpdates(state, hub, uiLogger, options, verifiedExecution, contentRootPath);
             uiLogger.LogInfo("scanner", $"{{\"event\":\"scan_end\",\"durationMs\":{(long)(DateTime.UtcNow - started).TotalMilliseconds},\"marketsScanned\":{filtered.Count},\"detected\":{cycleTop.Count},\"executable\":{executableCount}}}");
@@ -1200,8 +1208,11 @@ static async Task PushUiUpdates(BotRuntimeState state, IHubContext<BotHub> hub, 
 {
     try
     {
-        await hub.Clients.All.SendAsync("opportunitiesUpdated", state.Opportunities().TakeLast(options.SignalR.MaxPayloadItems).ToArray());
-        await hub.Clients.All.SendAsync("tradeLogUpdated", state.Trades().TakeLast(300).ToArray());
+        var opportunitiesPayload = TrimPayload(state, "opportunitiesUpdated", state.Opportunities().TakeLast(options.SignalR.MaxPayloadItems).ToArray(), options);
+        state.AddSignalREvent("opportunitiesUpdated");
+        await hub.Clients.All.SendAsync("opportunitiesUpdated", opportunitiesPayload);
+        state.AddSignalREvent("tradeLogUpdated");
+        await hub.Clients.All.SendAsync("tradeLogUpdated", TrimPayload(state, "tradeLogUpdated", state.Trades().TakeLast(Math.Min(300, options.SignalR.MaxPayloadItems)).ToArray(), options));
         verifiedExecution.ExportAudit(Path.Combine(contentRootPath, "exports/execution-audit-latest.json"));
         verifiedExecution.ExportDryRunPlans(Path.Combine(contentRootPath, "exports/dry-run-order-plans-latest.json"), options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile, true);
         verifiedExecution.ExportFillSimulations(Path.Combine(contentRootPath, "exports/dry-run-fill-simulations-latest.json"));
@@ -1218,18 +1229,42 @@ static async Task PushUiUpdates(BotRuntimeState state, IHubContext<BotHub> hub, 
             openBasketPositionsCount = state.Status.OpenPositions,
             lastUpdatedAt = state.Status.LastScanTime
         }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
-        await hub.Clients.All.SendAsync("positionsUpdated", state.Positions());
+        state.AddSignalREvent("positionsUpdated");
+        await hub.Clients.All.SendAsync("positionsUpdated", TrimPayload(state, "positionsUpdated", state.Positions().TakeLast(options.RuntimeState.MaxPaperPositions).ToArray(), options));
+        state.AddSignalREvent("scannerStatsUpdated");
         await hub.Clients.All.SendAsync("scannerStatsUpdated", state.ScannerStats);
+        state.AddSignalREvent("riskUpdated");
         await hub.Clients.All.SendAsync("riskUpdated", state.Risk);
+        state.AddSignalREvent("controlsUpdated");
         await hub.Clients.All.SendAsync("controlsUpdated", state.Controls);
+        state.AddSignalREvent("botStatusUpdated");
         await hub.Clients.All.SendAsync("botStatusUpdated", state.Status);
-        await hub.Clients.All.SendAsync("equityUpdated", state.Equity().TakeLast(options.SignalR.MaxPayloadItems).ToArray());
-        await hub.Clients.All.SendAsync("terminalLogsUpdated", state.Logs().TakeLast(options.SignalR.MaxRecentLogsToBroadcast).ToArray());
+        state.AddSignalREvent("equityUpdated");
+        await hub.Clients.All.SendAsync("equityUpdated", TrimPayload(state, "equityUpdated", state.Equity().TakeLast(options.SignalR.MaxPayloadItems).ToArray(), options));
+        state.AddSignalREvent("terminalLogsUpdated");
+        await hub.Clients.All.SendAsync("terminalLogsUpdated", TrimPayload(state, "terminalLogsUpdated", state.Logs().TakeLast(options.SignalR.MaxRecentLogsToBroadcast).ToArray(), options));
     }
     catch (Exception ex)
     {
         logger.LogError("signalr", $"{{\"event\":\"push_pipeline_error\",\"message\":\"{ex.Message.Replace("\"", "'")}\"}}");
     }
+}
+
+
+static T[] TrimPayload<T>(BotRuntimeState state, string eventName, T[] items, TradingBotOptions options)
+{
+    var before = items.Length;
+    var afterLimit = Math.Min(options.SignalR.MaxPayloadItems, before);
+    var payload = items.TakeLast(afterLimit).ToArray();
+    var bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(payload).Length;
+    while (payload.Length > 1 && bytes > options.SignalR.MaxPayloadBytes)
+    {
+        payload = payload.TakeLast(Math.Max(1, payload.Length / 2)).ToArray();
+        bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(payload).Length;
+    }
+    if (payload.Length != before)
+        Console.WriteLine($"[SIGNALR_PAYLOAD_TRIMMED] Event={eventName} ItemsBefore={before} ItemsAfter={payload.Length}");
+    return payload;
 }
 
 static List<Market> BuildRollingBatch(List<Market> markets, ref int offset, int batchSize, TradingBotOptions options)

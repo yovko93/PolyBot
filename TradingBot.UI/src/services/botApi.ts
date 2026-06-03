@@ -61,8 +61,8 @@ export const getControls = async (signal?: AbortSignal): Promise<BotControlState
 export const getOpportunityDiagnostics = async (signal?: AbortSignal): Promise<OpportunityDiagnostics | null> => safeRequest<any | null>('/opportunity-diagnostics', null, signal);
 export const getMultiOutcomeDiagnostics = async (signal?: AbortSignal): Promise<MultiOutcomeDiagnostics | null> => safeRequest<any | null>('/multi-outcome-diagnostics', null, signal);
 export const getVerifiedBasketScreener = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/verified-basket-screener', null, signal);
-export const getExecutionAudit = async (signal?: AbortSignal): Promise<any[]> => safeRequest<any[]>('/execution-audit?limit=200', [], signal);
-export const getDryRunOrderPlans = async (signal?: AbortSignal): Promise<any[]> => safeRequest<any[]>('/dry-run-order-plans?limit=50', [], signal);
+export const getExecutionAudit = async (signal?: AbortSignal): Promise<any[]> => keepLatest(await safeRequest<any[]>('/execution-audit?limit=300', [], signal), UIDataLimits.MaxAuditRows);
+export const getDryRunOrderPlans = async (signal?: AbortSignal): Promise<any[]> => keepLatest(await safeRequest<any[]>('/dry-run-order-plans?limit=100', [], signal), UIDataLimits.MaxDiagnosticsRows);
 export const getAllowlistRepairReport = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/verified-allowlist-repair-report?limit=50', null, signal);
 export const pauseScanner = async (): Promise<BotControlState> => mapControls(await request('/controls/pause', undefined, { method: 'POST' }));
 export const resumeScanner = async (): Promise<BotControlState> => mapControls(await request('/controls/resume', undefined, { method: 'POST' }));
@@ -110,7 +110,7 @@ export const subscribeToBotEvents = async (handlers: BotEventHandlers): Promise<
       ]);
       handlers.onStatus(status); handlers.onOpportunities(opportunities); handlers.onPositions(positions); handlers.onTrades(trades);
       if (scanner) handlers.onScanner(scanner); if (risk) handlers.onRisk(risk);
-      logs.slice(-50).forEach(handlers.onLog); handlers.onEquity(keepLatest(equity, UIDataLimits.MaxChartPoints));
+      keepLatest(logs, Math.min(50, UIDataLimits.MaxRecentLogs)).forEach(handlers.onLog); handlers.onEquity(keepLatest(equity, UIDataLimits.MaxChartPoints));
       handlers.onControls(controls);
     } catch {
       handlers.onConnectionState('DISCONNECTED');
@@ -130,14 +130,14 @@ export const subscribeToBotEvents = async (handlers: BotEventHandlers): Promise<
   hub.onState((s) => { handlers.onConnectionState(s); if (s === 'CONNECTED') { stopPolling(); } else { ensurePolling(); } });
   const unsubs = [
     hub.on('botStatusUpdated', (d) => handlers.onStatus(mapStatus(d))),
-    hub.on('opportunitiesUpdated', (d) => handlers.onOpportunities(((d as any[]) ?? []).filter(shouldDisplayOpportunity).map(mapOpportunity))),
+    hub.on('opportunitiesUpdated', (d) => handlers.onOpportunities(keepLatest(((d as any[]) ?? []).filter(shouldDisplayOpportunity).map(mapOpportunity), UIDataLimits.MaxOpportunities))),
     hub.on('opportunityDetected', (d) => { if (shouldDisplayOpportunity(d)) handlers.onOpportunityDetected(mapOpportunity(d)); }),
-    hub.on('tradeLogUpdated', (d) => handlers.onTrades(((d as any[]) ?? []).map(mapTrade))),
+    hub.on('tradeLogUpdated', (d) => handlers.onTrades(keepLatest(((d as any[]) ?? []).map(mapTrade), UIDataLimits.MaxTradeLogRows))),
     hub.on('positionsUpdated', (d) => handlers.onPositions(((d as any[]) ?? []).map(mapPosition))),
     hub.on('riskUpdated', (d) => handlers.onRisk(mapRisk(d))),
     hub.on('scannerStatsUpdated', (d) => handlers.onScanner(mapScanner(d))),
     hub.on('terminalLogAdded', (d) => handlers.onLog(mapLog(d))),
-    hub.on('equityUpdated', (d) => handlers.onEquity(((d as any[]) ?? []).map(mapEquity))),
+    hub.on('equityUpdated', (d) => handlers.onEquity(keepLatest(((d as any[]) ?? []).map(mapEquity), UIDataLimits.MaxChartPoints))),
     hub.on('heartbeat', (d: any) => handlers.onHeartbeat(d?.timestamp ?? new Date().toISOString())),
     hub.on('controlsUpdated', (d) => handlers.onControls(mapControls(d)))
   ];

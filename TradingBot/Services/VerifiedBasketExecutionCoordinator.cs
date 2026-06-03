@@ -12,6 +12,7 @@ public sealed class VerifiedBasketExecutionCoordinator
 {
     private readonly object _gate = new();
     private readonly ExecutionOptions _execution;
+    private readonly RuntimeStateOptions _runtime;
     private readonly Dictionary<string, DateTime> _recentlyExecuted = new();
     private readonly ConcurrentQueue<ExecutionAuditEvent> _audit = new();
     private readonly ConcurrentQueue<BasketOrderPlan> _dryRunPlans = new();
@@ -19,13 +20,17 @@ public sealed class VerifiedBasketExecutionCoordinator
     private readonly Dictionary<string, int> _duplicateSuppressionByGroup = new(StringComparer.OrdinalIgnoreCase);
 
     public VerifiedBasketExecutionCoordinator(IOptions<ExecutionOptions> executionOptions)
+        : this(executionOptions, Microsoft.Extensions.Options.Options.Create(new TradingBotOptions())) { }
+
+    public VerifiedBasketExecutionCoordinator(IOptions<ExecutionOptions> executionOptions, IOptions<TradingBotOptions> botOptions)
     {
         _execution = executionOptions.Value;
+        _runtime = botOptions.Value.RuntimeState;
     }
 
-    public IReadOnlyList<ExecutionAuditEvent> ListAudit(int limit = 200) => _audit.TakeLast(Math.Clamp(limit, 1, 1000)).ToArray();
-    public IReadOnlyList<BasketOrderPlan> ListDryRunPlans(int limit = 50) => _dryRunPlans.TakeLast(Math.Clamp(limit, 1, 500)).ToArray();
-    public IReadOnlyList<FillSimulationResult> ListFillSimulations(int limit = 50) => _fillSimulations.TakeLast(Math.Clamp(limit, 1, 500)).ToArray();
+    public IReadOnlyList<ExecutionAuditEvent> ListAudit(int limit = 200) => _audit.TakeLast(Math.Clamp(limit, 1, _runtime.MaxExecutionAuditEvents)).ToArray();
+    public IReadOnlyList<BasketOrderPlan> ListDryRunPlans(int limit = 50) => _dryRunPlans.TakeLast(Math.Clamp(limit, 1, _runtime.MaxDryRunOrderPlans)).ToArray();
+    public IReadOnlyList<FillSimulationResult> ListFillSimulations(int limit = 50) => _fillSimulations.TakeLast(Math.Clamp(limit, 1, _runtime.MaxFillSimulations)).ToArray();
 
     public IReadOnlyList<object> ListDryRunPlanSummaries(int limit = 50)
     {
@@ -75,20 +80,24 @@ public sealed class VerifiedBasketExecutionCoordinator
     public void Audit(ExecutionAuditEvent e)
     {
         _audit.Enqueue(e);
-        while (_audit.Count > 2000) _audit.TryDequeue(out _);
+        while (_audit.Count > _runtime.MaxExecutionAuditEvents) _audit.TryDequeue(out _);
     }
 
     public void RecordDryRunPlan(BasketOrderPlan plan)
     {
         _dryRunPlans.Enqueue(plan);
-        while (_dryRunPlans.Count > 1000) _dryRunPlans.TryDequeue(out _);
+        while (_dryRunPlans.Count > _runtime.MaxDryRunOrderPlans) _dryRunPlans.TryDequeue(out _);
     }
 
     public void RecordFillSimulation(FillSimulationResult simulation)
     {
         _fillSimulations.Enqueue(simulation);
-        while (_fillSimulations.Count > 1000) _fillSimulations.TryDequeue(out _);
+        while (_fillSimulations.Count > _runtime.MaxFillSimulations) _fillSimulations.TryDequeue(out _);
     }
+
+    public int AuditCount => _audit.Count;
+    public int DryRunPlanCount => _dryRunPlans.Count;
+    public int FillSimulationCount => _fillSimulations.Count;
 
     public void ExportDryRunPlans(string path, string activeProfile, bool paperOnly, int limit = 50)
     {
