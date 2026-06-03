@@ -104,6 +104,79 @@ public class AllowlistRepairSafetyTests
         Assert.Equal(1, second.PatchPreview.Summary.PatchableHighConfidence + second.PatchPreview.Summary.PatchableMediumConfidence);
     }
 
+
+    [Fact]
+    public void CandidateSnapshot_WithDuplicateGroupKey_DoesNotThrow()
+    {
+        var service = new AllowlistRepairService();
+        var options = new AllowlistRepairOptions { UseLatestCandidateExportForRepair = false, LockedGroups = [] };
+        var candidates = new object[] { CandidateObject(includeOscillatingMarket: true), CandidateObject(includeOscillatingMarket: true) };
+
+        var report = service.BuildReport([PeruConfig(includeOscillatingMarket: false)], [], [], candidates, options);
+
+        Assert.Single(report.Groups);
+    }
+
+    [Fact]
+    public void PatchPreview_DuplicatePeruEntries_AreCollapsedToMostRestrictive()
+    {
+        var service = new AllowlistRepairService();
+        var options = new AllowlistRepairOptions { UseLatestCandidateExportForRepair = false, LockedGroups = [] };
+        service.BuildReport([], [], [], [], options);
+        service.BuildPatchPreview(BuildReport("previous-remove", addMarket: false), [PeruConfig(includeOscillatingMarket: true)]);
+        var duplicateReport = BuildReportWithDuplicateGroups("current-add", addMarket: true);
+
+        var preview = service.BuildPatchPreview(duplicateReport, [PeruConfig(includeOscillatingMarket: false)]);
+
+        Assert.Single(preview.PatchPreview.Patches.Select(x => x.GroupKey).Distinct(StringComparer.OrdinalIgnoreCase));
+        Assert.Single(preview.PatchPreview.Patches);
+        Assert.Equal("ReviewOnly", preview.PatchPreview.Patches.Single().PatchType);
+        Assert.Equal(1, preview.PatchPreview.Summary.Quarantined);
+    }
+
+    [Fact]
+    public void RepairHistoryDuplicateGroupEntries_AreMergedAndCompact()
+    {
+        var temp = Directory.CreateTempSubdirectory("repair-history-duplicates-").FullName;
+        try
+        {
+            var exports = Path.Combine(temp, "exports");
+            Directory.CreateDirectory(exports);
+            File.WriteAllText(Path.Combine(exports, "allowlist-repair-history-latest.json"), $$"""
+            {
+              "timestamp": "2026-06-03T00:00:00Z",
+              "groups": [
+                {
+                  "groupKey": "{{PeruGroupKey}}",
+                  "snapshots": [{ "groupKey": "{{PeruGroupKey}}", "snapshotId": "s1", "action": "Remove", "addedMarketIds": [], "removedMarketIds": ["{{PeruOscillatingMarketId}}"], "timestamp": "2026-06-03T00:00:00Z" }]
+                },
+                {
+                  "groupKey": "{{PeruGroupKey}}",
+                  "snapshots": [{ "groupKey": "{{PeruGroupKey}}", "snapshotId": "s2", "action": "Add", "addedMarketIds": ["{{PeruOscillatingMarketId}}"], "removedMarketIds": [], "timestamp": "2026-06-03T00:01:00Z" }],
+                  "oscillationDetected": true,
+                  "oscillatingMarketIds": ["{{PeruOscillatingMarketId}}"],
+                  "quarantineReason": "RepairDiffOscillation",
+                  "repairConfidence": "Unsafe"
+                }
+              ]
+            }
+            """);
+            var service = new AllowlistRepairService();
+
+            service.BuildReport([], [], [], [], new AllowlistRepairOptions { UseLatestCandidateExportForRepair = false, LockedGroups = [] }, temp);
+            var history = service.BuildRepairHistoryExport();
+
+            Assert.Single(history.Groups);
+            Assert.True(history.Groups.Single().Snapshots.Count <= 5);
+            Assert.True(history.Groups.Single().OscillationDetected);
+            Assert.Contains(PeruOscillatingMarketId, history.Groups.Single().OscillatingMarketIds);
+        }
+        finally
+        {
+            Directory.Delete(temp, recursive: true);
+        }
+    }
+
     private static VerifiedMultiOutcomeGroupConfig PeruConfig(bool includeOscillatingMarket)
         => new(
             true,
@@ -184,6 +257,24 @@ public class AllowlistRepairSafetyTests
             [group],
             [],
             "Test");
+    }
+
+
+    private static object CandidateObject(bool includeOscillatingMarket) => new
+    {
+        groupKey = PeruGroupKey,
+        title = "2026 Peruvian presidential election winner",
+        markets = new[]
+        {
+            new { marketId = "base-market", conditionId = "base-condition", question = "Base", active = true, closed = false, archived = false },
+            new { marketId = includeOscillatingMarket ? PeruOscillatingMarketId : "other-market", conditionId = "peru-condition", question = "Peru", active = true, closed = false, archived = false }
+        }
+    };
+
+    private static AllowlistRepairReport BuildReportWithDuplicateGroups(string snapshotId, bool addMarket)
+    {
+        var report = BuildReport(snapshotId, addMarket);
+        return report with { Groups = [report.Groups.Single(), report.Groups.Single()] };
     }
 
     private static JsonObject SuggestedTemplate(bool includeOscillatingMarket) => new()

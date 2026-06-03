@@ -453,7 +453,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
 
                 if (options.MultiOutcomeArbitrage.EvaluateVerifiedGroupsAgainstFullPool)
                 {
-                    var allByMarketId = discoveredMarkets.Where(m => !string.IsNullOrWhiteSpace(m.id)).ToDictionary(m => m.id, StringComparer.OrdinalIgnoreCase);
+                    var allByMarketId = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(discoveredMarkets.Where(m => !string.IsNullOrWhiteSpace(m.id)), m => m.id, "Scanner.DiscoveredMarketsById", DuplicateGroupKeyPolicy.KeepLatest);
                     var allowlistedGroups = multiOutcomeValidator.GetAllowlistedGroups();
                     var resolved = verifiedResolver.ResolveVerifiedGroups(allowlistedGroups, allByMarketId, options.MultiOutcomeArbitrage, lastDiscoverySummary.DiscoveryHealthy);
                     var verifiedMismatch = resolved.Count(x => x.ValidationStatus != "VerifiedGroupResolved");
@@ -601,7 +601,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             activeExecutable++;
                             var maxLiquidityQty = Math.Max(options.MultiOutcomeArbitrage.MinExecutableQty, resolvedNoAsks.Min(x => x.NoAskQuantity ?? 0m));
                             var maxLiquidityExpectedProfit = maxLiquidityQty * formula.NetEdge;
-                            var questionByMarket = markets.Where(m => !string.IsNullOrWhiteSpace(m.id)).ToDictionary(m => m.id, m => m.question ?? m.id, StringComparer.OrdinalIgnoreCase);
+                            var questionByMarket = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(markets.Where(m => !string.IsNullOrWhiteSpace(m.id)), m => m.id, "Scanner.QuestionByMarket", DuplicateGroupKeyPolicy.KeepLatest)
+                                .ToDictionary(kv => kv.Key, kv => kv.Value.question ?? kv.Value.id, StringComparer.OrdinalIgnoreCase);
                             var legs = resolvedNoAsks.Select(x => new VerifiedMultiOutcomeOpportunityLeg(x.MarketId, x.ConditionId ?? x.MarketId, questionByMarket.TryGetValue(x.MarketId, out var q) ? q : x.MarketId, "NO", x.NoTokenId ?? x.MarketId, x.NoAsk ?? 0m, x.NoAskQuantity ?? 0m, x.Source, maxLiquidityQty, maxLiquidityQty * (x.NoAsk ?? 0m))).ToArray();
                             var opp = new VerifiedMultiOutcomeOpportunity($"verified-{g.GroupKey}-{DateTime.UtcNow:yyyyMMddHHmmss}", strategyName, g.GroupKey, g.Title, "Verified", legs.Length, formula.GuaranteedPayout, formula.NoAskSum, formula.GrossEdge, formula.NetEdge, activeCostProfileName, maxLiquidityQty, maxLiquidityExpectedProfit, options.MultiOutcomeArbitrage.MaxNotionalPerGroup, maxLiquidityQty * formula.NoAskSum, "PaperExecutable", legs);
                             promotedVerifiedOpportunities.Add(opp);
@@ -682,14 +683,15 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 verifiedExecution.RecordDryRunPlan(plan);
                                 verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "DryRunOrderPlanCreated", "Ok", "DryRunOnly", pre.NetEdge, pre.ExpectedProfit, pre.EstimatedCost, pre.Quantity, $"Orders={plan.Orders.Count}"));
                                 Console.WriteLine($"[DRY_RUN_ORDER_PLAN_CREATED] Group={opp.GroupKey} Orders={plan.Orders.Count} Qty={pre.Quantity:0.####} TotalCost={plan.TotalEstimatedCost:0.####} ExpectedProfit={plan.ExpectedProfit:0.####} DryRunOnly=true");
-                                var marketById = g.ResolvedMarkets.ToDictionary(x => x.id, StringComparer.OrdinalIgnoreCase);
+                                var marketById = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(g.ResolvedMarkets.Where(x => !string.IsNullOrWhiteSpace(x.id)), x => x.id, "Scanner.ResolvedMarketsById", DuplicateGroupKeyPolicy.KeepLatest);
                                 var snapshotsByMarket = new Dictionary<string, BinaryOrderBookSnapshot?>(StringComparer.OrdinalIgnoreCase);
                                 foreach (var order in plan.Orders)
                                 {
                                     if (marketById.TryGetValue(order.MarketId, out var market)) snapshotsByMarket[order.MarketId] = await orderbookService.GetBinarySnapshotAsync(market, stoppingToken);
                                     else snapshotsByMarket[order.MarketId] = null;
                                 }
-                                var booksByToken = plan.Orders.ToDictionary(o => o.TokenId, o => orderbookService.GetCachedOrderBookSnapshot(o.TokenId, o.MarketId), StringComparer.OrdinalIgnoreCase);
+                                var booksByToken = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(plan.Orders.Where(o => !string.IsNullOrWhiteSpace(o.TokenId)), o => o.TokenId, "Scanner.DryRunOrdersByToken", DuplicateGroupKeyPolicy.KeepLatest)
+                                            .ToDictionary(kv => kv.Key, kv => orderbookService.GetCachedOrderBookSnapshot(kv.Value.TokenId, kv.Value.MarketId), StringComparer.OrdinalIgnoreCase);
                                 var fill = fillSimulator.Simulate(plan, booksByToken, snapshotsByMarket, executionOptions, profileUsed: activeCostProfileName, estimatedFees: formula.Fees, estimatedSlippage: formula.Slippage, safetyBuffer: formula.SafetyBuffer);
                                 verifiedExecution.RecordFillSimulation(fill);
                                 Console.WriteLine($"[DRY_RUN_FILL_SIMULATION] Group={opp.GroupKey} PlannedQty={fill.RequestedQty:0.####} FullyFillableQty={fill.FullyFillableQty:0.####} Status={fill.Status}");
@@ -754,13 +756,26 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var unresolvedConfiguredGroups = resolved.Where(x => x.ValidationStatus != "VerifiedGroupResolved").Select(x => (object)new { x.GroupKey, Reason = x.RejectionReason, x.ValidationStatus }).ToArray();
                     var repairReportPath = Path.Combine(contentRootPath, options.MultiOutcomeReview.ExportAllowlistRepairReportPath);
                     var repairSuggestedPath = Path.Combine(contentRootPath, options.MultiOutcomeReview.ExportAllowlistRepairSuggestedConfigPath);
-                    var repairExports = allowlistRepairService.Export(repairReportPath, repairSuggestedPath, allowlistedGroups, resolved, verifiedPricingExport, boundedCandidates, options.AllowlistRepair, contentRootPath);
-                    var repairReport = repairExports.Report;
                     var patchPreviewPath = Path.Combine(contentRootPath, "exports/verified-allowlist-repair-patch-preview-latest.json");
                     var patchedPreviewPath = Path.Combine(contentRootPath, "exports/verified-multi-outcome-groups-patched-preview.json");
                     var patchedPreviewMetadataPath = Path.Combine(contentRootPath, "exports/verified-multi-outcome-groups-patched-preview.with-metadata.json");
-                    var patchPreviewExport = allowlistRepairService.ExportPatchPreview(patchPreviewPath, patchedPreviewPath, patchedPreviewMetadataPath, repairReport, allowlistedGroups, contentRootPath);
-                    var patchPreview = patchPreviewExport.PatchPreview;
+                    AllowlistRepairReport repairReport;
+                    AllowlistRepairPatchPreview patchPreview;
+                    try
+                    {
+                        var repairExports = allowlistRepairService.Export(repairReportPath, repairSuggestedPath, allowlistedGroups, resolved, verifiedPricingExport, boundedCandidates, options.AllowlistRepair, contentRootPath);
+                        repairReport = repairExports.Report;
+                        patchPreview = allowlistRepairService.ExportPatchPreview(patchPreviewPath, patchedPreviewPath, patchedPreviewMetadataPath, repairReport, allowlistedGroups, contentRootPath).PatchPreview;
+                    }
+                    catch (Exception ex)
+                    {
+                        var safeMessage = ex.Message.Replace("\"", "'");
+                        Console.WriteLine($"[ALLOWLIST_REPAIR_ERROR] Message={safeMessage}");
+                        uiLogger.LogWarn("allowlist-repair", $"{{\"event\":\"allowlist_repair_error\",\"message\":\"{safeMessage}\"}}");
+                        repairReport = BuildEmptyAllowlistRepairReport(allowlistedGroups.Count, safeMessage);
+                        patchPreview = BuildEmptyAllowlistRepairPatchPreview(repairReport.SnapshotId, "config/verified-multi-outcome-groups.json");
+                    }
+                    state.SetRuntimeCounts(patchPreviewItemsCount: patchPreview.Patches.Count);
                     var summary = repairReport.Summary;
                     var allowlistHealth = repairReport.Groups.Select(g => new
                     {
@@ -796,7 +811,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             Console.WriteLine($"[ALLOWLIST_CONFIG_REPAIR_REMAINING] Group={remaining.GroupKey} Action=PruneMissingNoAskLegs MissingMarketIds=[{missingIds}]");
                     }
                     var healthPath = Path.Combine(contentRootPath, "exports/verified-allowlist-health-latest.json"); Directory.CreateDirectory(Path.GetDirectoryName(healthPath)!); File.WriteAllText(healthPath, System.Text.Json.JsonSerializer.Serialize(new { configured = summary.ConfiguredGroups, healthy = summary.Healthy, monitoringOnly = summary.MonitoringOnly, needsPricingPrune = summary.NeedsPricingPrune, needsRefresh = summary.NeedsRefresh, brokenConfig = summary.BrokenConfig, disabled = summary.Disabled, ignored = summary.Ignored, brokenTotal = summary.Broken, invariantResult = summary.InvariantOk, categoryCounts = repairReport.CategoryCounts, groups = allowlistHealth }, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
-                    var cleanup = new { metadata = new { generatedAtUtc = DateTime.UtcNow, note = "suggested only" }, groups = repairExports.SuggestedConfig.Groups };
+                    var cleanup = new { metadata = new { generatedAtUtc = DateTime.UtcNow, note = "suggested only" }, groups = allowlistRepairService.BuildSuggestedConfig(repairReport).Groups };
                     var cleanupPath = Path.Combine(contentRootPath, "exports/verified-allowlist-cleanup-suggested.json"); File.WriteAllText(cleanupPath, System.Text.Json.JsonSerializer.Serialize(cleanup, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
                     var repairSnapshotFingerprint = $"{repairReport.SnapshotId}|{repairReport.Snapshot.CandidateGroupsCount}|{repairReport.Snapshot.VerifiedGroupsCount}|{repairReport.Snapshot.Source}";
                     if (logThrottle.ShouldLog("ALLOWLIST_REPAIR_SNAPSHOT", repairSnapshotFingerprint, true, options.Logging.LogAllowlistRepairEveryNCycles))
@@ -987,7 +1002,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     verifiedScanCycle++;
                     var bestExperimentalText = bestExperimentalNet.HasValue ? bestExperimentalNet.Value.ToString("0.####") : "N/A";
                     var verifiedScanFingerprint = $"{multiOutcomeValidator.LoadedAllowlistCount}|{verifiedResolved}|{unresolved}|{verifiedEvaluated}|{activeExecutable}|{experimentalCandidates}|{diagnosticsOnlyPositive}|{paperOpenedCount}|{suppressedDuplicateCount}|{verifiedMismatch}|{bestConservativeNet}|{bestExperimentalText}|{bestAlternateProfileNet}|{bestRaw}";
-                    var repairByGroupKey = repairReport.Groups.ToDictionary(x => x.GroupKey, StringComparer.OrdinalIgnoreCase);
+                    var repairByGroupKey = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(repairReport.Groups, x => x.GroupKey, "Scanner.RepairReport.Groups", DuplicateGroupKeyPolicy.KeepMostRestrictive);
                     var unresolvedDiagnosticsForSampling = ScanLogSummaryService.BuildUnresolvedDiagnostics(allowlistedGroups, resolved, repairByGroupKey, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
                     var unresolvedSampleDecisions = unresolvedDiagnosticsForSampling
                         .Take(Math.Max(0, options.Logging.MaxVerifiedUnresolvedSamplesToLog))
@@ -1209,6 +1224,46 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         await Task.Delay(options.ScanIntervalMs, stoppingToken);
     }
 }
+
+
+static AllowlistRepairReport BuildEmptyAllowlistRepairReport(int configuredGroups, string reason)
+{
+    var snapshotId = $"repair-error-{DateTime.UtcNow:yyyyMMddHHmmss}";
+    var summary = new AllowlistRepairSummary(configuredGroups, 0, 0, 0, 0, 0, 0, 0, 0, configuredGroups == 0);
+    var counts = new AllowlistRepairCategoryCounts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    return new AllowlistRepairReport(
+        snapshotId,
+        DateTime.UtcNow,
+        summary,
+        counts,
+        summary.InvariantOk,
+        new AllowlistRepairSnapshot(snapshotId, DateTime.UtcNow, snapshotId, string.Empty, 0, configuredGroups, "RepairError", Array.Empty<AllowlistRepairGroup>()),
+        configuredGroups,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        Array.Empty<AllowlistRepairGroup>(),
+        Array.Empty<AllowlistRepairSuggestion>(),
+        $"Repair diagnostics failed safely: {reason}");
+}
+
+static AllowlistRepairPatchPreview BuildEmptyAllowlistRepairPatchPreview(string snapshotId, string sourceConfigPath)
+    => new(
+        DateTime.UtcNow,
+        snapshotId,
+        sourceConfigPath,
+        "ManualPreviewOnly",
+        false,
+        new AllowlistRepairPatchSummary(0, 0, 0, 0, 0, 0, 0, 0, 0),
+        Array.Empty<AllowlistRepairPatchItem>(),
+        new AllowlistRepairPostApplyValidationPlan(Array.Empty<string>(), 0, 0, 0, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>()),
+        new AllowlistRepairManualApplyInstructions(string.Empty, sourceConfigPath, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>()),
+        new AllowlistPatchedPreviewValidation(0, 0, 0, true, Array.Empty<string>()));
 
 static async Task PushUiUpdates(BotRuntimeState state, IHubContext<BotHub> hub, IBotUiLogger logger, TradingBotOptions options, VerifiedBasketExecutionCoordinator verifiedExecution, string contentRootPath)
 {

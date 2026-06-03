@@ -143,5 +143,30 @@ public class RuntimeMemorySafetyTests
         Assert.True(ScanLogSummaryService.ShouldSuppressRejectedOnlyCandidateScan(true, false, true, current, last, periodic: false));
     }
 
+
+    [Fact]
+    public void RealConfigDuplicateGroupKey_DoesNotThrowAndKeepsOneGroup()
+    {
+        var temp = Directory.CreateTempSubdirectory("allowlist-duplicate-config-").FullName;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(temp, "config"));
+            File.WriteAllText(Path.Combine(temp, "config", "verified-multi-outcome-groups.json"), """
+            [
+              { "enabled": true, "groupKey": "dup", "verificationStatus": "Verified", "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", "marketIds": ["m1"], "conditionIds": ["c1"] },
+              { "enabled": true, "groupKey": "dup", "verificationStatus": "Verified", "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", "marketIds": ["m2"], "conditionIds": ["c2"] }
+            ]
+            """);
+
+            var validator = new MutuallyExclusiveGroupValidator(new MultiOutcomeArbitrageOptions(), temp);
+
+            Assert.Equal(1, validator.LoadedAllowlistCount);
+        }
+        finally
+        {
+            Directory.Delete(temp, recursive: true);
+        }
+    }
+
     private static ScannerStatsDto MakeStats(long sequence) => new(0,0,0,0,0,0,0,0,0,0,0,0,DateTime.UtcNow,DateTime.UtcNow,null,0,0,0,0,0,0,0,DateTime.UtcNow,DateTime.UtcNow,0,0,0,0,0,0,0,0,0,0,0,0,null,0,0,0,0,0,0,0,null,sequence);
 }

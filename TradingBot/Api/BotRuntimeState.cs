@@ -35,6 +35,7 @@ public class BotRuntimeState
     private int _orderbookCacheCount;
     private int _marketCacheCount;
     private int _exportQueueCount;
+    private int _patchPreviewItemsCount;
 
     private static void Trim<T>(ConcurrentQueue<T> q,int max){ var capped = Math.Max(0, max); while(q.Count>capped) q.TryDequeue(out _); }
     private void TrimAll()
@@ -61,6 +62,7 @@ public class BotRuntimeState
     public int OrderbookCacheCount => Volatile.Read(ref _orderbookCacheCount);
     public int MarketCacheCount => Volatile.Read(ref _marketCacheCount);
     public int ExportQueueCount => Volatile.Read(ref _exportQueueCount);
+    public int PatchPreviewItemsCount => Volatile.Read(ref _patchPreviewItemsCount);
     public long NextSeq()=>Interlocked.Increment(ref _seq);
     public void SetStatus(BotStatusDto s){lock(_gate) Status=s;}
     public void SetScannerStats(ScannerStatsDto s){lock(_gate) ScannerStats=s; _scannerStatsHistory.Enqueue(s); Trim(_scannerStatsHistory, Math.Min(_runtime.MaxScannerStatsHistory, _runtime.MaxScannerHistory));}
@@ -81,7 +83,7 @@ public class BotRuntimeState
     public void AddEquity(EquityPointDto e){_equity.Enqueue(e); Trim(_equity,500);}
     public void AddSignalREvent(string eventName){_signalREventBuffer.Enqueue($"{DateTime.UtcNow:O}|{eventName}"); Trim(_signalREventBuffer,_runtime.MaxSignalREventBuffer);}
     public void AddUnresolvedDiagnostics(IEnumerable<object> items){foreach(var item in items.Take(_runtime.MaxUnresolvedDiagnostics)) _unresolvedDiagnostics.Enqueue(item); Trim(_unresolvedDiagnostics,_runtime.MaxUnresolvedDiagnostics);}
-    public void SetRuntimeCounts(int? repairHistoryCount = null, int? dryRunOrderPlansCount = null, int? fillSimulationsCount = null, int? executionAuditCount = null, int? orderbookCacheCount = null, int? marketCacheCount = null, int? exportQueueCount = null)
+    public void SetRuntimeCounts(int? repairHistoryCount = null, int? dryRunOrderPlansCount = null, int? fillSimulationsCount = null, int? executionAuditCount = null, int? orderbookCacheCount = null, int? marketCacheCount = null, int? exportQueueCount = null, int? patchPreviewItemsCount = null)
     {
         if (repairHistoryCount is int rh) Interlocked.Exchange(ref _repairHistoryCount, rh);
         if (dryRunOrderPlansCount is int drp) Interlocked.Exchange(ref _dryRunOrderPlansCount, drp);
@@ -90,6 +92,7 @@ public class BotRuntimeState
         if (orderbookCacheCount is int ob) Interlocked.Exchange(ref _orderbookCacheCount, ob);
         if (marketCacheCount is int mc) Interlocked.Exchange(ref _marketCacheCount, mc);
         if (exportQueueCount is int eq) Interlocked.Exchange(ref _exportQueueCount, eq);
+        if (patchPreviewItemsCount is int pp) Interlocked.Exchange(ref _patchPreviewItemsCount, pp);
     }
     public IReadOnlyDictionary<string,int> GetRuntimeCollectionCounts() => new Dictionary<string,int>
     {
@@ -104,7 +107,8 @@ public class BotRuntimeState
         ["signalREventBuffer"] = SignalREventBufferCount,
         ["orderbookCache"] = OrderbookCacheCount,
         ["marketCache"] = MarketCacheCount,
-        ["exports"] = ExportQueueCount
+        ["exports"] = ExportQueueCount,
+        ["patchPreviewItems"] = PatchPreviewItemsCount
     };
     public void ClearNonEssentialRuntimeState()
     {

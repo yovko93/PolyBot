@@ -26,10 +26,12 @@ public sealed record RuntimeHealthSnapshot(
     int SignalREventBufferCount,
     int OrderbookCacheCount,
     int MarketCacheCount,
-    int ExportQueueCount)
+    int ExportQueueCount,
+    int PatchPreviewItemsCount,
+    int DuplicateGroupKeyWarnings)
 {
     public string ToLogLine()
-        => $"[RUNTIME_HEALTH] ProcessMb={ProcessMemoryMb} GcMb={GcTotalMemoryMb} WorkingSetMb={WorkingSetMb} Logs={RecentLogsCount} ScannerHistory={ScannerHistoryCount} CandidateSnapshots={CandidateSnapshotCount} RepairHistory={RepairHistoryCount} ExecutionAudit={ExecutionAuditCount} SignalRBuffer={SignalREventBufferCount} OrderbookCache={OrderbookCacheCount} MarketCache={MarketCacheCount} Uptime={Uptime}";
+        => $"[RUNTIME_HEALTH] ProcessMb={ProcessMemoryMb} GcMb={GcTotalMemoryMb} WorkingSetMb={WorkingSetMb} Logs={RecentLogsCount} ScannerHistory={ScannerHistoryCount} CandidateSnapshots={CandidateSnapshotCount} RepairHistory={RepairHistoryCount} ExecutionAudit={ExecutionAuditCount} SignalRBuffer={SignalREventBufferCount} OrderbookCache={OrderbookCacheCount} MarketCache={MarketCacheCount} PatchPreviewItems={PatchPreviewItemsCount} DuplicateGroupKeyWarnings={DuplicateGroupKeyWarnings} Uptime={Uptime}";
 
     public static RuntimeHealthSnapshot From(BotRuntimeState state)
     {
@@ -59,6 +61,8 @@ public sealed record RuntimeHealthSnapshot(
             SignalREventBufferCount: state.SignalREventBufferCount,
             OrderbookCacheCount: state.OrderbookCacheCount,
             MarketCacheCount: state.MarketCacheCount,
-            ExportQueueCount: state.ExportQueueCount);
+            ExportQueueCount: state.ExportQueueCount,
+            PatchPreviewItemsCount: state.PatchPreviewItemsCount,
+            DuplicateGroupKeyWarnings: TradingBot.Services.GroupKeyDictionaryBuilder.DuplicateWarnings);
     }
 }

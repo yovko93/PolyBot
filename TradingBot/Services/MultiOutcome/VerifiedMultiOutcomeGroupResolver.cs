@@ -1,5 +1,6 @@
 using TradingBot.Models;
 using TradingBot.Options;
+using TradingBot.Services;
 
 namespace TradingBot.Services.MultiOutcome;
 
@@ -11,9 +12,11 @@ public sealed class VerifiedMultiOutcomeGroupResolver
         MultiOutcomeArbitrageOptions options,
         bool discoveryHealthy = true)
     {
-        var byCondition = allDiscoveredMarkets.Values
-            .Where(m => !string.IsNullOrWhiteSpace(m.conditionId))
-            .ToDictionary(m => m.conditionId!, m => m, StringComparer.OrdinalIgnoreCase);
+        var byCondition = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(
+            allDiscoveredMarkets.Values.Where(m => !string.IsNullOrWhiteSpace(m.conditionId)),
+            m => m.conditionId,
+            "VerifiedGroupResolver.MarketsByCondition",
+            DuplicateGroupKeyPolicy.KeepLatest);
         var output = new List<ResolvedVerifiedGroup>();
         foreach (var item in allowlist.Where(x => x.Enabled).Take(Math.Max(1, options.MaxVerifiedGroupsPerCycle)))
         {
