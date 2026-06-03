@@ -1,4 +1,6 @@
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using TradingBot.Models;
 using TradingBot.Options;
 using TradingBot.Services;
@@ -11,6 +13,34 @@ public class AllowlistRepairSafetyTests
 {
     private const string PeruGroupKey = "winner:2026 peruvian presidential election|kind:person";
     private const string PeruOscillatingMarketId = "947269";
+
+    [Fact]
+    public void AllowlistRepairLockProvider_HasExactlyOnePublicConstructor()
+    {
+        var ctor = Assert.Single(typeof(AllowlistRepairLockProvider).GetConstructors());
+        var parameter = Assert.Single(ctor.GetParameters());
+        Assert.Equal(typeof(IOptions<TradingBotOptions>), parameter.ParameterType);
+    }
+
+    [Fact]
+    public void DependencyInjection_CanConstructLockProvider_AndRepairService()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(Options.Create(new TradingBotOptions
+        {
+            AllowlistRepair = new AllowlistRepairOptions
+            {
+                LockedGroups = [PeruLock()]
+            }
+        }));
+        services.AddSingleton<AllowlistRepairLockProvider>();
+        services.AddSingleton<AllowlistRepairService>();
+
+        using var provider = services.BuildServiceProvider(validateScopes: true);
+
+        Assert.NotNull(provider.GetRequiredService<AllowlistRepairLockProvider>());
+        Assert.NotNull(provider.GetRequiredService<AllowlistRepairService>());
+    }
 
     [Fact]
     public void LockedPeruGroup_IsNeverPatchable_AndReturnsManualReviewUnsafe()
@@ -186,11 +216,18 @@ public class AllowlistRepairSafetyTests
         Console.SetOut(writer);
         try
         {
-            var provider = new AllowlistRepairLockProvider([
+            var normalized = AllowlistRepairLockProvider.NormalizeLockedGroups([
+                new AllowlistRepairLockedGroupOptions { GroupKey = PeruGroupKey, Reason = "older", AllowPatchPreview = true },
+                new AllowlistRepairLockedGroupOptions { GroupKey = PeruGroupKey, Reason = "latest", AllowPatchPreview = false }
+            ]);
+            var provider = ProviderWith([
                 new AllowlistRepairLockedGroupOptions { GroupKey = PeruGroupKey, Reason = "older", AllowPatchPreview = true },
                 new AllowlistRepairLockedGroupOptions { GroupKey = PeruGroupKey, Reason = "latest", AllowPatchPreview = false }
             ]);
 
+            Assert.Equal(2, normalized.TotalConfigured);
+            Assert.Equal(1, normalized.LockedGroups.Count);
+            Assert.Equal(1, normalized.DuplicateGroupKeys);
             Assert.Equal(2, provider.TotalConfigured);
             Assert.Equal(1, provider.UniqueGroupKeys);
             Assert.Equal(1, provider.DuplicateGroupKeys);
@@ -215,7 +252,7 @@ public class AllowlistRepairSafetyTests
         Console.SetOut(writer);
         try
         {
-            var provider = new AllowlistRepairLockProvider([
+            var provider = ProviderWith([
                 new AllowlistRepairLockedGroupOptions { GroupKey = PeruGroupKey, Reason = "older", AllowPatchPreview = true },
                 new AllowlistRepairLockedGroupOptions { GroupKey = PeruGroupKey, Reason = "latest", AllowPatchPreview = false }
             ]);
@@ -276,7 +313,7 @@ public class AllowlistRepairSafetyTests
     [Fact]
     public void LockedPeruPatchPreview_RemainsLockedAndNotPatchable_WithProvider()
     {
-        var provider = new AllowlistRepairLockProvider([AllowlistRepairLockProvider.DefaultPeruLock()], logValidation: false);
+        var provider = ProviderWith([PeruLock()]);
         var service = new AllowlistRepairService(provider);
         service.BuildReport([], [], [], [], new AllowlistRepairOptions { UseLatestCandidateExportForRepair = false, LockedGroups = [] });
 
@@ -412,6 +449,22 @@ public class AllowlistRepairSafetyTests
         foreach (var value in values) arr.Add(value);
         return arr;
     }
+
+    private static AllowlistRepairLockProvider ProviderWith(IEnumerable<AllowlistRepairLockedGroupOptions> locks)
+        => new(Options.Create(new TradingBotOptions
+        {
+            AllowlistRepair = new AllowlistRepairOptions
+            {
+                LockedGroups = locks.ToList()
+            }
+        }));
+
+    private static AllowlistRepairLockedGroupOptions PeruLock() => new()
+    {
+        GroupKey = PeruGroupKey,
+        Reason = "Manual review required due to repair diff oscillation on marketId 947269",
+        AllowPatchPreview = false
+    };
 
     private static IEnumerable<int> Occurrences(string text, string value)
     {

@@ -14,23 +14,12 @@ public sealed class AllowlistRepairLockProvider
     public IReadOnlyDictionary<string, AllowlistRepairLockedGroupOptions> LockedGroups { get; }
 
     public AllowlistRepairLockProvider(IOptions<TradingBotOptions> options)
-        : this(options.Value.AllowlistRepair.LockedGroups, logValidation: true)
     {
-    }
-
-    public AllowlistRepairLockProvider(IEnumerable<AllowlistRepairLockedGroupOptions>? configuredLocks, bool logValidation = true)
-    {
-        var rawLocks = NormalizeInput(configuredLocks).ToList();
-        if (rawLocks.Count == 0)
-            rawLocks.Add(DefaultPeruLock());
-
-        TotalConfigured = rawLocks.Count;
-        var groups = rawLocks.GroupBy(x => x.GroupKey, StringComparer.OrdinalIgnoreCase).ToArray();
-        DuplicateGroupKeys = groups.Sum(g => Math.Max(0, g.Count() - 1));
-        LockedGroups = groups.ToDictionary(g => g.Key, g => g.Last(), StringComparer.OrdinalIgnoreCase);
-
-        if (logValidation)
-            LogValidation();
+        var normalized = NormalizeLockedGroups(options.Value.AllowlistRepair.LockedGroups);
+        TotalConfigured = normalized.TotalConfigured;
+        DuplicateGroupKeys = normalized.DuplicateGroupKeys;
+        LockedGroups = normalized.LockedGroups;
+        LogValidation();
     }
 
     public bool TryGetLock(string? groupKey, out AllowlistRepairLockedGroupOptions lockedGroup)
@@ -42,7 +31,19 @@ public sealed class AllowlistRepairLockProvider
     public bool IsHardLocked(string? groupKey)
         => TryGetLock(groupKey, out var lockedGroup) && !lockedGroup.AllowPatchPreview;
 
-    internal static AllowlistRepairLockedGroupOptions DefaultPeruLock() => new()
+    public static LockNormalizationResult NormalizeLockedGroups(IEnumerable<AllowlistRepairLockedGroupOptions>? configuredLocks)
+    {
+        var rawLocks = NormalizeInput(configuredLocks).ToList();
+        if (rawLocks.Count == 0)
+            rawLocks.Add(DefaultPeruLock());
+
+        var groups = rawLocks.GroupBy(x => x.GroupKey, StringComparer.OrdinalIgnoreCase).ToArray();
+        var duplicateGroupKeys = groups.Sum(g => Math.Max(0, g.Count() - 1));
+        var lockedGroups = groups.ToDictionary(g => g.Key, g => g.Last(), StringComparer.OrdinalIgnoreCase);
+        return new LockNormalizationResult(rawLocks.Count, duplicateGroupKeys, lockedGroups);
+    }
+
+    public static AllowlistRepairLockedGroupOptions DefaultPeruLock() => new()
     {
         GroupKey = PeruOscillationGroupKey,
         Reason = PeruOscillationReason,
@@ -70,4 +71,6 @@ public sealed class AllowlistRepairLockProvider
         foreach (var lockedGroup in LockedGroups.Values.Where(x => !x.AllowPatchPreview).OrderBy(x => x.GroupKey, StringComparer.OrdinalIgnoreCase))
             Console.WriteLine($"[ALLOWLIST_REPAIR_LOCKED] Group={lockedGroup.GroupKey} Reason={lockedGroup.Reason}");
     }
+
+    public sealed record LockNormalizationResult(int TotalConfigured, int DuplicateGroupKeys, IReadOnlyDictionary<string, AllowlistRepairLockedGroupOptions> LockedGroups);
 }
