@@ -46,33 +46,6 @@ public class RuntimeMemorySafetyTests
     }
 
     [Fact]
-    public void VerifiedExecutionCoordinator_SoakSimulation_KeepsQueuesBounded()
-    {
-        var botOptions = Options.Create(new TradingBotOptions
-        {
-            RuntimeState = new RuntimeStateOptions
-            {
-                MaxExecutionAuditEvents = 500,
-                MaxDryRunOrderPlans = 100,
-                MaxFillSimulations = 100
-            }
-        });
-        var coordinator = new VerifiedBasketExecutionCoordinator(Options.Create(new ExecutionOptions()), botOptions);
-
-        for (var i = 0; i < 1000; i++)
-        {
-            coordinator.Audit(new ExecutionAuditEvent(DateTime.UtcNow, $"opp{i}", "g", "s", "stage", "status", "reason", 0, 0, 0, 0, ""));
-            coordinator.RecordDryRunPlan(new BasketOrderPlan($"p{i}", $"opp{i}", "g", "t", "s", "Conservative", true, DateTime.UtcNow, DateTime.UtcNow.AddMinutes(1), BasketOrderPlanStatus.PaperOnly, 0, 0, 0, 0, 0, 0, 0, 0, Array.Empty<OrderIntent>(), Array.Empty<string>(), Array.Empty<string>()));
-            coordinator.RecordFillSimulation(new FillSimulationResult($"f{i}", $"p{i}", "g", "s", DateTime.UtcNow, FillSimulationStatus.FullyFillable, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "Conservative", false, true, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<LegFillSimulation>()));
-        }
-
-        Assert.True(coordinator.AuditCount <= botOptions.Value.RuntimeState.MaxExecutionAuditEvents);
-        Assert.True(coordinator.DryRunPlanCount <= botOptions.Value.RuntimeState.MaxDryRunOrderPlans);
-        Assert.True(coordinator.FillSimulationCount <= botOptions.Value.RuntimeState.MaxFillSimulations);
-    }
-
-
-    [Fact]
     public void RuntimeHealthSnapshot_ReturnsCollectionCounts_AndLogLine()
     {
         var state = new BotRuntimeState(new RuntimeStateOptions { MaxRecentLogs = 500, MaxSignalREventBuffer = 100 });

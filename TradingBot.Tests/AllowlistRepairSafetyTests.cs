@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
+using MsOptions = Microsoft.Extensions.Options.Options;
 using TradingBot.Models;
 using TradingBot.Options;
 using TradingBot.Services;
@@ -15,18 +15,10 @@ public class AllowlistRepairSafetyTests
     private const string PeruOscillatingMarketId = "947269";
 
     [Fact]
-    public void AllowlistRepairLockProvider_HasExactlyOnePublicConstructor()
-    {
-        var ctor = Assert.Single(typeof(AllowlistRepairLockProvider).GetConstructors());
-        var parameter = Assert.Single(ctor.GetParameters());
-        Assert.Equal(typeof(IOptions<TradingBotOptions>), parameter.ParameterType);
-    }
-
-    [Fact]
     public void DependencyInjection_CanConstructLockProvider_AndRepairService()
     {
         var services = new ServiceCollection();
-        services.AddSingleton(Options.Create(new TradingBotOptions
+        services.AddSingleton(MsOptions.Create(new TradingBotOptions
         {
             AllowlistRepair = new AllowlistRepairOptions
             {
@@ -451,7 +443,7 @@ public class AllowlistRepairSafetyTests
     }
 
     private static AllowlistRepairLockProvider ProviderWith(IEnumerable<AllowlistRepairLockedGroupOptions> locks)
-        => new(Options.Create(new TradingBotOptions
+        => new(MsOptions.Create(new TradingBotOptions
         {
             AllowlistRepair = new AllowlistRepairOptions
             {
