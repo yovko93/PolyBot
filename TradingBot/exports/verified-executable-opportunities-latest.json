@@ -1,7 +1,35 @@
 {
-  "timestamp": "2026-06-03T09:59:05.5474132Z",
+  "timestamp": "2026-06-03T12:50:40.8519934Z",
   "activeProfile": "Conservative",
   "executableVerifiedBaskets": [],
   "preTradeResults": [],
-  "paperPositions": []
+  "paperPositions": [
+    {
+      "PositionId": "Unknown_947289_YES_947289_NO",
+      "GroupKey": "single-market:947289",
+      "Strategy": "TWO_LEG_ARB",
+      "TotalCost": 73.11860,
+      "ExpectedProfit": 2.26140,
+      "OpenedAtUtc": "2026-06-03T12:50:03.784345Z",
+      "status": "Open"
+    },
+    {
+      "PositionId": "Unknown_1107582_YES_1107582_NO",
+      "GroupKey": "single-market:1107582",
+      "Strategy": "TWO_LEG_ARB",
+      "TotalCost": 100.00000000000000000000000000,
+      "ExpectedProfit": 3.9501039501039501039501039501,
+      "OpenedAtUtc": "2026-06-03T12:50:04.447314Z",
+      "status": "Open"
+    },
+    {
+      "PositionId": "Unknown_601821_YES_601821_NO",
+      "GroupKey": "single-market:601821",
+      "Strategy": "TWO_LEG_ARB",
+      "TotalCost": 100.00000000000000000000000000,
+      "ExpectedProfit": 0.9081735620585267406659939456,
+      "OpenedAtUtc": "2026-06-03T12:50:34.1027892Z",
+      "status": "Open"
+    }
+  ]
 }

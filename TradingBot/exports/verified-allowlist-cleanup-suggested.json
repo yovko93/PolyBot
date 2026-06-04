@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAtUtc": "2026-06-03T09:59:05.5034072Z",
+    "generatedAtUtc": "2026-06-03T12:50:40.7805251Z",
     "note": "suggested only"
   },
   "groups": [
@@ -189,71 +189,17 @@
       "Title": "winner:2026 peruvian presidential election|kind:person",
       "CurrentEnabled": true,
       "HealthCategory": "NeedsRefresh",
-      "RecommendedAction": "RefreshFromCandidateExport",
-      "RepairConfidence": "High",
-      "SuggestedAction": "RefreshFromCandidateExport",
-      "SuggestedEnabled": true,
-      "SuggestedTemplate": {
-        "enabled": true,
-        "groupKey": "winner:2026 peruvian presidential election|kind:person",
-        "title": "winner:2026 peruvian presidential election|kind:person",
-        "verificationStatus": "Verified",
-        "groupType": "MutuallyExclusiveWinner",
-        "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-        "marketIds": [
-          "947289",
-          "947269",
-          "947268"
-        ],
-        "conditionIds": [
-          "0x2cd24d17f5680dc6e7b7d67c712a223ae85550745597e81bd2d2b8d073443951",
-          "0xc4c3dbcc37a957a817599b0bf9fb5bd6b62b19210b0f527fec57cb75c7ed150a",
-          "0xae6d3d20bc8f742922dc40880cd8a8671c10385a9912fa7cd670fba0643dfe96"
-        ],
-        "requiredOutcomeCount": 3,
-        "requireExactOutcomeCount": false,
-        "settlementNotes": "Refreshed from candidate export. Manually verify mutually exclusive settlement before enabling.",
-        "verifiedBy": "manual-review-required",
-        "verifiedAt": "2026-06-03"
-      },
+      "RecommendedAction": "NeedsManualReview",
+      "RepairConfidence": "Low",
+      "SuggestedAction": "NeedsManualReview",
+      "SuggestedEnabled": false,
+      "SuggestedTemplate": null,
       "SuggestedPrunedTemplate": null,
-      "SuggestedRefreshedTemplate": {
-        "enabled": true,
-        "groupKey": "winner:2026 peruvian presidential election|kind:person",
-        "title": "winner:2026 peruvian presidential election|kind:person",
-        "verificationStatus": "Verified",
-        "groupType": "MutuallyExclusiveWinner",
-        "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-        "marketIds": [
-          "947289",
-          "947269",
-          "947268"
-        ],
-        "conditionIds": [
-          "0x2cd24d17f5680dc6e7b7d67c712a223ae85550745597e81bd2d2b8d073443951",
-          "0xc4c3dbcc37a957a817599b0bf9fb5bd6b62b19210b0f527fec57cb75c7ed150a",
-          "0xae6d3d20bc8f742922dc40880cd8a8671c10385a9912fa7cd670fba0643dfe96"
-        ],
-        "requiredOutcomeCount": 3,
-        "requireExactOutcomeCount": false,
-        "settlementNotes": "Refreshed from candidate export. Manually verify mutually exclusive settlement before enabling.",
-        "verifiedBy": "manual-review-required",
-        "verifiedAt": "2026-06-03"
-      },
-      "Diff": {
-        "suggestedMarketCount": 3,
-        "removedMarketIds": [
-          "947289",
-          "947268"
-        ],
-        "addedMarketIds": [
-          "947269"
-        ],
-        "changedConditionIds": []
-      },
+      "SuggestedRefreshedTemplate": null,
+      "Diff": null,
       "Notes": [
         "Stable candidate match: winner:2026 peruvian presidential election|kind:person score=1.",
-        "Market mismatch; stable refreshed candidate is available for manual review."
+        "ManualLock: Manual review required due to repair diff oscillation on marketId 947269"
       ],
       "CopyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     }

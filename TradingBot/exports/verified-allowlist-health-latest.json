@@ -21,7 +21,7 @@
     "HasMissingNoAsk": 0,
     "HasMarketMismatch": 3,
     "HasCandidateRefreshMatch": 1,
-    "HasSuggestedTemplate": 1
+    "HasSuggestedTemplate": 0
   },
   "groups": [
     {
@@ -191,9 +191,9 @@
       "foundMarketIds": [],
       "status": "NeedsRepair",
       "healthCategory": "NeedsRefresh",
-      "reason": "Market mismatch; stable refreshed candidate is available for manual review.",
-      "recommendedAction": "RefreshFromCandidateExport",
-      "repairConfidence": "High"
+      "reason": "ManualLock: Manual review required due to repair diff oscillation on marketId 947269",
+      "recommendedAction": "NeedsManualReview",
+      "repairConfidence": "Low"
     }
   ]
 }

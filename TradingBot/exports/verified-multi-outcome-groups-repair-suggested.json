@@ -1,7 +1,7 @@
 {
-  "snapshotId": "candidate-export-8dec1569f1bfb42-9915e071a98d",
-  "generatedAt": "2026-06-03T09:59:05.395114Z",
-  "timestamp": "2026-06-03T09:59:05.3951141Z",
+  "snapshotId": "candidate-export-8dec16ea5397246-4451d8da1e16",
+  "generatedAt": "2026-06-03T12:50:40.5350748Z",
+  "timestamp": "2026-06-03T12:50:40.535075Z",
   "note": "Suggested only. Does not overwrite config/verified-multi-outcome-groups.json. Review manually before copying.",
   "summary": {
     "configuredGroups": 11,
@@ -27,7 +27,7 @@
     "hasMissingNoAsk": 0,
     "hasMarketMismatch": 3,
     "hasCandidateRefreshMatch": 1,
-    "hasSuggestedTemplate": 1
+    "hasSuggestedTemplate": 0
   },
   "groups": [
     {
@@ -215,71 +215,17 @@
       "title": "winner:2026 peruvian presidential election|kind:person",
       "currentEnabled": true,
       "healthCategory": "NeedsRefresh",
-      "recommendedAction": "RefreshFromCandidateExport",
-      "repairConfidence": "High",
-      "suggestedAction": "RefreshFromCandidateExport",
-      "suggestedEnabled": true,
-      "suggestedTemplate": {
-        "enabled": true,
-        "groupKey": "winner:2026 peruvian presidential election|kind:person",
-        "title": "winner:2026 peruvian presidential election|kind:person",
-        "verificationStatus": "Verified",
-        "groupType": "MutuallyExclusiveWinner",
-        "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-        "marketIds": [
-          "947289",
-          "947269",
-          "947268"
-        ],
-        "conditionIds": [
-          "0x2cd24d17f5680dc6e7b7d67c712a223ae85550745597e81bd2d2b8d073443951",
-          "0xc4c3dbcc37a957a817599b0bf9fb5bd6b62b19210b0f527fec57cb75c7ed150a",
-          "0xae6d3d20bc8f742922dc40880cd8a8671c10385a9912fa7cd670fba0643dfe96"
-        ],
-        "requiredOutcomeCount": 3,
-        "requireExactOutcomeCount": false,
-        "settlementNotes": "Refreshed from candidate export. Manually verify mutually exclusive settlement before enabling.",
-        "verifiedBy": "manual-review-required",
-        "verifiedAt": "2026-06-03"
-      },
+      "recommendedAction": "NeedsManualReview",
+      "repairConfidence": "Low",
+      "suggestedAction": "NeedsManualReview",
+      "suggestedEnabled": false,
+      "suggestedTemplate": null,
       "suggestedPrunedTemplate": null,
-      "suggestedRefreshedTemplate": {
-        "enabled": true,
-        "groupKey": "winner:2026 peruvian presidential election|kind:person",
-        "title": "winner:2026 peruvian presidential election|kind:person",
-        "verificationStatus": "Verified",
-        "groupType": "MutuallyExclusiveWinner",
-        "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-        "marketIds": [
-          "947289",
-          "947269",
-          "947268"
-        ],
-        "conditionIds": [
-          "0x2cd24d17f5680dc6e7b7d67c712a223ae85550745597e81bd2d2b8d073443951",
-          "0xc4c3dbcc37a957a817599b0bf9fb5bd6b62b19210b0f527fec57cb75c7ed150a",
-          "0xae6d3d20bc8f742922dc40880cd8a8671c10385a9912fa7cd670fba0643dfe96"
-        ],
-        "requiredOutcomeCount": 3,
-        "requireExactOutcomeCount": false,
-        "settlementNotes": "Refreshed from candidate export. Manually verify mutually exclusive settlement before enabling.",
-        "verifiedBy": "manual-review-required",
-        "verifiedAt": "2026-06-03"
-      },
-      "diff": {
-        "suggestedMarketCount": 3,
-        "removedMarketIds": [
-          "947289",
-          "947268"
-        ],
-        "addedMarketIds": [
-          "947269"
-        ],
-        "changedConditionIds": []
-      },
+      "suggestedRefreshedTemplate": null,
+      "diff": null,
       "notes": [
         "Stable candidate match: winner:2026 peruvian presidential election|kind:person score=1.",
-        "Market mismatch; stable refreshed candidate is available for manual review."
+        "ManualLock: Manual review required due to repair diff oscillation on marketId 947269"
       ],
       "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     }

@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-06-03T09:59:05.4623352Z",
+  "timestamp": "2026-06-03T12:50:40.727913Z",
   "groups": [
     {
       "groupKey": "winner:1st round of 2026 colombian presidential election|kind:person",
@@ -16,7 +16,7 @@
           ],
           "diffHash": "9c1d4438b091780e513a5d699ca96a82962fcfc81f1577a0c227a1402f4b80d1",
           "inverseDiffHash": "5ec54b8715cf42ea01809e8581ff5ecbf24c8c60117e1650e16b5bb46298774b",
-          "timestamp": "2026-06-03T09:58:12.285602Z"
+          "timestamp": "2026-06-03T04:58:12.285602-05:00"
         },
         {
           "groupKey": "winner:1st round of 2026 colombian presidential election|kind:person",
@@ -30,7 +30,7 @@
           ],
           "diffHash": "9c1d4438b091780e513a5d699ca96a82962fcfc81f1577a0c227a1402f4b80d1",
           "inverseDiffHash": "5ec54b8715cf42ea01809e8581ff5ecbf24c8c60117e1650e16b5bb46298774b",
-          "timestamp": "2026-06-03T09:58:13.4890708Z"
+          "timestamp": "2026-06-03T04:58:13.4890708-05:00"
         },
         {
           "groupKey": "winner:1st round of 2026 colombian presidential election|kind:person",
@@ -44,10 +44,39 @@
           ],
           "diffHash": "9c1d4438b091780e513a5d699ca96a82962fcfc81f1577a0c227a1402f4b80d1",
           "inverseDiffHash": "5ec54b8715cf42ea01809e8581ff5ecbf24c8c60117e1650e16b5bb46298774b",
-          "timestamp": "2026-06-03T09:58:24.7042052Z"
+          "timestamp": "2026-06-03T04:58:24.7042052-05:00"
+        },
+        {
+          "groupKey": "winner:1st round of 2026 colombian presidential election|kind:person",
+          "snapshotId": "candidate-export-8dec16ea5397246-4451d8da1e16",
+          "action": "Remove",
+          "addedMarketIds": [],
+          "removedMarketIds": [
+            "569342",
+            "569343",
+            "569344"
+          ],
+          "diffHash": "9c1d4438b091780e513a5d699ca96a82962fcfc81f1577a0c227a1402f4b80d1",
+          "inverseDiffHash": "5ec54b8715cf42ea01809e8581ff5ecbf24c8c60117e1650e16b5bb46298774b",
+          "timestamp": "2026-06-03T12:50:14.0461741Z"
+        },
+        {
+          "groupKey": "winner:1st round of 2026 colombian presidential election|kind:person",
+          "snapshotId": "candidate-export-8dec16ea5397246-4451d8da1e16:loaded-preview",
+          "action": "Remove",
+          "addedMarketIds": [],
+          "removedMarketIds": [
+            "569342",
+            "569344",
+            "569343"
+          ],
+          "diffHash": "9c1d4438b091780e513a5d699ca96a82962fcfc81f1577a0c227a1402f4b80d1",
+          "inverseDiffHash": "5ec54b8715cf42ea01809e8581ff5ecbf24c8c60117e1650e16b5bb46298774b",
+          "timestamp": "2026-06-03T12:50:39.5349989Z"
         }
       ],
       "lastDiffHash": "9c1d4438b091780e513a5d699ca96a82962fcfc81f1577a0c227a1402f4b80d1",
+      "inverseDiffHash": "5ec54b8715cf42ea01809e8581ff5ecbf24c8c60117e1650e16b5bb46298774b",
       "lastAddedMarketIds": [],
       "lastRemovedMarketIds": [
         "569342",
@@ -64,7 +93,7 @@
       "oscillatingMarketIds": [],
       "locked": false,
       "quarantineReason": "",
-      "lastUpdatedAt": "2026-06-03T09:58:24.7042052Z",
+      "lastUpdatedAt": "2026-06-03T12:50:39.5349989Z",
       "patchable": true,
       "currentDiff": {
         "addedMarketIds": [],
@@ -83,6 +112,7 @@
         ]
       },
       "recommendedAction": "NeedsManualReview",
+      "repairConfidence": "Low",
       "reason": "",
       "lastSnapshots": [
         {
@@ -97,7 +127,7 @@
           ],
           "diffHash": "9c1d4438b091780e513a5d699ca96a82962fcfc81f1577a0c227a1402f4b80d1",
           "inverseDiffHash": "5ec54b8715cf42ea01809e8581ff5ecbf24c8c60117e1650e16b5bb46298774b",
-          "timestamp": "2026-06-03T09:58:12.285602Z"
+          "timestamp": "2026-06-03T04:58:12.285602-05:00"
         },
         {
           "groupKey": "winner:1st round of 2026 colombian presidential election|kind:person",
@@ -111,7 +141,7 @@
           ],
           "diffHash": "9c1d4438b091780e513a5d699ca96a82962fcfc81f1577a0c227a1402f4b80d1",
           "inverseDiffHash": "5ec54b8715cf42ea01809e8581ff5ecbf24c8c60117e1650e16b5bb46298774b",
-          "timestamp": "2026-06-03T09:58:13.4890708Z"
+          "timestamp": "2026-06-03T04:58:13.4890708-05:00"
         },
         {
           "groupKey": "winner:1st round of 2026 colombian presidential election|kind:person",
@@ -125,7 +155,35 @@
           ],
           "diffHash": "9c1d4438b091780e513a5d699ca96a82962fcfc81f1577a0c227a1402f4b80d1",
           "inverseDiffHash": "5ec54b8715cf42ea01809e8581ff5ecbf24c8c60117e1650e16b5bb46298774b",
-          "timestamp": "2026-06-03T09:58:24.7042052Z"
+          "timestamp": "2026-06-03T04:58:24.7042052-05:00"
+        },
+        {
+          "groupKey": "winner:1st round of 2026 colombian presidential election|kind:person",
+          "snapshotId": "candidate-export-8dec16ea5397246-4451d8da1e16",
+          "action": "Remove",
+          "addedMarketIds": [],
+          "removedMarketIds": [
+            "569342",
+            "569343",
+            "569344"
+          ],
+          "diffHash": "9c1d4438b091780e513a5d699ca96a82962fcfc81f1577a0c227a1402f4b80d1",
+          "inverseDiffHash": "5ec54b8715cf42ea01809e8581ff5ecbf24c8c60117e1650e16b5bb46298774b",
+          "timestamp": "2026-06-03T12:50:14.0461741Z"
+        },
+        {
+          "groupKey": "winner:1st round of 2026 colombian presidential election|kind:person",
+          "snapshotId": "candidate-export-8dec16ea5397246-4451d8da1e16:loaded-preview",
+          "action": "Remove",
+          "addedMarketIds": [],
+          "removedMarketIds": [
+            "569342",
+            "569344",
+            "569343"
+          ],
+          "diffHash": "9c1d4438b091780e513a5d699ca96a82962fcfc81f1577a0c227a1402f4b80d1",
+          "inverseDiffHash": "5ec54b8715cf42ea01809e8581ff5ecbf24c8c60117e1650e16b5bb46298774b",
+          "timestamp": "2026-06-03T12:50:39.5349989Z"
         }
       ],
       "addedMarketIds": [],
@@ -133,7 +191,8 @@
         "569342",
         "569344",
         "569343"
-      ]
+      ],
+      "diffHash": "9c1d4438b091780e513a5d699ca96a82962fcfc81f1577a0c227a1402f4b80d1"
     },
     {
       "groupKey": "winner:2026 peruvian presidential election|kind:person",
@@ -148,7 +207,7 @@
           "removedMarketIds": [],
           "diffHash": "b9adcc3ad363a29cfba4a22a744f203b5d2fbb2ce584991c9d5c7cd75ea31575",
           "inverseDiffHash": "c99611081fdb272586a4ffbfc55c78eaa868793a9fb5b98151b37e66d0466597",
-          "timestamp": "2026-06-03T09:58:13.4901519Z"
+          "timestamp": "2026-06-03T04:58:13.4901519-05:00"
         },
         {
           "groupKey": "winner:2026 peruvian presidential election|kind:person",
@@ -160,38 +219,70 @@
           "removedMarketIds": [],
           "diffHash": "b9adcc3ad363a29cfba4a22a744f203b5d2fbb2ce584991c9d5c7cd75ea31575",
           "inverseDiffHash": "c99611081fdb272586a4ffbfc55c78eaa868793a9fb5b98151b37e66d0466597",
-          "timestamp": "2026-06-03T09:58:24.7042854Z"
+          "timestamp": "2026-06-03T04:58:24.7042854-05:00"
+        },
+        {
+          "groupKey": "winner:2026 peruvian presidential election|kind:person",
+          "snapshotId": "candidate-export-8dec16ea5397246-4451d8da1e16",
+          "action": "Remove",
+          "addedMarketIds": [],
+          "removedMarketIds": [
+            "947268",
+            "947289"
+          ],
+          "diffHash": "8960d3058dfd84d1a7b02371732a9d5394aa6928b05eaeb207e5c0674125c7b6",
+          "inverseDiffHash": "88316b215f6515ceaf459430a40f96368163be576c422e66bf74053e953f3e91",
+          "timestamp": "2026-06-03T12:50:14.0463787Z"
+        },
+        {
+          "groupKey": "winner:2026 peruvian presidential election|kind:person",
+          "snapshotId": "candidate-export-8dec16ea5397246-4451d8da1e16:loaded-preview",
+          "action": "Remove",
+          "addedMarketIds": [],
+          "removedMarketIds": [
+            "947289",
+            "947268"
+          ],
+          "diffHash": "8960d3058dfd84d1a7b02371732a9d5394aa6928b05eaeb207e5c0674125c7b6",
+          "inverseDiffHash": "88316b215f6515ceaf459430a40f96368163be576c422e66bf74053e953f3e91",
+          "timestamp": "2026-06-03T12:50:39.5350616Z"
         }
       ],
-      "lastDiffHash": "b9adcc3ad363a29cfba4a22a744f203b5d2fbb2ce584991c9d5c7cd75ea31575",
-      "lastAddedMarketIds": [
-        "947269"
+      "lastDiffHash": "8960d3058dfd84d1a7b02371732a9d5394aa6928b05eaeb207e5c0674125c7b6",
+      "inverseDiffHash": "88316b215f6515ceaf459430a40f96368163be576c422e66bf74053e953f3e91",
+      "lastAddedMarketIds": [],
+      "lastRemovedMarketIds": [
+        "947289",
+        "947268"
       ],
-      "lastRemovedMarketIds": [],
-      "previousAddedMarketIds": [
-        "947269"
+      "previousAddedMarketIds": [],
+      "previousRemovedMarketIds": [
+        "947268",
+        "947289"
       ],
-      "previousRemovedMarketIds": [],
       "oscillationDetected": false,
       "oscillatingMarketIds": [],
-      "locked": false,
-      "quarantineReason": "",
-      "lastUpdatedAt": "2026-06-03T09:58:24.7042854Z",
-      "patchable": true,
+      "locked": true,
+      "quarantineReason": "Manual review required due to repair diff oscillation on marketId 947269",
+      "lastUpdatedAt": "2026-06-03T12:50:39.5350616Z",
+      "patchable": false,
       "currentDiff": {
-        "addedMarketIds": [
-          "947269"
-        ],
-        "removedMarketIds": []
+        "addedMarketIds": [],
+        "removedMarketIds": [
+          "947289",
+          "947268"
+        ]
       },
       "previousDiff": {
-        "addedMarketIds": [
-          "947269"
-        ],
-        "removedMarketIds": []
+        "addedMarketIds": [],
+        "removedMarketIds": [
+          "947268",
+          "947289"
+        ]
       },
-      "recommendedAction": "RefreshFromCandidateExport",
-      "reason": "",
+      "recommendedAction": "NeedsManualReview",
+      "repairConfidence": "Unsafe",
+      "reason": "Manual review required due to repair diff oscillation on marketId 947269",
       "lastSnapshots": [
         {
           "groupKey": "winner:2026 peruvian presidential election|kind:person",
@@ -203,7 +294,7 @@
           "removedMarketIds": [],
           "diffHash": "b9adcc3ad363a29cfba4a22a744f203b5d2fbb2ce584991c9d5c7cd75ea31575",
           "inverseDiffHash": "c99611081fdb272586a4ffbfc55c78eaa868793a9fb5b98151b37e66d0466597",
-          "timestamp": "2026-06-03T09:58:13.4901519Z"
+          "timestamp": "2026-06-03T04:58:13.4901519-05:00"
         },
         {
           "groupKey": "winner:2026 peruvian presidential election|kind:person",
@@ -215,13 +306,41 @@
           "removedMarketIds": [],
           "diffHash": "b9adcc3ad363a29cfba4a22a744f203b5d2fbb2ce584991c9d5c7cd75ea31575",
           "inverseDiffHash": "c99611081fdb272586a4ffbfc55c78eaa868793a9fb5b98151b37e66d0466597",
-          "timestamp": "2026-06-03T09:58:24.7042854Z"
+          "timestamp": "2026-06-03T04:58:24.7042854-05:00"
+        },
+        {
+          "groupKey": "winner:2026 peruvian presidential election|kind:person",
+          "snapshotId": "candidate-export-8dec16ea5397246-4451d8da1e16",
+          "action": "Remove",
+          "addedMarketIds": [],
+          "removedMarketIds": [
+            "947268",
+            "947289"
+          ],
+          "diffHash": "8960d3058dfd84d1a7b02371732a9d5394aa6928b05eaeb207e5c0674125c7b6",
+          "inverseDiffHash": "88316b215f6515ceaf459430a40f96368163be576c422e66bf74053e953f3e91",
+          "timestamp": "2026-06-03T12:50:14.0463787Z"
+        },
+        {
+          "groupKey": "winner:2026 peruvian presidential election|kind:person",
+          "snapshotId": "candidate-export-8dec16ea5397246-4451d8da1e16:loaded-preview",
+          "action": "Remove",
+          "addedMarketIds": [],
+          "removedMarketIds": [
+            "947289",
+            "947268"
+          ],
+          "diffHash": "8960d3058dfd84d1a7b02371732a9d5394aa6928b05eaeb207e5c0674125c7b6",
+          "inverseDiffHash": "88316b215f6515ceaf459430a40f96368163be576c422e66bf74053e953f3e91",
+          "timestamp": "2026-06-03T12:50:39.5350616Z"
         }
       ],
-      "addedMarketIds": [
-        "947269"
+      "addedMarketIds": [],
+      "removedMarketIds": [
+        "947289",
+        "947268"
       ],
-      "removedMarketIds": []
+      "diffHash": "8960d3058dfd84d1a7b02371732a9d5394aa6928b05eaeb207e5c0674125c7b6"
     },
     {
       "groupKey": "winner:2026 women s us open|kind:generic",
@@ -238,7 +357,7 @@
           ],
           "diffHash": "fe25e92ba46409074bde0cf9124eb2a27e1149c579f0cfd2d86cd07dab024b14",
           "inverseDiffHash": "d8623724e88f7becc8e7d61b6e2a03b4cb96a2f84e9fe43a3feb954a8689a87c",
-          "timestamp": "2026-06-03T09:58:12.2845353Z"
+          "timestamp": "2026-06-03T04:58:12.2845353-05:00"
         },
         {
           "groupKey": "winner:2026 women s us open|kind:generic",
@@ -252,7 +371,7 @@
           ],
           "diffHash": "fe25e92ba46409074bde0cf9124eb2a27e1149c579f0cfd2d86cd07dab024b14",
           "inverseDiffHash": "d8623724e88f7becc8e7d61b6e2a03b4cb96a2f84e9fe43a3feb954a8689a87c",
-          "timestamp": "2026-06-03T09:58:13.485886Z"
+          "timestamp": "2026-06-03T04:58:13.485886-05:00"
         },
         {
           "groupKey": "winner:2026 women s us open|kind:generic",
@@ -266,10 +385,39 @@
           ],
           "diffHash": "fe25e92ba46409074bde0cf9124eb2a27e1149c579f0cfd2d86cd07dab024b14",
           "inverseDiffHash": "d8623724e88f7becc8e7d61b6e2a03b4cb96a2f84e9fe43a3feb954a8689a87c",
-          "timestamp": "2026-06-03T09:58:24.7041217Z"
+          "timestamp": "2026-06-03T04:58:24.7041217-05:00"
+        },
+        {
+          "groupKey": "winner:2026 women s us open|kind:generic",
+          "snapshotId": "candidate-export-8dec16ea5397246-4451d8da1e16",
+          "action": "Remove",
+          "addedMarketIds": [],
+          "removedMarketIds": [
+            "1088662",
+            "1088679",
+            "1088680"
+          ],
+          "diffHash": "fe25e92ba46409074bde0cf9124eb2a27e1149c579f0cfd2d86cd07dab024b14",
+          "inverseDiffHash": "d8623724e88f7becc8e7d61b6e2a03b4cb96a2f84e9fe43a3feb954a8689a87c",
+          "timestamp": "2026-06-03T12:50:14.0416702Z"
+        },
+        {
+          "groupKey": "winner:2026 women s us open|kind:generic",
+          "snapshotId": "candidate-export-8dec16ea5397246-4451d8da1e16:loaded-preview",
+          "action": "Remove",
+          "addedMarketIds": [],
+          "removedMarketIds": [
+            "1088662",
+            "1088680",
+            "1088679"
+          ],
+          "diffHash": "fe25e92ba46409074bde0cf9124eb2a27e1149c579f0cfd2d86cd07dab024b14",
+          "inverseDiffHash": "d8623724e88f7becc8e7d61b6e2a03b4cb96a2f84e9fe43a3feb954a8689a87c",
+          "timestamp": "2026-06-03T12:50:39.5349079Z"
         }
       ],
       "lastDiffHash": "fe25e92ba46409074bde0cf9124eb2a27e1149c579f0cfd2d86cd07dab024b14",
+      "inverseDiffHash": "d8623724e88f7becc8e7d61b6e2a03b4cb96a2f84e9fe43a3feb954a8689a87c",
       "lastAddedMarketIds": [],
       "lastRemovedMarketIds": [
         "1088662",
@@ -286,7 +434,7 @@
       "oscillatingMarketIds": [],
       "locked": false,
       "quarantineReason": "",
-      "lastUpdatedAt": "2026-06-03T09:58:24.7041217Z",
+      "lastUpdatedAt": "2026-06-03T12:50:39.5349079Z",
       "patchable": true,
       "currentDiff": {
         "addedMarketIds": [],
@@ -305,6 +453,7 @@
         ]
       },
       "recommendedAction": "DisableMissingMarkets",
+      "repairConfidence": "Low",
       "reason": "",
       "lastSnapshots": [
         {
@@ -319,7 +468,7 @@
           ],
           "diffHash": "fe25e92ba46409074bde0cf9124eb2a27e1149c579f0cfd2d86cd07dab024b14",
           "inverseDiffHash": "d8623724e88f7becc8e7d61b6e2a03b4cb96a2f84e9fe43a3feb954a8689a87c",
-          "timestamp": "2026-06-03T09:58:12.2845353Z"
+          "timestamp": "2026-06-03T04:58:12.2845353-05:00"
         },
         {
           "groupKey": "winner:2026 women s us open|kind:generic",
@@ -333,7 +482,7 @@
           ],
           "diffHash": "fe25e92ba46409074bde0cf9124eb2a27e1149c579f0cfd2d86cd07dab024b14",
           "inverseDiffHash": "d8623724e88f7becc8e7d61b6e2a03b4cb96a2f84e9fe43a3feb954a8689a87c",
-          "timestamp": "2026-06-03T09:58:13.485886Z"
+          "timestamp": "2026-06-03T04:58:13.485886-05:00"
         },
         {
           "groupKey": "winner:2026 women s us open|kind:generic",
@@ -347,7 +496,35 @@
           ],
           "diffHash": "fe25e92ba46409074bde0cf9124eb2a27e1149c579f0cfd2d86cd07dab024b14",
           "inverseDiffHash": "d8623724e88f7becc8e7d61b6e2a03b4cb96a2f84e9fe43a3feb954a8689a87c",
-          "timestamp": "2026-06-03T09:58:24.7041217Z"
+          "timestamp": "2026-06-03T04:58:24.7041217-05:00"
+        },
+        {
+          "groupKey": "winner:2026 women s us open|kind:generic",
+          "snapshotId": "candidate-export-8dec16ea5397246-4451d8da1e16",
+          "action": "Remove",
+          "addedMarketIds": [],
+          "removedMarketIds": [
+            "1088662",
+            "1088679",
+            "1088680"
+          ],
+          "diffHash": "fe25e92ba46409074bde0cf9124eb2a27e1149c579f0cfd2d86cd07dab024b14",
+          "inverseDiffHash": "d8623724e88f7becc8e7d61b6e2a03b4cb96a2f84e9fe43a3feb954a8689a87c",
+          "timestamp": "2026-06-03T12:50:14.0416702Z"
+        },
+        {
+          "groupKey": "winner:2026 women s us open|kind:generic",
+          "snapshotId": "candidate-export-8dec16ea5397246-4451d8da1e16:loaded-preview",
+          "action": "Remove",
+          "addedMarketIds": [],
+          "removedMarketIds": [
+            "1088662",
+            "1088680",
+            "1088679"
+          ],
+          "diffHash": "fe25e92ba46409074bde0cf9124eb2a27e1149c579f0cfd2d86cd07dab024b14",
+          "inverseDiffHash": "d8623724e88f7becc8e7d61b6e2a03b4cb96a2f84e9fe43a3feb954a8689a87c",
+          "timestamp": "2026-06-03T12:50:39.5349079Z"
         }
       ],
       "addedMarketIds": [],
@@ -355,7 +532,8 @@
         "1088662",
         "1088680",
         "1088679"
-      ]
+      ],
+      "diffHash": "fe25e92ba46409074bde0cf9124eb2a27e1149c579f0cfd2d86cd07dab024b14"
     }
   ]
 }

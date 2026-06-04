@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "timestamp": "2026-06-03T09:59:05.4376526Z",
-    "snapshotId": "candidate-export-8dec1569f1bfb42-9915e071a98d",
+    "timestamp": "2026-06-03T12:50:40.6571003Z",
+    "snapshotId": "candidate-export-8dec16ea5397246-4451d8da1e16",
     "mode": "ManualPreviewOnly",
     "willOverwriteRealConfig": false,
     "sourceConfigPath": "config/verified-multi-outcome-groups.json",
@@ -20,17 +20,15 @@
         "cp config/verified-multi-outcome-groups.json config/verified-multi-outcome-groups.json.bak.$(date -u \u002B%Y%m%dT%H%M%SZ)",
         "Keep the backup until [ALLOWLIST_HEALTH] and [MULTI_VERIFIED_SCAN] are reviewed after restart."
       ],
-      "GroupsToApply": [
-        "winner:2026 peruvian presidential election|kind:person (ReplaceGroup, High)"
-      ],
+      "GroupsToApply": [],
       "GroupsNotToApply": [
         "winner:2026 women s us open|kind:generic",
-        "winner:1st round of 2026 colombian presidential election|kind:person"
+        "winner:1st round of 2026 colombian presidential election|kind:person",
+        "winner:2026 peruvian presidential election|kind:person"
       ],
       "ExpectedLogsAfterRestart": [
         "[ALLOWLIST_CONFIG_VALIDATION] Total=11 UniqueGroupKeys=11 DuplicateGroupKeys=0",
-        "[ALLOWLIST_PATCHED_PREVIEW_VALIDATION] Total=11 UniqueGroupKeys=11 DuplicateGroupKeys=0 Valid=true",
-        "Peru should no longer show the removed market id after restart if the patch is correct."
+        "[ALLOWLIST_PATCHED_PREVIEW_VALIDATION] Total=11 UniqueGroupKeys=11 DuplicateGroupKeys=0 Valid=true"
       ]
     }
   },
@@ -374,20 +372,18 @@
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
         "947289",
-        "947269",
         "947268"
       ],
       "conditionIds": [
         "0x2cd24d17f5680dc6e7b7d67c712a223ae85550745597e81bd2d2b8d073443951",
-        "0xc4c3dbcc37a957a817599b0bf9fb5bd6b62b19210b0f527fec57cb75c7ed150a",
         "0xae6d3d20bc8f742922dc40880cd8a8671c10385a9912fa7cd670fba0643dfe96"
       ],
-      "requiredOutcomeCount": 3,
+      "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-06-03",
-      "repairSourceSnapshotId": "candidate-export-8dec1569f1bfb42-9915e071a98d",
+      "verifiedAt": "2026-06-02",
+      "repairSourceSnapshotId": "candidate-export-8dec0de724b7f0a-2622bb8f0120",
       "repairAction": "RefreshFromCandidateExport"
     }
   ]
