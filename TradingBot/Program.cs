@@ -226,6 +226,7 @@ logger.LogInfo("startup", $"[CONFIG] Scanner Mode={options.Mode} MarketScanLimit
 logger.LogInfo("startup", $"[DIAGNOSTICS] DebuggerSafeMode={options.Diagnostics.DebuggerSafeMode} DetailedLogs={(!options.Diagnostics.DebuggerSafeMode).ToString().ToLowerInvariant()} MaxRecentLogs={options.RuntimeState.MaxRecentLogs}");
 logger.LogInfo("startup", $"[DIAGNOSTICS] OperationalQuietMode={options.Diagnostics.OperationalQuietMode.ToString().ToLowerInvariant()}");
 Console.WriteLine($"[DIAGNOSTICS] OperationalQuietMode={options.Diagnostics.OperationalQuietMode.ToString().ToLowerInvariant()}");
+Console.WriteLine($"[SOAK_READINESS] OperationalQuietMode={options.Diagnostics.OperationalQuietMode.ToString().ToLowerInvariant()} RuntimeHealth={options.RuntimeHealth.Enabled.ToString().ToLowerInvariant()} MemoryGuard=true BoundedCollections=true SignalRPayloadLimits={(options.SignalR.MaxPayloadItems > 0 && options.SignalR.MaxPayloadBytes > 0).ToString().ToLowerInvariant()} PaperOnly={options.PaperOnly.ToString().ToLowerInvariant()} LiveTrading={options.EnableLiveExecution.ToString().ToLowerInvariant()}");
 logger.LogInfo("startup", $"[CONFIG] MultiOutcome FeePerLeg={options.MultiOutcomeArbitrage.FeePerLeg} SlippagePerLeg={options.MultiOutcomeArbitrage.SlippageBufferPerLeg} SafetyPerGroup={options.MultiOutcomeArbitrage.SafetyBufferPerGroup} MinNetEdgePerBasket={options.MultiOutcomeArbitrage.MinMultiOutcomeEdge} MinExpectedProfit={options.MultiOutcomeArbitrage.MinExpectedProfit} EnableSensitivityDiagnostics={options.MultiOutcomeArbitrage.EnableSensitivityDiagnostics}");
 var executionCfg = app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value;
 logger.LogInfo("startup", $"[CONFIG] Execution PaperOnly={executionCfg.PaperOnly.ToString().ToLowerInvariant()} MaxNotionalPerBasket={executionCfg.MaxNotionalPerBasket} MaxOpenBasketPositions={executionCfg.MaxOpenBasketPositions} MaxExposurePerGroup={executionCfg.MaxExposurePerGroup} DuplicateCooldownMinutes={executionCfg.DuplicateCooldownMinutes}");
@@ -1018,7 +1019,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         .Select(ug =>
                         {
                             var sampleFingerprint = $"{ug.GroupKey}|{ug.Reason}|{ug.ValidationStatus}|{ug.HealthCategory}|{ug.RecommendedAction}|{ug.RepairConfidence}";
-                            var shouldLogSample = logThrottle.ShouldLog($"VERIFIED_UNRESOLVED_SAMPLE:{ug.GroupKey}", sampleFingerprint, options.Logging.LogVerifiedUnresolvedSamplesOnChangeOnly, options.Logging.LogVerifiedUnresolvedSamplesEveryNCycles);
+                            var shouldLogSample = logThrottle.ShouldLog($"VERIFIED_UNRESOLVED_SAMPLE:{ug.GroupKey}", sampleFingerprint, options.Logging.LogVerifiedUnresolvedOnChangeOnly, options.Logging.LogVerifiedUnresolvedEveryNCycles);
                             return new { Group = ug, ShouldLog = shouldLogSample };
                         })
                         .ToArray();
@@ -1040,11 +1041,12 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} BrokenConfigCount={unresolvedCounts.BrokenConfig} NeedsRefreshCount={unresolvedCounts.NeedsRefresh} ReviewOnlyCount={unresolvedCounts.ReviewOnly} MonitoringOnlyUnresolvedCount={unresolvedCounts.MonitoringOnly} OtherUnresolvedCount={unresolvedCounts.Other} UnresolvedSamplesShown={unresolvedCounts.SamplesShown} SuppressedUnresolvedSamples={unresolvedCounts.Suppressed} UnresolvedTotal={unresolvedCounts.Total} Evaluated={verifiedEvaluated} ActiveExecutable={activeExecutable} ExperimentalCandidates={experimentalCandidates} DiagnosticsOnlyPositive={diagnosticsOnlyPositive} PaperOpened={paperOpenedCount} SuppressedDuplicate={suppressedDuplicateCount} Mismatch={verifiedMismatch} BestActiveNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestExperimentalNet={bestExperimentalText} BestAlternateProfileNet={bestAlternateProfileNet} BestRaw={bestRaw}");
                     if (!unresolvedCounts.InvariantOk)
                         Console.WriteLine(unresolvedCounts.ToCounterErrorLogLine());
-                    if (logThrottle.ShouldLog("VERIFIED_UNRESOLVED_BREAKDOWN", unresolvedCounts.ToBreakdownLogLine(), options.Logging.LogVerifiedUnresolvedOnChangeOnly, options.Logging.LogVerifiedUnresolvedEveryNCycles))
+                    var unresolvedGroupSetFingerprint = string.Join(",", unresolvedDiagnostics.Select(x => x.GroupKey).OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+                    if (logThrottle.ShouldLog("VERIFIED_UNRESOLVED_BREAKDOWN", $"{unresolvedCounts.ToBreakdownLogLine()}|Groups={unresolvedGroupSetFingerprint}", options.Logging.LogVerifiedUnresolvedOnChangeOnly, options.Logging.LogVerifiedUnresolvedEveryNCycles))
                         Console.WriteLine(unresolvedCounts.ToBreakdownLogLine());
                     lastVerifiedScanFingerprint = verifiedScanFingerprint;
                     var unresolvedSummary = ScanLogSummaryService.UnresolvedSampleSummary(unresolvedCounts.Total, unresolvedCounts.SamplesShown, suppressedUnresolvedKeys);
-                    if (unresolvedSummary.Suppressed > 0 && logThrottle.ShouldLog("VERIFIED_UNRESOLVED_SUMMARY", $"{unresolvedSummary.Total}|{unresolvedSummary.SamplesShown}|{unresolvedSummary.Suppressed}", options.Logging.LogVerifiedUnresolvedOnChangeOnly, options.Logging.LogVerifiedUnresolvedEveryNCycles))
+                    if (unresolvedSummary.Suppressed > 0 && logThrottle.ShouldLog("VERIFIED_UNRESOLVED_SUMMARY", $"{unresolvedSummary.Total}|{unresolvedSummary.SamplesShown}|{unresolvedSummary.Suppressed}|Groups={unresolvedGroupSetFingerprint}", options.Logging.LogVerifiedUnresolvedOnChangeOnly, options.Logging.LogVerifiedUnresolvedEveryNCycles))
                         Console.WriteLine(unresolvedSummary.ToLogLine());
                     foreach (var ug in unresolvedDiagnostics.Where(x => x.SampleLogged))
                     {

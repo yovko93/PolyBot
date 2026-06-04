@@ -349,6 +349,20 @@ public class AllowlistRepairLoggingTests
         Assert.False(throttle.ShouldLog("MULTI_CANDIDATE_SCAN", changed, true, 50));
     }
 
+
+    [Fact]
+    public void Verified_unresolved_breakdown_throttle_changes_on_group_set_change_only()
+    {
+        var throttle = new LogThrottle();
+        var first = "[VERIFIED_UNRESOLVED_BREAKDOWN] Total=3 BrokenConfig=1 NeedsRefresh=0 ReviewOnly=2|Groups=a,b,c";
+        var same = "[VERIFIED_UNRESOLVED_BREAKDOWN] Total=3 BrokenConfig=1 NeedsRefresh=0 ReviewOnly=2|Groups=a,b,c";
+        var changedGroups = "[VERIFIED_UNRESOLVED_BREAKDOWN] Total=3 BrokenConfig=1 NeedsRefresh=0 ReviewOnly=2|Groups=a,b,d";
+
+        Assert.True(throttle.ShouldLog("VERIFIED_UNRESOLVED_BREAKDOWN", first, onChangeOnly: true, everyNCycles: 100));
+        Assert.False(throttle.ShouldLog("VERIFIED_UNRESOLVED_BREAKDOWN", same, onChangeOnly: true, everyNCycles: 100));
+        Assert.True(throttle.ShouldLog("VERIFIED_UNRESOLVED_BREAKDOWN", changedGroups, onChangeOnly: true, everyNCycles: 100));
+    }
+
     [Fact]
     public void Profile_comparison_classification_change_logs()
     {

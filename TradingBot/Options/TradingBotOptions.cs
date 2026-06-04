@@ -250,6 +250,7 @@ public class MultiOutcomeLoggingOptions
     public bool LogSingleMarketSummaryOnChangeOnly { get; set; } = true;
     public int LogSingleMarketDataQualityEveryNCycles { get; set; } = 25;
     public bool LogSingleMarketDataQualityOnChangeOnly { get; set; } = true;
+    public int SingleMarketDataQualitySignificantDelta { get; set; } = 10;
     public int LogSingleMarketNearMissEveryNCycles { get; set; } = 50;
     public bool LogSingleMarketNearMissOnChangeOnly { get; set; } = true;
     public int LogVerifiedUnresolvedEveryNCycles { get; set; } = 100;
@@ -326,7 +327,8 @@ public class SingleMarketArbOptions
     public bool AuditDataQualityRejectedEvents { get; set; } = false;
     public bool AuditHighSeverityDataQualityRejectedEvents { get; set; } = true;
     public int MaxAuditSamplesPerCycle { get; set; } = 20;
-    public int MaxDataQualityAuditSamplesPerCycle { get; set; } = 5;
+    public int MaxDataQualityAuditSamplesPerCycle { get; set; } = 3;
+    public decimal HighSeveritySuspiciousAskSumDistance { get; set; } = 0.10m;
     public bool LogTopNearMissesToConsole { get; set; } = false;
     public int ConsoleTopNearMissCount { get; set; } = 3;
     public int TopNearMissCount { get; set; } = 10;
