@@ -93,6 +93,16 @@ public static class ScanLogSummaryService
             && currentFingerprint.Equals(lastFingerprint, StringComparison.OrdinalIgnoreCase)
             && !periodic;
 
+
+    public static string VerifiedUnresolvedGroupSetFingerprint(IEnumerable<string> groupKeys)
+        => string.Join(",", groupKeys.Where(x => !string.IsNullOrWhiteSpace(x)).OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+
+    public static string VerifiedUnresolvedCategoryFingerprint(VerifiedUnresolvedCategoryCounts counts, string groupSetFingerprint)
+        => $"total:{counts.Total}|broken:{counts.BrokenConfig}|refresh:{counts.NeedsRefresh}|review:{counts.ReviewOnly}|monitor:{counts.MonitoringOnly}|other:{counts.Other}|groups:{groupSetFingerprint}";
+
+    public static string MultiVerifiedScanQuietFingerprint(VerifiedUnresolvedCategoryCounts counts, string groupSetFingerprint, int activeExecutable)
+        => $"{VerifiedUnresolvedCategoryFingerprint(counts, groupSetFingerprint)}|activeExecutable:{Math.Max(0, activeExecutable)}";
+
     public static string ProfileComparisonFingerprint(IReadOnlyList<VerifiedBasketScreener.ScreenResult> rows, decimal netDelta)
     {
         var bucket = netDelta <= 0m ? 0.005m : netDelta;

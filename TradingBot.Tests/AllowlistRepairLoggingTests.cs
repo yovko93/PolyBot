@@ -350,6 +350,34 @@ public class AllowlistRepairLoggingTests
     }
 
 
+
+    [Fact]
+    public void Multi_verified_scan_quiet_fingerprint_suppresses_unchanged_diagnostics()
+    {
+        var throttle = new LogThrottle();
+        var counts = new VerifiedUnresolvedCategoryCounts(Total: 3, BrokenConfig: 1, NeedsRefresh: 0, ReviewOnly: 2, MonitoringOnly: 0, Other: 0, SamplesShown: 0, Suppressed: 3);
+        var groups = ScanLogSummaryService.VerifiedUnresolvedGroupSetFingerprint(new[] { "a", "b", "c" });
+        var first = ScanLogSummaryService.MultiVerifiedScanQuietFingerprint(counts, groups, activeExecutable: 0);
+        var same = ScanLogSummaryService.MultiVerifiedScanQuietFingerprint(counts, groups, activeExecutable: 0);
+        var executableAppeared = ScanLogSummaryService.MultiVerifiedScanQuietFingerprint(counts, groups, activeExecutable: 1);
+
+        Assert.True(throttle.ShouldLog("MULTI_VERIFIED_SCAN", first, onChangeOnly: true, everyNCycles: 100));
+        Assert.False(throttle.ShouldLog("MULTI_VERIFIED_SCAN", same, onChangeOnly: true, everyNCycles: 100));
+        Assert.True(throttle.ShouldLog("MULTI_VERIFIED_SCAN", executableAppeared, onChangeOnly: true, everyNCycles: 100));
+    }
+
+    [Fact]
+    public void Verified_unresolved_summary_throttle_suppresses_unchanged_diagnostics()
+    {
+        var throttle = new LogThrottle();
+        var counts = new VerifiedUnresolvedCategoryCounts(Total: 3, BrokenConfig: 1, NeedsRefresh: 0, ReviewOnly: 2, MonitoringOnly: 0, Other: 0, SamplesShown: 0, Suppressed: 3);
+        var groups = ScanLogSummaryService.VerifiedUnresolvedGroupSetFingerprint(new[] { "a", "b", "c" });
+        var fingerprint = ScanLogSummaryService.VerifiedUnresolvedCategoryFingerprint(counts, groups);
+
+        Assert.True(throttle.ShouldLog("VERIFIED_UNRESOLVED_SUMMARY", fingerprint, onChangeOnly: true, everyNCycles: 100));
+        Assert.False(throttle.ShouldLog("VERIFIED_UNRESOLVED_SUMMARY", fingerprint, onChangeOnly: true, everyNCycles: 100));
+    }
+
     [Fact]
     public void Verified_unresolved_breakdown_throttle_changes_on_group_set_change_only()
     {

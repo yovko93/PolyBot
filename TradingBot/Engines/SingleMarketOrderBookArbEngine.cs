@@ -32,8 +32,10 @@ public class SingleMarketOrderBookArbEngine
     private readonly Dictionary<string, DateTime> _cooldownUntil = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _loggedDataQualityReasons = new(StringComparer.OrdinalIgnoreCase);
     private string _lastSummaryHash = string.Empty;
-    private string _lastDataQualityHash = string.Empty;
     private string _lastNearMissHash = string.Empty;
+    private bool _hasLoggedDataQualitySummary;
+    private int _lastLoggedDataQualityTotal;
+    private Dictionary<string, int> _lastLoggedDataQualityCounts = new(StringComparer.OrdinalIgnoreCase);
     private long _scanId;
     private int _positionsOpenedThisCycle;
 
@@ -341,10 +343,7 @@ public class SingleMarketOrderBookArbEngine
             Console.WriteLine($"[SINGLE_MARKET_SCAN_SUMMARY] Scanned={summary.Scanned} DataQualityRejected={summary.DataQualityRejected} BelowMinEdge={summary.BelowMinEdge} PositiveEdge={summary.PositiveEdge} EdgeStable={summary.EdgeStable} ExecutionReady={summary.ExecutionReady} FillPassed={summary.FillPassed} PaperOpened={summary.PaperOpened} TopReject={summary.TopRejectReason}:{summary.TopRejectCount} BestEdge={bestEdgeText} BestRejectedRawEdge={bestRejectedText}");
         }
 
-        var dqDelta = Math.Max(1, _logging.SingleMarketDataQualitySignificantDelta);
-        var dqHash = $"total:{Bucket(summary.DataQualityRejected, dqDelta)}|" + string.Join("|", summary.DataQualityRejectedByReason.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{Bucket(x.Value, dqDelta)}"));
-        var criticalDataQuality = diagnostics.HighSeverityDataQuality > 0;
-        if (summary.DataQualityRejected > 0 && (criticalDataQuality || ShouldLog(ref _lastDataQualityHash, dqHash, summary.ScanId, _logging.LogSingleMarketDataQualityEveryNCycles, _logging.LogSingleMarketDataQualityOnChangeOnly)))
+        if (ShouldLogDataQualitySummary(summary, diagnostics))
         {
             var counts = string.Join(" ", summary.DataQualityRejectedByReason.OrderByDescending(x => x.Value).ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}={x.Value}"));
             Console.WriteLine($"[SINGLE_MARKET_DATA_QUALITY_SUMMARY] TotalRejected={summary.DataQualityRejected} {counts} Samples={Math.Min(_options.TopDataQualityRejectSampleCount, diagnostics.DataQualitySamples.Count)}");
@@ -358,6 +357,42 @@ public class SingleMarketOrderBookArbEngine
             foreach (var n in topNearMisses)
                 Console.WriteLine($"[SINGLE_MARKET_TOP_NEAR_MISS] MarketId={n.MarketId} Edge={n.EdgePerShare:0.####} RequiredImprovement={n.RequiredImprovement:0.####}");
         }
+    }
+
+
+    private bool ShouldLogDataQualitySummary(SingleMarketScanSummaryDto summary, SingleMarketCycleDiagnostics diagnostics)
+    {
+        if (summary.DataQualityRejected <= 0) return false;
+        var criticalDataQuality = diagnostics.HighSeverityDataQuality > 0;
+        var periodic = _logging.LogSingleMarketDataQualityEveryNCycles > 0
+            && summary.ScanId % _logging.LogSingleMarketDataQualityEveryNCycles == 0;
+        var shouldLog = criticalDataQuality
+            || !_logging.LogSingleMarketDataQualityOnChangeOnly
+            || !_hasLoggedDataQualitySummary
+            || periodic
+            || IsMaterialDataQualityChange(summary.DataQualityRejected, summary.DataQualityRejectedByReason);
+        if (!shouldLog) return false;
+        _hasLoggedDataQualitySummary = true;
+        _lastLoggedDataQualityTotal = summary.DataQualityRejected;
+        _lastLoggedDataQualityCounts = summary.DataQualityRejectedByReason.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
+        return true;
+    }
+
+    private bool IsMaterialDataQualityChange(int totalRejected, IReadOnlyDictionary<string, int> reasonCounts)
+    {
+        var delta = Math.Max(1, _logging.SingleMarketDataQualitySignificantDelta);
+        if (!_hasLoggedDataQualitySummary) return true;
+        if (Math.Abs(totalRejected - _lastLoggedDataQualityTotal) >= delta) return true;
+        var previousTopReason = _lastLoggedDataQualityCounts.OrderByDescending(x => x.Value).ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase).FirstOrDefault().Key ?? string.Empty;
+        var currentTopReason = reasonCounts.OrderByDescending(x => x.Value).ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase).FirstOrDefault().Key ?? string.Empty;
+        if (!string.Equals(previousTopReason, currentTopReason, StringComparison.OrdinalIgnoreCase)) return true;
+        foreach (var reason in reasonCounts.Keys.Concat(_lastLoggedDataQualityCounts.Keys).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var current = reasonCounts.TryGetValue(reason, out var c) ? c : 0;
+            var previous = _lastLoggedDataQualityCounts.TryGetValue(reason, out var p) ? p : 0;
+            if (Math.Abs(current - previous) >= delta) return true;
+        }
+        return false;
     }
 
     private bool ShouldLog(ref string lastHash, string hash, long scanId, int everyNCycles, bool onChangeOnly)

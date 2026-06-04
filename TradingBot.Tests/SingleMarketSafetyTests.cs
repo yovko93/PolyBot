@@ -219,6 +219,43 @@ public class SingleMarketSafetyTests
         Assert.DoesNotContain("[SINGLE_MARKET_DATA_QUALITY_SUMMARY]", second);
     }
 
+
+    [Fact]
+    public async Task Data_quality_summary_suppresses_noisy_rolling_batch_changes()
+    {
+        var state = new BotRuntimeState(new RuntimeStateOptions());
+        var firstMarkets = Enumerable.Range(0, 50).Select(i => Market($"noise-a-{i}")).ToList();
+        var secondMarkets = firstMarkets.Take(27).ToList();
+        var thirdMarkets = firstMarkets.Take(43).ToList();
+        var books = firstMarkets.ToDictionary(m => m.id, m => BookFor(m, yes: null, no: 0.95m));
+        var engine = NewEngine(new MapProvider(books), state, Options(), quiet: true);
+
+        var first = await CaptureConsole(() => engine.ScanAsync(firstMarkets, NewPaper(), new SemaphoreSlim(8)));
+        var second = await CaptureConsole(() => engine.ScanAsync(secondMarkets, NewPaper(), new SemaphoreSlim(8)));
+        var third = await CaptureConsole(() => engine.ScanAsync(thirdMarkets, NewPaper(), new SemaphoreSlim(8)));
+
+        Assert.Contains("[SINGLE_MARKET_DATA_QUALITY_SUMMARY]", first);
+        Assert.DoesNotContain("[SINGLE_MARKET_DATA_QUALITY_SUMMARY]", second);
+        Assert.DoesNotContain("[SINGLE_MARKET_DATA_QUALITY_SUMMARY]", third);
+    }
+
+    [Fact]
+    public async Task Data_quality_summary_logs_material_reason_distribution_change()
+    {
+        var state = new BotRuntimeState(new RuntimeStateOptions());
+        var firstMarkets = Enumerable.Range(0, 50).Select(i => Market($"dist-a-{i}")).ToList();
+        var secondMarkets = Enumerable.Range(0, 50).Select(i => Market($"dist-b-{i}")).ToList();
+        var books = firstMarkets.ToDictionary(m => m.id, m => BookFor(m, yes: null, no: 0.95m));
+        foreach (var market in secondMarkets) books[market.id] = BookFor(market, yes: 0.05m, no: null);
+        var engine = NewEngine(new MapProvider(books), state, Options(), quiet: true);
+
+        var first = await CaptureConsole(() => engine.ScanAsync(firstMarkets, NewPaper(), new SemaphoreSlim(8)));
+        var second = await CaptureConsole(() => engine.ScanAsync(secondMarkets, NewPaper(), new SemaphoreSlim(8)));
+
+        Assert.Contains("[SINGLE_MARKET_DATA_QUALITY_SUMMARY]", first);
+        Assert.Contains("[SINGLE_MARKET_DATA_QUALITY_SUMMARY]", second);
+    }
+
     [Fact]
     public async Task Single_market_scan_summary_logs_first_only_until_material_change_or_periodic()
     {
@@ -322,7 +359,7 @@ public class SingleMarketSafetyTests
     }
 
     private static SingleMarketOrderBookArbEngine NewEngine(BinaryOrderBookSnapshot book, BotRuntimeState state, SingleMarketArbOptions? opts = null, bool quiet = false, VerifiedBasketExecutionCoordinator? audit = null) => NewEngine(new FakeProvider(book), state, opts, quiet, audit);
-    private static SingleMarketOrderBookArbEngine NewEngine(IOrderBookProvider provider, BotRuntimeState state, SingleMarketArbOptions? opts = null, bool quiet = false, VerifiedBasketExecutionCoordinator? audit = null) => new(provider, 0.005m, 0.001m, 0.001m, null, new ExecutionSizingService(new ExecutionPolicy { MaxNotionalPerTrade = 100m, MinNotionalPerTrade = 25m }), opts ?? Options(), state, null, audit, quiet, new MultiOutcomeLoggingOptions { LogSingleMarketSummaryOnChangeOnly = true, LogSingleMarketDataQualityOnChangeOnly = true, LogSingleMarketSummaryEveryNCycles = 25, LogSingleMarketDataQualityEveryNCycles = 25, SingleMarketDataQualitySignificantDelta = 10, LogSingleMarketNearMissEveryNCycles = 50, LogSingleMarketNearMissOnChangeOnly = true });
+    private static SingleMarketOrderBookArbEngine NewEngine(IOrderBookProvider provider, BotRuntimeState state, SingleMarketArbOptions? opts = null, bool quiet = false, VerifiedBasketExecutionCoordinator? audit = null) => new(provider, 0.005m, 0.001m, 0.001m, null, new ExecutionSizingService(new ExecutionPolicy { MaxNotionalPerTrade = 100m, MinNotionalPerTrade = 25m }), opts ?? Options(), state, null, audit, quiet, new MultiOutcomeLoggingOptions { LogSingleMarketSummaryOnChangeOnly = true, LogSingleMarketDataQualityOnChangeOnly = true, LogSingleMarketSummaryEveryNCycles = 25, LogSingleMarketDataQualityEveryNCycles = 25, SingleMarketDataQualitySignificantDelta = 25, LogSingleMarketNearMissEveryNCycles = 50, LogSingleMarketNearMissOnChangeOnly = true });
     private static SingleMarketArbOptions Options() => new() { RequiredConsecutiveEdgeScans = 3, RequiredConsecutiveExecutionReadyScans = 3, MinEdgePerShare = 0.005m, MinExpectedProfit = 0.50m, MinNotional = 25m, MaxNotionalPerTrade = 100m, MaxOpenSingleMarketPositions = 3, MaxTotalSingleMarketExposure = 300m, MaxPositionsPerCycle = 1, CooldownSecondsPerMarket = 300, AuditBelowMinEdgeEvents = false, AuditDetectedEvents = false, MaxAuditSamplesPerCycle = 20, AuditDataQualityRejectedEvents = false, AuditHighSeverityDataQualityRejectedEvents = true, MaxDataQualityAuditSamplesPerCycle = 3, HighSeveritySuspiciousAskSumDistance = 0.10m };
     private static PaperTradingEngine NewPaper() => new(new ExecutionPolicy { MaxNotionalPerTrade = 100m, MinNotionalPerTrade = 25m, MaxOpenPositions = 100, MaxLockedCapital = 1000m, MaxExposurePerGroup = 300m }, null, null, new PaperPositionBook(Path.GetTempFileName()));
     private static Market Market(string id = "m1") => new() { id = id, question = $"Will {id} win?", conditionId = $"c-{id}", outcomes = new() { "Yes", "No" }, clobTokenIds = new() { $"yes-{id}", $"no-{id}" } };

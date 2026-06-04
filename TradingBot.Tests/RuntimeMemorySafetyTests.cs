@@ -61,6 +61,17 @@ public class RuntimeMemorySafetyTests
         Assert.Contains("ProcessMb=", health.ToLogLine());
     }
 
+
+    [Fact]
+    public void RuntimeHealth_ShouldLogAt_EmitsStartupAndConfiguredPeriodicOnly()
+    {
+        var now = DateTime.UtcNow;
+
+        Assert.True(RuntimeHealthSnapshot.ShouldLogAt(now, DateTime.MinValue, everyMinutes: 2));
+        Assert.False(RuntimeHealthSnapshot.ShouldLogAt(now.AddSeconds(119), now, everyMinutes: 2));
+        Assert.True(RuntimeHealthSnapshot.ShouldLogAt(now.AddMinutes(2), now, everyMinutes: 2));
+    }
+
     [Fact]
     public void MemoryGuard_ClearsNonEssentialState_OnCriticalMemory()
     {

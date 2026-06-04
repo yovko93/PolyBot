@@ -250,7 +250,7 @@ public class MultiOutcomeLoggingOptions
     public bool LogSingleMarketSummaryOnChangeOnly { get; set; } = true;
     public int LogSingleMarketDataQualityEveryNCycles { get; set; } = 25;
     public bool LogSingleMarketDataQualityOnChangeOnly { get; set; } = true;
-    public int SingleMarketDataQualitySignificantDelta { get; set; } = 10;
+    public int SingleMarketDataQualitySignificantDelta { get; set; } = 25;
     public int LogSingleMarketNearMissEveryNCycles { get; set; } = 50;
     public bool LogSingleMarketNearMissOnChangeOnly { get; set; } = true;
     public int LogVerifiedUnresolvedEveryNCycles { get; set; } = 100;

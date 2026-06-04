@@ -336,7 +336,6 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var lastAllowlistHealthFingerprint = string.Empty;
     var lastCandidateScanFingerprint = string.Empty;
     var lastRejectedOnlyCandidateScanFingerprint = string.Empty;
-    var lastVerifiedScanFingerprint = string.Empty;
     var lastPortfolioFingerprint = string.Empty;
     var lastMtmFingerprint = string.Empty;
     var mismatchCycle = 0;
@@ -387,7 +386,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 if (options.Caches.ClearOrderbookCacheAfterScan) orderbookService.ClearExpiredCache();
             state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);
             memoryGuard.Check(state, options, () => orderbookService.ClearAllCache(), contentRootPath);
-            if (options.RuntimeHealth.Enabled && (runtimeHealthLastLoggedAt == DateTime.MinValue || DateTime.UtcNow - runtimeHealthLastLoggedAt >= TimeSpan.FromMinutes(Math.Max(1, options.RuntimeHealth.LogEveryMinutes))))
+            if (options.RuntimeHealth.Enabled && RuntimeHealthSnapshot.ShouldLogAt(DateTime.UtcNow, runtimeHealthLastLoggedAt, options.RuntimeHealth.LogEveryMinutes))
             {
                 runtimeHealthLastLoggedAt = DateTime.UtcNow;
                 var health = RuntimeHealthSnapshot.From(state);
@@ -1033,20 +1032,20 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     Directory.CreateDirectory(Path.GetDirectoryName(unresolvedExportPath)!);
                     File.WriteAllText(unresolvedExportPath, System.Text.Json.JsonSerializer.Serialize(unresolvedExport, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
                     var suppressedUnresolvedKeys = unresolvedDiagnostics.Where(x => x.SuppressedInConsole).Select(x => x.GroupKey).ToArray();
-                    verifiedScanFingerprint = $"{verifiedScanFingerprint}|{unresolvedCounts.BrokenConfig}|{unresolvedCounts.NeedsRefresh}|{unresolvedCounts.ReviewOnly}|{unresolvedCounts.MonitoringOnly}|{unresolvedCounts.Other}|{unresolvedCounts.SamplesShown}|{unresolvedCounts.Suppressed}";
-                    var shouldLogVerifiedScan = string.IsNullOrEmpty(lastVerifiedScanFingerprint)
-                        || !options.Logging.LogVerifiedScanOnChangeOnly
-                        || verifiedScanFingerprint != lastVerifiedScanFingerprint
-                        || (options.Logging.LogVerifiedScanEveryNCycles > 0 && verifiedScanCycle % options.Logging.LogVerifiedScanEveryNCycles == 0);
+                    var unresolvedGroupSetFingerprint = ScanLogSummaryService.VerifiedUnresolvedGroupSetFingerprint(unresolvedDiagnostics.Select(x => x.GroupKey));
+                    var quietVerifiedFingerprint = ScanLogSummaryService.MultiVerifiedScanQuietFingerprint(unresolvedCounts, unresolvedGroupSetFingerprint, activeExecutable);
+                    verifiedScanFingerprint = options.Diagnostics.OperationalQuietMode
+                        ? quietVerifiedFingerprint
+                        : $"{verifiedScanFingerprint}|{unresolvedCounts.BrokenConfig}|{unresolvedCounts.NeedsRefresh}|{unresolvedCounts.ReviewOnly}|{unresolvedCounts.MonitoringOnly}|{unresolvedCounts.Other}|{unresolvedCounts.SamplesShown}|{unresolvedCounts.Suppressed}";
+                    var shouldLogVerifiedScan = logThrottle.ShouldLog("MULTI_VERIFIED_SCAN", verifiedScanFingerprint, options.Logging.LogVerifiedScanOnChangeOnly, options.Logging.LogVerifiedScanEveryNCycles);
                     if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} BrokenConfigCount={unresolvedCounts.BrokenConfig} NeedsRefreshCount={unresolvedCounts.NeedsRefresh} ReviewOnlyCount={unresolvedCounts.ReviewOnly} MonitoringOnlyUnresolvedCount={unresolvedCounts.MonitoringOnly} OtherUnresolvedCount={unresolvedCounts.Other} UnresolvedSamplesShown={unresolvedCounts.SamplesShown} SuppressedUnresolvedSamples={unresolvedCounts.Suppressed} UnresolvedTotal={unresolvedCounts.Total} Evaluated={verifiedEvaluated} ActiveExecutable={activeExecutable} ExperimentalCandidates={experimentalCandidates} DiagnosticsOnlyPositive={diagnosticsOnlyPositive} PaperOpened={paperOpenedCount} SuppressedDuplicate={suppressedDuplicateCount} Mismatch={verifiedMismatch} BestActiveNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestExperimentalNet={bestExperimentalText} BestAlternateProfileNet={bestAlternateProfileNet} BestRaw={bestRaw}");
                     if (!unresolvedCounts.InvariantOk)
                         Console.WriteLine(unresolvedCounts.ToCounterErrorLogLine());
-                    var unresolvedGroupSetFingerprint = string.Join(",", unresolvedDiagnostics.Select(x => x.GroupKey).OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
-                    if (logThrottle.ShouldLog("VERIFIED_UNRESOLVED_BREAKDOWN", $"{unresolvedCounts.ToBreakdownLogLine()}|Groups={unresolvedGroupSetFingerprint}", options.Logging.LogVerifiedUnresolvedOnChangeOnly, options.Logging.LogVerifiedUnresolvedEveryNCycles))
+                    var unresolvedFingerprint = ScanLogSummaryService.VerifiedUnresolvedCategoryFingerprint(unresolvedCounts, unresolvedGroupSetFingerprint);
+                    if (logThrottle.ShouldLog("VERIFIED_UNRESOLVED_BREAKDOWN", unresolvedFingerprint, options.Logging.LogVerifiedUnresolvedOnChangeOnly, options.Logging.LogVerifiedUnresolvedEveryNCycles))
                         Console.WriteLine(unresolvedCounts.ToBreakdownLogLine());
-                    lastVerifiedScanFingerprint = verifiedScanFingerprint;
                     var unresolvedSummary = ScanLogSummaryService.UnresolvedSampleSummary(unresolvedCounts.Total, unresolvedCounts.SamplesShown, suppressedUnresolvedKeys);
-                    if (unresolvedSummary.Suppressed > 0 && logThrottle.ShouldLog("VERIFIED_UNRESOLVED_SUMMARY", $"{unresolvedSummary.Total}|{unresolvedSummary.SamplesShown}|{unresolvedSummary.Suppressed}|Groups={unresolvedGroupSetFingerprint}", options.Logging.LogVerifiedUnresolvedOnChangeOnly, options.Logging.LogVerifiedUnresolvedEveryNCycles))
+                    if (unresolvedSummary.Suppressed > 0 && logThrottle.ShouldLog("VERIFIED_UNRESOLVED_SUMMARY", unresolvedFingerprint, options.Logging.LogVerifiedUnresolvedOnChangeOnly, options.Logging.LogVerifiedUnresolvedEveryNCycles))
                         Console.WriteLine(unresolvedSummary.ToLogLine());
                     foreach (var ug in unresolvedDiagnostics.Where(x => x.SampleLogged))
                     {
@@ -1212,7 +1211,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             if (options.Caches.ClearOrderbookCacheAfterScan) orderbookService.ClearExpiredCache();
             state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);
             memoryGuard.Check(state, options, () => orderbookService.ClearAllCache(), contentRootPath);
-            if (options.RuntimeHealth.Enabled && (runtimeHealthLastLoggedAt == DateTime.MinValue || DateTime.UtcNow - runtimeHealthLastLoggedAt >= TimeSpan.FromMinutes(Math.Max(1, options.RuntimeHealth.LogEveryMinutes))))
+            if (options.RuntimeHealth.Enabled && RuntimeHealthSnapshot.ShouldLogAt(DateTime.UtcNow, runtimeHealthLastLoggedAt, options.RuntimeHealth.LogEveryMinutes))
             {
                 runtimeHealthLastLoggedAt = DateTime.UtcNow;
                 var health = RuntimeHealthSnapshot.From(state);
