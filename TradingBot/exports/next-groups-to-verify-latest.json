@@ -1,9 +1,9 @@
 [
   {
-    "groupKey": "winner:california governor election in 2026|kind:person",
-    "title": "winner:california governor election in 2026|kind:person",
-    "detectedMarketsCount": 7,
-    "pricedLegs": 7,
+    "groupKey": "winner:on 2026 06 06|kind:generic",
+    "title": "winner:on 2026 06 06|kind:generic",
+    "detectedMarketsCount": 5,
+    "pricedLegs": 5,
     "missingNoAsk": 0,
     "estimatedGrossEdge": null,
     "estimatedNetEdgeConservative": null,
@@ -13,85 +13,35 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:california governor election in 2026|kind:person",
-      "title": "winner:california governor election in 2026|kind:person",
+      "groupKey": "winner:on 2026 06 06|kind:generic",
+      "title": "winner:on 2026 06 06|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "628946",
-        "628937",
-        "628942",
-        "628956",
-        "628943",
-        "628949",
-        "628944"
+        "2373165",
+        "2421889",
+        "2277072",
+        "2421877",
+        "2421871"
       ],
       "conditionIds": [
-        "0x0a46731134b06c151d4f939bec58e07d784ed50ed214141286fd8bc9561608a3",
-        "0x433587daba653f972f1bf49d41712ff02a0e73196c3a498a1e9d8e80c6587861",
-        "0xa0a62ba83d66d748a4df1e36efffe85746d1e2b3a43167701f83826599fb51e8",
-        "0x6d6b9d5f81726194e8e5969bc5fd9ad5aefcf9ebe836f44d734e3fe18c15a805",
-        "0xad80f8a007ce2dad75754998cc72f162b2b2eef2c6b1017b47add4f01974a5e8",
-        "0x44efa7a078d27c6bdec7ff1f82474adfdba4626a3fd4c3c668f3b81583020cae",
-        "0x43cf1b93d1b5420b158346f0e6e2993432014c4c09a213a1240fa7426c1c5af8"
+        "0x3d0749e72d7688132be87ecf2d25b9d55a9622e59cccb4d93f1b819a17bf659f",
+        "0xaf869054f543549166b523500589b3ff69a8e90a6e3b7c3ac33a4cdb88dc8759",
+        "0x306b98d35252384bcde3b5680de2ba7feef1680b6375e1a92952798c0ed80d89",
+        "0x4da87d7e7cf04e0bdfe05830c3e08b2c9ec43baf813a1844df89e232075df6bc",
+        "0xbd6a22e4f8399fe9b678cf52f6b9e8ef603d5df220f63ab6567c51388defdeb5"
       ],
-      "requiredOutcomeCount": 7,
+      "requiredOutcomeCount": 5,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-06-03"
+      "verifiedAt": "2026-06-04"
     }
   },
   {
-    "groupKey": "winner:iem cologne major 2026|kind:generic",
-    "title": "winner:iem cologne major 2026|kind:generic",
-    "detectedMarketsCount": 8,
-    "pricedLegs": 8,
-    "missingNoAsk": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "rawOnlyEdge": null,
-    "candidateQualityScore": 110,
-    "safetyClassification": "SafeForManualVerification",
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:iem cologne major 2026|kind:generic",
-      "title": "winner:iem cologne major 2026|kind:generic",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "1892281",
-        "1892285",
-        "1892305",
-        "1892291",
-        "1892306",
-        "1892309",
-        "1892307",
-        "1892292"
-      ],
-      "conditionIds": [
-        "0xadf834ab08d5e31ca8dabac7c194632bf4739fe695aa70937ce0dff296990e90",
-        "0x1d6a4514ffe89c4aa8afc2718c36ce95aae0477130cf1a6d547fcae9a4dfa18b",
-        "0xdf6e9ed2eaf69707c7a1162a240ca025a02b0a5028dc286c9248769e0044bdf7",
-        "0xa2ea44f06f6b7ca3e00cea284d6e9294ac3d0331fd8817a5ff82989a5ae2291d",
-        "0x810aabb183a1df47b151a7e6918bf7603c19889055a75d8eddf42f188c876a28",
-        "0xfc1f0e02955453a09c0e74e473980de7fbee597a8859eadf0c7ec9e8b0237562",
-        "0xf3767c9260d825c337a4fbc3542b797d65dc6fa3b34a953c9207701f379982ae",
-        "0x18b175a7f6faa5dd8942d03df7ebf3b3c244357af7bbc0f70f363311bc3b9028"
-      ],
-      "requiredOutcomeCount": 8,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-06-03"
-    }
-  },
-  {
-    "groupKey": "winner:on 2026 06 20|kind:generic",
-    "title": "winner:on 2026 06 20|kind:generic",
+    "groupKey": "winner:2026 minnesota governor republican primary election|kind:person",
+    "title": "winner:2026 minnesota governor republican primary election|kind:person",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
     "missingNoAsk": 0,
@@ -103,65 +53,29 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:on 2026 06 20|kind:generic",
-      "title": "winner:on 2026 06 20|kind:generic",
+      "groupKey": "winner:2026 minnesota governor republican primary election|kind:person",
+      "title": "winner:2026 minnesota governor republican primary election|kind:person",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "2355525",
-        "2340991"
+        "907993",
+        "907983"
       ],
       "conditionIds": [
-        "0xf3e269bf42f75067c2ec2259da5befbe8c5b88ffdecc82fa166f8b9d22608703",
-        "0x440483c5edb8d53a9dd43d10a3e4ea224b02eb54dfa9ae0b0d9956b24758d131"
+        "0xbbd623c4191ca76dec466507375d6df85b403b7e14f9cbd3d09f2c450ae0cd96",
+        "0xd25c820d3aee1c735c0fa62c36f4905632ab8c6988653b5b4134593b3209eb7f"
       ],
       "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-06-03"
+      "verifiedAt": "2026-06-04"
     }
   },
   {
-    "groupKey": "winner:on 2026 06 21|kind:generic",
-    "title": "winner:on 2026 06 21|kind:generic",
-    "detectedMarketsCount": 3,
-    "pricedLegs": 3,
-    "missingNoAsk": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "rawOnlyEdge": null,
-    "candidateQualityScore": 90,
-    "safetyClassification": "SafeForManualVerification",
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:on 2026 06 21|kind:generic",
-      "title": "winner:on 2026 06 21|kind:generic",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "2355580",
-        "2355618",
-        "2355656"
-      ],
-      "conditionIds": [
-        "0x1c202675a63ed0073fc70584dac318842908df4aecb55119040145c13c4a7f1d",
-        "0xcc56391473e519771f789595266697d7c56ea4a826e196b08b3164f306df1580",
-        "0x0ea1aa2307d6dd0c2174eebf83dc2d7effe6cb09442e5cdc33897fec4ce105cf"
-      ],
-      "requiredOutcomeCount": 3,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-06-03"
-    }
-  },
-  {
-    "groupKey": "winner:most seats in south korea s 2026 parliamentary by elections|kind:generic",
-    "title": "winner:most seats in south korea s 2026 parliamentary by elections|kind:generic",
+    "groupKey": "winner:bronze boot at 2026 fifa world cup|kind:generic",
+    "title": "winner:bronze boot at 2026 fifa world cup|kind:generic",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
     "missingNoAsk": 0,
@@ -173,29 +87,29 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:most seats in south korea s 2026 parliamentary by elections|kind:generic",
-      "title": "winner:most seats in south korea s 2026 parliamentary by elections|kind:generic",
+      "groupKey": "winner:bronze boot at 2026 fifa world cup|kind:generic",
+      "title": "winner:bronze boot at 2026 fifa world cup|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "1364471",
-        "1364469"
+        "2432138",
+        "2430902"
       ],
       "conditionIds": [
-        "0x1be4bbac1cf3cec878b0dba2d2e945a416db1d5c54ea6373d44649ec3fcbb997",
-        "0xe787cf7c6ae17e60c9f90883a14f759ebfce4365056b07eec018c4129769ba45"
+        "0x37224ee514aa364be93a5e4f0b15f15e71c6b3851ce189b9a2d64b087b4c85ea",
+        "0x437dea980bbce4bb82236ea55c2f7f9f6dfb81e6e478045673530a751cd2d1ed"
       ],
       "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-06-03"
+      "verifiedAt": "2026-06-04"
     }
   },
   {
-    "groupKey": "winner:2026 world series|kind:generic",
-    "title": "winner:2026 world series|kind:generic",
+    "groupKey": "winner:2027 nfl afc championship|kind:generic",
+    "title": "winner:2027 nfl afc championship|kind:generic",
     "detectedMarketsCount": 3,
     "pricedLegs": 3,
     "missingNoAsk": 0,
@@ -207,26 +121,60 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:2026 world series|kind:generic",
-      "title": "winner:2026 world series|kind:generic",
+      "groupKey": "winner:2027 nfl afc championship|kind:generic",
+      "title": "winner:2027 nfl afc championship|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "1235559",
-        "1235574",
-        "1235567"
+        "1361093",
+        "1361084",
+        "1361082"
       ],
       "conditionIds": [
-        "0x36f3d99fb629ebbad8bc559f922da1b1e8333496fe6322308bff647926ac15f0",
-        "0x20ad75028f28b5bced0e807f25289a57ea8060ddd716a60bafb9eba1cf0e58e9",
-        "0x728ed3e64f1f6b67d9b3dcd545ae574aaf0dfd3b0fb6df433d0c07c253981ec0"
+        "0x983223b53e2dc149079e8919efa1a85f4f2cefe5723e2cdd25d962a122f4f9e3",
+        "0xf56c3543401052711ed407ec692c414e3ccde973a1195cf7274f71d1981c9242",
+        "0x13ef35d4bf77d5e1cb891b15fde4af75a2f9ed8044b898ec9596b1515afbf06a"
       ],
       "requiredOutcomeCount": 3,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-06-03"
+      "verifiedAt": "2026-06-04"
+    }
+  },
+  {
+    "groupKey": "winner:on 2026 06 25|kind:generic",
+    "title": "winner:on 2026 06 25|kind:generic",
+    "detectedMarketsCount": 2,
+    "pricedLegs": 2,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:on 2026 06 25|kind:generic",
+      "title": "winner:on 2026 06 25|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "1897336",
+        "1897356"
+      ],
+      "conditionIds": [
+        "0xbb8523862374b3edc90cb813b125bd30e8e27030be53fcf40d1f76152339f8d0",
+        "0x32552863fe8014da2613037970661f0d49f415c86a88cb3d65af7a43395bc4ad"
+      ],
+      "requiredOutcomeCount": 2,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-06-04"
     }
   }
 ]

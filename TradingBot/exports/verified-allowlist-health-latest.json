@@ -20,7 +20,7 @@
     "BrokenTotal": 3,
     "HasMissingNoAsk": 0,
     "HasMarketMismatch": 3,
-    "HasCandidateRefreshMatch": 1,
+    "HasCandidateRefreshMatch": 0,
     "HasSuggestedTemplate": 0
   },
   "groups": [
@@ -111,7 +111,7 @@
       "foundMarketIds": [],
       "status": "NeedsRepair",
       "healthCategory": "BrokenConfig",
-      "reason": "No stable candidate match found in repair snapshot; manual review required.",
+      "reason": "No stable candidate match yet. ConsecutiveSnapshotMisses=5.",
       "recommendedAction": "DisableMissingMarkets",
       "repairConfidence": "Low"
     },

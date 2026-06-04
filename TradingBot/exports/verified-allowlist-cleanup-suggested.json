@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAtUtc": "2026-06-03T12:50:40.7805251Z",
+    "generatedAtUtc": "2026-06-04T19:02:18.201149Z",
     "note": "suggested only"
   },
   "groups": [
@@ -108,7 +108,8 @@
       "SuggestedRefreshedTemplate": null,
       "Diff": null,
       "Notes": [
-        "No stable candidate match found in repair snapshot; manual review required."
+        "Candidate match missing for 5 repair snapshot(s); hysteresis prevents immediate downgrade.",
+        "No stable candidate match yet. ConsecutiveSnapshotMisses=5."
       ],
       "CopyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
@@ -198,7 +199,6 @@
       "SuggestedRefreshedTemplate": null,
       "Diff": null,
       "Notes": [
-        "Stable candidate match: winner:2026 peruvian presidential election|kind:person score=1.",
         "ManualLock: Manual review required due to repair diff oscillation on marketId 947269"
       ],
       "CopyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."

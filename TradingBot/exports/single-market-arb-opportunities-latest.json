@@ -1,0 +1,371 @@
+{
+  "TimestampUtc": "2026-06-04T19:02:15.8440857Z",
+  "ScanId": 338,
+  "Summary": {
+    "TimestampUtc": "2026-06-04T19:02:15.8440824Z",
+    "ScanId": 338,
+    "Scanned": 250,
+    "BookOk": 250,
+    "BothAsks": 125,
+    "DataQualityRejected": 125,
+    "BelowMinEdge": 125,
+    "PositiveEdge": 0,
+    "EdgeStable": 0,
+    "ExecutionReady": 0,
+    "FillPassed": 0,
+    "PaperOpened": 0,
+    "BestEdgeSeen": -0.003,
+    "BestRejectedRawEdge": 0.997,
+    "TopRejectReason": "BelowMinEdge",
+    "TopRejectCount": 125,
+    "RejectedByReason": {
+      "MissingYesAsk": 10,
+      "BelowMinEdge": 125,
+      "SuspiciousYesNoAskSum": 69,
+      "TokenOutcomeMappingUnverified": 32,
+      "MissingNoAsk": 14
+    },
+    "DataQualityRejectedByReason": {
+      "MissingYesAsk": 10,
+      "SuspiciousYesNoAskSum": 69,
+      "TokenOutcomeMappingUnverified": 32,
+      "MissingNoAsk": 14
+    }
+  },
+  "PositiveCandidates": [],
+  "TopNearMisses": [
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.8415364Z",
+      "MarketId": "1105745",
+      "ConditionId": "0x86a2f168603fae962d925c91b23fba47c0c7436a240056785de25e998bc30811",
+      "Title": "Will Dinorah Figuera be the leader of Venezuela end of 2026?",
+      "YesAsk": 0.002,
+      "NoAsk": 0.999,
+      "RawSum": 1.001,
+      "EdgePerShare": -0.003,
+      "RequiredImprovement": 0.008
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.8412723Z",
+      "MarketId": "2365171",
+      "ConditionId": "0xc925a612dd4a2c0f6101374717ef598b8603d3d12ea32a9ed8e5851b0d74b13a",
+      "Title": "Trump renames Strait of Hormuz to \u0022Strait of Trump\u0022 by June 30?",
+      "YesAsk": 0.017,
+      "NoAsk": 0.984,
+      "RawSum": 1.001,
+      "EdgePerShare": -0.003,
+      "RequiredImprovement": 0.008
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.6972505Z",
+      "MarketId": "2099002",
+      "ConditionId": "0xd8e1587344587e2c032540ed1c8e8f0586d0bd0e5711320abcf9b8564e22a641",
+      "Title": "Will 260 to 289 tornadoes occur in the United States in May 2026?",
+      "YesAsk": 0.002,
+      "NoAsk": 0.999,
+      "RawSum": 1.001,
+      "EdgePerShare": -0.003,
+      "RequiredImprovement": 0.008
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.6970997Z",
+      "MarketId": "2425076",
+      "ConditionId": "0xda0db1ccdef83737ec395d68948047a98f3898974b158b51ee9d482a80c12ec5",
+      "Title": "Will the lowest temperature in New York City be between 74-75\u00B0F on June 5?",
+      "YesAsk": 0.002,
+      "NoAsk": 0.999,
+      "RawSum": 1.001,
+      "EdgePerShare": -0.003,
+      "RequiredImprovement": 0.008
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.6966311Z",
+      "MarketId": "2117914",
+      "ConditionId": "0x00a1f67a0d212026e17d751db55382c3380e76c8c0b1654c1a5aeaafd49781c3",
+      "Title": "Will Aymen Hussein record the most goal contributions at the 2026 FIFA World Cup?",
+      "YesAsk": 0.003,
+      "NoAsk": 0.998,
+      "RawSum": 1.001,
+      "EdgePerShare": -0.003,
+      "RequiredImprovement": 0.008
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.8423032Z",
+      "MarketId": "2424415",
+      "ConditionId": "0x72d481c2e0d8c62f7a8d18035ffda337aba37ef33cbb3369ea25e985eee428f9",
+      "Title": "Will the highest temperature in Sao Paulo be 16\u00B0C or below on June 5?",
+      "YesAsk": 0.003,
+      "NoAsk": 0.999,
+      "RawSum": 1.002,
+      "EdgePerShare": -0.004,
+      "RequiredImprovement": 0.009
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.8398827Z",
+      "MarketId": "821114",
+      "ConditionId": "0x437f095880aa1008305ec7260c6dda3539d33b16fa8624e0575f6a641005aac1",
+      "Title": "MH370 underwater wreckage found by June 30, 2026?",
+      "YesAsk": 0.012,
+      "NoAsk": 0.99,
+      "RawSum": 1.002,
+      "EdgePerShare": -0.004,
+      "RequiredImprovement": 0.009
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.6971226Z",
+      "MarketId": "2117313",
+      "ConditionId": "0xdb715354471980935600f90b4ed823c578cb23a1c377093d7517713e2cad515d",
+      "Title": "Will Andy Robertson record the most assists at the 2026 FIFA World Cup?",
+      "YesAsk": 0.005,
+      "NoAsk": 0.997,
+      "RawSum": 1.002,
+      "EdgePerShare": -0.004,
+      "RequiredImprovement": 0.009
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.83995Z",
+      "MarketId": "608374",
+      "ConditionId": "0x1721f89383f83b8c744d4b88986c0a1abd484d55812239d03a852bbff052ebc6",
+      "Title": "Will Fannie Mae\u2019s market cap be between $300B and $350B at market close on IPO day?",
+      "YesAsk": 0.004,
+      "NoAsk": 0.999,
+      "RawSum": 1.003,
+      "EdgePerShare": -0.005,
+      "RequiredImprovement": 0.010
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.6966747Z",
+      "MarketId": "2380055",
+      "ConditionId": "0x4c8f07553e59ac53f08a1e69fd917665e5e3531473e6fd775e57628c01fe0cbf",
+      "Title": "Will PPI YoY be between 3.0% and 3.9% in May?",
+      "YesAsk": 0.005,
+      "NoAsk": 0.998,
+      "RawSum": 1.003,
+      "EdgePerShare": -0.005,
+      "RequiredImprovement": 0.010
+    }
+  ],
+  "DataQualityRejectSamples": [
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.8439431Z",
+      "MarketId": "2411214",
+      "ConditionId": "0x54233b4b1fd18a109dad06de5c4453d80e3fe9ffefbdfee50068d7f34dfe0cf8",
+      "Title": "Will the price of Ethereum be less than $1,500 on June 8?",
+      "Reason": "SuspiciousYesNoAskSum",
+      "YesAsk": 0.08,
+      "NoAsk": 0.99,
+      "RawSum": 1.07,
+      "EdgePerShare": -0.072
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.8438463Z",
+      "MarketId": "1131459",
+      "ConditionId": "0x48b60dee314c783580a450b88f35e1ca500fd6a7410f1be6a724615f4f389ef4",
+      "Title": "Will SpaceX have between 180-199 launches in 2026?",
+      "Reason": "SuspiciousYesNoAskSum",
+      "YesAsk": 0.12,
+      "NoAsk": 0.946,
+      "RawSum": 1.066,
+      "EdgePerShare": -0.068
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.843829Z",
+      "MarketId": "2374920",
+      "ConditionId": "0x5110ec5ef34ceb06eeb62d461c7eb89728f19e555bb8ece97f68254433034028",
+      "Title": "Will Bank of America (BAC) Q2 provision for credit losses be above $1.6B?",
+      "Reason": "SuspiciousYesNoAskSum",
+      "YesAsk": 0.68,
+      "NoAsk": 0.89,
+      "RawSum": 1.57,
+      "EdgePerShare": -0.572
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.8438158Z",
+      "MarketId": "2294164",
+      "ConditionId": "0xd936e611dc06b64b69140c7d46975f8b2f91590be8da65fa668fcb23a6ac5cb5",
+      "Title": "Will Puka Nacua be on the cover of Madden NFL 27?",
+      "Reason": "SuspiciousYesNoAskSum",
+      "YesAsk": 0.9,
+      "NoAsk": 0.97,
+      "RawSum": 1.87,
+      "EdgePerShare": -0.872
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.8437684Z",
+      "MarketId": "2434779",
+      "ConditionId": "0x0176668b81e27f79c452278464fac0e4165915bc8649fbf2451e3b8a3322915b",
+      "Title": "Bitcoin Up or Down - June 5, 5:50AM-5:55AM ET",
+      "Reason": "TokenOutcomeMappingUnverified",
+      "YesAsk": 0.51,
+      "NoAsk": 0.5,
+      "RawSum": 1.01,
+      "EdgePerShare": -0.012
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.8437053Z",
+      "MarketId": "2391022",
+      "ConditionId": "0x6a0ffad8dcfe816d2297ec6e217415db16fcb84bd97bb73f00a08998b3e53cf1",
+      "Title": "Will Ted Cruz post 140-159 posts from June 2 to June 9, 2026?",
+      "Reason": "SuspiciousYesNoAskSum",
+      "YesAsk": 0.3,
+      "NoAsk": 0.96,
+      "RawSum": 1.26,
+      "EdgePerShare": -0.262
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.843621Z",
+      "MarketId": "2169894",
+      "ConditionId": "0xb6d067e531ce2ea4b13a3ae88fe3be6ffc7448ac3bc4bdc223b6f0da998d0f72",
+      "Title": "Will the next model released by OpenAI debut at a score of at least 1470?",
+      "Reason": "SuspiciousYesNoAskSum",
+      "YesAsk": 0.707,
+      "NoAsk": 0.359,
+      "RawSum": 1.066,
+      "EdgePerShare": -0.068
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.8436123Z",
+      "MarketId": "1493534",
+      "ConditionId": "0x18ea0e3d1a4e01d397d27c075418c4c503f6c4d361cd0acd68f6ca69cb02517e",
+      "Title": "Will the Seattle Mariners win more than 88.5 games in the 2026 MLB Regular Season?",
+      "Reason": "TokenOutcomeMappingUnverified",
+      "YesAsk": 0.42,
+      "NoAsk": 0.78,
+      "RawSum": 1.20,
+      "EdgePerShare": -0.202
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.8436028Z",
+      "MarketId": "1981590",
+      "ConditionId": "0x9c5c0e57d6a003387da5335929624488317d8415f0f95683c6d511b195e75bd8",
+      "Title": "Will Jon Stewart be the 2028 Democratic Vice-Presidential nominee?",
+      "Reason": "SuspiciousYesNoAskSum",
+      "YesAsk": 0.101,
+      "NoAsk": 0.973,
+      "RawSum": 1.074,
+      "EdgePerShare": -0.076
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.8435551Z",
+      "MarketId": "2375139",
+      "ConditionId": "0x27804b25acf852e2dba6ffe5d4c6b8063a8750c460c5b950fe9ca93fc5c27dc3",
+      "Title": "Will Goldman Sachs (GS) Q2 investment banking fees be above $3.1B?",
+      "Reason": "SuspiciousYesNoAskSum",
+      "YesAsk": 0.72,
+      "NoAsk": 0.94,
+      "RawSum": 1.66,
+      "EdgePerShare": -0.662
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.843546Z",
+      "MarketId": "2433660",
+      "ConditionId": "0x220a4562091b28c48f245836389b66b36f3d0ce34ab74bf438939e1ea61cae9e",
+      "Title": "Counter-Strike: Virtus.pro vs GenOne (BO3) - European Pro League Series 7 Group D",
+      "Reason": "TokenOutcomeMappingUnverified",
+      "YesAsk": 0.71,
+      "NoAsk": 0.38,
+      "RawSum": 1.09,
+      "EdgePerShare": -0.092
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.8435046Z",
+      "MarketId": "2326623",
+      "ConditionId": "0xf744cee270ee7e04f707eb20ba92de5b27aafb8f434741fc8efd94cdbb726e20",
+      "Title": "Spread: DR Congo (-2.5)",
+      "Reason": "TokenOutcomeMappingUnverified",
+      "YesAsk": 0.008,
+      "NoAsk": 0.997,
+      "RawSum": 1.005,
+      "EdgePerShare": -0.007
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.8434964Z",
+      "MarketId": "2434825",
+      "ConditionId": "0x80b94a54d9b845fbb978c4bf97f33d0d3196c42b876f144646cea4c4d8e39694",
+      "Title": "ITF Lakewood: Neo Niedner vs Jean Baptiste Badon",
+      "Reason": "TokenOutcomeMappingUnverified",
+      "YesAsk": 0.67,
+      "NoAsk": 0.38,
+      "RawSum": 1.05,
+      "EdgePerShare": -0.052
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.8434871Z",
+      "MarketId": "2210117",
+      "ConditionId": "0x04b2128f686bc3e075519d4ce2efc38b3b4905fb22aa827371996167505e8daa",
+      "Title": "Will Kimi Antonelli finish on the podium at the 2026 F1 Monaco Grand Prix?",
+      "Reason": "SuspiciousYesNoAskSum",
+      "YesAsk": 0.57,
+      "NoAsk": 0.58,
+      "RawSum": 1.15,
+      "EdgePerShare": -0.152
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.843472Z",
+      "MarketId": "1105854",
+      "ConditionId": "0xe273314ec70ccaa216c30e3ef35c919c6c9ce7afcd05f1925d662bc3685ae3f0",
+      "Title": "Will Los Angeles Thieves finish in the top 4 of the CDL Regular Season?",
+      "Reason": "SuspiciousYesNoAskSum",
+      "YesAsk": 0.97,
+      "NoAsk": 0.72,
+      "RawSum": 1.69,
+      "EdgePerShare": -0.692
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.8434449Z",
+      "MarketId": "1285151",
+      "ConditionId": "0x40f70bef37f290b26f6d67a31f56a474aa04d5e0eaea2355c967b675bf6e2e2b",
+      "Title": "Will the Republican Party win the WA-05 House seat?",
+      "Reason": "SuspiciousYesNoAskSum",
+      "YesAsk": 0.7,
+      "NoAsk": 0.59,
+      "RawSum": 1.29,
+      "EdgePerShare": -0.292
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.8434345Z",
+      "MarketId": "1818705",
+      "ConditionId": "0x07eaadb00e3996a0877b0242b702391addfe503766b0137807a41e13f5a0eb2d",
+      "Title": "Andrew Garfield as Spider-Man?",
+      "Reason": "SuspiciousYesNoAskSum",
+      "YesAsk": 0.23,
+      "NoAsk": 0.89,
+      "RawSum": 1.12,
+      "EdgePerShare": -0.122
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.8434244Z",
+      "MarketId": "2408366",
+      "ConditionId": "0x283a1da839563a06c247330cd37da9c9fe6669d72df17c53a57f7587dc05b057",
+      "Title": "Joventut vs. Saski Baskonia",
+      "Reason": "TokenOutcomeMappingUnverified",
+      "YesAsk": 0.48,
+      "NoAsk": 0.54,
+      "RawSum": 1.02,
+      "EdgePerShare": -0.022
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.8433903Z",
+      "MarketId": "2436873",
+      "ConditionId": "0x266d09fba57261048ae24d5664786ba7c97b23e82c258dfe49a9c744fe781520",
+      "Title": "Roland Garros Juniors, Girls: Completed Match: Victoria Barros vs Xinran Sun",
+      "Reason": "SuspiciousYesNoAskSum",
+      "YesAsk": 0.97,
+      "NoAsk": 0.91,
+      "RawSum": 1.88,
+      "EdgePerShare": -0.882
+    },
+    {
+      "TimestampUtc": "2026-06-04T19:02:15.8433158Z",
+      "MarketId": "2424846",
+      "ConditionId": "0xdfe4a5f40e3d4ac87adebc3099814fd5610dcd63b6666b73f507bded06fa101c",
+      "Title": "Will the highest temperature in Panama City be 23\u00B0C on June 5?",
+      "Reason": "MissingNoAsk",
+      "YesAsk": 0.002,
+      "NoAsk": null,
+      "RawSum": 0.002,
+      "EdgePerShare": 0.996
+    }
+  ],
+  "PaperExecutions": []
+}

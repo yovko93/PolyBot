@@ -1,1160 +1,224 @@
 [
   {
-    "groupKey": "winner:2026 fifa world cup|kind:generic",
-    "title": "winner:2026 fifa world cup|kind:generic",
-    "kind": "generic",
-    "detectedMarketsCount": 42,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "AutoCandidatePartialOverlap",
-    "estimatedNoBasketCost": null,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "558985",
-        "conditionId": "0x106ccc4508432a065a67394837d4c2c529a8d77ed69fa3ba90b81eedf5236598",
-        "question": "Will Turkiye win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558955",
-        "conditionId": "0xbaf7780f9059e34b84301fd411f8dc573b4d56adfe6e0cda33daf304b1438da4",
-        "question": "Will Ecuador win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558961",
-        "conditionId": "0x65307f30dce84ac35e41813035d3c04933da830dc4efbbb2fcdc4b282700ef3b",
-        "question": "Will South Korea win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558976",
-        "conditionId": "0xe5bd80313b8859e3f5761568ac9498866ea9d4419e4d1b6a877a9a9bd2754cb4",
-        "question": "Will Croatia win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558945",
-        "conditionId": "0x5ccfe1b69a582d2985db08a8481a0d74c314b1fce9b4711ae2efb2c6467fe6aa",
-        "question": "Will Mexico win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558935",
-        "conditionId": "0x375409bc5eeeff961e82b479caeccc20f33d15738e5bce1186d628aa3d9dfb1f",
-        "question": "Will England win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558966",
-        "conditionId": "0x289568d555ec620ed6fa33c936c5f42649d3a2e30748a1daf7079f42453fbea4",
-        "question": "Will Ivory Coast win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558943",
-        "conditionId": "0xcdb1f0400949238a63d3e88243d2ada08cd9c2a71985ced9f0cfd5e66354cf90",
-        "question": "Will USA win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558963",
-        "conditionId": "0x37a6de1b21803e5f3fb1965116218215d79963af4f7e51659696366267a63a03",
-        "question": "Will Morocco win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558984",
-        "conditionId": "0x5e614739363bbfc399469102c600e4e8260032d41e59e0bc12ebc0e71231642d",
-        "question": "Will Czechia win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558968",
-        "conditionId": "0x7412d284c8f63791fec807f9b1f61c6fe61163621775a3dc8686cd2575272abe",
-        "question": "Will Egypt win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558975",
-        "conditionId": "0xfe230d510eaf545198c0d62bb17871e5fe8989f1b19aa54c0c062b858360987c",
-        "question": "Will Austria win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558967",
-        "conditionId": "0x881a3ffa618b6ae0ab95a5637e310afb1afc2d99c921bfe3235b15eccfce0344",
-        "question": "Will Ghana win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558938",
-        "conditionId": "0x0c4cd2055d6ea89354ffddc55d6dbcef9355748112ea952fc925f3db6a5c457f",
-        "question": "Will Argentina win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558969",
-        "conditionId": "0x5a59d269c2b5108cd2f64c624e46ee2c8b5cfd88b882582565f927918315b6aa",
-        "question": "Will Algeria win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558952",
-        "conditionId": "0x67443cb1ffb2bf180f7df5b6ca7adff63f7e8e933c7e41405ba118f3e9f8befb",
-        "question": "Will Canada win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558947",
-        "conditionId": "0xe99cc59f32b10d23acf196d1a0e8264ea30fca198428acadd3464b06ff60e771",
-        "question": "Will Colombia win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558983",
-        "conditionId": "0xbce6698c9a61376c0709a2a724a9cf0dd0236d8dea882533073b6bb062efbee0",
-        "question": "Will Bosnia-Herzegovina win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558973",
-        "conditionId": "0xf950740bc71136155d6525cc0528a582c81f88812bff227803190c32ca25f54d",
-        "question": "Will Scotland win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558946",
-        "conditionId": "0x32cfa52198e85e070d1b17d1b53c5c3a6aaae7736cdc33fa6aa04d353f0c2811",
-        "question": "Will Belgium win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558980",
-        "conditionId": "0xd0dbdc94b28c5cffeef64ed6b13e5f0f2324fb177e5ffaa634b48c88fe18d5e7",
-        "question": "Will Sweden win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558974",
-        "conditionId": "0x3a26ca6425e2d98f14935670bc22cdb0744defc6f6d83c65f8c413a921c5c70c",
-        "question": "Will Switzerland win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558954",
-        "conditionId": "0xff0cfa9506cfa95759e4c7591654195bd26e3011f9882b51439135e04f2b69f1",
-        "question": "Will Tunisia win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558949",
-        "conditionId": "0x0189df05ed7bf84d799213b01a79571e305c03b2ac5359cfbb3a323448ba20fa",
-        "question": "Will Japan win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558956",
-        "conditionId": "0x675bba4df50fd123f7fbfbafa67e9b75f4092d85ce0f9148ce78fc945964c856",
-        "question": "Will Paraguay win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558937",
-        "conditionId": "0x30d55d8124ee1e12dabe89201badc45669b81dff69e4ce44d961f32878ec178a",
-        "question": "Will Brazil win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558936",
-        "conditionId": "0x9b6fef249040fd17e9c107955b37ac2c3e923509b6b0ff01cc463a331ddeb894",
-        "question": "Will France win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558944",
-        "conditionId": "0x7876851632c295043c66536150a304cb785abdf712ba8489d298c6e6926be106",
-        "question": "Will Uruguay win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558940",
-        "conditionId": "0x4f3421fb2daf5cca7430ed8d8132463963081572d75434393a1808fdb8829fe8",
-        "question": "Will Portugal win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558934",
-        "conditionId": "0x7976b8dbacf9077eb1453a62bcefd6ab2df199acd28aad276ff0d920d6992892",
-        "question": "Will Spain win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558965",
-        "conditionId": "0x6972edb1b3f8cd8192651a665fc424dff846efe1c4a2376f628d4b20c704144c",
-        "question": "Will Senegal win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558939",
-        "conditionId": "0x1595b4818eeb1ea1e0bec5de6f057218e557feee9b405a0e930d290384fa1d16",
-        "question": "Will Germany win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558959",
-        "conditionId": "0x84edef36bded182da6a395ac6c785dba8f3e09b6c5ad041385b2042536cbef25",
-        "question": "Will Iran win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558958",
-        "conditionId": "0x098e2be3df8ab529940c567819f8ef007cf007820e9d627642a5bbfaa42af372",
-        "question": "Will Australia win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558941",
-        "conditionId": "0x9be56371f6a29d12769b2f196847ee825b9585ebb8bfa042136be031b081eba1",
-        "question": "Will Netherlands win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558951",
-        "conditionId": "0x7b52405ad0e0d31bfe970940b67d77f24ecedeab8a2361c11148c02a006e325c",
-        "question": "Will Norway win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558964",
-        "conditionId": "0x233ce0c3969a5cd5079287f16fcd283be7c1db82263e08697f85dbe1b4d2113c",
-        "question": "Will South Africa win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558977",
-        "conditionId": "0x506f80bcf76bc75e6b31a250e2d754f347c4c231665326931d58bdb339ba1913",
-        "question": "Will Haiti win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558979",
-        "conditionId": "0x9779c09fd4dd0a1c82dd82618269c2aa5669d91305293b396d1e0b8a166b566e",
-        "question": "Will Panama win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558972",
-        "conditionId": "0x3fb8a8de2ac275882d72b2c4f22d41776fcf033f9e413a77a84dd395c0d5257c",
-        "question": "Will Saudi Arabia win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558960",
-        "conditionId": "0x965ebc5d79eb1ec02cad67245a44b9e45b33359018f013fb6cf81d5bbf7bcc8d",
-        "question": "Will Uzbekistan win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      },
-      {
-        "marketId": "558957",
-        "conditionId": "0x9e5f9d8c384f8fe368b195fa9a780be58643dff7360588a4e577012df8af00a7",
-        "question": "Will New Zealand win the 2026 FIFA World Cup?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-20T00:00:00Z"
-      }
-    ]
-  },
-  {
-    "groupKey": "winner:california governor election in 2026|kind:person",
-    "title": "winner:california governor election in 2026|kind:person",
-    "kind": "person",
-    "detectedMarketsCount": 16,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "AutoCandidateUnverified",
-    "estimatedNoBasketCost": null,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "628955",
-        "conditionId": "0x8d62f20324e9e7f1a3c663ab6aac9a2f6e7adb96c6a69ac2cea7e08a71a7f2ef",
-        "question": "Will Tom Steyer win the California Governor Election in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-11-03T00:00:00Z"
-      },
-      {
-        "marketId": "628941",
-        "conditionId": "0xa5d79e71e66c9fe122f8b8b3ca6ab7a0e3048bd8508f130746944e92ed79ddf3",
-        "question": "Will Xavier Becerra win the California Governor Election in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-11-03T00:00:00Z"
-      },
-      {
-        "marketId": "628940",
-        "conditionId": "0x119b6b3b744ac3239c7a71100165d254234eaecea401abde5a3d303bef21d19e",
-        "question": "Will Steve Hilton win the California Governor Election in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-11-03T00:00:00Z"
-      },
-      {
-        "marketId": "628936",
-        "conditionId": "0x046941ddc09a5420aae85108b94bec3e1d7a3290b4144346cfc37e125282f958",
-        "question": "Will Rick Caruso win the California Governor Election in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-11-03T00:00:00Z"
-      },
-      {
-        "marketId": "628938",
-        "conditionId": "0x11375fe1cf6665bbdee0cba5c2d48be1dedafab87841bd2eb8bc778c0402f457",
-        "question": "Will Katie Porter win the California Governor Election in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-11-03T00:00:00Z"
-      },
-      {
-        "marketId": "628947",
-        "conditionId": "0x1a5b898bbfa1e697c19afeef356d9c1a6ecb95d2493c31524d3c75f16f782c3e",
-        "question": "Will Chad Bianco win the California Governor Election in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-11-03T00:00:00Z"
-      },
-      {
-        "marketId": "628957",
-        "conditionId": "0x58b0474e74a03480c439d50e13dd0b75146c3596e5a475f95e70035c90cee4ca",
-        "question": "Will Matt Mahan win the California Governor Election in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-11-03T00:00:00Z"
-      },
-      {
-        "marketId": "628954",
-        "conditionId": "0x957ddc82dc11959c5e6940b0239aecc050230c5b6ce8673bff21c14fe74bcb6e",
-        "question": "Will Eric Swalwell win the California Governor Election in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-11-03T00:00:00Z"
-      },
-      {
-        "marketId": "628945",
-        "conditionId": "0x394b2be88763473da1df0943c934cfdc06cd33dea1c883cb178bfc56eb3a5c52",
-        "question": "Will Toni Atkins win the California Governor Election in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-11-03T00:00:00Z"
-      },
-      {
-        "marketId": "628950",
-        "conditionId": "0xbaa911d1bdf7f43fafd9de773a43ec8ea00dd1c405a3c996e6f0f3ab365209e0",
-        "question": "Will Tony Thurmond win the California Governor Election in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-11-03T00:00:00Z"
-      },
-      {
-        "marketId": "628951",
-        "conditionId": "0xc6564d7fc7bb20de273fd8383fa95322a1323c18bdd3b59e04ff1140e48d04a9",
-        "question": "Will Michael Younger win the California Governor Election in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-11-03T00:00:00Z"
-      },
-      {
-        "marketId": "628953",
-        "conditionId": "0x5ff8465273252fdc32d12e91305d51133b87b5878464477141e2e6ca61b133e7",
-        "question": "Will Nicole Shanahan win the California Governor Election in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-11-03T00:00:00Z"
-      },
-      {
-        "marketId": "628939",
-        "conditionId": "0x555d4228698fed95802ef627c79ca8a16ff13680a7eef759311827f2c355fcf0",
-        "question": "Will Antonio Villaraigosa win the California Governor Election in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-11-03T00:00:00Z"
-      },
-      {
-        "marketId": "628952",
-        "conditionId": "0x06345583ca9b85eafb51253f4346029771b3802ec2715457235ddc58ef0b19c4",
-        "question": "Will Leo Zacky win the California Governor Election in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-11-03T00:00:00Z"
-      },
-      {
-        "marketId": "628948",
-        "conditionId": "0x331cd65740d378b98427723b33b353c62241e7bdabfaa01daac48d9caf85b401",
-        "question": "Will Eleni Kounalakis win the California Governor Election in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-11-03T00:00:00Z"
-      },
-      {
-        "marketId": "628958",
-        "conditionId": "0x83d00d2378c0f5bb34a3a8e9b009bde54f0ab34668bf6a456aec1e66bf961481",
-        "question": "Will Elaine Culotti win the California Governor Election in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-11-03T00:00:00Z"
-      }
-    ]
-  },
-  {
-    "groupKey": "winner:2028 us presidential election|kind:person",
-    "title": "winner:2028 us presidential election|kind:person",
-    "kind": "person",
-    "detectedMarketsCount": 11,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "AutoCandidatePartialOverlap",
-    "estimatedNoBasketCost": null,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "561236",
-        "conditionId": "0xfd6176f8c9a59105f80e060a77c4099881c5f2d9e0ceab88e55cf978462fab7f",
-        "question": "Will Gretchen Whitmer win the 2028 US Presidential Election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561240",
-        "conditionId": "0x66b906b8205f48a26beb8e553bbb1e7954e87e4f6e1d539823441221d1806e8f",
-        "question": "Will Stephen Smith win the 2028 US Presidential Election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561257",
-        "conditionId": "0xbbbece074c2d4010e39e39c85ed67b1131180fcea616073c893fb6beaf51d783",
-        "question": "Will Michelle Obama win the 2028 US Presidential Election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561245",
-        "conditionId": "0xe0173375b7eaccb836f7b92d28a9a2d1cc69e54e5a65fae89a5d7e49aadd332e",
-        "question": "Will Nikki Haley win the 2028 US Presidential Election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561249",
-        "conditionId": "0x01dffa7abae7e5d9b7fb44b06d537c5ac932e2ca422ab4b53366672f5e2dc7d6",
-        "question": "Will Greg Abbott win the 2028 US Presidential Election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561258",
-        "conditionId": "0xa9549c44687993a9a154347c6907092341459b927efaa3f2b49009ca2c4e40a1",
-        "question": "Will Jamie Dimon win the 2028 US Presidential Election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561251",
-        "conditionId": "0x836b850fc838195374862551a36f1c8691d96ff01e58b0a071f0fc1a0e357fb1",
-        "question": "Will LeBron James win the 2028 US Presidential Election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561254",
-        "conditionId": "0x7f695758278e6d4d9e63df862afa88d664d3402a3d26e4d32ae05121cdbddba6",
-        "question": "Will Kim Kardashian win the 2028 US Presidential Election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561231",
-        "conditionId": "0xf232b565995e4b3a3e7fa6cef775eeff1cecd20ad7c013cb9fc8dadabfe279a9",
-        "question": "Will Alexandria Ocasio-Cortez win the 2028 US Presidential Election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561263",
-        "conditionId": "0x2d3c4fc5cde6dfb43448402b912e41bd4453e3f030448ed026bff8f1a0bc072e",
-        "question": "Will Eric Trump win the 2028 US Presidential Election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561229",
-        "conditionId": "0x7ad403c3508f8e3912940fd1a913f227591145ca0614074208e0b962d5fcc422",
-        "question": "Will JD Vance win the 2028 US Presidential Election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      }
-    ]
-  },
-  {
-    "groupKey": "winner:2028 republican presidential nomination|kind:person",
-    "title": "winner:2028 republican presidential nomination|kind:person",
-    "kind": "person",
-    "detectedMarketsCount": 11,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "AutoCandidatePartialOverlap",
-    "estimatedNoBasketCost": null,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "561986",
-        "conditionId": "0xd1747284d6048b2a3dcfbee489db405f36de18f9590197dd0e5c9f0c246bf050",
-        "question": "Will Byron Donalds win the 2028 Republican presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561980",
-        "conditionId": "0xd7a0d72b19ca48b06b0029684677f581e32f133c367d7a19c2f1e4ad07066af7",
-        "question": "Will Nikki Haley win the 2028 Republican presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561985",
-        "conditionId": "0x42631e1a8c8e6389422b58b8e15b1b551892b9833651aa3bab25afab124354b5",
-        "question": "Will Brian Kemp win the 2028 Republican presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561991",
-        "conditionId": "0xf2cea45ec282af4f302d2ab85ede73678cd692ebf8c3ab6d52bfa5e19f44c553",
-        "question": "Will Matt Gaetz win the 2028 Republican presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "562004",
-        "conditionId": "0x17902b9490c6a73152772316b4705935c5c6801ba269f2afc81686532e34fb9a",
-        "question": "Will Marjorie Taylor Greene win the 2028 Republican presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561976",
-        "conditionId": "0x9cd77217b2ab264fe4f6d302f662c0a91f349fe5798f1f98d70bb2311712791b",
-        "question": "Will Tulsi Gabbard win the 2028 Republican presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561998",
-        "conditionId": "0x4f02b9cf70e514964fcb9aa2f7873d2b0d1aa0986da096cce7e6687e78da00f3",
-        "question": "Will Ivanka Trump win the 2028 Republican presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561987",
-        "conditionId": "0x655b4bfdfa55a95c24d6e9bf7e7cd62f1b57da9a1f4c7f40f090b8ba847dffa2",
-        "question": "Will Elise Stefanik win the 2028 Republican presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "562002",
-        "conditionId": "0x7abed80b88301210ee83b7b14ec41bc9a5161e1af07254fbb26c6e2bf7182766",
-        "question": "Will Erika Kirk win the 2028 Republican presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561993",
-        "conditionId": "0x7190eccbd0677d5d0ae8cdf598b37e945a346915c666dda11468dc9970657a56",
-        "question": "Will John Thune win the 2028 Republican presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561982",
-        "conditionId": "0x00ad3bb5284b0b2314b1a2d42812fe292f606619c6278bd95c9d905816c240f6",
-        "question": "Will Sarah Huckabee Sanders win the 2028 Republican presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      }
-    ]
-  },
-  {
-    "groupKey": "winner:2026 brazilian presidential election|kind:person",
-    "title": "winner:2026 brazilian presidential election|kind:person",
-    "kind": "person",
-    "detectedMarketsCount": 10,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "AutoCandidatePartialOverlap",
-    "estimatedNoBasketCost": null,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "601834",
-        "conditionId": "0x919c9bc428d2d19400437852066582b11bb7b00ad78529a0069cde76766b9faf",
-        "question": "Will Helder Barbalho win the 2026 Brazilian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-04T00:00:00Z"
-      },
-      {
-        "marketId": "601830",
-        "conditionId": "0xd0536d9612e041312235baceac52bde48821e8aad4607533513b3782904b7d49",
-        "question": "Will Geraldo Alckmin win the 2026 Brazilian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-04T00:00:00Z"
-      },
-      {
-        "marketId": "601833",
-        "conditionId": "0xae7dd99bf126b033b77af2553a98b97e1190fd7bdddd5a792ca2791ae23e4d13",
-        "question": "Will Tereza Cristina win the 2026 Brazilian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-04T00:00:00Z"
-      },
-      {
-        "marketId": "601828",
-        "conditionId": "0x054725b2a7971376f7924a7021221b12acc50fe78d97817824fe411704d5b5a2",
-        "question": "Will Romeu Zema win the 2026 Brazilian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-04T00:00:00Z"
-      },
-      {
-        "marketId": "601825",
-        "conditionId": "0x05297f854d3b757d5e51a1a29c7f225a80b14b2a161d6b7f9a61677da7a80ced",
-        "question": "Will Renan Santos win the 2026 Brazilian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-04T00:00:00Z"
-      },
-      {
-        "marketId": "601827",
-        "conditionId": "0xbca3d70ec52a5a441ccc365a3b1b48b9cd0f08dfff4bc5871e2cd92d0d92caa1",
-        "question": "Will Ronaldo Caiado win the 2026 Brazilian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-04T00:00:00Z"
-      },
-      {
-        "marketId": "601826",
-        "conditionId": "0x1a01bf78f56a507fcb666d564d8c8b91b0750679163ed6e96746102c9b7d285d",
-        "question": "Will Fl\u00E1vio Bolsonaro win the 2026 Brazilian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-04T00:00:00Z"
-      },
-      {
-        "marketId": "601822",
-        "conditionId": "0x37ec4c6b57a18b16eed1241f6155ee7ff45bc1697d7848f15ac33d406e38ed00",
-        "question": "Will Michelle Bolsonaro win the 2026 Brazilian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-04T00:00:00Z"
-      },
-      {
-        "marketId": "601829",
-        "conditionId": "0x101d084cd035070abde58d8a3113b78e11ba68028b0d9e7e38ea7d780797aecc",
-        "question": "Will Camilo Santana win the 2026 Brazilian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-04T00:00:00Z"
-      },
-      {
-        "marketId": "601819",
-        "conditionId": "0xdf8e2dc5860027decbe6164555c3c1c9645c3bd33e16b9dc57ca87125047d4a8",
-        "question": "Will Luiz In\u00E1cio Lula da Silva win the 2026 Brazilian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-04T00:00:00Z"
-      }
-    ]
-  },
-  {
-    "groupKey": "winner:2028 democratic presidential nomination|kind:person",
-    "title": "winner:2028 democratic presidential nomination|kind:person",
-    "kind": "person",
-    "detectedMarketsCount": 6,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "AutoCandidatePartialOverlap",
-    "estimatedNoBasketCost": null,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "559696",
-        "conditionId": "0x6685b25cc7c89032efcdf81eb27fdc6bbf04a3e4299bcd99c9f3d62c8471001e",
-        "question": "Will Graham Platner win the 2028 Democratic presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "559685",
-        "conditionId": "0xc44edcfdedb422bae8ff1803e2178d1ee025fc41efd81400ccbede709e018841",
-        "question": "Will MrBeast win the 2028 Democratic presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "559682",
-        "conditionId": "0x1945a8b23e313ed7423b6b6fd556f9ab5578900376b565a61dc480a5f4f35d21",
-        "question": "Will Hunter Biden win the 2028 Democratic presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "559683",
-        "conditionId": "0x822e61527476cabf98927e3aad385c5ecdae7086f945535f2c1fd9ae8dbfa46e",
-        "question": "Will George Clooney win the 2028 Democratic presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "559681",
-        "conditionId": "0x8b203037c7c0e21b500314f8398d2a8ea294b7ce1f4f9185f426425a3505bc45",
-        "question": "Will LeBron James win the 2028 Democratic presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "559666",
-        "conditionId": "0x3265b10daeb30dbcc3214bd02e488551d0a5d3028392f4152e4750b943fbfc91",
-        "question": "Will Tim Walz win the 2028 Democratic presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      }
-    ]
-  },
-  {
-    "groupKey": "winner:2026 men s french open|kind:generic",
-    "title": "winner:2026 men s french open|kind:generic",
-    "kind": "generic",
-    "detectedMarketsCount": 5,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "AutoCandidateUnverified",
-    "estimatedNoBasketCost": null,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "1087514",
-        "conditionId": "0x739e756119534672538d8df821a5b3321e2c802d80afff0c5790126be9b41281",
-        "question": "Will Alexander Zverev win the 2026 Men\u0027s French Open?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-07T00:00:00Z"
-      },
-      {
-        "marketId": "1087521",
-        "conditionId": "0x40d85bb0c07156d8078ed03df11bea9aff0c6700a5186c9848307f00503b2060",
-        "question": "Will Jakub Mensik win the 2026 Men\u0027s French Open?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-07T00:00:00Z"
-      },
-      {
-        "marketId": "1087545",
-        "conditionId": "0x90d0f0f57e38136c7ae56743e682c1eb29aa4e9f17faa4b4fdbcf94d2d6ea787",
-        "question": "Will Felix Auger Aliassime win the 2026 Men\u0027s French Open?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-07T00:00:00Z"
-      },
-      {
-        "marketId": "1087538",
-        "conditionId": "0x9eaadf490bf58eb7e2d00fb257711ff462ae99197dc339b2a5cd93a577c7a2e2",
-        "question": "Will Flavio Cobolli win the 2026 Men\u0027s French Open?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-07T00:00:00Z"
-      },
-      {
-        "marketId": "1087541",
-        "conditionId": "0x46fd91a9d61d35516cb18b81abe7f16f648be4e41061a174fa4243e9495df5f7",
-        "question": "Will Matteo Berrettini win the 2026 Men\u0027s French Open?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-07T00:00:00Z"
-      }
-    ]
-  },
-  {
-    "groupKey": "winner:iem cologne major 2026|kind:generic",
-    "title": "winner:iem cologne major 2026|kind:generic",
-    "kind": "generic",
-    "detectedMarketsCount": 5,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "AutoCandidateUnverified",
-    "estimatedNoBasketCost": null,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "1892297",
-        "conditionId": "0x10cfe107f46a1f4465e41501bebf20edda4f16ef47b702a4f45cacce90e01d16",
-        "question": "Will Team Spirit win IEM Cologne Major 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-21T00:00:00Z"
-      },
-      {
-        "marketId": "1892288",
-        "conditionId": "0xf5e41ab84b0c79d73ca4698a3d60a578fd4fa077b9b091f9f5ac2c2053e6b601",
-        "question": "Will NRG win IEM Cologne Major 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-21T00:00:00Z"
-      },
-      {
-        "marketId": "1892294",
-        "conditionId": "0xc8b5bacf5b747337800902d8720aa293d312221bdc2f3cb81dd3232cc38505f2",
-        "question": "Will Lynn Vision win IEM Cologne Major 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-21T00:00:00Z"
-      },
-      {
-        "marketId": "1892295",
-        "conditionId": "0x6d98df5d6142dbec8a034841f7aa3626b00102df59e01e06977786753378a3e8",
-        "question": "Will Thunder downunder win IEM Cologne Major 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-21T00:00:00Z"
-      },
-      {
-        "marketId": "1892283",
-        "conditionId": "0x1b6eab50dbd311232b55f08c226a8b713a8571adb1a72494ee2fe12356cbd00a",
-        "question": "Will BetBoom win IEM Cologne Major 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-21T00:00:00Z"
-      }
-    ]
-  },
-  {
-    "groupKey": "winner:2027 french presidential election|kind:person",
-    "title": "winner:2027 french presidential election|kind:person",
-    "kind": "person",
-    "detectedMarketsCount": 4,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "AutoCandidatePartialOverlap",
-    "estimatedNoBasketCost": null,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "679033",
-        "conditionId": "0xbac8d3ca6cc7297022850562d9d66669d5e0a112767337f8a5955417f1984b54",
-        "question": "Will Olivier Faure win the 2027 French presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2027-04-30T00:00:00Z"
-      },
-      {
-        "marketId": "679053",
-        "conditionId": "0x1779552bade1ad85d35b2e5128136ea04602f26e2b67b7e1b6f9ec46ea8811d3",
-        "question": "Will Cl\u00E9mence Guett\u00E9 win the 2027 French presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2027-04-30T00:00:00Z"
-      },
-      {
-        "marketId": "679048",
-        "conditionId": "0xa6c3848b7861841cc9d93a5c2c1d26b3f44e0298a49889968a627214a2b177ae",
-        "question": "Will Manuel Bompard win the 2027 French presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2027-04-30T00:00:00Z"
-      },
-      {
-        "marketId": "679024",
-        "conditionId": "0x0b4fdc620f5aeafbfa8603a7fe9f3dd2dbae70e73aa157c8c94275676043ce06",
-        "question": "Will Laurent Wauquiez win the 2027 French presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2027-04-30T00:00:00Z"
-      }
-    ]
-  },
-  {
     "groupKey": "colon-event:spread|kind:generic",
     "title": "colon-event:spread|kind:generic",
     "kind": "generic",
+    "detectedMarketsCount": 13,
+    "verificationStatus": "Candidate",
+    "rejectionReason": "AutoCandidateUnverified",
+    "estimatedNoBasketCost": null,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdge": null,
+    "guaranteedPayoutIfVerified": null,
+    "warnings": [
+      "Not manually verified",
+      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
+    ],
+    "markets": [
+      {
+        "marketId": "2413208",
+        "conditionId": "0x2ba4a99af447df024c5a0b22cc38cf2de6c6c526bfa6716c373a33c25e295683",
+        "question": "Spread: CD Castell\u00F3n (-1.5)",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-06T19:00:00Z"
+      },
+      {
+        "marketId": "2379151",
+        "conditionId": "0x39963a6dc986635015f71fd720aeaca647f00e993c7cf4b86d74759265689554",
+        "question": "Spread: Fagiano Okayama (-2.5)",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-06T07:00:00Z"
+      },
+      {
+        "marketId": "2379118",
+        "conditionId": "0x5c5a68c1771b4a5b772e651dcf1f29c5184d84968debfe5b8b87fd6c922443fe",
+        "question": "Spread: Ky\u014Dto Sanga FC (-2.5)",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-06T09:00:00Z"
+      },
+      {
+        "marketId": "2224658",
+        "conditionId": "0xbe7e8da8c5d871d6845f18d595fb59d4e930df844467bd07954952b6f8a4a66d",
+        "question": "Spread: Republic of Ireland (-2.5)",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-05T23:30:00Z"
+      },
+      {
+        "marketId": "2224538",
+        "conditionId": "0x3d30f58d86ba1cc8230ecd04bc600b73caefda59f8544d85eb5bb1dd99083b29",
+        "question": "Spread: Honduras (-1.5)",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-07T00:00:00Z"
+      },
+      {
+        "marketId": "2216875",
+        "conditionId": "0x59c0bcd411820cacfba72bebcd90b9cc2138ddb5cb70413a4901ed948e3e0fad",
+        "question": "Spread: Slovakia (-1.5)",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-05T16:30:00Z"
+      },
+      {
+        "marketId": "2326609",
+        "conditionId": "0xac8d629b6c47d8500ee4f9cbbe5cefebb15cbb696faba06ec5bdbbf247136038",
+        "question": "Spread: England (-1.5)",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-17T20:00:00Z"
+      },
+      {
+        "marketId": "2432618",
+        "conditionId": "0x6277d7a27a9d8f4c79f5f8cd2e80bead20c15faecefd688eb6431d0403873d9d",
+        "question": "Spread: Chicago Sky (-8.5)",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-05T23:30:00Z"
+      },
+      {
+        "marketId": "2326656",
+        "conditionId": "0x7164003effdfef62c5ac5b660c40630ecde0890e3c328ef8510f037831c59c0c",
+        "question": "Spread: Norway (-2.5)",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-16T22:00:00Z"
+      },
+      {
+        "marketId": "2224655",
+        "conditionId": "0x8b2fe5dd0ea931b2530a583e9c7dd1c7b02597ddd989e9dea435874d2961f73f",
+        "question": "Spread: Canada (-1.5)",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-05T23:30:00Z"
+      },
+      {
+        "marketId": "2326445",
+        "conditionId": "0xbdb326038e98f139550add22cab891493f7093118096eb005cd7d3224aaf4f5e",
+        "question": "Spread: Spain (-2.5)",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-21T16:00:00Z"
+      },
+      {
+        "marketId": "2216834",
+        "conditionId": "0x14641d6a9407d1c45f56469ae91d7e1c65608c1455a3dcd189c3d9467ec1643c",
+        "question": "Spread: Bahrain (-2.5)",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-05T18:00:00Z"
+      },
+      {
+        "marketId": "2326620",
+        "conditionId": "0x7d531b7f4710a8f00562455db5d409e269564a1415b5da352ba3f3daf33ee98e",
+        "question": "Spread: Portugal (-1.5)",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-17T17:00:00Z"
+      }
+    ]
+  },
+  {
+    "groupKey": "colon-event:exact score|kind:generic",
+    "title": "colon-event:exact score|kind:generic",
+    "kind": "generic",
+    "detectedMarketsCount": 7,
+    "verificationStatus": "Candidate",
+    "rejectionReason": "AutoCandidateUnverified",
+    "estimatedNoBasketCost": null,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdge": null,
+    "guaranteedPayoutIfVerified": null,
+    "warnings": [
+      "Not manually verified",
+      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
+    ],
+    "markets": [
+      {
+        "marketId": "2322430",
+        "conditionId": "0x9c46ee0f32049736768f352d27683c014f526ddca7a49ea3f587ae917d301954",
+        "question": "Exact Score: Netherlands 1 - 0 Japan?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-14T20:00:00Z"
+      },
+      {
+        "marketId": "2322653",
+        "conditionId": "0x82974ae770d6e2bd9e6d1190cc3207a41de5e0b2f36593c9d949048df13a1213",
+        "question": "Exact Score: Austria 3 - 0 Jordan?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-17T04:00:00Z"
+      },
+      {
+        "marketId": "2222161",
+        "conditionId": "0xcadeb2b5d33c3c9c9bbf73040061c51de0e9170f44b0ee088337ed020a585e45",
+        "question": "Exact Score: Bolivia 0 - 2 Scotland?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-06T20:00:00Z"
+      },
+      {
+        "marketId": "2211812",
+        "conditionId": "0xef32e8ef13fb09e519c2143897c90504842fcf15141abc62d5d9bb99534965be",
+        "question": "Exact Score: Guatemala 1 - 1 Czechia?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-05T00:00:00Z"
+      },
+      {
+        "marketId": "2211853",
+        "conditionId": "0x20b78e8ce8daabb36c0aeefd077162a8ce44c6a24da64704fac5d6b9290538c1",
+        "question": "Exact Score: Singapore 1 - 0 China PR?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-05T11:30:00Z"
+      },
+      {
+        "marketId": "2211862",
+        "conditionId": "0x45573a8cf3ae38e60a3d9275d9cd23e5d5ed53a85942e9d48aef80802788627b",
+        "question": "Exact Score: Singapore 2 - 2 China PR?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-05T11:30:00Z"
+      },
+      {
+        "marketId": "2211859",
+        "conditionId": "0x53b69a962562be72aad587bd44cd0d0a80ea378af842e70698f364b7c74983c1",
+        "question": "Exact Score: Singapore 2 - 1 China PR?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-05T11:30:00Z"
+      }
+    ]
+  },
+  {
+    "groupKey": "winner:best lighting design of a play at 2026 tony awards|kind:generic",
+    "title": "winner:best lighting design of a play at 2026 tony awards|kind:generic",
+    "kind": "generic",
     "detectedMarketsCount": 4,
     "verificationStatus": "Candidate",
     "rejectionReason": "AutoCandidateUnverified",
@@ -1168,93 +232,48 @@
     ],
     "markets": [
       {
-        "marketId": "2401715",
-        "conditionId": "0x9e72a3388c066842294a96d5c09590bb6dc3f2b75e6f628f749324ef5e865d78",
-        "question": "Spread: Spurs (-4.5)",
+        "marketId": "2421402",
+        "conditionId": "0xf64f1148586aabdad3328e433f717a6ed792a470b6fffac7febc80709b6a93f2",
+        "question": "Will \u0022Heather Gilbert (The Fear of 13)\u0022 win Best Lighting Design of a Play at the 2026 Tony Awards?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-04T00:30:00Z"
+        "endDate": "2026-06-07T00:00:00Z"
       },
       {
-        "marketId": "2405226",
-        "conditionId": "0x296142bbfaddc1dc47c598761c64dfa1c6ed6f1c1c4b090c4753d44645f9af58",
-        "question": "Spread: Spurs (-3.5)",
+        "marketId": "2421400",
+        "conditionId": "0x00e54bbe05fe6de8e01a73924f3a713f1007ae68d58e18f1e17e80e9461c94f8",
+        "question": "Will \u0022Natasha Chivers\u0022 win Best Lighting Design of a Play at the 2026 Tony Awards?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-04T00:30:00Z"
+        "endDate": "2026-06-07T00:00:00Z"
       },
       {
-        "marketId": "2423425",
-        "conditionId": "0xcf8da4a124f8228b23a7f73e711d6f1e9cea8e0559c379c42070abb67964a6ea",
-        "question": "Spread: Phoenix Mercury (-6.5)",
+        "marketId": "2421401",
+        "conditionId": "0xdf19b61b7ee847201ee1dbfbebfcaa412b292204d937882db17437fb79d648cb",
+        "question": "Will \u0022Heather Gilbert\u0022 win Best Lighting Design of a Play at the 2026 Tony Awards?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-04T02:00:00Z"
+        "endDate": "2026-06-07T00:00:00Z"
       },
       {
-        "marketId": "2400221",
-        "conditionId": "0x1f271e68d41a39dc4e6ac8365428e3e166f95fdd72cd5beca69d20bd352a5a0e",
-        "question": "Spread: Spurs (-5.5)",
+        "marketId": "2421399",
+        "conditionId": "0x49b6da8caae1d50e6b43de39483f1fbe4098cd28b80e5446d359f3f4b3ad0a4c",
+        "question": "Will \u0022Isabella Byrd\u0022 win Best Lighting Design of a Play at the 2026 Tony Awards?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-04T00:30:00Z"
+        "endDate": "2026-06-07T00:00:00Z"
       }
     ]
   },
   {
-    "groupKey": "winner:2026 peruvian presidential election|kind:person",
-    "title": "winner:2026 peruvian presidential election|kind:person",
+    "groupKey": "winner:most seats in 2026 israeli legislative election|kind:person",
+    "title": "winner:most seats in 2026 israeli legislative election|kind:person",
     "kind": "person",
-    "detectedMarketsCount": 3,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "AutoCandidatePartialOverlap",
-    "estimatedNoBasketCost": null,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "947289",
-        "conditionId": "0x2cd24d17f5680dc6e7b7d67c712a223ae85550745597e81bd2d2b8d073443951",
-        "question": "Will Roberto S\u00E1nchez Palomino win the 2026 Peruvian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-07T00:00:00Z"
-      },
-      {
-        "marketId": "947269",
-        "conditionId": "0xc4c3dbcc37a957a817599b0bf9fb5bd6b62b19210b0f527fec57cb75c7ed150a",
-        "question": "Will Keiko Fujimori win the 2026 Peruvian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-07T00:00:00Z"
-      },
-      {
-        "marketId": "947268",
-        "conditionId": "0xae6d3d20bc8f742922dc40880cd8a8671c10385a9912fa7cd670fba0643dfe96",
-        "question": "Will Rafael L\u00F3pez Aliaga win the 2026 Peruvian presidential election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-07T00:00:00Z"
-      }
-    ]
-  },
-  {
-    "groupKey": "winner:2027 nfl league championship|kind:generic",
-    "title": "winner:2027 nfl league championship|kind:generic",
-    "kind": "generic",
-    "detectedMarketsCount": 3,
+    "detectedMarketsCount": 4,
     "verificationStatus": "Candidate",
     "rejectionReason": "AutoCandidateUnverified",
     "estimatedNoBasketCost": null,
@@ -1267,37 +286,46 @@
     ],
     "markets": [
       {
-        "marketId": "1357395",
-        "conditionId": "0x508c917d0ee4a7a5535e825c3f85ee47d27fc1e72f88475d88daa4877da2a9d0",
-        "question": "Will the New York Jets win the 2027 NFL league championship?",
+        "marketId": "2100984",
+        "conditionId": "0xd05da9807740aa0f5bc9e9232daabe87a21e5012c19e283abf414f1c1651118b",
+        "question": "Will Yashar win the most seats in the 2026 Israeli legislative election?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2027-03-31T23:55:00Z"
+        "endDate": "2026-10-27T00:00:00Z"
       },
       {
-        "marketId": "1357393",
-        "conditionId": "0x850c5df4f71fbe41414e71df71213453a97615742a6194e42600015e2c255800",
-        "question": "Will the New Orleans Saints win the 2027 NFL league championship?",
+        "marketId": "2100981",
+        "conditionId": "0xf77fa3e63014f1f76ea4433dac66b3860493ed7f1a9fee3dfbef9104d7f1eee3",
+        "question": "Will Likud win the most seats in the 2026 Israeli legislative election?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2027-03-31T23:55:00Z"
+        "endDate": "2026-10-27T00:00:00Z"
       },
       {
-        "marketId": "1357400",
-        "conditionId": "0x2abc2ca23b04c1d8e170b33f1de93937eec740bf5b3e9309e250f3562f1a166b",
-        "question": "Will the Tampa Bay Buccaneers win the 2027 NFL league championship?",
+        "marketId": "2100983",
+        "conditionId": "0xc3c4b06b71e5a9dec867169d4319a4bf7364d7b0a6c5d6cd048689a207aafc40",
+        "question": "Will Shas win the most seats in the 2026 Israeli legislative election?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2027-03-31T23:55:00Z"
+        "endDate": "2026-10-27T00:00:00Z"
+      },
+      {
+        "marketId": "2100986",
+        "conditionId": "0x49b2c8eac865bbac235153824b3490185ff0fdb7305cb053b2ab5b1466bf4f36",
+        "question": "Will Otzma Yehudit win the most seats in the 2026 Israeli legislative election?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-10-27T00:00:00Z"
       }
     ]
   },
   {
-    "groupKey": "colon-event:roland garros wta|kind:generic",
-    "title": "colon-event:roland garros wta|kind:generic",
+    "groupKey": "winner:on 2026 06 06|kind:generic",
+    "title": "winner:on 2026 06 06|kind:generic",
     "kind": "generic",
     "detectedMarketsCount": 2,
     "verificationStatus": "Candidate",
@@ -1312,28 +340,28 @@
     ],
     "markets": [
       {
-        "marketId": "2411206",
-        "conditionId": "0x3c1059461ee1653041afabe37e9083004d46897223a59f18e775b69953244eba",
-        "question": "Roland Garros WTA: Anna Kalinskaya vs Maja Chwalinska",
+        "marketId": "2421859",
+        "conditionId": "0x6205288e6fb612a9aca54913ddc556d9bd23a5582775247588c57809339cd276",
+        "question": "Will Tochigi City FC win on 2026-06-06?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-09T09:00:00Z"
+        "endDate": "2026-06-06T05:00:00Z"
       },
       {
-        "marketId": "2414018",
-        "conditionId": "0x43496b333b74dfba06b028a9e59ebda4441787e5535bcfd08f94d7c233c41d81",
-        "question": "Roland Garros WTA: Aryna Sabalenka vs Diana Shnaider",
+        "marketId": "2421883",
+        "conditionId": "0x84d47216d7476c4e38bc70619c506d881b0965488fefbf07f4d77b14399ba08a",
+        "question": "Will FC Gifu win on 2026-06-06?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-10T09:00:00Z"
+        "endDate": "2026-06-06T06:00:00Z"
       }
     ]
   },
   {
-    "groupKey": "colon-event:roland garros atp|kind:generic",
-    "title": "colon-event:roland garros atp|kind:generic",
+    "groupKey": "colon-event:hong kong sar vs mongolia|kind:generic",
+    "title": "colon-event:hong kong sar vs mongolia|kind:generic",
     "kind": "generic",
     "detectedMarketsCount": 2,
     "verificationStatus": "Candidate",
@@ -1348,64 +376,28 @@
     ],
     "markets": [
       {
-        "marketId": "2414047",
-        "conditionId": "0x61e65a3ca7b9486c544db814d07e049a6fd384e39dbba5f50dc783ddc0905931",
-        "question": "Roland Garros ATP: Felix Auger-Aliassime vs Flavio Cobolli",
+        "marketId": "2324894",
+        "conditionId": "0x26813cd4969be03feb50a5106445c38ec93b18c38a66849e24bcec8fa3b38b6a",
+        "question": "Hong Kong SAR vs. Mongolia: O/U 0.5",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-10T09:00:00Z"
+        "endDate": "2026-06-05T12:00:00Z"
       },
       {
-        "marketId": "2415834",
-        "conditionId": "0x6bb965c8530decd8db873671d33fd22ffbdd170d07cf5acd8e0cfd70d52c4b6e",
-        "question": "Roland Garros ATP: Matteo Berrettini vs Matteo Arnaldi",
+        "marketId": "2324895",
+        "conditionId": "0x644f5418f5a353ab709b2cb76f044f22a1e40a83645f489eb35e8dbd153f2349",
+        "question": "Hong Kong SAR vs. Mongolia: O/U 1.5",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-10T09:00:00Z"
+        "endDate": "2026-06-05T12:00:00Z"
       }
     ]
   },
   {
-    "groupKey": "winner:2026 nba finals|kind:generic",
-    "title": "winner:2026 nba finals|kind:generic",
-    "kind": "generic",
-    "detectedMarketsCount": 2,
-    "verificationStatus": "Candidate",
-    "rejectionReason": "AutoCandidatePartialOverlap",
-    "estimatedNoBasketCost": null,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdge": null,
-    "guaranteedPayoutIfVerified": null,
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "553858",
-        "conditionId": "0x713641f745d71f6ec61f906237ffca3c8583f251e49384429a63ceb0ccdb2d37",
-        "question": "Will the New York Knicks win the 2026 NBA Finals?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-01T00:00:00Z"
-      },
-      {
-        "marketId": "553866",
-        "conditionId": "0xb6b3d7a2037b3faa7e1306d741840d453432902d73cc9a146a035e40271eae73",
-        "question": "Will the San Antonio Spurs win the 2026 NBA Finals?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-07-01T00:00:00Z"
-      }
-    ]
-  },
-  {
-    "groupKey": "colon-event:birmingham|kind:generic",
-    "title": "colon-event:birmingham|kind:generic",
+    "groupKey": "winner:on 2026 06 27|kind:generic",
+    "title": "winner:on 2026 06 27|kind:generic",
     "kind": "generic",
     "detectedMarketsCount": 2,
     "verificationStatus": "Candidate",
@@ -1420,32 +412,32 @@
     ],
     "markets": [
       {
-        "marketId": "2403053",
-        "conditionId": "0xa306cf32fbdc092c19a59b2a084d6166cdafd83afeefeb7cd98fefb947784569",
-        "question": "Birmingham: Ajla Tomljanovic vs Katie Swan",
+        "marketId": "1897423",
+        "conditionId": "0x2cc359648ba6695498c169ceaa44c5444e0479102c453289c47ed9489e7f3e93",
+        "question": "Will Croatia win on 2026-06-27?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-08T09:30:00Z"
+        "endDate": "2026-06-27T21:00:00Z"
       },
       {
-        "marketId": "2397813",
-        "conditionId": "0xe812238eaf158b5ac8bb9f7db9c84e3848d8919546684f106a93eb4151c86aee",
-        "question": "Birmingham: Sho Shimabukuro vs Shintaro Mochizuki",
+        "marketId": "1897427",
+        "conditionId": "0x137ae42a26fde276b0fced88f502e88a67da8e6acbc2ff8760b7e24d99234192",
+        "question": "Will Ghana win on 2026-06-27?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-08T09:30:00Z"
+        "endDate": "2026-06-27T21:00:00Z"
       }
     ]
   },
   {
-    "groupKey": "winner:2026 colombian presidential election|kind:person",
-    "title": "winner:2026 colombian presidential election|kind:person",
-    "kind": "person",
+    "groupKey": "winner:bronze boot at 2026 fifa world cup|kind:generic",
+    "title": "winner:bronze boot at 2026 fifa world cup|kind:generic",
+    "kind": "generic",
     "detectedMarketsCount": 2,
     "verificationStatus": "Candidate",
-    "rejectionReason": "AutoCandidatePartialOverlap",
+    "rejectionReason": "AutoCandidateUnverified",
     "estimatedNoBasketCost": null,
     "estimatedGrossEdge": null,
     "estimatedNetEdge": null,
@@ -1456,22 +448,22 @@
     ],
     "markets": [
       {
-        "marketId": "569368",
-        "conditionId": "0x0fb006e0c06caa4db12f7e30ec8c2483d658f83eb57b2ee8eb478e39beca3dfd",
-        "question": "Will Ivan Cepeda Castro win the 2026 Colombian presidential election?",
+        "marketId": "2432136",
+        "conditionId": "0x6f95083d1dc109604948f90d9e9c9d9a47ce8f0fb90aa38c7a167f76dd800dad",
+        "question": "Will Erling Haaland win the Bronze Boot at the 2026 FIFA World Cup?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-21T14:00:00Z"
+        "endDate": "2026-07-20T03:59:00Z"
       },
       {
-        "marketId": "569366",
-        "conditionId": "0xfbe85201ab2b4acff01cd5a3639039fc813d3448c64db081f70926bd9b9e74e9",
-        "question": "Will Abelardo de la Espriella  win the 2026 Colombian presidential election?",
+        "marketId": "2432146",
+        "conditionId": "0x769f8c10e12d14b4df12c981e06357cb3f7a6ab16c27380ea0825c3cffa706f2",
+        "question": "Will Juli\u00E1n \u00C1lvarez win the Bronze Boot at the 2026 FIFA World Cup?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-21T14:00:00Z"
+        "endDate": "2026-07-20T03:59:00Z"
       }
     ]
   }
