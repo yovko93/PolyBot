@@ -93,6 +93,38 @@ public class SingleMarketSafetyTests
         Assert.Contains("[DRY_RUN_ORDER_PLAN_CREATED]", text);
     }
 
+
+    [Fact]
+    public async Task BestEdge_ignores_rejected_markets_and_uses_best_valid_net_edge()
+    {
+        var state = new BotRuntimeState(new RuntimeStateOptions());
+        var valid = Market("valid-below");
+        var rejected = Market("rejected-huge");
+        var books = new Dictionary<string, BinaryOrderBookSnapshot>
+        {
+            [valid.id] = BookForEdge(valid, -0.003m),
+            [rejected.id] = BookFor(rejected, yes: null, no: 0.001m)
+        };
+        await NewEngine(new MapProvider(books), state, Options(), quiet: true).ScanAsync(new List<Market> { valid, rejected }, NewPaper(), new SemaphoreSlim(2));
+        Assert.Equal(0, state.SingleMarketSnapshot.Summary.PositiveEdge);
+        Assert.Equal(-0.003m, state.SingleMarketSnapshot.Summary.BestEdgeSeen);
+        Assert.True(state.SingleMarketSnapshot.Summary.BestRejectedRawEdge > 0.9m);
+    }
+
+    [Fact]
+    public async Task BestEdge_is_null_when_all_markets_are_data_quality_rejected()
+    {
+        var state = new BotRuntimeState(new RuntimeStateOptions());
+        var markets = new[] { Market("missing-yes"), Market("missing-no") }.ToList();
+        var books = new Dictionary<string, BinaryOrderBookSnapshot>
+        {
+            ["missing-yes"] = BookFor(markets[0], yes: null, no: 0.95m),
+            ["missing-no"] = BookFor(markets[1], yes: 0.05m, no: null)
+        };
+        await NewEngine(new MapProvider(books), state, Options(), quiet: true).ScanAsync(markets, NewPaper(), new SemaphoreSlim(2));
+        Assert.Null(state.SingleMarketSnapshot.Summary.BestEdgeSeen);
+    }
+
     [Fact]
     public async Task OperationalQuietMode_suppresses_below_min_console_and_detected_audit_spam()
     {
@@ -130,6 +162,22 @@ public class SingleMarketSafetyTests
         Assert.True(state.SingleMarketSnapshot.DataQualityRejectSamples.Count <= runtime.MaxSingleMarketDataQualitySamples);
     }
 
+
+
+    [Fact]
+    public async Task Data_quality_audit_samples_are_limited_in_quiet_mode()
+    {
+        var opts = Options();
+        opts.MaxDataQualityAuditSamplesPerCycle = 2;
+        opts.AuditDataQualityRejectedEvents = true;
+        var audit = NewAudit();
+        var state = new BotRuntimeState(new RuntimeStateOptions());
+        var markets = Enumerable.Range(0, 20).Select(i => Market($"dq{i}")).ToList();
+        var books = markets.ToDictionary(m => m.id, m => BookFor(m, yes: null, no: 0.95m));
+        await NewEngine(new MapProvider(books), state, opts, quiet: true, audit: audit).ScanAsync(markets, NewPaper(), new SemaphoreSlim(8));
+        Assert.True(audit.ListAudit(1000).Count(x => x.Stage == "SingleMarketDataQualityRejected") <= 2);
+    }
+
     [Fact]
     public async Task Top_near_misses_keep_only_configured_top_n_and_payload_is_compact()
     {
@@ -143,6 +191,8 @@ public class SingleMarketSafetyTests
         Assert.Equal(2, state.SingleMarketSnapshot.TopNearMisses.Count);
         Assert.True(state.SingleMarketSnapshot.TopNearMisses[0].EdgePerShare >= state.SingleMarketSnapshot.TopNearMisses[1].EdgePerShare);
         Assert.Empty(state.SingleMarketSnapshot.PositiveCandidates);
+        var output = await CaptureConsole(() => NewEngine(new MapProvider(books), state, opts, quiet: true).ScanAsync(markets, NewPaper(), new SemaphoreSlim(4)));
+        Assert.DoesNotContain("[SINGLE_MARKET_TOP_NEAR_MISS]", output);
     }
 
     [Fact]

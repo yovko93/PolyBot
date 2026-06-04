@@ -20,7 +20,7 @@ public class BotRuntimeState
     public VerifiedBasketScreenerDto? VerifiedBasketScreener { get; private set; }
     public RiskStateDto Risk { get; private set; } = new(100,5,0.003m,0.25m,300,0,5,0,100,new(),true,true,true,true,DateTime.UtcNow,0);
     public BotControlStateDto Controls { get; private set; } = new(false, "RUNNING", DateTime.UtcNow, 0);
-    public SingleMarketArbSnapshotDto SingleMarketSnapshot { get; private set; } = new(DateTime.UtcNow, 0, new SingleMarketScanSummaryDto(DateTime.UtcNow, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null, "None", 0, new Dictionary<string,int>(), new Dictionary<string,int>()), Array.Empty<SingleMarketArbOpportunityDto>(), Array.Empty<SingleMarketNearMissDto>(), Array.Empty<SingleMarketDataQualityRejectSampleDto>(), Array.Empty<SingleMarketPaperExecutionDto>());
+    public SingleMarketArbSnapshotDto SingleMarketSnapshot { get; private set; } = new(DateTime.UtcNow, 0, new SingleMarketScanSummaryDto(DateTime.UtcNow, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null, null, "None", 0, new Dictionary<string,int>(), new Dictionary<string,int>()), Array.Empty<SingleMarketArbOpportunityDto>(), Array.Empty<SingleMarketNearMissDto>(), Array.Empty<SingleMarketDataQualityRejectSampleDto>(), Array.Empty<SingleMarketPaperExecutionDto>());
     private readonly ConcurrentQueue<OpportunityDto> _opps = new();
     private readonly ConcurrentQueue<TradeLogEntryDto> _trades = new();
     private readonly ConcurrentQueue<PaperPositionDto> _positions = new();

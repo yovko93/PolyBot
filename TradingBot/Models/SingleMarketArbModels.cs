@@ -73,6 +73,7 @@ public record SingleMarketScanSummaryDto(
     int FillPassed,
     int PaperOpened,
     decimal? BestEdgeSeen,
+    decimal? BestRejectedRawEdge,
     string TopRejectReason,
     int TopRejectCount,
     IReadOnlyDictionary<string, int> RejectedByReason,

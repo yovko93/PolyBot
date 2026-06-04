@@ -250,7 +250,10 @@ public class MultiOutcomeLoggingOptions
     public bool LogSingleMarketSummaryOnChangeOnly { get; set; } = true;
     public int LogSingleMarketDataQualityEveryNCycles { get; set; } = 25;
     public bool LogSingleMarketDataQualityOnChangeOnly { get; set; } = true;
-    public int LogSingleMarketNearMissEveryNCycles { get; set; } = 25;
+    public int LogSingleMarketNearMissEveryNCycles { get; set; } = 50;
+    public bool LogSingleMarketNearMissOnChangeOnly { get; set; } = true;
+    public int LogVerifiedUnresolvedEveryNCycles { get; set; } = 100;
+    public bool LogVerifiedUnresolvedOnChangeOnly { get; set; } = true;
     public bool LogAllowlistRepairSuggestionsOnChangeOnly { get; set; } = true;
     public int LogAllowlistRepairSuggestionsEveryNCycles { get; set; } = 100;
     public bool LogAllowlistRepairOnChangeOnly { get; set; } = true;
@@ -320,7 +323,12 @@ public class SingleMarketArbOptions
     public int MaxOrderbookAgeMs { get; set; } = 5000;
     public bool AuditBelowMinEdgeEvents { get; set; } = false;
     public bool AuditDetectedEvents { get; set; } = false;
+    public bool AuditDataQualityRejectedEvents { get; set; } = false;
+    public bool AuditHighSeverityDataQualityRejectedEvents { get; set; } = true;
     public int MaxAuditSamplesPerCycle { get; set; } = 20;
+    public int MaxDataQualityAuditSamplesPerCycle { get; set; } = 5;
+    public bool LogTopNearMissesToConsole { get; set; } = false;
+    public int ConsoleTopNearMissCount { get; set; } = 3;
     public int TopNearMissCount { get; set; } = 10;
     public decimal NearMissMinEdge { get; set; } = -0.005m;
     public int TopPositiveCandidateCount { get; set; } = 20;

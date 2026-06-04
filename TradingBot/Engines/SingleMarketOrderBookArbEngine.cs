@@ -108,21 +108,22 @@ public class SingleMarketOrderBookArbEngine
             var rawCost = yes + no;
             var adjustedCost = rawCost + _feeBuffer + _slippageBuffer;
             var edge = 1m - adjustedCost;
-            diagnostics.RecordEdge(edge);
 
             var dq = _dataQuality.Validate(market, book, now);
             if (!dq.IsValid)
             {
+                diagnostics.RecordRejectedRawEdge(edge);
                 diagnostics.AddDataQualityReject(dq.Reason, Sample(book, market.conditionId, yes, no, rawCost, dq.Reason, edge));
                 var reject = BuildDto(book, market.conditionId, SingleMarketArbState.Rejected, yes, no, rawCost, edge, 0m, 0m, 0m, "Rejected", "NotRun", "NotOpened", dq.Reason, 0, 0);
                 MaybeStoreOpportunity(reject, highValue: IsHighSeverityDataQuality(dq.Reason));
-                MaybeAudit(reject, "SingleMarketDataQualityRejected", highValue: IsHighSeverityDataQuality(dq.Reason), sampled: diagnostics.ShouldAuditSample(_options.MaxAuditSamplesPerCycle));
+                MaybeAuditDataQuality(reject, dq.Reason, edge, diagnostics);
                 if (ShouldLogDataQualityReject(dq.Reason))
                     Console.WriteLine($"[SINGLE_MARKET_DATA_QUALITY_REJECTED] Market={book.Question} Reason={dq.Reason} YesAsk={yes} NoAsk={no} RawSum={rawCost}");
                 return new SingleMarketScanResult(true, book.YesAsk != null && book.NoAsk != null, false, false, adjustedCost, book.Question, edge, dq.Reason, null);
             }
 
             diagnostics.IncrementBothAsks();
+            diagnostics.RecordValidEdge(edge);
             var quantityAvailable = Math.Min(book.YesAsk!.Size, book.NoAsk!.Size);
             var sizing = _sizing.SizeByNotional(quantityAvailable, adjustedCost);
             var quantity = sizing.ExecutableQuantity;
@@ -318,6 +319,7 @@ public class SingleMarketOrderBookArbEngine
             diagnostics.FillPassed,
             diagnostics.PaperOpened,
             diagnostics.BestEdgeSeen,
+            diagnostics.BestRejectedRawEdge,
             topReject.Key ?? "None",
             topReject.Value,
             rejectCounts,
@@ -332,7 +334,9 @@ public class SingleMarketOrderBookArbEngine
         var summaryHash = $"{Bucket(summary.Scanned, 25)}|{summary.PositiveEdge}|{summary.TopRejectReason}|{summary.PaperOpened}|{Bucket(summary.BestEdgeSeen ?? 0m, 0.001m)}";
         if (ShouldLog(ref _lastSummaryHash, summaryHash, summary.ScanId, _logging.LogSingleMarketSummaryEveryNCycles, _logging.LogSingleMarketSummaryOnChangeOnly))
         {
-            Console.WriteLine($"[SINGLE_MARKET_SCAN_SUMMARY] Scanned={summary.Scanned} DataQualityRejected={summary.DataQualityRejected} BelowMinEdge={summary.BelowMinEdge} PositiveEdge={summary.PositiveEdge} EdgeStable={summary.EdgeStable} ExecutionReady={summary.ExecutionReady} FillPassed={summary.FillPassed} PaperOpened={summary.PaperOpened} TopReject={summary.TopRejectReason}:{summary.TopRejectCount} BestEdge={summary.BestEdgeSeen:0.####}");
+            var bestEdgeText = summary.BestEdgeSeen.HasValue ? summary.BestEdgeSeen.Value.ToString("0.####") : "N/A";
+            var bestRejectedText = summary.BestRejectedRawEdge.HasValue ? summary.BestRejectedRawEdge.Value.ToString("0.####") : "N/A";
+            Console.WriteLine($"[SINGLE_MARKET_SCAN_SUMMARY] Scanned={summary.Scanned} DataQualityRejected={summary.DataQualityRejected} BelowMinEdge={summary.BelowMinEdge} PositiveEdge={summary.PositiveEdge} EdgeStable={summary.EdgeStable} ExecutionReady={summary.ExecutionReady} FillPassed={summary.FillPassed} PaperOpened={summary.PaperOpened} TopReject={summary.TopRejectReason}:{summary.TopRejectCount} BestEdge={bestEdgeText} BestRejectedRawEdge={bestRejectedText}");
         }
 
         var dqHash = string.Join("|", summary.DataQualityRejectedByReason.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{Bucket(x.Value, 10)}"));
@@ -342,9 +346,10 @@ public class SingleMarketOrderBookArbEngine
             Console.WriteLine($"[SINGLE_MARKET_DATA_QUALITY_SUMMARY] TotalRejected={summary.DataQualityRejected} {counts} Samples={Math.Min(_options.TopDataQualityRejectSampleCount, diagnostics.DataQualitySamples.Count)}");
         }
 
-        var topNearMisses = diagnostics.NearMisses.Where(x => x.EdgePerShare >= _options.NearMissMinEdge && x.EdgePerShare < _minEdgePerShare).OrderByDescending(x => x.EdgePerShare).Take(5).ToArray();
+        if (!_options.LogTopNearMissesToConsole) return;
+        var topNearMisses = diagnostics.NearMisses.Where(x => x.EdgePerShare >= _options.NearMissMinEdge && x.EdgePerShare < _minEdgePerShare).OrderByDescending(x => x.EdgePerShare).Take(Math.Max(0, _options.ConsoleTopNearMissCount)).ToArray();
         var nearHash = string.Join("|", topNearMisses.Select(x => $"{x.MarketId}:{Bucket(x.EdgePerShare, 0.001m)}"));
-        if (topNearMisses.Length > 0 && ShouldLog(ref _lastNearMissHash, nearHash, summary.ScanId, _logging.LogSingleMarketNearMissEveryNCycles, true))
+        if (topNearMisses.Length > 0 && ShouldLog(ref _lastNearMissHash, nearHash, summary.ScanId, _logging.LogSingleMarketNearMissEveryNCycles, _logging.LogSingleMarketNearMissOnChangeOnly))
         {
             foreach (var n in topNearMisses)
                 Console.WriteLine($"[SINGLE_MARKET_TOP_NEAR_MISS] MarketId={n.MarketId} Edge={n.EdgePerShare:0.####} RequiredImprovement={n.RequiredImprovement:0.####}");
@@ -385,6 +390,19 @@ public class SingleMarketOrderBookArbEngine
     private void MaybeStoreOpportunity(SingleMarketArbOpportunityDto dto, bool highValue)
     {
         if (highValue) _state?.AddSingleMarketOpportunity(dto);
+    }
+
+    private void MaybeAuditDataQuality(SingleMarketArbOpportunityDto dto, string reason, decimal edge, SingleMarketCycleDiagnostics diagnostics)
+    {
+        var firstReason = diagnostics.MarkDataQualityAuditReason(reason);
+        var highSeverity = IsHighSeverityDataQuality(reason);
+        var positiveRejected = edge >= _minEdgePerShare && reason is not ("MissingYesAsk" or "MissingNoAsk");
+        var enabledSample = _options.AuditDataQualityRejectedEvents && firstReason;
+        var highSeveritySample = _options.AuditHighSeverityDataQualityRejectedEvents && highSeverity && firstReason;
+        var positiveSample = positiveRejected && firstReason;
+        if (!(enabledSample || highSeveritySample || positiveSample)) return;
+        if (!diagnostics.ShouldAuditDataQualitySample(_options.MaxDataQualityAuditSamplesPerCycle)) return;
+        MaybeAudit(dto, "SingleMarketDataQualityRejected", highValue: highSeverity || positiveRejected, sampled: true);
     }
 
     private void MaybeAudit(SingleMarketArbOpportunityDto dto, string auditStage, bool highValue, bool sampled)
@@ -439,7 +457,9 @@ public class SingleMarketOrderBookArbEngine
         private int _fillPassed;
         private int _paperOpened;
         private int _auditSamples;
+        private int _dataQualityAuditSamples;
         private decimal? _bestEdgeSeen;
+        private decimal? _bestRejectedRawEdge;
         private readonly object _edgeGate = new();
         public long ScanId { get; } = scanId;
         public int Scanned => Volatile.Read(ref _scanned);
@@ -453,8 +473,10 @@ public class SingleMarketOrderBookArbEngine
         public int FillPassed => Volatile.Read(ref _fillPassed);
         public int PaperOpened => Volatile.Read(ref _paperOpened);
         public decimal? BestEdgeSeen { get { lock (_edgeGate) return _bestEdgeSeen; } }
+        public decimal? BestRejectedRawEdge { get { lock (_edgeGate) return _bestRejectedRawEdge; } }
         public ConcurrentDictionary<string, int> RejectCounts { get; } = new(StringComparer.OrdinalIgnoreCase);
         public ConcurrentDictionary<string, int> DataQualityCounts { get; } = new(StringComparer.OrdinalIgnoreCase);
+        private ConcurrentDictionary<string, byte> DataQualityAuditReasons { get; } = new(StringComparer.OrdinalIgnoreCase);
         public ConcurrentBag<SingleMarketDataQualityRejectSampleDto> DataQualitySamples { get; } = new();
         public ConcurrentBag<SingleMarketNearMissDto> NearMisses { get; } = new();
         public ConcurrentBag<SingleMarketArbOpportunityDto> PositiveCandidates { get; } = new();
@@ -467,7 +489,8 @@ public class SingleMarketOrderBookArbEngine
         public void IncrementExecutionReady() => Interlocked.Increment(ref _executionReady);
         public void IncrementFillPassed() => Interlocked.Increment(ref _fillPassed);
         public void IncrementPaperOpened() => Interlocked.Increment(ref _paperOpened);
-        public void RecordEdge(decimal edge) { lock (_edgeGate) if (!_bestEdgeSeen.HasValue || edge > _bestEdgeSeen.Value) _bestEdgeSeen = edge; }
+        public void RecordValidEdge(decimal edge) { lock (_edgeGate) if (!_bestEdgeSeen.HasValue || edge > _bestEdgeSeen.Value) _bestEdgeSeen = edge; }
+        public void RecordRejectedRawEdge(decimal edge) { lock (_edgeGate) if (!_bestRejectedRawEdge.HasValue || edge > _bestRejectedRawEdge.Value) _bestRejectedRawEdge = edge; }
         public void AddReject(string reason)
         {
             RejectCounts.AddOrUpdate(reason, 1, (_, x) => x + 1);
@@ -480,17 +503,20 @@ public class SingleMarketOrderBookArbEngine
             DataQualityCounts.AddOrUpdate(reason, 1, (_, x) => x + 1);
             DataQualitySamples.Add(sample);
         }
+        public bool MarkDataQualityAuditReason(string reason) => DataQualityAuditReasons.TryAdd(reason, 0);
         public void AddNearMiss(SingleMarketNearMissDto nearMiss) => NearMisses.Add(nearMiss);
         public void AddPositiveCandidate(SingleMarketArbOpportunityDto dto) => PositiveCandidates.Add(dto);
         public void AddExecution(SingleMarketPaperExecutionDto dto) => Executions.Add(dto);
-        public bool ShouldAuditSample(int maxSamples)
+        public bool ShouldAuditSample(int maxSamples) => TryReserve(ref _auditSamples, maxSamples);
+        public bool ShouldAuditDataQualitySample(int maxSamples) => TryReserve(ref _dataQualityAuditSamples, maxSamples);
+        private static bool TryReserve(ref int counter, int maxSamples)
         {
             if (maxSamples <= 0) return false;
             while (true)
             {
-                var cur = Volatile.Read(ref _auditSamples);
+                var cur = Volatile.Read(ref counter);
                 if (cur >= maxSamples) return false;
-                if (Interlocked.CompareExchange(ref _auditSamples, cur + 1, cur) == cur) return true;
+                if (Interlocked.CompareExchange(ref counter, cur + 1, cur) == cur) return true;
             }
         }
     }
