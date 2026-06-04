@@ -304,6 +304,59 @@ public class SingleMarketSafetyTests
 
 
 
+
+    [Fact]
+    public async Task High_severity_data_quality_logs_are_capped_per_full_cycle()
+    {
+        var opts = Options();
+        opts.MaxHighSeverityDataQualityLogsPerCycle = 3;
+        var markets = Enumerable.Range(0, 5).Select(i => Market($"high-{i}")).ToList();
+        var books = markets.ToDictionary(m => m.id, m => BookFor(m, yes: 0.72m, no: 0.72m));
+        var engine = NewEngine(new MapProvider(books), new BotRuntimeState(new RuntimeStateOptions()), opts, quiet: true);
+
+        var output = await CaptureConsole(() => engine.ScanAsync(markets, NewPaper(), new SemaphoreSlim(5), fullCycleId: 42, isFullCycleComplete: true, suppressBatchDataQualitySummary: true));
+
+        Assert.Equal(3, output.Split("[SINGLE_MARKET_DATA_QUALITY_REJECTED]").Length - 1);
+        Assert.Contains("[SINGLE_MARKET_DATA_QUALITY_HIGH_SEVERITY_SUPPRESSED] Count=2", output);
+    }
+
+    [Fact]
+    public async Task Low_and_medium_data_quality_rejects_do_not_enter_audit_in_quiet_mode()
+    {
+        var opts = Options();
+        opts.AuditDataQualityRejectedEvents = false;
+        opts.AuditHighSeverityDataQualityRejectedEvents = true;
+        var audit = NewAudit();
+        var low = Market("low-sum");
+        var missing = Market("missing-ask");
+        var books = new Dictionary<string, BinaryOrderBookSnapshot>
+        {
+            [low.id] = BookFor(low, yes: 0.50m, no: 0.578m),
+            [missing.id] = BookFor(missing, yes: null, no: 0.95m)
+        };
+
+        await NewEngine(new MapProvider(books), new BotRuntimeState(new RuntimeStateOptions()), opts, quiet: true, audit: audit).ScanAsync(new List<Market> { low, missing }, NewPaper(), new SemaphoreSlim(2));
+
+        Assert.DoesNotContain(audit.ListAudit(1000), x => x.Stage == "SingleMarketDataQualityRejected");
+    }
+
+    [Fact]
+    public void Single_market_batch_summaries_aggregate_into_full_cycle_summary()
+    {
+        var aggregator = new SingleMarketFullCycleSummaryAggregator(Options());
+        var batch1 = new SingleMarketScanSummaryDto(DateTime.UtcNow, 1, 250, 250, 200, 52, 198, 0, 0, 0, 0, 0, -0.003m, 0.997m, "BelowMinEdge", 198, new Dictionary<string, int> { ["BelowMinEdge"] = 198, ["MissingNoAsk"] = 52 }, new Dictionary<string, int> { ["MissingNoAsk"] = 52 });
+        var batch2 = batch1 with { ScanId = 2, DataQualityRejected = 23, BelowMinEdge = 227, TopRejectCount = 227, RejectedByReason = new Dictionary<string, int> { ["BelowMinEdge"] = 227, ["MissingNoAsk"] = 23 }, DataQualityRejectedByReason = new Dictionary<string, int> { ["MissingNoAsk"] = 23 } };
+
+        aggregator.AddBatch(7, batch1, Array.Empty<SingleMarketDataQualityRejectSampleDto>());
+        var summary = aggregator.AddBatch(7, batch2, Array.Empty<SingleMarketDataQualityRejectSampleDto>());
+
+        Assert.Equal(2, summary.BatchesSeen);
+        Assert.Equal(500, summary.MarketsScanned);
+        Assert.Equal(75, summary.DataQualityRejected);
+        Assert.Equal(425, summary.BelowMinEdge);
+        Assert.Equal(-0.003m, summary.BestValidEdge);
+    }
+
     [Fact]
     public async Task RuntimeHealth_single_market_counters_reflect_bounded_snapshot_after_scan()
     {
@@ -360,7 +413,7 @@ public class SingleMarketSafetyTests
 
     private static SingleMarketOrderBookArbEngine NewEngine(BinaryOrderBookSnapshot book, BotRuntimeState state, SingleMarketArbOptions? opts = null, bool quiet = false, VerifiedBasketExecutionCoordinator? audit = null) => NewEngine(new FakeProvider(book), state, opts, quiet, audit);
     private static SingleMarketOrderBookArbEngine NewEngine(IOrderBookProvider provider, BotRuntimeState state, SingleMarketArbOptions? opts = null, bool quiet = false, VerifiedBasketExecutionCoordinator? audit = null) => new(provider, 0.005m, 0.001m, 0.001m, null, new ExecutionSizingService(new ExecutionPolicy { MaxNotionalPerTrade = 100m, MinNotionalPerTrade = 25m }), opts ?? Options(), state, null, audit, quiet, new MultiOutcomeLoggingOptions { LogSingleMarketSummaryOnChangeOnly = true, LogSingleMarketDataQualityOnChangeOnly = true, LogSingleMarketSummaryEveryNCycles = 25, LogSingleMarketDataQualityEveryNCycles = 25, SingleMarketDataQualitySignificantDelta = 25, LogSingleMarketNearMissEveryNCycles = 50, LogSingleMarketNearMissOnChangeOnly = true });
-    private static SingleMarketArbOptions Options() => new() { RequiredConsecutiveEdgeScans = 3, RequiredConsecutiveExecutionReadyScans = 3, MinEdgePerShare = 0.005m, MinExpectedProfit = 0.50m, MinNotional = 25m, MaxNotionalPerTrade = 100m, MaxOpenSingleMarketPositions = 3, MaxTotalSingleMarketExposure = 300m, MaxPositionsPerCycle = 1, CooldownSecondsPerMarket = 300, AuditBelowMinEdgeEvents = false, AuditDetectedEvents = false, MaxAuditSamplesPerCycle = 20, AuditDataQualityRejectedEvents = false, AuditHighSeverityDataQualityRejectedEvents = true, MaxDataQualityAuditSamplesPerCycle = 3, HighSeveritySuspiciousAskSumDistance = 0.10m };
+    private static SingleMarketArbOptions Options() => new() { RequiredConsecutiveEdgeScans = 3, RequiredConsecutiveExecutionReadyScans = 3, MinEdgePerShare = 0.005m, MinExpectedProfit = 0.50m, MinNotional = 25m, MaxNotionalPerTrade = 100m, MaxOpenSingleMarketPositions = 3, MaxTotalSingleMarketExposure = 300m, MaxPositionsPerCycle = 1, CooldownSecondsPerMarket = 300, AuditBelowMinEdgeEvents = false, AuditDetectedEvents = false, MaxAuditSamplesPerCycle = 20, AuditDataQualityRejectedEvents = false, AuditHighSeverityDataQualityRejectedEvents = true, MaxDataQualityAuditSamplesPerCycle = 3, HighSeveritySuspiciousAskSumDistance = 0.10m, MaxHighSeverityDataQualityLogsPerCycle = 3 };
     private static PaperTradingEngine NewPaper() => new(new ExecutionPolicy { MaxNotionalPerTrade = 100m, MinNotionalPerTrade = 25m, MaxOpenPositions = 100, MaxLockedCapital = 1000m, MaxExposurePerGroup = 300m }, null, null, new PaperPositionBook(Path.GetTempFileName()));
     private static Market Market(string id = "m1") => new() { id = id, question = $"Will {id} win?", conditionId = $"c-{id}", outcomes = new() { "Yes", "No" }, clobTokenIds = new() { $"yes-{id}", $"no-{id}" } };
     private static BinaryOrderBookSnapshot Book(decimal? yes = 0.235m, decimal? no = 0.733m, decimal yesSize = 200m, decimal noSize = 200m) => BookFor(Market(), yes, no, yesSize, noSize);

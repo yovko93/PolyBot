@@ -30,12 +30,15 @@ public class SingleMarketOrderBookArbEngine
     private readonly object _gate = new();
     private readonly Dictionary<string, MarketStability> _stability = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> _cooldownUntil = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _loggedDataQualityReasons = new(StringComparer.OrdinalIgnoreCase);
     private string _lastSummaryHash = string.Empty;
     private string _lastNearMissHash = string.Empty;
     private bool _hasLoggedDataQualitySummary;
     private int _lastLoggedDataQualityTotal;
     private Dictionary<string, int> _lastLoggedDataQualityCounts = new(StringComparer.OrdinalIgnoreCase);
+    private long _currentDataQualityFullCycleId = -1;
+    private int _highSeverityDataQualityLogsThisCycle;
+    private int _highSeverityDataQualitySuppressedThisCycle;
+    private int _dataQualityAuditSamplesThisCycle;
     private long _scanId;
     private int _positionsOpenedThisCycle;
 
@@ -70,14 +73,19 @@ public class SingleMarketOrderBookArbEngine
     }
 
     public async Task<SingleMarketScanStats> ScanAsync(List<Market> markets, PaperTradingEngine paper, SemaphoreSlim semaphore, CancellationToken ct = default)
+        => await ScanAsync(markets, paper, semaphore, fullCycleId: null, isFullCycleComplete: false, suppressBatchDataQualitySummary: false, ct);
+
+    public async Task<SingleMarketScanStats> ScanAsync(List<Market> markets, PaperTradingEngine paper, SemaphoreSlim semaphore, long? fullCycleId, bool isFullCycleComplete, bool suppressBatchDataQualitySummary = false, CancellationToken ct = default)
     {
         _positionsOpenedThisCycle = 0;
         var scanId = Interlocked.Increment(ref _scanId);
+        BeginDataQualityFullCycle(fullCycleId ?? scanId);
         var diagnostics = new SingleMarketCycleDiagnostics(scanId);
         var tasks = markets.Select(market => ScanMarketAsync(market, paper, semaphore, diagnostics, ct));
         var results = await Task.WhenAll(tasks);
         var summary = BuildAndPublishSnapshot(diagnostics);
-        MaybeLogSummaries(summary, diagnostics);
+        MaybeLogSummaries(summary, diagnostics, suppressBatchDataQualitySummary);
+        if (isFullCycleComplete) MaybeLogSuppressedHighSeverityDataQuality();
         ExportLatest();
 
         var skipReasons = new Dictionary<string, int>();
@@ -333,17 +341,20 @@ public class SingleMarketOrderBookArbEngine
         return summary;
     }
 
-    private void MaybeLogSummaries(SingleMarketScanSummaryDto summary, SingleMarketCycleDiagnostics diagnostics)
+    private void MaybeLogSummaries(SingleMarketScanSummaryDto summary, SingleMarketCycleDiagnostics diagnostics, bool suppressDataQualitySummary = false)
     {
-        var summaryHash = $"{Bucket(summary.Scanned, 25)}|{summary.PositiveEdge}|{summary.TopRejectReason}|{summary.PaperOpened}|{Bucket(summary.BestEdgeSeen ?? 0m, 0.001m)}";
-        if (ShouldLog(ref _lastSummaryHash, summaryHash, summary.ScanId, _logging.LogSingleMarketSummaryEveryNCycles, _logging.LogSingleMarketSummaryOnChangeOnly))
+        if (!suppressDataQualitySummary)
         {
-            var bestEdgeText = summary.BestEdgeSeen.HasValue ? summary.BestEdgeSeen.Value.ToString("0.####") : "N/A";
-            var bestRejectedText = summary.BestRejectedRawEdge.HasValue ? summary.BestRejectedRawEdge.Value.ToString("0.####") : "N/A";
-            Console.WriteLine($"[SINGLE_MARKET_SCAN_SUMMARY] Scanned={summary.Scanned} DataQualityRejected={summary.DataQualityRejected} BelowMinEdge={summary.BelowMinEdge} PositiveEdge={summary.PositiveEdge} EdgeStable={summary.EdgeStable} ExecutionReady={summary.ExecutionReady} FillPassed={summary.FillPassed} PaperOpened={summary.PaperOpened} TopReject={summary.TopRejectReason}:{summary.TopRejectCount} BestEdge={bestEdgeText} BestRejectedRawEdge={bestRejectedText}");
+            var summaryHash = $"{Bucket(summary.Scanned, 25)}|{summary.PositiveEdge}|{summary.TopRejectReason}|{summary.PaperOpened}|{Bucket(summary.BestEdgeSeen ?? 0m, 0.001m)}";
+            if (ShouldLog(ref _lastSummaryHash, summaryHash, summary.ScanId, _logging.LogSingleMarketSummaryEveryNCycles, _logging.LogSingleMarketSummaryOnChangeOnly))
+            {
+                var bestEdgeText = summary.BestEdgeSeen.HasValue ? summary.BestEdgeSeen.Value.ToString("0.####") : "N/A";
+                var bestRejectedText = summary.BestRejectedRawEdge.HasValue ? summary.BestRejectedRawEdge.Value.ToString("0.####") : "N/A";
+                Console.WriteLine($"[SINGLE_MARKET_SCAN_SUMMARY] Scanned={summary.Scanned} DataQualityRejected={summary.DataQualityRejected} BelowMinEdge={summary.BelowMinEdge} PositiveEdge={summary.PositiveEdge} EdgeStable={summary.EdgeStable} ExecutionReady={summary.ExecutionReady} FillPassed={summary.FillPassed} PaperOpened={summary.PaperOpened} TopReject={summary.TopRejectReason}:{summary.TopRejectCount} BestEdge={bestEdgeText} BestRejectedRawEdge={bestRejectedText}");
+            }
         }
 
-        if (ShouldLogDataQualitySummary(summary, diagnostics))
+        if (!suppressDataQualitySummary && ShouldLogDataQualitySummary(summary, diagnostics))
         {
             var counts = string.Join(" ", summary.DataQualityRejectedByReason.OrderByDescending(x => x.Value).ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}={x.Value}"));
             Console.WriteLine($"[SINGLE_MARKET_DATA_QUALITY_SUMMARY] TotalRejected={summary.DataQualityRejected} {counts} Samples={Math.Min(_options.TopDataQualityRejectSampleCount, diagnostics.DataQualitySamples.Count)}");
@@ -395,6 +406,51 @@ public class SingleMarketOrderBookArbEngine
         return false;
     }
 
+
+    private void BeginDataQualityFullCycle(long cycleId)
+    {
+        lock (_gate)
+        {
+            if (_currentDataQualityFullCycleId == cycleId) return;
+            _currentDataQualityFullCycleId = cycleId;
+            _highSeverityDataQualityLogsThisCycle = 0;
+            _highSeverityDataQualitySuppressedThisCycle = 0;
+            _dataQualityAuditSamplesThisCycle = 0;
+        }
+    }
+
+    private bool TryReserveHighSeverityDataQualityLog()
+    {
+        lock (_gate)
+        {
+            if (_highSeverityDataQualityLogsThisCycle < Math.Max(0, _options.MaxHighSeverityDataQualityLogsPerCycle))
+            {
+                _highSeverityDataQualityLogsThisCycle++;
+                return true;
+            }
+            _highSeverityDataQualitySuppressedThisCycle++;
+            return false;
+        }
+    }
+
+    private bool TryReserveDataQualityAuditSample(int maxSamples)
+    {
+        lock (_gate)
+        {
+            if (_dataQualityAuditSamplesThisCycle >= Math.Max(0, maxSamples)) return false;
+            _dataQualityAuditSamplesThisCycle++;
+            return true;
+        }
+    }
+
+    private void MaybeLogSuppressedHighSeverityDataQuality()
+    {
+        int suppressed;
+        lock (_gate) suppressed = _highSeverityDataQualitySuppressedThisCycle;
+        if (suppressed > 0)
+            Console.WriteLine($"[SINGLE_MARKET_DATA_QUALITY_HIGH_SEVERITY_SUPPRESSED] Count={suppressed}");
+    }
+
     private bool ShouldLog(ref string lastHash, string hash, long scanId, int everyNCycles, bool onChangeOnly)
     {
         var changed = !string.Equals(lastHash, hash, StringComparison.Ordinal);
@@ -412,9 +468,9 @@ public class SingleMarketOrderBookArbEngine
 
     private bool ShouldLogDataQualityReject(string reason, decimal rawSum)
     {
-        if (!_operationalQuietMode) return IsHighSeverityDataQuality(reason, rawSum);
         if (!IsHighSeverityDataQuality(reason, rawSum)) return false;
-        lock (_gate) return _loggedDataQualityReasons.Add(reason);
+        if (!_operationalQuietMode) return true;
+        return TryReserveHighSeverityDataQualityLog();
     }
 
     private bool IsHighSeverityDataQuality(string reason, decimal rawSum)
@@ -449,7 +505,7 @@ public class SingleMarketOrderBookArbEngine
         var highSeveritySample = _options.AuditHighSeverityDataQualityRejectedEvents && highSeverity;
         var positiveSample = positiveRejected && firstReason;
         if (!(enabledSample || highSeveritySample || positiveSample)) return;
-        if (!diagnostics.ShouldAuditDataQualitySample(_options.MaxDataQualityAuditSamplesPerCycle)) return;
+        if (!TryReserveDataQualityAuditSample(_options.MaxDataQualityAuditSamplesPerCycle)) return;
         MaybeAudit(dto, "SingleMarketDataQualityRejected", highValue: highSeverity || positiveRejected, sampled: true);
     }
 

@@ -79,6 +79,24 @@ public record SingleMarketScanSummaryDto(
     IReadOnlyDictionary<string, int> RejectedByReason,
     IReadOnlyDictionary<string, int> DataQualityRejectedByReason);
 
+
+public record SingleMarketFullCycleSummary(
+    long CycleId,
+    int BatchesSeen,
+    int MarketsScanned,
+    int DataQualityRejected,
+    int BelowMinEdge,
+    int PositiveEdge,
+    int EdgeStable,
+    int ExecutionReady,
+    int FillPassed,
+    int PaperOpened,
+    IReadOnlyDictionary<string, int> RejectCountsByReason,
+    decimal? BestValidEdge,
+    decimal? BestRejectedRawEdge,
+    int HighSeverityRejectCount,
+    IReadOnlyList<SingleMarketDataQualityRejectSampleDto> SampledRejects);
+
 public record SingleMarketDataQualityRejectSampleDto(
     DateTime TimestampUtc,
     string MarketId,

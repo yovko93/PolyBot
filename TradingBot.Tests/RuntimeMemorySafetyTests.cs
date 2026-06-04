@@ -72,6 +72,18 @@ public class RuntimeMemorySafetyTests
         Assert.True(RuntimeHealthSnapshot.ShouldLogAt(now.AddMinutes(2), now, everyMinutes: 2));
     }
 
+
+    [Fact]
+    public void Soak_status_export_is_wired_in_push_pipeline()
+    {
+        var text = File.ReadAllText(Path.Combine("..", "..", "..", "..", "TradingBot", "Program.cs"));
+
+        Assert.Contains("runtime-soak-status-latest.json", text);
+        Assert.Contains("soakReady", text);
+        Assert.Contains("memoryWarnings", text);
+        Assert.Contains("memoryCriticals", text);
+    }
+
     [Fact]
     public void MemoryGuard_ClearsNonEssentialState_OnCriticalMemory()
     {

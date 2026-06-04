@@ -299,6 +299,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var monitor = new OpportunityMonitor(Path.Combine(AppContext.BaseDirectory, "data", "arb-opportunities.csv"), options.MinEdgePerShare, -0.02m, TimeSpan.FromMinutes(2), options.MinExpectedProfit, new DryRunLiveOrderBuilder(minEdgePerShare: -0.01m, maxPlanCost: 100000m, minSize: 1m, tickSize: 0.001m, orderType: LiveOrderType.FOK, policy: executionPolicy));
     var semaphore = new SemaphoreSlim(options.MaxConcurrentRequests);
     var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketFees, options.SingleMarketSlippage, monitor, sizing, options.SingleMarketArb, state, contentRootPath, verifiedExecution, options.Diagnostics.OperationalQuietMode, options.Logging);
+    var singleMarketFullCycle = new SingleMarketFullCycleSummaryAggregator(options.SingleMarketArb);
 
     var config = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory).AddJsonFile("appsettings.json", optional: true).Build();
     config.GetSection(CrossExchangeOptions.SectionName).Bind(crossOptions);
@@ -424,13 +425,19 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             var currentRollingOffsetAfter = rollingOffset;
             var batchStartIndex = filtered.Count == 0 ? 0 : currentRollingOffsetBefore;
             var batchEndIndex = filtered.Count == 0 ? 0 : ((currentRollingOffsetBefore + filtered.Count - 1) % Math.Max(1, scanPool.Count));
-            if (scanPool.Count > 0 && currentRollingOffsetAfter < currentRollingOffsetBefore) fullCoverageCompletedCount++;
+            var fullCoverageCompletedThisBatch = scanPool.Count > 0 && currentRollingOffsetAfter < currentRollingOffsetBefore;
+            if (fullCoverageCompletedThisBatch) fullCoverageCompletedCount++;
             cyclesCompletedSinceDiscovery++;
             totalMarketsScannedSinceStart += filtered.Count;
             scanId++;
+            var singleMarketFullCycleId = scanPool.Count == 0 ? scanId : (fullCoverageCompletedThisBatch ? fullCoverageCompletedCount : fullCoverageCompletedCount + 1);
+            var singleMarketFullCycleComplete = scanPool.Count > 0 && (options.Mode == "AllAtOnce" || filtered.Count >= scanPool.Count || fullCoverageCompletedThisBatch);
             var orderbookSemaphore = new SemaphoreSlim(options.MaxConcurrentOrderbookRequests);
             await orderbookService.PrefetchBinarySnapshotsAsync(filtered);
-            var scanStats = await singleMarketArb.ScanAsync(filtered!, paper, orderbookSemaphore);
+            var scanStats = await singleMarketArb.ScanAsync(filtered!, paper, orderbookSemaphore, singleMarketFullCycleId, singleMarketFullCycleComplete, suppressBatchDataQualitySummary: options.Diagnostics.OperationalQuietMode, ct: stoppingToken);
+            var singleMarketFullSummary = singleMarketFullCycle.AddBatch(singleMarketFullCycleId, state.SingleMarketSnapshot.Summary, state.SingleMarketSnapshot.DataQualityRejectSamples);
+            if (options.Diagnostics.OperationalQuietMode && singleMarketFullCycle.ShouldLog(singleMarketFullSummary, options.Logging, singleMarketFullCycleComplete))
+                Console.WriteLine(SingleMarketFullCycleSummaryAggregator.ToLogLine(singleMarketFullSummary));
 
             MultiOutcomeGroupArbEngine.MultiOutcomeScanReport multiOutcomeReport = new(0,0,0,0,0,0,0,0m,0m,0m,"","NotEvaluated",new Dictionary<string,int>(),Array.Empty<MultiOutcomeGroupArbEngine.RejectedSample>(),Array.Empty<MultiOutcomeGroupArbEngine.CandidateGroupReview>());
             if (options.MultiOutcomeArbitrage.Enabled)
@@ -1300,6 +1307,7 @@ static async Task PushUiUpdates(BotRuntimeState state, IHubContext<BotHub> hub, 
             openBasketPositionsCount = state.Status.OpenPositions,
             lastUpdatedAt = state.Status.LastScanTime
         }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        ExportRuntimeSoakStatus(state, options, contentRootPath);
         state.AddSignalREvent("positionsUpdated");
         await hub.Clients.All.SendAsync("positionsUpdated", TrimPayload(state, "positionsUpdated", state.Positions().TakeLast(options.RuntimeState.MaxPaperPositions).ToArray(), options));
         state.AddSignalREvent("scannerStatsUpdated");
@@ -1332,6 +1340,39 @@ static T[] TrimPayload<T>(BotRuntimeState state, string eventName, T[] items, Tr
     if (result.Trimmed)
         Console.WriteLine($"[SIGNALR_PAYLOAD_TRIMMED] Event={eventName} ItemsBefore={result.ItemsBefore} ItemsAfter={result.ItemsAfter}");
     return result.Items;
+}
+
+
+static void ExportRuntimeSoakStatus(BotRuntimeState state, TradingBotOptions options, string contentRootPath)
+{
+    var health = RuntimeHealthSnapshot.From(state);
+    var logs = state.Logs();
+    var payload = new
+    {
+        timestamp = DateTime.UtcNow,
+        uptime = health.Uptime,
+        processMemoryMb = health.ProcessMemoryMb,
+        gcMemoryMb = health.GcTotalMemoryMb,
+        logsCount = health.RecentLogsCount,
+        executionAuditCount = health.ExecutionAuditCount,
+        signalRBufferCount = health.SignalREventBufferCount,
+        singleMarketDataQualitySamples = health.SingleMarketDataQualitySamplesCount,
+        singleMarketNearMisses = health.SingleMarketNearMissesCount,
+        paperOpenedCount = state.SingleMarketExecutionsCount,
+        memoryWarnings = logs.Count(x => x.Message.Contains("[MEMORY_WARNING]", StringComparison.OrdinalIgnoreCase)),
+        memoryCriticals = logs.Count(x => x.Message.Contains("[MEMORY_CRITICAL]", StringComparison.OrdinalIgnoreCase)),
+        liveTradingEnabled = options.EnableLiveExecution,
+        paperOnly = options.PaperOnly,
+        soakReady = options.Diagnostics.OperationalQuietMode
+            && options.RuntimeHealth.Enabled
+            && options.SignalR.MaxPayloadItems > 0
+            && options.SignalR.MaxPayloadBytes > 0
+            && options.PaperOnly
+            && !options.EnableLiveExecution
+    };
+    var path = Path.Combine(contentRootPath, "exports/runtime-soak-status-latest.json");
+    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+    File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(payload, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 }
 
 static SingleMarketArbSnapshotDto BuildSingleMarketSignalRPayload(BotRuntimeState state, TradingBotOptions options)
