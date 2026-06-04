@@ -243,6 +243,31 @@ foreach (var p in options.MultiOutcomeArbitrage.CostProfiles.Profiles.OrderBy(x 
     Console.WriteLine($"[COST_PROFILE] Name={p.Key} FeeModel={p.Value.FeeModel} FeePerLeg={p.Value.FeePerLeg} SlippagePerLeg={p.Value.SlippageBufferPerLeg} Safety={p.Value.SafetyBufferPerGroup} DiagnosticsOnly={diagnosticsOnly.ToString().ToLowerInvariant()}");
 }
 
+
+_ = Task.Run(async () =>
+{
+    if (!options.RuntimeHealth.Enabled) return;
+    try
+    {
+        if (options.RuntimeHealth.LogOnStartup)
+        {
+            Console.WriteLine(RuntimeHealthSnapshot.From(state).ToLogLine());
+            ExportRuntimeSoakStatus(state, options, app.Environment.ContentRootPath);
+        }
+
+        var delay = TimeSpan.FromMinutes(Math.Max(1, options.RuntimeHealth.LogEveryMinutes));
+        using var timer = new PeriodicTimer(delay);
+        while (await timer.WaitForNextTickAsync(app.Lifetime.ApplicationStopping))
+        {
+            Console.WriteLine(RuntimeHealthSnapshot.From(state).ToLogLine());
+            ExportRuntimeSoakStatus(state, options, app.Environment.ContentRootPath);
+        }
+    }
+    catch (OperationCanceledException) when (app.Lifetime.ApplicationStopping.IsCancellationRequested)
+    {
+    }
+});
+
 _ = Task.Run(async () =>
 {
     var hub = app.Services.GetRequiredService<IHubContext<BotHub>>();
@@ -344,7 +369,6 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var lastExperimentalFingerprintByGroup = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
     var lastProfileComparisonFingerprint = string.Empty;
     var mismatchFingerprintByGroup = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
-    var runtimeHealthLastLoggedAt = DateTime.MinValue;
     var basketStateByGroup = new Dictionary<string, VerifiedBasketState>(StringComparer.OrdinalIgnoreCase);
     var stability = new VerifiedOpportunityStabilityTracker();
     var edgeStabilityLogThrottle = new EdgeStabilityLogThrottle();
@@ -360,12 +384,6 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     Console.WriteLine($"[ALLOWLIST] Loaded verified multi-outcome groups: {multiOutcomeValidator.LoadedAllowlistCount}");
     var startupAllowlistValidation = ScanLogSummaryService.AllowlistConfigValidation(multiOutcomeValidator.GetAllowlistedGroups());
     Console.WriteLine(startupAllowlistValidation.ToLogLine());
-    if (options.RuntimeHealth.Enabled && options.RuntimeHealth.LogOnStartup)
-    {
-        state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);
-        Console.WriteLine(RuntimeHealthSnapshot.From(state).ToLogLine());
-        runtimeHealthLastLoggedAt = DateTime.UtcNow;
-    }
     while (!stoppingToken.IsCancellationRequested)
     {
         var started = DateTime.UtcNow;
@@ -387,12 +405,6 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 if (options.Caches.ClearOrderbookCacheAfterScan) orderbookService.ClearExpiredCache();
             state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);
             memoryGuard.Check(state, options, () => orderbookService.ClearAllCache(), contentRootPath);
-            if (options.RuntimeHealth.Enabled && RuntimeHealthSnapshot.ShouldLogAt(DateTime.UtcNow, runtimeHealthLastLoggedAt, options.RuntimeHealth.LogEveryMinutes))
-            {
-                runtimeHealthLastLoggedAt = DateTime.UtcNow;
-                var health = RuntimeHealthSnapshot.From(state);
-                Console.WriteLine(health.ToLogLine());
-            }
             await PushUiUpdates(state, hub, uiLogger, options, verifiedExecution, contentRootPath);
                 uiLogger.LogInfo("scanner", "{\"event\":\"scan_skipped\",\"reason\":\"PAUSED\"}");
                 await Task.Delay(options.ScanIntervalMs, stoppingToken);
@@ -425,18 +437,18 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             var currentRollingOffsetAfter = rollingOffset;
             var batchStartIndex = filtered.Count == 0 ? 0 : currentRollingOffsetBefore;
             var batchEndIndex = filtered.Count == 0 ? 0 : ((currentRollingOffsetBefore + filtered.Count - 1) % Math.Max(1, scanPool.Count));
-            var fullCoverageCompletedThisBatch = scanPool.Count > 0 && currentRollingOffsetAfter < currentRollingOffsetBefore;
+            var fullCoverageCompletedThisBatch = scanPool.Count > 0 && filtered.Count > 0 && (currentRollingOffsetAfter == 0 || currentRollingOffsetAfter < currentRollingOffsetBefore);
             if (fullCoverageCompletedThisBatch) fullCoverageCompletedCount++;
             cyclesCompletedSinceDiscovery++;
             totalMarketsScannedSinceStart += filtered.Count;
             scanId++;
             var singleMarketFullCycleId = scanPool.Count == 0 ? scanId : (fullCoverageCompletedThisBatch ? fullCoverageCompletedCount : fullCoverageCompletedCount + 1);
-            var singleMarketFullCycleComplete = scanPool.Count > 0 && (options.Mode == "AllAtOnce" || filtered.Count >= scanPool.Count || fullCoverageCompletedThisBatch);
+            var singleMarketFullCycleComplete = scanPool.Count > 0 && (options.Mode == "AllAtOnce" || currentRollingOffsetAfter == 0 || filtered.Count >= scanPool.Count || fullCoverageCompletedThisBatch);
             var orderbookSemaphore = new SemaphoreSlim(options.MaxConcurrentOrderbookRequests);
             await orderbookService.PrefetchBinarySnapshotsAsync(filtered);
-            var scanStats = await singleMarketArb.ScanAsync(filtered!, paper, orderbookSemaphore, singleMarketFullCycleId, singleMarketFullCycleComplete, suppressBatchDataQualitySummary: options.Diagnostics.OperationalQuietMode, ct: stoppingToken);
+            var scanStats = await singleMarketArb.ScanAsync(filtered!, paper, orderbookSemaphore, singleMarketFullCycleId, singleMarketFullCycleComplete, suppressBatchDataQualitySummary: options.Diagnostics.OperationalQuietMode || !options.SingleMarketArb.LogBatchSummaries, ct: stoppingToken);
             var singleMarketFullSummary = singleMarketFullCycle.AddBatch(singleMarketFullCycleId, state.SingleMarketSnapshot.Summary, state.SingleMarketSnapshot.DataQualityRejectSamples);
-            if (options.Diagnostics.OperationalQuietMode && singleMarketFullCycle.ShouldLog(singleMarketFullSummary, options.Logging, singleMarketFullCycleComplete))
+            if (options.Diagnostics.OperationalQuietMode && singleMarketFullCycle.ShouldLog(singleMarketFullSummary, options.Logging, singleMarketFullCycleComplete, options.SingleMarketArb.LogCycleProgress))
                 Console.WriteLine(SingleMarketFullCycleSummaryAggregator.ToLogLine(singleMarketFullSummary));
 
             MultiOutcomeGroupArbEngine.MultiOutcomeScanReport multiOutcomeReport = new(0,0,0,0,0,0,0,0m,0m,0m,"","NotEvaluated",new Dictionary<string,int>(),Array.Empty<MultiOutcomeGroupArbEngine.RejectedSample>(),Array.Empty<MultiOutcomeGroupArbEngine.CandidateGroupReview>());
@@ -938,7 +950,6 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     state.SetVerifiedBasketScreener(new VerifiedBasketScreenerDto(snapshot.ActiveProfile, snapshot.ExperimentalProfile, snapshot.Timestamp, verifiedRowsWithReadiness, rankingRowsWithReadiness, snapshot.NearExecutableBaskets.Cast<object>().Take(25).ToArray(), snapshot.ExperimentalCandidates.Cast<object>().Take(100).ToArray(), snapshot.StableExperimentalCandidates.Cast<object>().Take(100).ToArray(), snapshot.ActiveProfileExecutable.Cast<object>().Take(100).ToArray(), snapshot.DiagnosticsOnlyPositive.Cast<object>().Take(100).ToArray(), snapshot.Profiles, snapshot.BestByActiveProfile, snapshot.BestByRawEdge, snapshot.BestByConservative, snapshot.BestByPolymarketApprox, snapshot.BestByRaw, snapshot.BestNearExecutable, snapshot.UnresolvedConfiguredGroups, stability.ReadinessSummaries(executionOptions.RequiredConsecutiveExecutionReadyScans).Cast<object>().ToArray()));
                     profileComparisonCycle++;
                     static long EdgeBucket(decimal value, decimal bucket) => bucket <= 0m ? (long)(value * 1000000m) : (long)Math.Round(value / bucket, MidpointRounding.AwayFromZero);
-                    profileComparisonCycle++;
                     var profileComparisonFingerprint = ScanLogSummaryService.ProfileComparisonFingerprint(snapshot.VerifiedBaskets, options.Logging.ProfileComparisonSignificantNetDelta);
                     var shouldLogProfileComparisonDetails = options.Logging.LogProfileComparisonSummary && logThrottle.ShouldLog("PROFILE_COMPARISON", profileComparisonFingerprint, options.Logging.LogProfileComparisonOnChangeOnly, options.Logging.LogProfileComparisonEveryNCycles);
                     var shouldLogProfileComparisonSummary = options.Logging.LogProfileComparisonSummary && (shouldLogProfileComparisonDetails || (options.Logging.LogProfileComparisonEveryNCycles > 0 && profileComparisonCycle % options.Logging.LogProfileComparisonEveryNCycles == 0));
@@ -998,7 +1009,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var candidateReasons = string.Join(",", multiOutcomeReport.RejectedByReason.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value}"));
                     candidateScanCycle++;
                     var rejectedCandidates = Math.Max(0, multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified);
-                    var rejectedOnlyCandidateScan = multiOutcomeReport.GroupsDetected > 0 && rejectedCandidates == multiOutcomeReport.GroupsDetected && multiOutcomeReport.ExecutableGroups == 0;
+                    var rejectedOnlyCandidateScan = multiOutcomeReport.GroupsDetected > 0 && rejectedCandidates == multiOutcomeReport.GroupsDetected && multiOutcomeReport.ExecutableGroups == 0 && activeExecutable == 0;
                     var candidateFingerprint = ScanLogSummaryService.CandidateScanFingerprint(multiOutcomeReport.GroupsDetected, multiOutcomeReport.TopSkipReason, multiOutcomeReport.RejectedByReason, candidateBucket, multiOutcomeReport.ExecutableGroups);
                     var rejectedOnlyMaterialFingerprint = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint(multiOutcomeReport.TopSkipReason, multiOutcomeReport.RejectedByReason, Math.Max(1, options.Logging.CandidateScanSignificantCountDelta));
                     var throttleFingerprint = rejectedOnlyCandidateScan && options.Diagnostics.OperationalQuietMode ? rejectedOnlyMaterialFingerprint : candidateFingerprint;
@@ -1040,7 +1051,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     File.WriteAllText(unresolvedExportPath, System.Text.Json.JsonSerializer.Serialize(unresolvedExport, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
                     var suppressedUnresolvedKeys = unresolvedDiagnostics.Where(x => x.SuppressedInConsole).Select(x => x.GroupKey).ToArray();
                     var unresolvedGroupSetFingerprint = ScanLogSummaryService.VerifiedUnresolvedGroupSetFingerprint(unresolvedDiagnostics.Select(x => x.GroupKey));
-                    var quietVerifiedFingerprint = ScanLogSummaryService.MultiVerifiedScanQuietFingerprint(unresolvedCounts, unresolvedGroupSetFingerprint, activeExecutable);
+                    var quietVerifiedFingerprint = ScanLogSummaryService.MultiVerifiedScanQuietFingerprint(unresolvedCounts, unresolvedGroupSetFingerprint, activeExecutable, paperOpenedCount, bestConservativeNet, options.Logging.VerifiedScanSignificantEdgeDelta);
                     verifiedScanFingerprint = options.Diagnostics.OperationalQuietMode
                         ? quietVerifiedFingerprint
                         : $"{verifiedScanFingerprint}|{unresolvedCounts.BrokenConfig}|{unresolvedCounts.NeedsRefresh}|{unresolvedCounts.ReviewOnly}|{unresolvedCounts.MonitoringOnly}|{unresolvedCounts.Other}|{unresolvedCounts.SamplesShown}|{unresolvedCounts.Suppressed}";
@@ -1218,12 +1229,6 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             if (options.Caches.ClearOrderbookCacheAfterScan) orderbookService.ClearExpiredCache();
             state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);
             memoryGuard.Check(state, options, () => orderbookService.ClearAllCache(), contentRootPath);
-            if (options.RuntimeHealth.Enabled && RuntimeHealthSnapshot.ShouldLogAt(DateTime.UtcNow, runtimeHealthLastLoggedAt, options.RuntimeHealth.LogEveryMinutes))
-            {
-                runtimeHealthLastLoggedAt = DateTime.UtcNow;
-                var health = RuntimeHealthSnapshot.From(state);
-                Console.WriteLine(health.ToLogLine());
-            }
             await PushUiUpdates(state, hub, uiLogger, options, verifiedExecution, contentRootPath);
             uiLogger.LogInfo("scanner", $"{{\"event\":\"scan_end\",\"durationMs\":{(long)(DateTime.UtcNow - started).TotalMilliseconds},\"marketsScanned\":{filtered.Count},\"detected\":{cycleTop.Count},\"executable\":{executableCount}}}");
         }
@@ -1344,36 +1349,8 @@ static T[] TrimPayload<T>(BotRuntimeState state, string eventName, T[] items, Tr
 
 
 static void ExportRuntimeSoakStatus(BotRuntimeState state, TradingBotOptions options, string contentRootPath)
-{
-    var health = RuntimeHealthSnapshot.From(state);
-    var logs = state.Logs();
-    var payload = new
-    {
-        timestamp = DateTime.UtcNow,
-        uptime = health.Uptime,
-        processMemoryMb = health.ProcessMemoryMb,
-        gcMemoryMb = health.GcTotalMemoryMb,
-        logsCount = health.RecentLogsCount,
-        executionAuditCount = health.ExecutionAuditCount,
-        signalRBufferCount = health.SignalREventBufferCount,
-        singleMarketDataQualitySamples = health.SingleMarketDataQualitySamplesCount,
-        singleMarketNearMisses = health.SingleMarketNearMissesCount,
-        paperOpenedCount = state.SingleMarketExecutionsCount,
-        memoryWarnings = logs.Count(x => x.Message.Contains("[MEMORY_WARNING]", StringComparison.OrdinalIgnoreCase)),
-        memoryCriticals = logs.Count(x => x.Message.Contains("[MEMORY_CRITICAL]", StringComparison.OrdinalIgnoreCase)),
-        liveTradingEnabled = options.EnableLiveExecution,
-        paperOnly = options.PaperOnly,
-        soakReady = options.Diagnostics.OperationalQuietMode
-            && options.RuntimeHealth.Enabled
-            && options.SignalR.MaxPayloadItems > 0
-            && options.SignalR.MaxPayloadBytes > 0
-            && options.PaperOnly
-            && !options.EnableLiveExecution
-    };
-    var path = Path.Combine(contentRootPath, "exports/runtime-soak-status-latest.json");
-    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-    File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(payload, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
-}
+    => RuntimeSoakStatusExporter.Export(state, options, contentRootPath);
+
 
 static SingleMarketArbSnapshotDto BuildSingleMarketSignalRPayload(BotRuntimeState state, TradingBotOptions options)
 {

@@ -357,6 +357,40 @@ public class SingleMarketSafetyTests
         Assert.Equal(-0.003m, summary.BestValidEdge);
     }
 
+
+    [Fact]
+    public void Single_market_full_cycle_summary_logs_only_when_cycle_completed()
+    {
+        var aggregator = new SingleMarketFullCycleSummaryAggregator(Options());
+        var logging = new TradingBot.Options.MultiOutcomeLoggingOptions
+        {
+            LogSingleMarketFullCycleOnlyOnCompletion = true,
+            LogSingleMarketCompletedCycleOnChangeOnly = true,
+            LogSingleMarketCompletedCycleEveryNCycles = 10
+        };
+        var batch = new SingleMarketScanSummaryDto(DateTime.UtcNow, 1, 250, 250, 0, 250, 0, 0, 0, 0, 0, 0, -0.003m, null, "BelowMinEdge", 250, new Dictionary<string, int> { ["BelowMinEdge"] = 250 }, new Dictionary<string, int>());
+
+        var partial = aggregator.AddBatch(1, batch, Array.Empty<SingleMarketDataQualityRejectSampleDto>());
+        var completed = aggregator.AddBatch(1, batch with { ScanId = 2 }, Array.Empty<SingleMarketDataQualityRejectSampleDto>());
+
+        Assert.False(aggregator.ShouldLog(partial, logging, fullCycleComplete: false));
+        Assert.True(aggregator.ShouldLog(completed, logging, fullCycleComplete: true));
+        Assert.Contains("Completed=true", SingleMarketFullCycleSummaryAggregator.ToLogLine(completed));
+    }
+
+    [Fact]
+    public async Task Batch_summaries_do_not_log_when_operational_quiet_mode_suppresses_batch_output()
+    {
+        var market = Market("quiet-batch");
+        var books = new Dictionary<string, BinaryOrderBookSnapshot> { [market.id] = BookForEdge(market, -0.003m) };
+        var engine = NewEngine(new MapProvider(books), new BotRuntimeState(new RuntimeStateOptions()), Options(), quiet: true);
+
+        var output = await CaptureConsole(() => engine.ScanAsync([market], NewPaper(), new SemaphoreSlim(1), fullCycleId: 1, isFullCycleComplete: false, suppressBatchDataQualitySummary: true));
+
+        Assert.DoesNotContain("[SINGLE_MARKET_SCAN_SUMMARY]", output);
+        Assert.DoesNotContain("[SINGLE_MARKET_DATA_QUALITY_SUMMARY]", output);
+    }
+
     [Fact]
     public async Task RuntimeHealth_single_market_counters_reflect_bounded_snapshot_after_scan()
     {

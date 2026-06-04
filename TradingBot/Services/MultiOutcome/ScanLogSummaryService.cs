@@ -82,8 +82,9 @@ public static class ScanLogSummaryService
 
     public static string RejectedOnlyCandidateScanFingerprint(string topReject, IReadOnlyDictionary<string, int> rejectedByReason, int reasonBucketSize)
     {
-        var reasonKeys = string.Join(",", rejectedByReason.Keys.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
-        return $"top:{topReject}|reasons:{reasonKeys}";
+        var bucket = Math.Max(1, reasonBucketSize);
+        var reasonBuckets = string.Join(",", rejectedByReason.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{(int)Math.Floor(x.Value / (decimal)bucket)}"));
+        return $"top:{topReject}|reasons:{reasonBuckets}";
     }
 
     public static bool ShouldSuppressRejectedOnlyCandidateScan(bool operationalQuietMode, bool logCandidateScanWhenOnlyRejected, bool rejectedOnlyCandidateScan, string currentFingerprint, string lastFingerprint, bool periodic)
@@ -100,8 +101,12 @@ public static class ScanLogSummaryService
     public static string VerifiedUnresolvedCategoryFingerprint(VerifiedUnresolvedCategoryCounts counts, string groupSetFingerprint)
         => $"total:{counts.Total}|broken:{counts.BrokenConfig}|refresh:{counts.NeedsRefresh}|review:{counts.ReviewOnly}|monitor:{counts.MonitoringOnly}|other:{counts.Other}|groups:{groupSetFingerprint}";
 
-    public static string MultiVerifiedScanQuietFingerprint(VerifiedUnresolvedCategoryCounts counts, string groupSetFingerprint, int activeExecutable)
-        => $"{VerifiedUnresolvedCategoryFingerprint(counts, groupSetFingerprint)}|activeExecutable:{Math.Max(0, activeExecutable)}";
+    public static string MultiVerifiedScanQuietFingerprint(VerifiedUnresolvedCategoryCounts counts, string groupSetFingerprint, int activeExecutable, int paperOpened = 0, decimal? bestActiveNet = null, decimal significantEdgeDelta = 0.005m)
+    {
+        var bucketSize = significantEdgeDelta <= 0m ? 0.005m : significantEdgeDelta;
+        var edgeBucket = bestActiveNet.HasValue ? ((long)Math.Round(bestActiveNet.Value / bucketSize, MidpointRounding.AwayFromZero)).ToString() : "none";
+        return $"{VerifiedUnresolvedCategoryFingerprint(counts, groupSetFingerprint)}|activeExecutable:{Math.Max(0, activeExecutable)}|paperOpened:{Math.Max(0, paperOpened)}|bestActiveNetBucket:{edgeBucket}";
+    }
 
     public static string ProfileComparisonFingerprint(IReadOnlyList<VerifiedBasketScreener.ScreenResult> rows, decimal netDelta)
     {

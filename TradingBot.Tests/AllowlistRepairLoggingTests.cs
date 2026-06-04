@@ -7,6 +7,57 @@ namespace TradingBot.Tests;
 
 public class AllowlistRepairLoggingTests
 {
+
+    [Fact]
+    public void Rejected_only_candidate_scan_is_suppressed_until_material_change_or_periodic_cycle()
+    {
+        var current = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint("AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 9 }, 15);
+        var sameBucket = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint("AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 12 }, 15);
+        var changedBucket = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint("AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 31 }, 15);
+
+        Assert.True(ScanLogSummaryService.ShouldSuppressRejectedOnlyCandidateScan(true, false, true, sameBucket, current, periodic: false));
+        Assert.False(ScanLogSummaryService.ShouldSuppressRejectedOnlyCandidateScan(true, false, true, changedBucket, current, periodic: false));
+        Assert.False(ScanLogSummaryService.ShouldSuppressRejectedOnlyCandidateScan(true, false, true, sameBucket, current, periodic: true));
+    }
+
+    [Fact]
+    public void Multi_verified_scan_unchanged_diagnostics_are_suppressed_until_material_change()
+    {
+        var throttle = new LogThrottle();
+        var counts = new VerifiedUnresolvedCategoryCounts(3, 0, 1, 2, 0, 0, 0, 3);
+        var groups = ScanLogSummaryService.VerifiedUnresolvedGroupSetFingerprint(["a", "b", "c"]);
+        var first = ScanLogSummaryService.MultiVerifiedScanQuietFingerprint(counts, groups, activeExecutable: 0, paperOpened: 0, bestActiveNet: -0.010m, significantEdgeDelta: 0.005m);
+        var smallEdgeMove = ScanLogSummaryService.MultiVerifiedScanQuietFingerprint(counts, groups, activeExecutable: 0, paperOpened: 0, bestActiveNet: -0.011m, significantEdgeDelta: 0.005m);
+        var activeExecutableChanged = ScanLogSummaryService.MultiVerifiedScanQuietFingerprint(counts, groups, activeExecutable: 1, paperOpened: 0, bestActiveNet: -0.011m, significantEdgeDelta: 0.005m);
+
+        Assert.True(throttle.ShouldLog("MULTI_VERIFIED_SCAN", first, onChangeOnly: true, everyNCycles: 100));
+        Assert.False(throttle.ShouldLog("MULTI_VERIFIED_SCAN", smallEdgeMove, onChangeOnly: true, everyNCycles: 100));
+        Assert.True(throttle.ShouldLog("MULTI_VERIFIED_SCAN", activeExecutableChanged, onChangeOnly: true, everyNCycles: 100));
+    }
+
+    [Fact]
+    public void Profile_comparison_unchanged_details_are_suppressed()
+    {
+        var throttle = new LogThrottle();
+        var first = ScanLogSummaryService.ProfileComparisonFingerprint([Row(active: -0.004m, experimental: -0.001m, classification: "Monitor")], 0.005m);
+        var unchangedBucket = ScanLogSummaryService.ProfileComparisonFingerprint([Row(active: -0.0041m, experimental: -0.0012m, classification: "Monitor")], 0.005m);
+        var classificationChanged = ScanLogSummaryService.ProfileComparisonFingerprint([Row(active: -0.0041m, experimental: -0.0012m, classification: "NearExecutable")], 0.005m);
+
+        Assert.True(throttle.ShouldLog("PROFILE_COMPARISON", first, true, 100));
+        Assert.False(throttle.ShouldLog("PROFILE_COMPARISON", unchangedBucket, true, 100));
+        Assert.True(throttle.ShouldLog("PROFILE_COMPARISON", classificationChanged, true, 100));
+    }
+
+    [Fact]
+    public void Repair_suggestion_same_hash_logs_once()
+    {
+        var throttle = new LogThrottle();
+        var hash = "snapshot|group|RefreshFromCandidateExport|missing|suggested|Medium";
+
+        Assert.True(throttle.ShouldLog("ALLOWLIST_REPAIR_SUGGESTION:group", hash, true, 100));
+        Assert.False(throttle.ShouldLog("ALLOWLIST_REPAIR_SUGGESTION:group", hash, true, 100));
+    }
+
     [Fact]
     public void Experimental_candidates_zero_makes_best_experimental_null_and_alternate_separate()
     {

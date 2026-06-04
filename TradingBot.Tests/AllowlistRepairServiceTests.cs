@@ -10,6 +10,47 @@ namespace TradingBot.Tests;
 public class AllowlistRepairServiceTests
 {
 
+
+    [Fact]
+    public void Diagnostics_only_during_soak_suppresses_non_critical_repair_patches()
+    {
+        var svc = new AllowlistRepairService();
+        var opts = new TradingBot.Options.AllowlistRepairOptions
+        {
+            DiagnosticsOnlyDuringSoak = true,
+            RequiredStableRepairSnapshots = 1,
+            UseLatestCandidateExportForRepair = true
+        };
+        var report = svc.BuildReport(Configured(), ResolvedMismatches(), [], [WomensCandidate()], opts);
+
+        var preview = svc.BuildPatchPreview(report, Configured()).PatchPreview;
+        var womens = preview.Patches.Single(x => x.GroupKey.Contains("women s us open", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal("ReviewOnly", womens.PatchType);
+        Assert.Contains(womens.RiskNotes, x => x.Contains("DiagnosticsOnlyDuringSoak", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(0, preview.Summary.PatchableHighConfidence + preview.Summary.PatchableMediumConfidence);
+    }
+
+    [Fact]
+    public void Womens_us_open_action_change_does_not_become_patchable_during_soak()
+    {
+        var svc = new AllowlistRepairService();
+        var opts = new TradingBot.Options.AllowlistRepairOptions
+        {
+            DiagnosticsOnlyDuringSoak = true,
+            RequiredStableRepairSnapshots = 3,
+            QuarantineOnActionChange = true,
+            UseLatestCandidateExportForRepair = true
+        };
+        var report = svc.BuildReport(Configured(), ResolvedMismatches(), [], [WomensCandidate()], opts);
+
+        var preview = svc.BuildPatchPreview(report, Configured()).PatchPreview;
+        var womens = preview.Patches.Single(x => x.GroupKey.Contains("women s us open", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal("ReviewOnly", womens.PatchType);
+        Assert.True(womens.RiskNotes.Any(x => x.Contains("DiagnosticsOnlyDuringSoak", StringComparison.OrdinalIgnoreCase) || x.Contains("RepairDiffNotStable", StringComparison.OrdinalIgnoreCase)));
+    }
+
     [Fact]
     public void Shared_classifier_counts_match_health_and_repair_report()
     {
@@ -620,7 +661,7 @@ public class AllowlistRepairServiceTests
 
 
 
-    private static TradingBot.Options.AllowlistRepairOptions StableRepairOptions() => new() { RequiredStableRepairSnapshots = 1, UseLatestCandidateExportForRepair = false };
+    private static TradingBot.Options.AllowlistRepairOptions StableRepairOptions() => new() { DiagnosticsOnlyDuringSoak = false, RequiredStableRepairSnapshots = 1, UseLatestCandidateExportForRepair = false };
 
     private static IReadOnlyList<VerifiedMultiOutcomeGroupConfig> PeruConfigured(IReadOnlyList<string> marketIds) =>
     [

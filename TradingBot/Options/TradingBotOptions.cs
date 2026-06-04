@@ -260,6 +260,10 @@ public class MultiOutcomeLoggingOptions
     public int LogAllowlistRepairSuggestionsEveryNCycles { get; set; } = 100;
     public bool LogAllowlistRepairOnChangeOnly { get; set; } = true;
     public int LogAllowlistRepairEveryNCycles { get; set; } = 100;
+    public bool LogSingleMarketFullCycleOnlyOnCompletion { get; set; } = true;
+    public int LogSingleMarketCompletedCycleEveryNCycles { get; set; } = 10;
+    public bool LogSingleMarketCompletedCycleOnChangeOnly { get; set; } = true;
+    public decimal VerifiedScanSignificantEdgeDelta { get; set; } = 0.005m;
     public bool LogRepairHistoryValidationOnChangeOnly { get; set; } = true;
     public int LogRepairHistoryValidationEveryNCycles { get; set; } = 100;
 }
@@ -294,7 +298,9 @@ public class AllowlistRepairOptions
     public decimal MinRefreshMatchScore { get; set; } = 0.70m;
     public bool PreferStableCachedMatches { get; set; } = true;
     public bool UseLatestCandidateExportForRepair { get; set; } = true;
-    public int RequiredStableRepairSnapshots { get; set; } = 2;
+    public bool DiagnosticsOnlyDuringSoak { get; set; } = false;
+    public int RequiredStableRepairSnapshots { get; set; } = 3;
+    public bool QuarantineOnActionChange { get; set; } = true;
     public List<AllowlistRepairLockedGroupOptions> LockedGroups { get; set; } = new();
 }
 
@@ -338,6 +344,9 @@ public class SingleMarketArbOptions
     public int TopPositiveCandidateCount { get; set; } = 20;
     public int TopDataQualityRejectSampleCount { get; set; } = 20;
     public int TopExecutionCount { get; set; } = 20;
+    public bool LogBatchSummaries { get; set; } = false;
+    public bool LogCycleProgress { get; set; } = false;
+    public int CycleProgressEveryNBatches { get; set; } = 25;
 }
 
 public class RuntimeStateOptions
