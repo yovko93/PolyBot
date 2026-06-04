@@ -452,7 +452,7 @@ public sealed class AllowlistRepairService
         if (status.Quarantined)
             Console.WriteLine($"[ALLOWLIST_REPAIR_QUARANTINED] Group={patch.GroupKey} Reason={status.Reason} MarketIds=[{string.Join(',', status.OscillatingMarketIds)}]");
         if (options.DiagnosticsOnlyDuringSoak && IsNonCriticalRepairPatch(patch) && !status.Locked && !status.NoOp
-            && _loggedDiagnosticsOnlySuppressions.Add($"{snapshotId}|{patch.GroupKey}|DiagnosticsOnlyDuringSoak"))
+            && _loggedDiagnosticsOnlySuppressions.Add($"{patch.GroupKey}|{patch.PatchType}|DiagnosticsOnlyDuringSoak"))
             Console.WriteLine($"[ALLOWLIST_REPAIR_PATCH_SUPPRESSED] Group={patch.GroupKey} Reason=DiagnosticsOnlyDuringSoak");
 
         if (status.Quarantined || status.Locked || status.NoOp || status.Unstable)

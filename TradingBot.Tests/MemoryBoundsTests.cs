@@ -126,6 +126,22 @@ public class MemoryBoundsTests
         Assert.True(audit.ListAudit(500).Count <= runtime.MaxExecutionAuditEvents);
     }
 
+
+    [Fact]
+    public void RuntimeHealth_includes_quiet_suppression_counters()
+    {
+        var state = new BotRuntimeState();
+        state.SetQuietLogGateStats(new QuietLogGateStats(123, 7, new Dictionary<string, long> { ["multi"] = 123 }, new Dictionary<string, long> { ["multi"] = 7 }, 4, 2));
+
+        var health = RuntimeHealthSnapshot.From(state);
+        var line = health.ToLogLine();
+
+        Assert.Equal(123, health.QuietSuppressedTotal);
+        Assert.Contains("QuietSuppressed=123", line);
+        Assert.Contains("EmittedLogs=7", line);
+        Assert.Contains("LogGateCache=4", line);
+    }
+
     [Fact]
     public void SignalR_buffer_remains_bounded_after_20000_events()
     {

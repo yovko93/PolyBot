@@ -38,6 +38,7 @@ builder.Services.AddSingleton<DryRunFillSimulator>();
 builder.Services.AddSingleton<AllowlistRepairLockProvider>();
 builder.Services.AddSingleton<AllowlistRepairService>();
 builder.Services.AddSingleton<MemoryGuard>();
+builder.Services.AddSingleton<QuietLogGate>();
 builder.Services.AddSingleton<IExchangeOrderExecutor, DisabledExchangeOrderExecutor>();
 builder.Services.AddSingleton<DryRunLiveExecutor>();
 builder.Services.AddSingleton(sp => new BotRuntimeState(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value.RuntimeState));
@@ -211,11 +212,12 @@ app.MapPost("/api/bot/controls/resume", async (BotRuntimeState s, IHubContext<Bo
 });
 app.MapGet("/api/bot/logs/recent", (BotRuntimeState s, int? limit) => s.Logs().TakeLast(Math.Clamp(limit ?? 300, 1, 1000)).ToArray());
 app.MapGet("/api/bot/equity", (BotRuntimeState s, int? limit) => s.Equity().TakeLast(Math.Clamp(limit ?? 500, 1, 1000)).ToArray());
-app.MapGet("/api/bot/runtime-health", (BotRuntimeState s) => Results.Ok(RuntimeHealthSnapshot.From(s)));
+app.MapGet("/api/bot/runtime-health", (BotRuntimeState s, QuietLogGate q) => { s.SetQuietLogGateStats(q.Snapshot()); return Results.Ok(RuntimeHealthSnapshot.From(s)); });
 app.MapHub<BotHub>("/hubs/bot");
 
 var apiTask = app.RunAsync(listenUrl);
 var state = app.Services.GetRequiredService<BotRuntimeState>();
+var quietLogGate = app.Services.GetRequiredService<QuietLogGate>();
 var logger = app.Services.GetRequiredService<IBotUiLogger>();
 options = app.Services.GetRequiredService<IOptions<TradingBotOptions>>().Value;
 
@@ -252,6 +254,7 @@ _ = Task.Run(async () =>
         DateTime lastSoakStatusLoggedAt = DateTime.UtcNow;
         void LogRuntimeHealthAndSoakStatus()
         {
+            state.SetQuietLogGateStats(quietLogGate.Snapshot());
             var health = RuntimeHealthSnapshot.From(state);
             var trend = RuntimeHealthTrendTracker.RecordAndAnalyze(health, options.RuntimeHealth);
             Console.WriteLine(health.ToLogLine());
@@ -259,7 +262,7 @@ _ = Task.Run(async () =>
             if (RuntimeHealthSnapshot.ShouldLogAt(DateTime.UtcNow, lastSoakStatusLoggedAt, options.RuntimeHealth.LogSoakStatusEveryMinutes))
             {
                 lastSoakStatusLoggedAt = DateTime.UtcNow;
-                Console.WriteLine(RuntimeHealthTrendTracker.ToSoakStatusLogLine(health, trend));
+                Console.WriteLine(RuntimeHealthTrendTracker.ToSoakStatusLogLine(health, trend, options));
             }
         }
 
@@ -288,10 +291,10 @@ _ = Task.Run(async () =>
     }
 });
 
-await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>(), app.Services.GetRequiredService<VerifiedBasketDryRunOrderBuilder>(), app.Services.GetRequiredService<DryRunFillSimulator>(), app.Services.GetRequiredService<AllowlistRepairService>(), app.Services.GetRequiredService<AllowlistRepairLockProvider>(), app.Services.GetRequiredService<MemoryGuard>(), app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value, options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping);
+await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>(), app.Services.GetRequiredService<VerifiedBasketDryRunOrderBuilder>(), app.Services.GetRequiredService<DryRunFillSimulator>(), app.Services.GetRequiredService<AllowlistRepairService>(), app.Services.GetRequiredService<AllowlistRepairLockProvider>(), app.Services.GetRequiredService<MemoryGuard>(), quietLogGate, app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value, options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping);
 await apiTask;
 
-static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, VerifiedBasketExecutionCoordinator verifiedExecution, VerifiedBasketDryRunOrderBuilder dryRunBuilder, DryRunFillSimulator fillSimulator, AllowlistRepairService allowlistRepairService, AllowlistRepairLockProvider lockProvider, MemoryGuard memoryGuard, ExecutionOptions executionOptions, TradingBotOptions options, OpportunityFilteringOptions filtering, string contentRootPath, CancellationToken stoppingToken)
+static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, VerifiedBasketExecutionCoordinator verifiedExecution, VerifiedBasketDryRunOrderBuilder dryRunBuilder, DryRunFillSimulator fillSimulator, AllowlistRepairService allowlistRepairService, AllowlistRepairLockProvider lockProvider, MemoryGuard memoryGuard, QuietLogGate quietLogGate, ExecutionOptions executionOptions, TradingBotOptions options, OpportunityFilteringOptions filtering, string contentRootPath, CancellationToken stoppingToken)
 {
     var scannerInstanceId = Guid.NewGuid().ToString("N");
     var scannerStartedAt = DateTime.UtcNow;
@@ -331,7 +334,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var paper = new PaperTradingEngine(executionPolicy, executionJournal, executionDecisionService, positionBook);
     var monitor = new OpportunityMonitor(Path.Combine(AppContext.BaseDirectory, "data", "arb-opportunities.csv"), options.MinEdgePerShare, -0.02m, TimeSpan.FromMinutes(2), options.MinExpectedProfit, new DryRunLiveOrderBuilder(minEdgePerShare: -0.01m, maxPlanCost: 100000m, minSize: 1m, tickSize: 0.001m, orderType: LiveOrderType.FOK, policy: executionPolicy));
     var semaphore = new SemaphoreSlim(options.MaxConcurrentRequests);
-    var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketFees, options.SingleMarketSlippage, monitor, sizing, options.SingleMarketArb, state, contentRootPath, verifiedExecution, options.Diagnostics.OperationalQuietMode, options.Logging);
+    var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketFees, options.SingleMarketSlippage, monitor, sizing, options.SingleMarketArb, state, contentRootPath, verifiedExecution, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate);
     var singleMarketFullCycle = new SingleMarketFullCycleSummaryAggregator(options.SingleMarketArb);
 
     var config = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory).AddJsonFile("appsettings.json", optional: true).Build();
@@ -377,6 +380,21 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var lastExperimentalFingerprintByGroup = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
     var lastProfileComparisonFingerprint = string.Empty;
     var mismatchFingerprintByGroup = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+    QuietLogPolicy QuietPolicy(int? everyNCycles = null, int? maxPerHour = null) => new(
+        options.Diagnostics.OperationalQuietMode,
+        everyNCycles ?? Math.Max(1, options.Logging.QuietModeDefaultEveryNCycles),
+        everyNCycles == 0 ? 0 : Math.Max(1, options.Logging.QuietModeDefaultEveryMinutes),
+        options.Logging.QuietModeSuppressRepeatedHash,
+        maxPerHour ?? Math.Max(1, options.Logging.QuietModeMaxSameEventPerHour),
+        options.Diagnostics.DebuggerSafeMode);
+
+    bool ShouldQuietLog(string category, string eventName, string stableHash, LogImportance importance = LogImportance.Normal, string? bucketHash = null, string? groupKey = null, string? marketId = null, string? strategy = null, int? everyNCycles = null, int? maxPerHour = null)
+        => quietLogGate.ShouldLog(
+            new LogEventKey(category, eventName, groupKey, marketId, strategy),
+            new LogEventFingerprint(stableHash, bucketHash),
+            importance,
+            QuietPolicy(everyNCycles, maxPerHour));
+
     var basketStateByGroup = new Dictionary<string, VerifiedBasketState>(StringComparer.OrdinalIgnoreCase);
     var stability = new VerifiedOpportunityStabilityTracker();
     var edgeStabilityLogThrottle = new EdgeStabilityLogThrottle();
@@ -473,7 +491,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     logRejectedCandidates: options.Logging.LogRejectedMultiOutcomeCandidates,
                     logRejectedSummary: false,
                     rejectedSampleSize: options.Logging.RejectedMultiOutcomeSampleSize > 0 ? options.Logging.RejectedMultiOutcomeSampleSize : options.Logging.RejectedCandidateSampleSize,
-                    validator: multiOutcomeValidator);
+                    validator: multiOutcomeValidator,
+                    operationalQuietMode: options.Diagnostics.OperationalQuietMode,
+                    logging: options.Logging,
+                    quietLogGate: quietLogGate);
                 multiOutcomeReport = await multiEngine.ScanAsync(filtered!, paper, orderbookSemaphore, stoppingToken);
                 var boundedCandidates = exportService.BuildBoundedCandidates(multiOutcomeReport.CandidateGroupsForReview, options.MultiOutcomeReview.TopCandidateGroupsForReview, options.MultiOutcomeReview.MaxMarketsPerCandidateGroup, includeMarkets: true);
                 var reviewReport = exportService.BuildReviewReport(multiOutcomeReport.CandidateGroupsForReview, options.MultiOutcomeReview.AllowUnpricedLegsInTemplate);
@@ -848,12 +869,12 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var repairSnapshotFingerprint = options.Logging.SuppressRepeatedRepairSnapshotLogs
                         ? repairReport.SnapshotId
                         : $"{repairReport.SnapshotId}|{repairReport.Snapshot.CandidateGroupsCount}|{repairReport.Snapshot.VerifiedGroupsCount}|{repairReport.Snapshot.Source}";
-                    if (logThrottle.ShouldLog("ALLOWLIST_REPAIR_SNAPSHOT", repairSnapshotFingerprint, true, repairLogEveryNCycles))
+                    if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_SNAPSHOT", repairSnapshotFingerprint, LogImportance.Normal, everyNCycles: repairLogEveryNCycles))
                         Console.WriteLine($"[ALLOWLIST_REPAIR_SNAPSHOT] Id={repairReport.SnapshotId} CandidateGroups={repairReport.Snapshot.CandidateGroupsCount} VerifiedGroups={repairReport.Snapshot.VerifiedGroupsCount} Source={repairReport.Snapshot.Source}");
                     var repairReportFingerprint = options.Logging.SuppressRepeatedRepairSnapshotLogs
                         ? $"{summary.ConfiguredGroups}|{summary.Healthy}|{summary.MonitoringOnly}|{summary.NeedsPricingPrune}|{summary.NeedsRefresh}|{summary.BrokenConfig}|{summary.Disabled}|{summary.Ignored}|{string.Join(";", repairReport.Groups.Select(x => $"{x.GroupKey}:{x.HealthCategory}:{x.RecommendedAction}:{x.RepairConfidence}"))}"
                         : $"{repairReport.SnapshotId}|{summary.ConfiguredGroups}|{summary.Healthy}|{summary.MonitoringOnly}|{summary.NeedsPricingPrune}|{summary.NeedsRefresh}|{summary.BrokenConfig}|{summary.Disabled}|{summary.Ignored}|{string.Join(";", repairReport.Groups.Select(x => $"{x.GroupKey}:{x.HealthCategory}:{x.RecommendedAction}:{x.RepairConfidence}:{x.ActionVersion}"))}";
-                    if (logThrottle.ShouldLog("ALLOWLIST_REPAIR_REPORT", repairReportFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, repairLogEveryNCycles))
+                    if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_REPORT", repairReportFingerprint, LogImportance.Normal, everyNCycles: repairLogEveryNCycles))
                         Console.WriteLine($"[ALLOWLIST_REPAIR_REPORT] Groups={repairReport.ConfiguredGroups} Healthy={summary.Healthy} MonitoringOnly={summary.MonitoringOnly} NeedsPricingPrune={summary.NeedsPricingPrune} NeedsRefresh={summary.NeedsRefresh} BrokenConfig={summary.BrokenConfig} Disabled={summary.Disabled} Ignored={summary.Ignored} BrokenTotal={summary.Broken} Path={options.MultiOutcomeReview.ExportAllowlistRepairReportPath}");
                     var patchableCount = patchPreview.Summary.PatchableHighConfidence + patchPreview.Summary.PatchableMediumConfidence;
                     var quarantinedCount = patchPreview.Summary.Quarantined;
@@ -861,7 +882,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var lockedCount = patchPreview.Summary.Locked;
                     var reviewOnlyCount = patchPreview.Patches.Count - patchableCount;
                     var patchPreviewFingerprint = $"{patchableCount}|{reviewOnlyCount}|{quarantinedCount}|{noOpCount}|{lockedCount}|{string.Join(";", patchPreview.Patches.Select(x => $"{x.GroupKey}:{x.PatchType}:{x.Confidence}:{string.Join(',', x.RiskNotes)}"))}";
-                    if (logThrottle.ShouldLog("ALLOWLIST_REPAIR_PATCH_PREVIEW", patchPreviewFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, repairLogEveryNCycles))
+                    if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_PATCH_PREVIEW", patchPreviewFingerprint, LogImportance.Normal, everyNCycles: repairLogEveryNCycles))
                         Console.WriteLine($"[ALLOWLIST_REPAIR_PATCH_PREVIEW] Snapshot={patchPreview.SnapshotId} Patchable={patchableCount} ReviewOnly={reviewOnlyCount} Quarantined={quarantinedCount} NoOp={noOpCount} Locked={lockedCount} Output=exports/verified-allowlist-repair-patch-preview-latest.json");
                     var patchedPreviewValidation = patchPreview.PatchedPreviewValidation;
                     var patchedPreviewValidationFingerprint = $"{patchPreview.SnapshotId}|{patchedPreviewValidation.TotalGroups}|{patchedPreviewValidation.UniqueGroupKeys}|{patchedPreviewValidation.DuplicateGroupKeys}|{patchedPreviewValidation.Valid}|{string.Join(';', patchedPreviewValidation.Reasons)}";
@@ -877,7 +898,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         var removed = patch.Diff?["removedMarketIds"] is System.Text.Json.Nodes.JsonArray rm ? string.Join(",", rm.Select(x => x?.GetValue<string>()).Where(x => !string.IsNullOrWhiteSpace(x))) : string.Empty;
                         var added = patch.Diff?["addedMarketIds"] is System.Text.Json.Nodes.JsonArray am ? string.Join(",", am.Select(x => x?.GetValue<string>()).Where(x => !string.IsNullOrWhiteSpace(x))) : string.Empty;
                         var patchFingerprint = $"{patch.GroupKey}|{patch.PatchType}|{patch.Confidence}|{removed}|{added}";
-                        if (logThrottle.ShouldLog($"ALLOWLIST_REPAIR_PATCH:{patch.GroupKey}", patchFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, repairLogEveryNCycles))
+                        if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_PATCH", patchFingerprint, LogImportance.Normal, groupKey: patch.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: options.Logging.MaxRepairSuggestionLogsPerHour))
                             Console.WriteLine($"[ALLOWLIST_REPAIR_PATCH] Group={patch.GroupKey} Type={patch.PatchType} Confidence={patch.Confidence} Added=[{added}] Removed=[{removed}]");
                         if (patch.PatchType == "PruneGroup")
                         {
@@ -904,7 +925,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 lockProvider.IsHardLocked(repair.GroupKey),
                                 repair.HealthCategory.Equals("Quarantined", StringComparison.OrdinalIgnoreCase) || repair.RepairConfidence.Equals("Unsafe", StringComparison.OrdinalIgnoreCase));
                             var repairFingerprint = options.Logging.SuppressRepeatedRepairSnapshotLogs ? suggestionStableHash : $"{repair.RepairSnapshotId}|{suggestionStableHash}|{suggestedLegs}|{repair.ActionVersion}";
-                            if (logThrottle.ShouldLog($"ALLOWLIST_REPAIR_SUGGESTION:{repair.GroupKey}", repairFingerprint, options.Logging.LogRepairSuggestionsOnChangeOnly, repairSuggestionEveryNCycles))
+                            if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_SUGGESTION", $"{repair.RepairSnapshotId}|{repairFingerprint}", LogImportance.Normal, repairFingerprint, repair.GroupKey, everyNCycles: repairSuggestionEveryNCycles, maxPerHour: options.Logging.MaxRepairSuggestionLogsPerHour))
                                 Console.WriteLine($"[ALLOWLIST_REPAIR_SUGGESTION] Group={repair.GroupKey} Snapshot={repair.RepairSnapshotId} Action={repair.RecommendedAction} MissingNoAsk={repair.MissingNoAsk} SuggestedLegs={suggestedLegs} Confidence={repair.RepairConfidence}");
                         }
                         if (repair.ActionVersion > 1 && !string.Equals(repair.PreviousAction, repair.CurrentAction, StringComparison.OrdinalIgnoreCase))
@@ -912,10 +933,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             var directionFingerprint = ScanLogSummaryService.RepairActionDirectionFingerprint(repair.GroupKey, repair.PreviousAction, repair.CurrentAction);
                             if (ScanLogSummaryService.IsWomenUsOpenRepairFlipFlop(repair.GroupKey, repair.PreviousAction, repair.CurrentAction, repair.ReasonForChange) && options.Diagnostics.OperationalQuietMode)
                             {
-                                if (logThrottle.ShouldLog($"ALLOWLIST_REPAIR_UNSTABLE_SUPPRESSED:{repair.GroupKey}", directionFingerprint, true, options.Logging.LogAllowlistRepairEveryNCycles))
+                                if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_UNSTABLE_SUPPRESSED", directionFingerprint, LogImportance.Normal, groupKey: repair.GroupKey, everyNCycles: options.Logging.LogAllowlistRepairEveryNCycles, maxPerHour: options.Logging.MaxRepairSuggestionLogsPerHour))
                                     Console.WriteLine($"[ALLOWLIST_REPAIR_UNSTABLE_SUPPRESSED] Group={repair.GroupKey} Reason=ActionFlipFlopDuringSoak");
                             }
-                            else if (logThrottle.ShouldLog($"ALLOWLIST_REPAIR_ACTION_CHANGED:{repair.GroupKey}", directionFingerprint, true, repairLogEveryNCycles))
+                            else if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_ACTION_CHANGED", directionFingerprint, LogImportance.Normal, groupKey: repair.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: options.Logging.MaxRepairSuggestionLogsPerHour))
                             {
                                 Console.WriteLine($"[ALLOWLIST_REPAIR_ACTION_CHANGED] Group={repair.GroupKey} From={repair.PreviousAction} To={repair.CurrentAction} Reason={repair.ReasonForChange} ConsecutiveSnapshotMisses={repair.ConsecutiveMatchMisses}");
                             }
@@ -933,20 +954,20 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             else if (lockProvider.IsHardLocked(repair.GroupKey))
                             {
                                 var ignoredFingerprint = $"{repair.GroupKey}|{m.CandidateGroupKey}|{m.Score}|LockedGroup";
-                                if (logThrottle.ShouldLog($"ALLOWLIST_REPAIR_LOCKED_MATCH_IGNORED:{repair.GroupKey}", ignoredFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, repairLogEveryNCycles))
+                                if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_LOCKED_MATCH_IGNORED", ignoredFingerprint, LogImportance.Normal, groupKey: repair.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: options.Logging.MaxRepairSuggestionLogsPerHour))
                                     Console.WriteLine($"[ALLOWLIST_REPAIR_LOCKED_MATCH_IGNORED] Group={repair.GroupKey} Candidate={m.CandidateGroupKey} Score={m.Score:0.##} Reason=LockedGroup");
                             }
                             else
                             {
                                 var matchFingerprint = $"{repair.GroupKey}|{m.CandidateGroupKey}|{m.Score}|{m.Confidence}|{string.Join(',', m.AddedMarketIds)}|{string.Join(',', m.RemovedMarketIds)}";
-                                if (logThrottle.ShouldLog($"ALLOWLIST_REPAIR_MATCH:{repair.GroupKey}", matchFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, repairLogEveryNCycles))
+                                if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_MATCH", matchFingerprint, LogImportance.Normal, groupKey: repair.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: options.Logging.MaxRepairSuggestionLogsPerHour))
                                     Console.WriteLine($"[ALLOWLIST_REPAIR_MATCH] Group={repair.GroupKey} Candidate={m.CandidateGroupKey} Score={m.Score:0.##} Confidence={m.Confidence} Added={m.AddedMarketIds.Count} Removed={m.RemovedMarketIds.Count}");
                             }
                         }
                         if (isRepairAction && (repair.ConsecutiveMatchMisses > 0 || repair.RecommendedAction == "NeedsManualReview" || repair.RecommendedAction == "DisableMissingMarkets"))
                         {
                             var noMatchFingerprint = $"{repair.RepairSnapshotId}|{repair.GroupKey}|{repair.RecommendedAction}|{repair.Reason}|{repair.ConsecutiveMatchMisses}";
-                            if (logThrottle.ShouldLog($"ALLOWLIST_REPAIR_NO_MATCH:{repair.GroupKey}", noMatchFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, repairLogEveryNCycles))
+                            if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_NO_MATCH", noMatchFingerprint, LogImportance.Normal, groupKey: repair.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: options.Logging.MaxRepairSuggestionLogsPerHour))
                                 Console.WriteLine($"[ALLOWLIST_REPAIR_NO_MATCH] Group={repair.GroupKey} ConsecutiveMisses={repair.ConsecutiveMatchMisses} RequiredForDowngrade={options.AllowlistRepair.MatchFailureDowngradeCycles}");
                         }
                     }
@@ -981,7 +1002,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     profileComparisonCycle++;
                     static long EdgeBucket(decimal value, decimal bucket) => bucket <= 0m ? (long)(value * 1000000m) : (long)Math.Round(value / bucket, MidpointRounding.AwayFromZero);
                     var profileComparisonFingerprint = ScanLogSummaryService.ProfileComparisonFingerprint(snapshot.VerifiedBaskets, options.Logging.ProfileComparisonSignificantNetDelta);
-                    var shouldLogProfileComparisonSummary = options.Logging.LogProfileComparisonSummary && logThrottle.ShouldLog("PROFILE_COMPARISON_SUMMARY", profileComparisonFingerprint, options.Logging.LogProfileComparisonOnChangeOnly, options.Logging.LogProfileComparisonEveryNCycles);
+                    var shouldLogProfileComparisonSummary = options.Logging.LogProfileComparisonSummary && ShouldQuietLog("profile-comparison", "PROFILE_COMPARISON_SUMMARY", profileComparisonFingerprint, LogImportance.Normal, profileComparisonFingerprint, everyNCycles: options.Logging.LogProfileComparisonEveryNCycles, maxPerHour: options.Logging.MaxProfileComparisonDetailLogsPerHour);
                     if (options.Logging.LogProfileComparisonSummary)
                     {
                         foreach (var row in snapshot.VerifiedBaskets.Take(5))
@@ -992,7 +1013,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             var r = row.ProfileResults.FirstOrDefault(x => x.ProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? 0m;
                             var detailFingerprint = $"{row.GroupKey}|{row.Classification}|active:{EdgeBucket(row.ActiveProfileNetEdge, options.Logging.ProfileComparisonSignificantNetDelta)}";
                             var detailEveryNCycles = options.Diagnostics.OperationalQuietMode ? 0 : options.Logging.LogProfileComparisonEveryNCycles;
-                            if (logThrottle.ShouldLog($"PROFILE_COMPARISON:{row.GroupKey}", detailFingerprint, options.Logging.LogProfileComparisonOnChangeOnly, detailEveryNCycles))
+                            if (ShouldQuietLog("profile-comparison", "PROFILE_COMPARISON", detailFingerprint, LogImportance.Normal, detailFingerprint, row.GroupKey, everyNCycles: detailEveryNCycles, maxPerHour: options.Logging.MaxProfileComparisonDetailLogsPerHour))
                                 Console.WriteLine($"[PROFILE_COMPARISON] Group={row.GroupKey} Gross={row.GrossEdge} Conservative={c} PolymarketApprox={p} OrderbookOnly={o} RawOnly={r}");
                         }
                     }
@@ -1027,7 +1048,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         var rankingExecutableCount = rankedScreen.Count(x => x.ExecutionStatus == VerifiedBasketScreener.ExecutionStatus.ExecutableUnderActiveProfile);
                         var rankingFingerprint = $"{rankedScreen.Count}|{EdgeBucket(rankedScreen[0].ActiveProfileNetEdge, 0.002m)}|{rankedScreen[0].GroupKey}|{rankedScreen[0].Classification}|{rankingExecutableCount}";
                         var rankingOnChangeOnly = options.Logging.LogVerifiedBasketRankingOnChangeOnly && options.Logging.LogVerifiedBasketOnlyOnChangeRanking;
-                        var shouldLogRanking = logThrottle.ShouldLog("VERIFIED_BASKET_RANKING", rankingFingerprint, options.Diagnostics.OperationalQuietMode ? options.Logging.LogVerifiedRankingOnChangeOnly : rankingOnChangeOnly, options.Diagnostics.OperationalQuietMode ? options.Logging.LogVerifiedRankingEveryNCycles : options.Logging.LogVerifiedBasketRankingEveryNCycles);
+                        var shouldLogRanking = ShouldQuietLog("verified-basket", "VERIFIED_BASKET_RANKING", rankingFingerprint, LogImportance.Normal, everyNCycles: options.Diagnostics.OperationalQuietMode ? options.Logging.LogVerifiedRankingEveryNCycles : options.Logging.LogVerifiedBasketRankingEveryNCycles);
                         lastRankingFingerprint = rankingFingerprint;
                         if (shouldLogRanking) Console.WriteLine($"[VERIFIED_BASKET_RANKING] Count={rankedScreen.Count} BestGrossEdge={rankedScreen[0].GrossEdge} BestNetEdge={rankedScreen[0].ActiveProfileNetEdge} BestGroup={rankedScreen[0].GroupKey} Classification={rankedScreen[0].Classification}");
                     }
@@ -1043,9 +1064,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var rejectedCandidates = Math.Max(0, multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified);
                     var rejectedOnlyCandidateScan = multiOutcomeReport.GroupsDetected > 0 && rejectedCandidates == multiOutcomeReport.GroupsDetected && multiOutcomeReport.ExecutableGroups == 0 && activeExecutable == 0;
                     var candidateFingerprint = ScanLogSummaryService.CandidateScanFingerprint(multiOutcomeReport.GroupsDetected, multiOutcomeReport.TopSkipReason, multiOutcomeReport.RejectedByReason, candidateBucket, multiOutcomeReport.ExecutableGroups);
-                    var rejectedOnlyMaterialFingerprint = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint(multiOutcomeReport.TopSkipReason, multiOutcomeReport.RejectedByReason, Math.Max(1, options.Logging.CandidateScanBucketSize), Math.Max(1, options.Logging.CandidateScanMaterialReasonDelta));
+                    var rejectedOnlyMaterialFingerprint = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint(multiOutcomeReport.GroupsDetected, multiOutcomeReport.TopSkipReason, multiOutcomeReport.RejectedByReason, Math.Max(1, options.Logging.CandidateScanBucketSize), Math.Max(1, options.Logging.CandidateScanMaterialReasonDelta));
                     var throttleFingerprint = rejectedOnlyCandidateScan && options.Diagnostics.OperationalQuietMode ? rejectedOnlyMaterialFingerprint : candidateFingerprint;
-                    var shouldLogCandidate = logThrottle.ShouldLog("MULTI_CANDIDATE_SCAN", throttleFingerprint, options.Logging.LogCandidateScanOnChangeOnly, options.Logging.LogCandidateScanEveryNCycles);
+                    var candidateImportance = (multiOutcomeReport.ExecutableGroups > 0 || activeExecutable > 0) ? LogImportance.Critical : LogImportance.Normal;
+                    var shouldLogCandidate = ShouldQuietLog("multi-candidate", "MULTI_CANDIDATE_SCAN", throttleFingerprint, candidateImportance, throttleFingerprint, everyNCycles: options.Logging.LogCandidateScanEveryNCycles, maxPerHour: options.Logging.MaxMultiCandidateScanLogsPerHour);
                     var candidatePeriodic = options.Logging.LogCandidateScanEveryNCycles > 0 && candidateScanCycle % options.Logging.LogCandidateScanEveryNCycles == 0;
                     if (rejectedOnlyCandidateScan && ScanLogSummaryService.ShouldSuppressRejectedOnlyCandidateScan(options.Diagnostics.OperationalQuietMode, options.Logging.LogCandidateScanWhenOnlyRejected, true, rejectedOnlyMaterialFingerprint, lastRejectedOnlyCandidateScanFingerprint, candidatePeriodic))
                         shouldLogCandidate = false;
@@ -1083,19 +1105,20 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     File.WriteAllText(unresolvedExportPath, System.Text.Json.JsonSerializer.Serialize(unresolvedExport, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
                     var suppressedUnresolvedKeys = unresolvedDiagnostics.Where(x => x.SuppressedInConsole).Select(x => x.GroupKey).ToArray();
                     var unresolvedGroupSetFingerprint = ScanLogSummaryService.VerifiedUnresolvedGroupSetFingerprint(unresolvedDiagnostics.Select(x => x.GroupKey));
-                    var quietVerifiedFingerprint = ScanLogSummaryService.MultiVerifiedScanQuietFingerprint(unresolvedCounts, unresolvedGroupSetFingerprint, activeExecutable, paperOpenedCount, bestConservativeNet, options.Logging.VerifiedScanSignificantEdgeDelta);
+                    var quietVerifiedFingerprint = $"configured:{multiOutcomeValidator.LoadedAllowlistCount}|resolved:{verifiedResolved}|unresolved:{unresolved}|" + ScanLogSummaryService.MultiVerifiedScanQuietFingerprint(unresolvedCounts, unresolvedGroupSetFingerprint, activeExecutable, paperOpenedCount, bestConservativeNet, options.Logging.VerifiedScanSignificantEdgeDelta);
                     verifiedScanFingerprint = options.Diagnostics.OperationalQuietMode
                         ? quietVerifiedFingerprint
                         : $"{verifiedScanFingerprint}|{unresolvedCounts.BrokenConfig}|{unresolvedCounts.NeedsRefresh}|{unresolvedCounts.ReviewOnly}|{unresolvedCounts.MonitoringOnly}|{unresolvedCounts.Other}|{unresolvedCounts.SamplesShown}|{unresolvedCounts.Suppressed}";
-                    var shouldLogVerifiedScan = logThrottle.ShouldLog("MULTI_VERIFIED_SCAN", verifiedScanFingerprint, options.Logging.LogVerifiedScanOnChangeOnly, options.Logging.LogVerifiedScanEveryNCycles);
+                    var verifiedImportance = (activeExecutable > 0 || paperOpenedCount > 0) ? LogImportance.Critical : LogImportance.Normal;
+                    var shouldLogVerifiedScan = ShouldQuietLog("multi-verified", "MULTI_VERIFIED_SCAN", verifiedScanFingerprint, verifiedImportance, verifiedScanFingerprint, everyNCycles: options.Logging.LogVerifiedScanEveryNCycles, maxPerHour: options.Logging.MaxMultiVerifiedScanLogsPerHour);
                     if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} BrokenConfigCount={unresolvedCounts.BrokenConfig} NeedsRefreshCount={unresolvedCounts.NeedsRefresh} ReviewOnlyCount={unresolvedCounts.ReviewOnly} MonitoringOnlyUnresolvedCount={unresolvedCounts.MonitoringOnly} OtherUnresolvedCount={unresolvedCounts.Other} UnresolvedSamplesShown={unresolvedCounts.SamplesShown} SuppressedUnresolvedSamples={unresolvedCounts.Suppressed} UnresolvedTotal={unresolvedCounts.Total} Evaluated={verifiedEvaluated} ActiveExecutable={activeExecutable} ExperimentalCandidates={experimentalCandidates} DiagnosticsOnlyPositive={diagnosticsOnlyPositive} PaperOpened={paperOpenedCount} SuppressedDuplicate={suppressedDuplicateCount} Mismatch={verifiedMismatch} BestActiveNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestExperimentalNet={bestExperimentalText} BestAlternateProfileNet={bestAlternateProfileNet} BestRaw={bestRaw}");
                     if (!unresolvedCounts.InvariantOk)
                         Console.WriteLine(unresolvedCounts.ToCounterErrorLogLine());
                     var unresolvedFingerprint = ScanLogSummaryService.VerifiedUnresolvedCategoryFingerprint(unresolvedCounts, unresolvedGroupSetFingerprint);
-                    if (logThrottle.ShouldLog("VERIFIED_UNRESOLVED_BREAKDOWN", unresolvedFingerprint, options.Logging.LogVerifiedUnresolvedOnChangeOnly, options.Logging.LogVerifiedUnresolvedEveryNCycles))
+                    if (ShouldQuietLog("multi-verified", "VERIFIED_UNRESOLVED_BREAKDOWN", unresolvedFingerprint, LogImportance.Normal, unresolvedFingerprint, everyNCycles: options.Logging.LogVerifiedUnresolvedEveryNCycles, maxPerHour: options.Logging.MaxMultiVerifiedScanLogsPerHour))
                         Console.WriteLine(unresolvedCounts.ToBreakdownLogLine());
                     var unresolvedSummary = ScanLogSummaryService.UnresolvedSampleSummary(unresolvedCounts.Total, unresolvedCounts.SamplesShown, suppressedUnresolvedKeys);
-                    if (unresolvedSummary.Suppressed > 0 && logThrottle.ShouldLog("VERIFIED_UNRESOLVED_SUMMARY", unresolvedFingerprint, options.Logging.LogVerifiedUnresolvedOnChangeOnly, options.Logging.LogVerifiedUnresolvedEveryNCycles))
+                    if (unresolvedSummary.Suppressed > 0 && ShouldQuietLog("multi-verified", "VERIFIED_UNRESOLVED_SUMMARY", unresolvedFingerprint, LogImportance.Normal, unresolvedFingerprint, everyNCycles: options.Logging.LogVerifiedUnresolvedEveryNCycles, maxPerHour: options.Logging.MaxMultiVerifiedScanLogsPerHour))
                         Console.WriteLine(unresolvedSummary.ToLogLine());
                     foreach (var ug in unresolvedDiagnostics.Where(x => x.SampleLogged))
                     {

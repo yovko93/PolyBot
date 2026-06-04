@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using TradingBot.Options;
 using TradingBot.Models;
+using TradingBot.Services;
 
 namespace TradingBot.Api;
 
@@ -40,6 +41,7 @@ public class BotRuntimeState
     private int _marketCacheCount;
     private int _exportQueueCount;
     private int _patchPreviewItemsCount;
+    private QuietLogGateStats _quietLogGateStats = new(0, 0, new Dictionary<string, long>(), new Dictionary<string, long>(), 0, 0);
 
     private static void Trim<T>(ConcurrentQueue<T> q,int max){ var capped = Math.Max(0, max); while(q.Count>capped) q.TryDequeue(out _); }
     private void TrimAll()
@@ -69,6 +71,7 @@ public class BotRuntimeState
     public int MarketCacheCount => Volatile.Read(ref _marketCacheCount);
     public int ExportQueueCount => Volatile.Read(ref _exportQueueCount);
     public int PatchPreviewItemsCount => Volatile.Read(ref _patchPreviewItemsCount);
+    public QuietLogGateStats QuietLogGateStats => _quietLogGateStats;
     public int SingleMarketOpportunitiesCount => _singleMarketOpportunities.Count;
     public int SingleMarketExecutionsCount => _singleMarketExecutions.Count;
     public long NextSeq()=>Interlocked.Increment(ref _seq);
@@ -108,6 +111,8 @@ public class BotRuntimeState
     public void ReplaceSingleMarketExecutions(IEnumerable<SingleMarketPaperExecutionDto> items){while(_singleMarketExecutions.TryDequeue(out _)){} foreach(var i in items.Take(_runtime.MaxSingleMarketExecutions)) _singleMarketExecutions.Enqueue(i); Trim(_singleMarketExecutions,_runtime.MaxSingleMarketExecutions);}
     public void AddSignalREvent(string eventName){_signalREventBuffer.Enqueue($"{DateTime.UtcNow:O}|{eventName}"); Trim(_signalREventBuffer,_runtime.MaxSignalREventBuffer);}
     public void AddUnresolvedDiagnostics(IEnumerable<object> items){foreach(var item in items.Take(_runtime.MaxUnresolvedDiagnostics)) _unresolvedDiagnostics.Enqueue(item); Trim(_unresolvedDiagnostics,_runtime.MaxUnresolvedDiagnostics);}
+    public void SetQuietLogGateStats(QuietLogGateStats stats) => _quietLogGateStats = stats;
+
     public void SetRuntimeCounts(int? repairHistoryCount = null, int? dryRunOrderPlansCount = null, int? fillSimulationsCount = null, int? executionAuditCount = null, int? orderbookCacheCount = null, int? marketCacheCount = null, int? exportQueueCount = null, int? patchPreviewItemsCount = null)
     {
         if (repairHistoryCount is int rh) Interlocked.Exchange(ref _repairHistoryCount, rh);
