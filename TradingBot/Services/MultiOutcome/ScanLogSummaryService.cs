@@ -82,10 +82,14 @@ public static class ScanLogSummaryService
 
     public static string RejectedOnlyCandidateScanFingerprint(string topReject, IReadOnlyDictionary<string, int> rejectedByReason, int candidateCountBucketSize, int reasonBucketSize)
     {
-        // Rejected-only scans are operationally useful only when the dominant reject class changes.
-        // Do not include small count fluctuations here; 8 -> 9 -> 15 should stay quiet.
-        var reasonKeys = string.Join(",", rejectedByReason.Keys.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
-        return $"top:{topReject}|reasons:{reasonKeys}";
+        // Rejected-only scans are operationally useful only when the dominant reject class changes
+        // or a reject-reason bucket changes. Do not include total candidate count: small discovery
+        // fluctuations such as 8 -> 9 -> 10 -> 13 -> 15 should stay quiet.
+        var reasonBucket = Math.Max(1, reasonBucketSize) * 2;
+        var reasonBuckets = string.Join(",", rejectedByReason
+            .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(x => $"{x.Key}:{(int)Math.Floor(x.Value / (decimal)reasonBucket)}"));
+        return $"top:{topReject}|reasonBuckets:{reasonBuckets}";
     }
 
     public static string RejectedOnlyCandidateScanFingerprint(string topReject, IReadOnlyDictionary<string, int> rejectedByReason, int reasonBucketSize)
@@ -97,6 +101,16 @@ public static class ScanLogSummaryService
         var removed = string.Join(",", removedIds.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
         return $"group:{groupKey}|action:{action}|confidence:{confidence}|added:{added}|removed:{removed}|missing:{missingNoAsk}|locked:{locked.ToString().ToLowerInvariant()}|quarantined:{quarantined.ToString().ToLowerInvariant()}";
     }
+
+    public static string RepairActionDirectionFingerprint(string groupKey, string? previousAction, string currentAction)
+        => $"group:{groupKey}|direction:{previousAction ?? string.Empty}->{currentAction}";
+
+    public static bool IsWomenUsOpenRepairFlipFlop(string groupKey, string? previousAction, string currentAction, string reasonForChange)
+        => groupKey.Equals("winner:2026 women s us open|kind:generic", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(previousAction)
+            && !previousAction.Equals(currentAction, StringComparison.OrdinalIgnoreCase)
+            && (reasonForChange.Equals("RepairSnapshotReclassified", StringComparison.OrdinalIgnoreCase)
+                || reasonForChange.Equals("NoMatchAcrossSnapshots", StringComparison.OrdinalIgnoreCase));
 
     public static bool ShouldSuppressRejectedOnlyCandidateScan(bool operationalQuietMode, bool logCandidateScanWhenOnlyRejected, bool rejectedOnlyCandidateScan, string currentFingerprint, string lastFingerprint, bool periodic)
         => operationalQuietMode

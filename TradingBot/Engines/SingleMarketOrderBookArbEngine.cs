@@ -39,6 +39,7 @@ public class SingleMarketOrderBookArbEngine
     private int _highSeverityDataQualityLogsThisCycle;
     private int _highSeverityDataQualitySuppressedThisCycle;
     private int _dataQualityAuditSamplesThisCycle;
+    private readonly SingleMarketDataQualityAuditHourlyCap _highSeverityDataQualityAuditHourlyCap = new();
     private readonly Dictionary<string, DateTime> _highSeverityDataQualityLastLoggedAt = new(StringComparer.OrdinalIgnoreCase);
     private long _scanId;
     private int _positionsOpenedThisCycle;
@@ -543,6 +544,11 @@ public class SingleMarketOrderBookArbEngine
         var positiveSample = positiveRejected && firstReason;
         if (!(enabledSample || highSeveritySample || positiveSample)) return;
         if (!TryReserveDataQualityAuditSample(_options.MaxDataQualityAuditSamplesPerCycle)) return;
+        if (highSeverity && reason == "SuspiciousYesNoAskSum" && !_highSeverityDataQualityAuditHourlyCap.TryReserve(_options.MaxHighSeverityDataQualityAuditLogsPerHour, DateTime.UtcNow, out var capLogDue, out var cappedCount))
+        {
+            if (capLogDue) Console.WriteLine($"[SINGLE_MARKET_DATA_QUALITY_AUDIT_HOURLY_CAP_REACHED] Count={cappedCount}");
+            return;
+        }
         MaybeAudit(dto, "SingleMarketDataQualityRejected", highValue: highSeverity || positiveRejected, sampled: true);
     }
 

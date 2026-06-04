@@ -341,6 +341,7 @@ public class SingleMarketArbOptions
     public bool AuditHighSeverityDataQualityRejectedEvents { get; set; } = true;
     public int MaxAuditSamplesPerCycle { get; set; } = 20;
     public int MaxDataQualityAuditSamplesPerCycle { get; set; } = 3;
+    public int MaxHighSeverityDataQualityAuditLogsPerHour { get; set; } = 30;
     public decimal HighSeveritySuspiciousAskSumDistance { get; set; } = 0.10m;
     public int MaxHighSeverityDataQualityLogsPerCycle { get; set; } = 3;
     public int HighSeverityDataQualityCooldownMinutes { get; set; } = 30;
