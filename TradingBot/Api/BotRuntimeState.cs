@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using TradingBot.Options;
+using TradingBot.Models;
 
 namespace TradingBot.Api;
 
@@ -19,6 +20,7 @@ public class BotRuntimeState
     public VerifiedBasketScreenerDto? VerifiedBasketScreener { get; private set; }
     public RiskStateDto Risk { get; private set; } = new(100,5,0.003m,0.25m,300,0,5,0,100,new(),true,true,true,true,DateTime.UtcNow,0);
     public BotControlStateDto Controls { get; private set; } = new(false, "RUNNING", DateTime.UtcNow, 0);
+    public SingleMarketArbSnapshotDto SingleMarketSnapshot { get; private set; } = new(DateTime.UtcNow, 0, new SingleMarketScanSummaryDto(DateTime.UtcNow, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null, null, "None", 0, new Dictionary<string,int>(), new Dictionary<string,int>()), Array.Empty<SingleMarketArbOpportunityDto>(), Array.Empty<SingleMarketNearMissDto>(), Array.Empty<SingleMarketDataQualityRejectSampleDto>(), Array.Empty<SingleMarketPaperExecutionDto>());
     private readonly ConcurrentQueue<OpportunityDto> _opps = new();
     private readonly ConcurrentQueue<TradeLogEntryDto> _trades = new();
     private readonly ConcurrentQueue<PaperPositionDto> _positions = new();
@@ -28,6 +30,8 @@ public class BotRuntimeState
     private readonly ConcurrentQueue<string> _candidateSnapshots = new();
     private readonly ConcurrentQueue<object> _unresolvedDiagnostics = new();
     private readonly ConcurrentQueue<object> _signalREventBuffer = new();
+    private readonly ConcurrentQueue<SingleMarketArbOpportunityDto> _singleMarketOpportunities = new();
+    private readonly ConcurrentQueue<SingleMarketPaperExecutionDto> _singleMarketExecutions = new();
     private int _repairHistoryCount;
     private int _dryRunOrderPlansCount;
     private int _fillSimulationsCount;
@@ -49,6 +53,8 @@ public class BotRuntimeState
         Trim(_positions,_runtime.MaxPaperPositions);
         Trim(_equity,500);
         Trim(_trades,500);
+        Trim(_singleMarketOpportunities,_runtime.MaxSingleMarketOpportunities);
+        Trim(_singleMarketExecutions,_runtime.MaxSingleMarketExecutions);
     }
 
     public int ScannerStatsHistoryCount => _scannerStatsHistory.Count;
@@ -63,6 +69,8 @@ public class BotRuntimeState
     public int MarketCacheCount => Volatile.Read(ref _marketCacheCount);
     public int ExportQueueCount => Volatile.Read(ref _exportQueueCount);
     public int PatchPreviewItemsCount => Volatile.Read(ref _patchPreviewItemsCount);
+    public int SingleMarketOpportunitiesCount => _singleMarketOpportunities.Count;
+    public int SingleMarketExecutionsCount => _singleMarketExecutions.Count;
     public long NextSeq()=>Interlocked.Increment(ref _seq);
     public void SetStatus(BotStatusDto s){lock(_gate) Status=s;}
     public void SetScannerStats(ScannerStatsDto s){lock(_gate) ScannerStats=s; _scannerStatsHistory.Enqueue(s); Trim(_scannerStatsHistory, Math.Min(_runtime.MaxScannerStatsHistory, _runtime.MaxScannerHistory));}
@@ -73,6 +81,19 @@ public class BotRuntimeState
     public void SetMultiOutcomeReviewReport(IEnumerable<object> items){lock(_gate) MultiOutcomeReviewReport = items.Take(_runtime.MaxRejectedCandidateSamples).ToArray();}
     public void SetVerifiedBasketScreener(VerifiedBasketScreenerDto? d){lock(_gate) VerifiedBasketScreener=d;}
     public void SetControls(BotControlStateDto c){lock(_gate) Controls=c;}
+    public void SetSingleMarketSnapshot(SingleMarketArbSnapshotDto snapshot)
+    {
+        lock(_gate)
+        {
+            SingleMarketSnapshot = snapshot with
+            {
+                PositiveCandidates = snapshot.PositiveCandidates.Take(_runtime.MaxSingleMarketOpportunities).ToArray(),
+                TopNearMisses = snapshot.TopNearMisses.Take(_runtime.MaxSingleMarketNearMisses).ToArray(),
+                DataQualityRejectSamples = snapshot.DataQualityRejectSamples.Take(_runtime.MaxSingleMarketDataQualitySamples).ToArray(),
+                PaperExecutions = snapshot.PaperExecutions.Take(_runtime.MaxSingleMarketExecutions).ToArray()
+            };
+        }
+    }
     public void AddOpportunity(OpportunityDto o){_opps.Enqueue(o); Trim(_opps,_runtime.MaxCandidateGroupsInMemory);}
     public void ReplaceOpportunities(IEnumerable<OpportunityDto> items){while(_opps.TryDequeue(out _)){} foreach(var i in items.Take(_runtime.MaxCandidateGroupsInMemory)) _opps.Enqueue(i); Trim(_opps,_runtime.MaxCandidateGroupsInMemory);}
     public void AddTrade(TradeLogEntryDto t){_trades.Enqueue(t); Trim(_trades,500);}
@@ -81,6 +102,10 @@ public class BotRuntimeState
     public void ReplacePositions(IEnumerable<PaperPositionDto> items){while(_positions.TryDequeue(out _)){} foreach(var i in items.Take(_runtime.MaxPaperPositions)) _positions.Enqueue(i); Trim(_positions,_runtime.MaxPaperPositions);}
     public void AddLog(TerminalLogEntryDto l){_logs.Enqueue(l); Trim(_logs,_runtime.MaxRecentLogs);}
     public void AddEquity(EquityPointDto e){_equity.Enqueue(e); Trim(_equity,500);}
+    public void AddSingleMarketOpportunity(SingleMarketArbOpportunityDto o){_singleMarketOpportunities.Enqueue(o); Trim(_singleMarketOpportunities,_runtime.MaxSingleMarketOpportunities);}
+    public void AddSingleMarketExecution(SingleMarketPaperExecutionDto e){_singleMarketExecutions.Enqueue(e); Trim(_singleMarketExecutions,_runtime.MaxSingleMarketExecutions);}
+    public void ReplaceSingleMarketOpportunities(IEnumerable<SingleMarketArbOpportunityDto> items){while(_singleMarketOpportunities.TryDequeue(out _)){} foreach(var i in items.Take(_runtime.MaxSingleMarketOpportunities)) _singleMarketOpportunities.Enqueue(i); Trim(_singleMarketOpportunities,_runtime.MaxSingleMarketOpportunities);}
+    public void ReplaceSingleMarketExecutions(IEnumerable<SingleMarketPaperExecutionDto> items){while(_singleMarketExecutions.TryDequeue(out _)){} foreach(var i in items.Take(_runtime.MaxSingleMarketExecutions)) _singleMarketExecutions.Enqueue(i); Trim(_singleMarketExecutions,_runtime.MaxSingleMarketExecutions);}
     public void AddSignalREvent(string eventName){_signalREventBuffer.Enqueue($"{DateTime.UtcNow:O}|{eventName}"); Trim(_signalREventBuffer,_runtime.MaxSignalREventBuffer);}
     public void AddUnresolvedDiagnostics(IEnumerable<object> items){foreach(var item in items.Take(_runtime.MaxUnresolvedDiagnostics)) _unresolvedDiagnostics.Enqueue(item); Trim(_unresolvedDiagnostics,_runtime.MaxUnresolvedDiagnostics);}
     public void SetRuntimeCounts(int? repairHistoryCount = null, int? dryRunOrderPlansCount = null, int? fillSimulationsCount = null, int? executionAuditCount = null, int? orderbookCacheCount = null, int? marketCacheCount = null, int? exportQueueCount = null, int? patchPreviewItemsCount = null)
@@ -108,7 +133,11 @@ public class BotRuntimeState
         ["orderbookCache"] = OrderbookCacheCount,
         ["marketCache"] = MarketCacheCount,
         ["exports"] = ExportQueueCount,
-        ["patchPreviewItems"] = PatchPreviewItemsCount
+        ["patchPreviewItems"] = PatchPreviewItemsCount,
+        ["singleMarketOpportunities"] = SingleMarketOpportunitiesCount,
+        ["singleMarketNearMisses"] = SingleMarketSnapshot.TopNearMisses.Count,
+        ["singleMarketDataQualitySamples"] = SingleMarketSnapshot.DataQualityRejectSamples.Count,
+        ["singleMarketExecutions"] = SingleMarketExecutionsCount
     };
     public void ClearNonEssentialRuntimeState()
     {
@@ -117,6 +146,9 @@ public class BotRuntimeState
         while(_scannerStatsHistory.Count > Math.Min(50, _runtime.MaxScannerHistory) && _scannerStatsHistory.TryDequeue(out _)){}
         while(_logs.Count > Math.Min(100, _runtime.MaxRecentLogs) && _logs.TryDequeue(out _)){}
         while(_signalREventBuffer.TryDequeue(out _)){}
+        while(_singleMarketOpportunities.TryDequeue(out _)){}
+        while(_singleMarketExecutions.TryDequeue(out _)){}
+        SetSingleMarketSnapshot(SingleMarketSnapshot with { PositiveCandidates = Array.Empty<SingleMarketArbOpportunityDto>(), TopNearMisses = Array.Empty<SingleMarketNearMissDto>(), DataQualityRejectSamples = Array.Empty<SingleMarketDataQualityRejectSampleDto>(), PaperExecutions = Array.Empty<SingleMarketPaperExecutionDto>() });
         TrimAll();
     }
     public OpportunityDto[] Opportunities()=>_opps.ToArray();
@@ -124,4 +156,6 @@ public class BotRuntimeState
     public PaperPositionDto[] Positions()=>_positions.ToArray();
     public TerminalLogEntryDto[] Logs()=>_logs.ToArray();
     public EquityPointDto[] Equity()=>_equity.ToArray();
+    public SingleMarketArbOpportunityDto[] SingleMarketOpportunities()=>_singleMarketOpportunities.ToArray();
+    public SingleMarketPaperExecutionDto[] SingleMarketExecutions()=>_singleMarketExecutions.ToArray();
 }

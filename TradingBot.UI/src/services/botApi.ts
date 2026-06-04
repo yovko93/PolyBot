@@ -63,6 +63,8 @@ export const getMultiOutcomeDiagnostics = async (signal?: AbortSignal): Promise<
 export const getVerifiedBasketScreener = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/verified-basket-screener', null, signal);
 export const getExecutionAudit = async (signal?: AbortSignal): Promise<any[]> => keepLatest(await safeRequest<any[]>('/execution-audit?limit=300', [], signal), UIDataLimits.MaxAuditRows);
 export const getDryRunOrderPlans = async (signal?: AbortSignal): Promise<any[]> => keepLatest(await safeRequest<any[]>('/dry-run-order-plans?limit=100', [], signal), UIDataLimits.MaxDiagnosticsRows);
+export const getSingleMarketArbs = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/single-market-arbs', null, signal);
+export const getSingleMarketPaperExecutions = async (signal?: AbortSignal): Promise<any[]> => keepLatest(await safeRequest<any[]>('/single-market-paper-executions?limit=100', [], signal), 100);
 export const getAllowlistRepairReport = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/verified-allowlist-repair-report?limit=50', null, signal);
 export const pauseScanner = async (): Promise<BotControlState> => mapControls(await request('/controls/pause', undefined, { method: 'POST' }));
 export const resumeScanner = async (): Promise<BotControlState> => mapControls(await request('/controls/resume', undefined, { method: 'POST' }));
@@ -80,6 +82,8 @@ type BotEventHandlers = {
   onHeartbeat: (x: string) => void;
   onConnectionState: (x: 'CONNECTED'|'RECONNECTING'|'DISCONNECTED') => void;
   onControls: (x: BotControlState) => void;
+  onSingleMarketArbs: (x: any | null) => void;
+  onSingleMarketPaperExecutions: (x: any[]) => void;
 };
 
 
@@ -105,13 +109,13 @@ export const subscribeToBotEvents = async (handlers: BotEventHandlers): Promise<
     pollController?.abort();
     pollController = new AbortController();
     try {
-      const [status, opportunities, positions, trades, scanner, risk, logs, equity, controls] = await Promise.all([
-        getBotStatus(pollController.signal), getOpportunities(pollController.signal), getPositions(pollController.signal), getTradeLogs(pollController.signal), getScannerStats(pollController.signal), getRisk(pollController.signal), getTerminalLogs(pollController.signal), getEquity(pollController.signal), getControls(pollController.signal)
+      const [status, opportunities, positions, trades, scanner, risk, logs, equity, controls, singleMarketArbs, singleMarketPaperExecutions] = await Promise.all([
+        getBotStatus(pollController.signal), getOpportunities(pollController.signal), getPositions(pollController.signal), getTradeLogs(pollController.signal), getScannerStats(pollController.signal), getRisk(pollController.signal), getTerminalLogs(pollController.signal), getEquity(pollController.signal), getControls(pollController.signal), getSingleMarketArbs(pollController.signal), getSingleMarketPaperExecutions(pollController.signal)
       ]);
       handlers.onStatus(status); handlers.onOpportunities(opportunities); handlers.onPositions(positions); handlers.onTrades(trades);
       if (scanner) handlers.onScanner(scanner); if (risk) handlers.onRisk(risk);
       keepLatest(logs, Math.min(50, UIDataLimits.MaxRecentLogs)).forEach(handlers.onLog); handlers.onEquity(keepLatest(equity, UIDataLimits.MaxChartPoints));
-      handlers.onControls(controls);
+      handlers.onControls(controls); handlers.onSingleMarketArbs(singleMarketArbs); handlers.onSingleMarketPaperExecutions(singleMarketPaperExecutions);
     } catch {
       handlers.onConnectionState('DISCONNECTED');
     } finally {
@@ -139,7 +143,9 @@ export const subscribeToBotEvents = async (handlers: BotEventHandlers): Promise<
     hub.on('terminalLogAdded', (d) => handlers.onLog(mapLog(d))),
     hub.on('equityUpdated', (d) => handlers.onEquity(keepLatest(((d as any[]) ?? []).map(mapEquity), UIDataLimits.MaxChartPoints))),
     hub.on('heartbeat', (d: any) => handlers.onHeartbeat(d?.timestamp ?? new Date().toISOString())),
-    hub.on('controlsUpdated', (d) => handlers.onControls(mapControls(d)))
+    hub.on('controlsUpdated', (d) => handlers.onControls(mapControls(d))),
+    hub.on('singleMarketArbsUpdated', (d) => handlers.onSingleMarketArbs(d ?? null)),
+    hub.on('singleMarketPaperExecutionsUpdated', (d) => handlers.onSingleMarketPaperExecutions(keepLatest(((d as any[]) ?? []), 100)))
   ];
   registeredEventHandlers = unsubs.length;
   memoryDiag.registeredEventHandlers = registeredEventHandlers;

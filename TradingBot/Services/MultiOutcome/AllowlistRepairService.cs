@@ -635,7 +635,7 @@ public sealed class AllowlistRepairService
             }
 
             var unique = nodes.Select(x => x["groupKey"]?.GetValue<string>() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).Count();
-            var validationFingerprint = $"{File.GetLastWriteTimeUtc(path).Ticks}|{total}|{unique}|{duplicateGroupKeys}|{merged}|{invalid}|{MaxRepairHistorySnapshotsPerGroup}";
+            var validationFingerprint = $"{total}|{unique}|{duplicateGroupKeys}|{merged}|{invalid}|{MaxRepairHistorySnapshotsPerGroup}";
             if (ShouldLogRepairHistoryValidation(validationFingerprint, loggingOptions))
                 Console.WriteLine($"[ALLOWLIST_REPAIR_HISTORY_VALIDATION] Total={total} UniqueGroupKeys={unique} DuplicateGroupKeys={duplicateGroupKeys} Merged={merged} MaxSnapshotsPerGroup={MaxRepairHistorySnapshotsPerGroup} InvalidEntries={invalid}");
             if (duplicateGroupKeys > 0 || invalid > 0 || merged > 0)
@@ -972,7 +972,8 @@ public sealed class AllowlistRepairService
     {
         _repairHistoryValidationCycle++;
         var changed = !_lastRepairHistoryValidationFingerprint.Equals(fingerprint, StringComparison.Ordinal);
-        var periodic = loggingOptions.LogRepairHistoryValidationEveryNCycles > 0
+        var periodic = !loggingOptions.LogRepairHistoryValidationOnChangeOnly
+            && loggingOptions.LogRepairHistoryValidationEveryNCycles > 0
             && _repairHistoryValidationCycle % loggingOptions.LogRepairHistoryValidationEveryNCycles == 0;
         if (changed || periodic || !loggingOptions.LogRepairHistoryValidationOnChangeOnly)
         {

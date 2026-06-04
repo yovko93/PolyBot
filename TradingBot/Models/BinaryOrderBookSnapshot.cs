@@ -13,5 +13,6 @@ public record BinaryOrderBookSnapshot(
     BookQuote? YesBid,
     BookQuote? YesAsk,
     BookQuote? NoBid,
-    BookQuote? NoAsk
+    BookQuote? NoAsk,
+    DateTime TimestampUtc = default
 );

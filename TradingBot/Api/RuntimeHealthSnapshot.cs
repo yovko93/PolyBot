@@ -28,10 +28,17 @@ public sealed record RuntimeHealthSnapshot(
     int MarketCacheCount,
     int ExportQueueCount,
     int PatchPreviewItemsCount,
+    int SingleMarketOpportunitiesCount,
+    int SingleMarketNearMissesCount,
+    int SingleMarketDataQualitySamplesCount,
+    int SingleMarketExecutionsCount,
     int DuplicateGroupKeyWarnings)
 {
     public string ToLogLine()
-        => $"[RUNTIME_HEALTH] ProcessMb={ProcessMemoryMb} GcMb={GcTotalMemoryMb} WorkingSetMb={WorkingSetMb} Logs={RecentLogsCount} ScannerHistory={ScannerHistoryCount} CandidateSnapshots={CandidateSnapshotCount} RepairHistory={RepairHistoryCount} ExecutionAudit={ExecutionAuditCount} SignalRBuffer={SignalREventBufferCount} OrderbookCache={OrderbookCacheCount} MarketCache={MarketCacheCount} PatchPreviewItems={PatchPreviewItemsCount} DuplicateGroupKeyWarnings={DuplicateGroupKeyWarnings} Uptime={Uptime}";
+        => $"[RUNTIME_HEALTH] ProcessMb={ProcessMemoryMb} GcMb={GcTotalMemoryMb} WorkingSetMb={WorkingSetMb} Logs={RecentLogsCount} ScannerHistory={ScannerHistoryCount} CandidateSnapshots={CandidateSnapshotCount} RepairHistory={RepairHistoryCount} ExecutionAudit={ExecutionAuditCount} SignalRBuffer={SignalREventBufferCount} OrderbookCache={OrderbookCacheCount} MarketCache={MarketCacheCount} PatchPreviewItems={PatchPreviewItemsCount} SingleMarketOpportunities={SingleMarketOpportunitiesCount} SingleMarketNearMisses={SingleMarketNearMissesCount} SingleMarketDataQualitySamples={SingleMarketDataQualitySamplesCount} SingleMarketExecutions={SingleMarketExecutionsCount} DuplicateGroupKeyWarnings={DuplicateGroupKeyWarnings} Uptime={Uptime}";
+
+    public static bool ShouldLogAt(DateTime nowUtc, DateTime lastLoggedAtUtc, int everyMinutes)
+        => lastLoggedAtUtc == DateTime.MinValue || nowUtc - lastLoggedAtUtc >= TimeSpan.FromMinutes(Math.Max(1, everyMinutes));
 
     public static RuntimeHealthSnapshot From(BotRuntimeState state)
     {
@@ -63,6 +70,10 @@ public sealed record RuntimeHealthSnapshot(
             MarketCacheCount: state.MarketCacheCount,
             ExportQueueCount: state.ExportQueueCount,
             PatchPreviewItemsCount: state.PatchPreviewItemsCount,
+            SingleMarketOpportunitiesCount: state.SingleMarketOpportunitiesCount,
+            SingleMarketNearMissesCount: state.SingleMarketSnapshot.TopNearMisses.Count,
+            SingleMarketDataQualitySamplesCount: state.SingleMarketSnapshot.DataQualityRejectSamples.Count,
+            SingleMarketExecutionsCount: state.SingleMarketExecutionsCount,
             DuplicateGroupKeyWarnings: TradingBot.Services.GroupKeyDictionaryBuilder.DuplicateWarnings);
     }
 }

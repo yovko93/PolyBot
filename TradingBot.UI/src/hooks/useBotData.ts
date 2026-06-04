@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { API, HUB, getAllowlistRepairReport, getBotHealth, getBotStatus, getControls, getDryRunOrderPlans, getEquity, getExecutionAudit, getMultiOutcomeDiagnostics, getOpportunities, getPositions, getRisk, getScannerStats, getTerminalLogs, getTradeLogs, getVerifiedBasketScreener, pauseScanner, resumeScanner, subscribeToBotEvents } from '../services/botApi';
+import { API, HUB, getAllowlistRepairReport, getBotHealth, getBotStatus, getControls, getDryRunOrderPlans, getEquity, getExecutionAudit, getMultiOutcomeDiagnostics, getOpportunities, getPositions, getRisk, getScannerStats, getSingleMarketArbs, getSingleMarketPaperExecutions, getTerminalLogs, getTradeLogs, getVerifiedBasketScreener, pauseScanner, resumeScanner, subscribeToBotEvents } from '../services/botApi';
 import { keepLatest, UIDataLimits } from '../constants/uiDataLimits';
 
 export function useBotData() {
@@ -9,6 +9,8 @@ export function useBotData() {
   const [executionAudit, setExecutionAudit] = useState<any[]>([]);
   const [dryRunOrderPlans, setDryRunOrderPlans] = useState<any[]>([]);
   const [allowlistRepairReport, setAllowlistRepairReport] = useState<any>(null);
+  const [singleMarketArbs, setSingleMarketArbs] = useState<any>(null);
+  const [singleMarketPaperExecutions, setSingleMarketPaperExecutions] = useState<any[]>([]);
   const [connectionStatus, setConnectionStatus] = useState('DISCONNECTED'); const [lastUpdated, setLastUpdated] = useState(''); const [lastHeartbeat, setLastHeartbeat] = useState(''); const [source, setSource] = useState('SNAPSHOT'); const [lastRestError, setLastRestError] = useState(''); const [lastEvent, setLastEvent] = useState('');
   const seenEvents = useRef(new Set<string>());
 
@@ -18,8 +20,8 @@ export function useBotData() {
       try {
         const healthy = await getBotHealth(ac.signal);
         if (!healthy) setLastRestError('backend health endpoint unavailable');
-        const [s, o, p, t, sc, r, l, eq, c, md, vbs, ea, drp, arr] = await Promise.all([getBotStatus(ac.signal), getOpportunities(ac.signal), getPositions(ac.signal), getTradeLogs(ac.signal), getScannerStats(ac.signal), getRisk(ac.signal), getTerminalLogs(ac.signal), getEquity(ac.signal), getControls(ac.signal), getMultiOutcomeDiagnostics(ac.signal), getVerifiedBasketScreener(ac.signal), getExecutionAudit(ac.signal), getDryRunOrderPlans(ac.signal), getAllowlistRepairReport(ac.signal)]);
-        setStatus(s); setMultiOutcomeDiagnostics(md); setVerifiedBasketScreener(vbs); setExecutionAudit(keepLatest(ea, UIDataLimits.MaxAuditRows)); setDryRunOrderPlans(keepLatest(drp, UIDataLimits.MaxDiagnosticsRows)); setAllowlistRepairReport(trimRepairReport(arr)); setOpps(keepLatest(o, UIDataLimits.MaxOpportunities)); setPositions(p); setTrades(keepLatest(t, UIDataLimits.MaxTradeLogRows)); setScanner(sc); setRisk(r); setLogs(keepLatest(l, UIDataLimits.MaxRecentLogs)); setEquity(keepLatest(eq, UIDataLimits.MaxChartPoints)); setControls(c); setConnectionStatus(healthy ? 'CONNECTED' : 'DEGRADED'); setSource('SNAPSHOT'); setLastUpdated(new Date().toISOString());
+        const [s, o, p, t, sc, r, l, eq, c, md, vbs, ea, drp, arr, sma, smx] = await Promise.all([getBotStatus(ac.signal), getOpportunities(ac.signal), getPositions(ac.signal), getTradeLogs(ac.signal), getScannerStats(ac.signal), getRisk(ac.signal), getTerminalLogs(ac.signal), getEquity(ac.signal), getControls(ac.signal), getMultiOutcomeDiagnostics(ac.signal), getVerifiedBasketScreener(ac.signal), getExecutionAudit(ac.signal), getDryRunOrderPlans(ac.signal), getAllowlistRepairReport(ac.signal), getSingleMarketArbs(ac.signal), getSingleMarketPaperExecutions(ac.signal)]);
+        setStatus(s); setSingleMarketArbs(sma); setSingleMarketPaperExecutions(smx); setMultiOutcomeDiagnostics(md); setVerifiedBasketScreener(vbs); setExecutionAudit(keepLatest(ea, UIDataLimits.MaxAuditRows)); setDryRunOrderPlans(keepLatest(drp, UIDataLimits.MaxDiagnosticsRows)); setAllowlistRepairReport(trimRepairReport(arr)); setOpps(keepLatest(o, UIDataLimits.MaxOpportunities)); setPositions(p); setTrades(keepLatest(t, UIDataLimits.MaxTradeLogRows)); setScanner(sc); setRisk(r); setLogs(keepLatest(l, UIDataLimits.MaxRecentLogs)); setEquity(keepLatest(eq, UIDataLimits.MaxChartPoints)); setControls(c); setConnectionStatus(healthy ? 'CONNECTED' : 'DEGRADED'); setSource('SNAPSHOT'); setLastUpdated(new Date().toISOString());
       } catch (e: any) { setLastRestError(String(e)); setConnectionStatus('DISCONNECTED'); }
 
       cleanup = await subscribeToBotEvents({
@@ -34,7 +36,9 @@ export function useBotData() {
         onEquity: (d) => setEquity(keepLatest(d, UIDataLimits.MaxChartPoints)),
         onHeartbeat: setLastHeartbeat,
         onConnectionState: (s) => { if (!seenEvents.current.has(s)) seenEvents.current.add(s); setConnectionStatus(s); setSource(s === 'CONNECTED' ? 'LIVE BACKEND' : 'POLLING FALLBACK'); },
-        onControls: setControls
+        onControls: setControls,
+        onSingleMarketArbs: (d) => setSingleMarketArbs(d),
+        onSingleMarketPaperExecutions: (d) => setSingleMarketPaperExecutions(d)
       });
     };
 
@@ -44,5 +48,5 @@ export function useBotData() {
 
   const trimRepairReport = (report: any) => report && Array.isArray(report.groups) ? { ...report, groups: keepLatest(report.groups, UIDataLimits.MaxRepairRows), repairSuggestions: keepLatest(report.repairSuggestions ?? [], UIDataLimits.MaxRepairRows) } : report;
 
-  return useMemo(() => ({ API, HUB, status, opps, positions, trades, risk, scanner, logs, equity, controls, multiOutcomeDiagnostics, verifiedBasketScreener, executionAudit, dryRunOrderPlans, allowlistRepairReport, connectionStatus, lastHeartbeat, lastUpdated, source, lastRestError, lastEvent, pauseScanner, resumeScanner }), [status, opps, positions, trades, risk, scanner, logs, equity, controls, multiOutcomeDiagnostics, verifiedBasketScreener, executionAudit, dryRunOrderPlans, allowlistRepairReport, connectionStatus, lastHeartbeat, lastUpdated, source, lastRestError, lastEvent]);
+  return useMemo(() => ({ API, HUB, status, opps, positions, trades, risk, scanner, logs, equity, controls, multiOutcomeDiagnostics, verifiedBasketScreener, executionAudit, dryRunOrderPlans, allowlistRepairReport, singleMarketArbs, singleMarketPaperExecutions, connectionStatus, lastHeartbeat, lastUpdated, source, lastRestError, lastEvent, pauseScanner, resumeScanner }), [status, opps, positions, trades, risk, scanner, logs, equity, controls, multiOutcomeDiagnostics, verifiedBasketScreener, executionAudit, dryRunOrderPlans, allowlistRepairReport, singleMarketArbs, singleMarketPaperExecutions, connectionStatus, lastHeartbeat, lastUpdated, source, lastRestError, lastEvent]);
 }

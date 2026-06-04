@@ -61,6 +61,29 @@ public class RuntimeMemorySafetyTests
         Assert.Contains("ProcessMb=", health.ToLogLine());
     }
 
+
+    [Fact]
+    public void RuntimeHealth_ShouldLogAt_EmitsStartupAndConfiguredPeriodicOnly()
+    {
+        var now = DateTime.UtcNow;
+
+        Assert.True(RuntimeHealthSnapshot.ShouldLogAt(now, DateTime.MinValue, everyMinutes: 2));
+        Assert.False(RuntimeHealthSnapshot.ShouldLogAt(now.AddSeconds(119), now, everyMinutes: 2));
+        Assert.True(RuntimeHealthSnapshot.ShouldLogAt(now.AddMinutes(2), now, everyMinutes: 2));
+    }
+
+
+    [Fact]
+    public void Soak_status_export_is_wired_in_push_pipeline()
+    {
+        var text = File.ReadAllText(Path.Combine("..", "..", "..", "..", "TradingBot", "Program.cs"));
+
+        Assert.Contains("runtime-soak-status-latest.json", text);
+        Assert.Contains("soakReady", text);
+        Assert.Contains("memoryWarnings", text);
+        Assert.Contains("memoryCriticals", text);
+    }
+
     [Fact]
     public void MemoryGuard_ClearsNonEssentialState_OnCriticalMemory()
     {
