@@ -77,3 +77,73 @@ public sealed record RuntimeHealthSnapshot(
             DuplicateGroupKeyWarnings: TradingBot.Services.GroupKeyDictionaryBuilder.DuplicateWarnings);
     }
 }
+
+public sealed record RuntimeHealthTrend(
+    double MinProcessMemoryMbWindow,
+    double MaxProcessMemoryMbWindow,
+    double MemoryDeltaMbWindow,
+    double MemorySlopeMbPerMinute,
+    bool IsMemoryStable,
+    int Samples);
+
+public static class RuntimeHealthTrendTracker
+{
+    private static readonly object Gate = new();
+    private static readonly List<(DateTime TimestampUtc, double ProcessMb)> Samples = new();
+
+    public static RuntimeHealthTrend RecordAndAnalyze(RuntimeHealthSnapshot snapshot, TradingBot.Options.RuntimeHealthOptions options)
+    {
+        lock (Gate)
+        {
+            var now = DateTime.UtcNow;
+            Samples.Add((now, snapshot.ProcessMemoryMb));
+            Trim(now, options.SoakTrendWindowMinutes);
+            return AnalyzeNoLock(options);
+        }
+    }
+
+    public static RuntimeHealthTrend Analyze(IEnumerable<(DateTime TimestampUtc, double ProcessMb)> samples, TradingBot.Options.RuntimeHealthOptions options)
+    {
+        lock (Gate)
+        {
+            Samples.Clear();
+            Samples.AddRange(samples.OrderBy(x => x.TimestampUtc));
+            var now = Samples.Count == 0 ? DateTime.UtcNow : Samples[^1].TimestampUtc;
+            Trim(now, options.SoakTrendWindowMinutes);
+            return AnalyzeNoLock(options);
+        }
+    }
+
+    public static RuntimeHealthTrend Current(TradingBot.Options.RuntimeHealthOptions options)
+    {
+        lock (Gate)
+        {
+            Trim(DateTime.UtcNow, options.SoakTrendWindowMinutes);
+            return AnalyzeNoLock(options);
+        }
+    }
+
+    public static string ToSoakStatusLogLine(RuntimeHealthSnapshot health, RuntimeHealthTrend trend)
+        => $"[SOAK_STATUS] Uptime={health.Uptime} ProcessMb={health.ProcessMemoryMb} DeltaMb={trend.MemoryDeltaMbWindow:0.##} SlopeMbPerMin={trend.MemorySlopeMbPerMinute:0.##} Logs={health.RecentLogsCount} ExecutionAudit={health.ExecutionAuditCount} SignalR={health.SignalREventBufferCount} PaperOpened={health.SingleMarketExecutionsCount} MemoryStable={trend.IsMemoryStable.ToString().ToLowerInvariant()}";
+
+    private static void Trim(DateTime nowUtc, int windowMinutes)
+    {
+        var cutoff = nowUtc - TimeSpan.FromMinutes(Math.Max(1, windowMinutes));
+        Samples.RemoveAll(x => x.TimestampUtc < cutoff);
+    }
+
+    private static RuntimeHealthTrend AnalyzeNoLock(TradingBot.Options.RuntimeHealthOptions options)
+    {
+        if (Samples.Count == 0) return new RuntimeHealthTrend(0, 0, 0, 0, true, 0);
+        var min = Samples.Min(x => x.ProcessMb);
+        var max = Samples.Max(x => x.ProcessMb);
+        var delta = max - min;
+        var first = Samples[0];
+        var last = Samples[^1];
+        var minutes = Math.Max(0.001, (last.TimestampUtc - first.TimestampUtc).TotalMinutes);
+        var slope = (last.ProcessMb - first.ProcessMb) / minutes;
+        var stable = Math.Abs(slope) <= Math.Max(0, options.StableMemorySlopeMbPerMinute)
+            && delta <= Math.Max(0, options.StableMemoryMaxDeltaMb);
+        return new RuntimeHealthTrend(Math.Round(min, 2), Math.Round(max, 2), Math.Round(delta, 2), Math.Round(slope, 2), stable, Samples.Count);
+    }
+}

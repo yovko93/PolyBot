@@ -30,30 +30,64 @@ public class MemoryBoundsTests
         Assert.Contains("\"soakReady\": true", json);
         Assert.Contains("\"memoryWarnings\": 1", json);
         Assert.Contains("\"liveTradingEnabled\": false", json);
+        Assert.Contains("\"minProcessMemoryMbWindow\"", json);
+        Assert.Contains("\"memorySlopeMbPerMinute\"", json);
+        Assert.Contains("\"isMemoryStable\"", json);
     }
 
     [Fact]
-    public void Logs_stay_bounded_after_10000_market_evaluation_logs()
+    public void Runtime_health_trend_calculates_slope_and_stability()
+    {
+        var start = DateTime.UtcNow.AddMinutes(-20);
+        var trend = RuntimeHealthTrendTracker.Analyze(
+            [
+                (start, 260d),
+                (start.AddMinutes(10), 275d),
+                (start.AddMinutes(20), 286d)
+            ],
+            new RuntimeHealthOptions { SoakTrendWindowMinutes = 20, StableMemorySlopeMbPerMinute = 5, StableMemoryMaxDeltaMb = 150 });
+
+        Assert.Equal(260, trend.MinProcessMemoryMbWindow);
+        Assert.Equal(286, trend.MaxProcessMemoryMbWindow);
+        Assert.Equal(26, trend.MemoryDeltaMbWindow);
+        Assert.True(trend.IsMemoryStable);
+    }
+
+    [Fact]
+    public void Logs_stay_bounded_after_20000_market_evaluation_logs()
     {
         var runtime = new RuntimeStateOptions { MaxRecentLogs = 500 };
         var state = new BotRuntimeState(runtime);
 
-        for (var i = 0; i < 10_000; i++)
+        for (var i = 0; i < 20_000; i++)
             state.AddLog(new TerminalLogEntryDto($"eval-{i}", DateTime.UtcNow, "info", "single-market", $"evaluation {i}", i));
 
         Assert.True(state.Logs().Length <= runtime.MaxRecentLogs);
     }
 
     [Fact]
-    public void Execution_audit_count_stays_bounded_after_10000_market_evaluations()
+    public void Execution_audit_count_stays_bounded_after_20000_market_evaluations()
     {
         var runtime = new RuntimeStateOptions { MaxExecutionAuditEvents = 500 };
         var state = new BotRuntimeState(runtime);
 
-        for (var i = 0; i < 10_000; i++)
+        for (var i = 0; i < 20_000; i++)
             state.SetRuntimeCounts(executionAuditCount: Math.Min(i + 1, runtime.MaxExecutionAuditEvents));
 
         Assert.True(state.ExecutionAuditCount <= runtime.MaxExecutionAuditEvents);
+    }
+
+
+    [Fact]
+    public void SignalR_buffer_remains_bounded_after_20000_events()
+    {
+        var runtime = new RuntimeStateOptions { MaxSignalREventBuffer = 100 };
+        var state = new BotRuntimeState(runtime);
+
+        for (var i = 0; i < 20_000; i++)
+            state.AddSignalREvent($"event-{i}");
+
+        Assert.True(state.SignalREventBufferCount <= runtime.MaxSignalREventBuffer);
     }
 
     [Fact]

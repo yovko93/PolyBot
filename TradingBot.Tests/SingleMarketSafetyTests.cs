@@ -432,7 +432,79 @@ public class SingleMarketSafetyTests
         Assert.DoesNotContain(audit.ListAudit(1000), x => x.Stage is "SingleMarketDetected" or "SingleMarketEdgePending");
     }
 
+
+    [Fact]
+    public async Task High_severity_same_market_reason_is_suppressed_during_cooldown_across_cycles()
+    {
+        var opts = Options();
+        opts.HighSeverityDataQualityCooldownMinutes = 30;
+        opts.MaxHighSeverityDataQualityLogsPerCycle = 3;
+        opts.MaxDataQualityAuditSamplesPerCycle = 3;
+        var market = Market("hyperliquid-repeat");
+        var books = new Dictionary<string, BinaryOrderBookSnapshot> { [market.id] = BookFor(market, yes: 0.72m, no: 0.72m) };
+        var audit = NewAudit();
+        var engine = NewEngine(new MapProvider(books), new BotRuntimeState(new RuntimeStateOptions()), opts, quiet: true, audit: audit);
+
+        var first = await CaptureConsole(() => engine.ScanAsync([market], NewPaper(), new SemaphoreSlim(1), fullCycleId: 1, isFullCycleComplete: true, suppressBatchDataQualitySummary: true));
+        var second = await CaptureConsole(() => engine.ScanAsync([market], NewPaper(), new SemaphoreSlim(1), fullCycleId: 2, isFullCycleComplete: true, suppressBatchDataQualitySummary: true));
+
+        Assert.Contains("[SINGLE_MARKET_DATA_QUALITY_REJECTED]", first);
+        Assert.DoesNotContain("[SINGLE_MARKET_DATA_QUALITY_REJECTED]", second);
+        Assert.Single(audit.ListAudit(1000).Where(x => x.Stage == "SingleMarketDataQualityRejected"));
+    }
+
+    [Fact]
+    public async Task High_severity_different_markets_can_log_until_per_cycle_cap()
+    {
+        var opts = Options();
+        opts.MaxHighSeverityDataQualityLogsPerCycle = 3;
+        var markets = Enumerable.Range(0, 5).Select(i => Market($"different-high-{i}")).ToList();
+        var books = markets.ToDictionary(m => m.id, m => BookFor(m, yes: 0.72m, no: 0.72m));
+        var engine = NewEngine(new MapProvider(books), new BotRuntimeState(new RuntimeStateOptions()), opts, quiet: true);
+
+        var output = await CaptureConsole(() => engine.ScanAsync(markets, NewPaper(), new SemaphoreSlim(5), fullCycleId: 77, isFullCycleComplete: true, suppressBatchDataQualitySummary: true));
+
+        Assert.Equal(3, output.Split("[SINGLE_MARKET_DATA_QUALITY_REJECTED]").Length - 1);
+        Assert.Contains("[SINGLE_MARKET_DATA_QUALITY_HIGH_SEVERITY_SUPPRESSED] Count=2", output);
+    }
+
     private static SingleMarketOrderBookArbEngine NewEngine(BinaryOrderBookSnapshot book, BotRuntimeState state, SingleMarketArbOptions? opts = null, bool quiet = false, VerifiedBasketExecutionCoordinator? audit = null) => NewEngine(new FakeProvider(book), state, opts, quiet, audit);
+
+    [Fact]
+    public async Task High_severity_same_market_reason_is_suppressed_during_cooldown_across_cycles()
+    {
+        var opts = Options();
+        opts.HighSeverityDataQualityCooldownMinutes = 30;
+        opts.MaxHighSeverityDataQualityLogsPerCycle = 3;
+        opts.MaxDataQualityAuditSamplesPerCycle = 3;
+        var market = Market("hyperliquid-repeat");
+        var books = new Dictionary<string, BinaryOrderBookSnapshot> { [market.id] = BookFor(market, yes: 0.72m, no: 0.72m) };
+        var audit = NewAudit();
+        var engine = NewEngine(new MapProvider(books), new BotRuntimeState(new RuntimeStateOptions()), opts, quiet: true, audit: audit);
+
+        var first = await CaptureConsole(() => engine.ScanAsync([market], NewPaper(), new SemaphoreSlim(1), fullCycleId: 1, isFullCycleComplete: true, suppressBatchDataQualitySummary: true));
+        var second = await CaptureConsole(() => engine.ScanAsync([market], NewPaper(), new SemaphoreSlim(1), fullCycleId: 2, isFullCycleComplete: true, suppressBatchDataQualitySummary: true));
+
+        Assert.Contains("[SINGLE_MARKET_DATA_QUALITY_REJECTED]", first);
+        Assert.DoesNotContain("[SINGLE_MARKET_DATA_QUALITY_REJECTED]", second);
+        Assert.Single(audit.ListAudit(1000).Where(x => x.Stage == "SingleMarketDataQualityRejected"));
+    }
+
+    [Fact]
+    public async Task High_severity_different_markets_can_log_until_per_cycle_cap()
+    {
+        var opts = Options();
+        opts.MaxHighSeverityDataQualityLogsPerCycle = 3;
+        var markets = Enumerable.Range(0, 5).Select(i => Market($"different-high-{i}")).ToList();
+        var books = markets.ToDictionary(m => m.id, m => BookFor(m, yes: 0.72m, no: 0.72m));
+        var engine = NewEngine(new MapProvider(books), new BotRuntimeState(new RuntimeStateOptions()), opts, quiet: true);
+
+        var output = await CaptureConsole(() => engine.ScanAsync(markets, NewPaper(), new SemaphoreSlim(5), fullCycleId: 77, isFullCycleComplete: true, suppressBatchDataQualitySummary: true));
+
+        Assert.Equal(3, output.Split("[SINGLE_MARKET_DATA_QUALITY_REJECTED]").Length - 1);
+        Assert.Contains("[SINGLE_MARKET_DATA_QUALITY_HIGH_SEVERITY_SUPPRESSED] Count=2", output);
+    }
+
     private static SingleMarketOrderBookArbEngine NewEngine(IOrderBookProvider provider, BotRuntimeState state, SingleMarketArbOptions? opts = null, bool quiet = false, VerifiedBasketExecutionCoordinator? audit = null) => new(provider, 0.005m, 0.001m, 0.001m, null, new ExecutionSizingService(new ExecutionPolicy { MaxNotionalPerTrade = 100m, MinNotionalPerTrade = 25m }), opts ?? Options(), state, null, audit, quiet, new MultiOutcomeLoggingOptions { LogSingleMarketSummaryOnChangeOnly = true, LogSingleMarketDataQualityOnChangeOnly = true, LogSingleMarketSummaryEveryNCycles = 25, LogSingleMarketDataQualityEveryNCycles = 25, SingleMarketDataQualitySignificantDelta = 25, LogSingleMarketNearMissEveryNCycles = 50, LogSingleMarketNearMissOnChangeOnly = true });
     private static SingleMarketArbOptions Options() => new() { RequiredConsecutiveEdgeScans = 3, RequiredConsecutiveExecutionReadyScans = 3, MinEdgePerShare = 0.005m, MinExpectedProfit = 0.50m, MinNotional = 25m, MaxNotionalPerTrade = 100m, MaxOpenSingleMarketPositions = 3, MaxTotalSingleMarketExposure = 300m, MaxPositionsPerCycle = 1, CooldownSecondsPerMarket = 300, AuditBelowMinEdgeEvents = false, AuditDetectedEvents = false, MaxAuditSamplesPerCycle = 20, AuditDataQualityRejectedEvents = false, AuditHighSeverityDataQualityRejectedEvents = true, MaxDataQualityAuditSamplesPerCycle = 3, HighSeveritySuspiciousAskSumDistance = 0.10m, MaxHighSeverityDataQualityLogsPerCycle = 3 };
     private static PaperTradingEngine NewPaper() => new(new ExecutionPolicy { MaxNotionalPerTrade = 100m, MinNotionalPerTrade = 25m, MaxOpenPositions = 100, MaxLockedCapital = 1000m, MaxExposurePerGroup = 300m }, null, null, new PaperPositionBook(Path.GetTempFileName()));

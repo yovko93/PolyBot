@@ -8,12 +8,34 @@ namespace TradingBot.Tests;
 public class AllowlistRepairLoggingTests
 {
 
+
+    [Fact]
+    public void Multi_candidate_scan_logs_when_executable_appears()
+    {
+        var throttle = new LogThrottle();
+        var rejectedOnly = ScanLogSummaryService.CandidateScanFingerprint(10, "AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 10 }, 10, executableAutoCandidates: 0);
+        var executableAppeared = ScanLogSummaryService.CandidateScanFingerprint(10, "AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 9 }, 10, executableAutoCandidates: 1);
+
+        Assert.True(throttle.ShouldLog("MULTI_CANDIDATE_SCAN", rejectedOnly, true, 100));
+        Assert.True(throttle.ShouldLog("MULTI_CANDIDATE_SCAN", executableAppeared, true, 100));
+    }
+
+    [Fact]
+    public void Repair_snapshot_same_id_logs_once_when_repeated_snapshot_suppression_is_enabled()
+    {
+        var throttle = new LogThrottle();
+        var snapshotHash = "snapshot-1|candidates:10|verified:11|export";
+
+        Assert.True(throttle.ShouldLog("ALLOWLIST_REPAIR_SNAPSHOT", snapshotHash, true, everyNCycles: 0));
+        Assert.False(throttle.ShouldLog("ALLOWLIST_REPAIR_SNAPSHOT", snapshotHash, true, everyNCycles: 0));
+    }
+
     [Fact]
     public void Rejected_only_candidate_scan_is_suppressed_until_material_change_or_periodic_cycle()
     {
         var current = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint("AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 9 }, 15);
         var sameBucket = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint("AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 12 }, 15);
-        var changedBucket = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint("AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 31 }, 15);
+        var changedBucket = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint("AutoCandidatePartialOverlap", new Dictionary<string, int> { ["AutoCandidatePartialOverlap"] = 31 }, 15);
 
         Assert.True(ScanLogSummaryService.ShouldSuppressRejectedOnlyCandidateScan(true, false, true, sameBucket, current, periodic: false));
         Assert.False(ScanLogSummaryService.ShouldSuppressRejectedOnlyCandidateScan(true, false, true, changedBucket, current, periodic: false));

@@ -9,15 +9,24 @@ public static class RuntimeSoakStatusExporter
     {
         var health = RuntimeHealthSnapshot.From(state);
         var logs = state.Logs();
+        var trend = RuntimeHealthTrendTracker.Current(options.RuntimeHealth);
         var payload = new
         {
             timestamp = DateTime.UtcNow,
             uptime = health.Uptime,
             processMemoryMb = health.ProcessMemoryMb,
             gcMemoryMb = health.GcTotalMemoryMb,
+            minProcessMemoryMbWindow = trend.MinProcessMemoryMbWindow,
+            maxProcessMemoryMbWindow = trend.MaxProcessMemoryMbWindow,
+            memoryDeltaMbWindow = trend.MemoryDeltaMbWindow,
+            memorySlopeMbPerMinute = trend.MemorySlopeMbPerMinute,
+            isMemoryStable = trend.IsMemoryStable,
             logsCount = health.RecentLogsCount,
             executionAuditCount = health.ExecutionAuditCount,
             signalRBufferCount = health.SignalREventBufferCount,
+            orderbookCacheCount = health.OrderbookCacheCount,
+            marketCacheCount = health.MarketCacheCount,
+            singleMarketOpportunities = health.SingleMarketOpportunitiesCount,
             singleMarketDataQualitySamples = health.SingleMarketDataQualitySamplesCount,
             singleMarketNearMisses = health.SingleMarketNearMissesCount,
             paperOpenedCount = state.SingleMarketExecutionsCount,

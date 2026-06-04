@@ -80,11 +80,22 @@ public static class ScanLogSummaryService
     }
 
 
-    public static string RejectedOnlyCandidateScanFingerprint(string topReject, IReadOnlyDictionary<string, int> rejectedByReason, int reasonBucketSize)
+    public static string RejectedOnlyCandidateScanFingerprint(string topReject, IReadOnlyDictionary<string, int> rejectedByReason, int candidateCountBucketSize, int reasonBucketSize)
     {
-        var bucket = Math.Max(1, reasonBucketSize);
-        var reasonBuckets = string.Join(",", rejectedByReason.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{(int)Math.Floor(x.Value / (decimal)bucket)}"));
-        return $"top:{topReject}|reasons:{reasonBuckets}";
+        // Rejected-only scans are operationally useful only when the dominant reject class changes.
+        // Do not include small count fluctuations here; 8 -> 9 -> 15 should stay quiet.
+        var reasonKeys = string.Join(",", rejectedByReason.Keys.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+        return $"top:{topReject}|reasons:{reasonKeys}";
+    }
+
+    public static string RejectedOnlyCandidateScanFingerprint(string topReject, IReadOnlyDictionary<string, int> rejectedByReason, int reasonBucketSize)
+        => RejectedOnlyCandidateScanFingerprint(topReject, rejectedByReason, reasonBucketSize, reasonBucketSize);
+
+    public static string RepairSuggestionStableHash(string groupKey, string action, string confidence, IEnumerable<string> addedIds, IEnumerable<string> removedIds, int missingNoAsk, bool locked, bool quarantined)
+    {
+        var added = string.Join(",", addedIds.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+        var removed = string.Join(",", removedIds.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+        return $"group:{groupKey}|action:{action}|confidence:{confidence}|added:{added}|removed:{removed}|missing:{missingNoAsk}|locked:{locked.ToString().ToLowerInvariant()}|quarantined:{quarantined.ToString().ToLowerInvariant()}";
     }
 
     public static bool ShouldSuppressRejectedOnlyCandidateScan(bool operationalQuietMode, bool logCandidateScanWhenOnlyRejected, bool rejectedOnlyCandidateScan, string currentFingerprint, string lastFingerprint, bool periodic)
