@@ -58,3 +58,53 @@ public record SingleMarketPaperExecutionDto(
     decimal EquityAfter,
     string PaperStatus,
     bool PaperOnly);
+
+public record SingleMarketScanSummaryDto(
+    DateTime TimestampUtc,
+    long ScanId,
+    int Scanned,
+    int BookOk,
+    int BothAsks,
+    int DataQualityRejected,
+    int BelowMinEdge,
+    int PositiveEdge,
+    int EdgeStable,
+    int ExecutionReady,
+    int FillPassed,
+    int PaperOpened,
+    decimal? BestEdgeSeen,
+    string TopRejectReason,
+    int TopRejectCount,
+    IReadOnlyDictionary<string, int> RejectedByReason,
+    IReadOnlyDictionary<string, int> DataQualityRejectedByReason);
+
+public record SingleMarketDataQualityRejectSampleDto(
+    DateTime TimestampUtc,
+    string MarketId,
+    string? ConditionId,
+    string Title,
+    string Reason,
+    decimal? YesAsk,
+    decimal? NoAsk,
+    decimal RawSum,
+    decimal EdgePerShare);
+
+public record SingleMarketNearMissDto(
+    DateTime TimestampUtc,
+    string MarketId,
+    string? ConditionId,
+    string Title,
+    decimal YesAsk,
+    decimal NoAsk,
+    decimal RawSum,
+    decimal EdgePerShare,
+    decimal RequiredImprovement);
+
+public record SingleMarketArbSnapshotDto(
+    DateTime TimestampUtc,
+    long ScanId,
+    SingleMarketScanSummaryDto Summary,
+    IReadOnlyList<SingleMarketArbOpportunityDto> PositiveCandidates,
+    IReadOnlyList<SingleMarketNearMissDto> TopNearMisses,
+    IReadOnlyList<SingleMarketDataQualityRejectSampleDto> DataQualityRejectSamples,
+    IReadOnlyList<SingleMarketPaperExecutionDto> PaperExecutions);

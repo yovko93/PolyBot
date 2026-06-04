@@ -63,7 +63,7 @@ export const getMultiOutcomeDiagnostics = async (signal?: AbortSignal): Promise<
 export const getVerifiedBasketScreener = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/verified-basket-screener', null, signal);
 export const getExecutionAudit = async (signal?: AbortSignal): Promise<any[]> => keepLatest(await safeRequest<any[]>('/execution-audit?limit=300', [], signal), UIDataLimits.MaxAuditRows);
 export const getDryRunOrderPlans = async (signal?: AbortSignal): Promise<any[]> => keepLatest(await safeRequest<any[]>('/dry-run-order-plans?limit=100', [], signal), UIDataLimits.MaxDiagnosticsRows);
-export const getSingleMarketArbs = async (signal?: AbortSignal): Promise<any[]> => keepLatest(await safeRequest<any[]>('/single-market-arbs?limit=200', [], signal), 200);
+export const getSingleMarketArbs = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/single-market-arbs', null, signal);
 export const getSingleMarketPaperExecutions = async (signal?: AbortSignal): Promise<any[]> => keepLatest(await safeRequest<any[]>('/single-market-paper-executions?limit=100', [], signal), 100);
 export const getAllowlistRepairReport = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/verified-allowlist-repair-report?limit=50', null, signal);
 export const pauseScanner = async (): Promise<BotControlState> => mapControls(await request('/controls/pause', undefined, { method: 'POST' }));
@@ -82,7 +82,7 @@ type BotEventHandlers = {
   onHeartbeat: (x: string) => void;
   onConnectionState: (x: 'CONNECTED'|'RECONNECTING'|'DISCONNECTED') => void;
   onControls: (x: BotControlState) => void;
-  onSingleMarketArbs: (x: any[]) => void;
+  onSingleMarketArbs: (x: any | null) => void;
   onSingleMarketPaperExecutions: (x: any[]) => void;
 };
 
@@ -144,7 +144,7 @@ export const subscribeToBotEvents = async (handlers: BotEventHandlers): Promise<
     hub.on('equityUpdated', (d) => handlers.onEquity(keepLatest(((d as any[]) ?? []).map(mapEquity), UIDataLimits.MaxChartPoints))),
     hub.on('heartbeat', (d: any) => handlers.onHeartbeat(d?.timestamp ?? new Date().toISOString())),
     hub.on('controlsUpdated', (d) => handlers.onControls(mapControls(d))),
-    hub.on('singleMarketArbsUpdated', (d) => handlers.onSingleMarketArbs(keepLatest(((d as any[]) ?? []), 200))),
+    hub.on('singleMarketArbsUpdated', (d) => handlers.onSingleMarketArbs(d ?? null)),
     hub.on('singleMarketPaperExecutionsUpdated', (d) => handlers.onSingleMarketPaperExecutions(keepLatest(((d as any[]) ?? []), 100)))
   ];
   registeredEventHandlers = unsubs.length;

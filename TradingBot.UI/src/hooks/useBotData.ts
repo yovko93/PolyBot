@@ -9,7 +9,7 @@ export function useBotData() {
   const [executionAudit, setExecutionAudit] = useState<any[]>([]);
   const [dryRunOrderPlans, setDryRunOrderPlans] = useState<any[]>([]);
   const [allowlistRepairReport, setAllowlistRepairReport] = useState<any>(null);
-  const [singleMarketArbs, setSingleMarketArbs] = useState<any[]>([]);
+  const [singleMarketArbs, setSingleMarketArbs] = useState<any>(null);
   const [singleMarketPaperExecutions, setSingleMarketPaperExecutions] = useState<any[]>([]);
   const [connectionStatus, setConnectionStatus] = useState('DISCONNECTED'); const [lastUpdated, setLastUpdated] = useState(''); const [lastHeartbeat, setLastHeartbeat] = useState(''); const [source, setSource] = useState('SNAPSHOT'); const [lastRestError, setLastRestError] = useState(''); const [lastEvent, setLastEvent] = useState('');
   const seenEvents = useRef(new Set<string>());

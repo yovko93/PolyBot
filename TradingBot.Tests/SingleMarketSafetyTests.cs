@@ -5,6 +5,8 @@ using TradingBot.Options;
 using TradingBot.Services;
 using Xunit;
 
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
+
 namespace TradingBot.Tests;
 
 public class SingleMarketSafetyTests
@@ -91,10 +93,121 @@ public class SingleMarketSafetyTests
         Assert.Contains("[DRY_RUN_ORDER_PLAN_CREATED]", text);
     }
 
-    private static SingleMarketOrderBookArbEngine NewEngine(BinaryOrderBookSnapshot book, BotRuntimeState state, SingleMarketArbOptions? opts = null) => new(new FakeProvider(book), 0.005m, 0.001m, 0.001m, null, new ExecutionSizingService(new ExecutionPolicy { MaxNotionalPerTrade = 100m, MinNotionalPerTrade = 25m }), opts ?? Options(), state, null);
-    private static SingleMarketArbOptions Options() => new() { RequiredConsecutiveEdgeScans = 3, RequiredConsecutiveExecutionReadyScans = 3, MinEdgePerShare = 0.005m, MinExpectedProfit = 0.50m, MinNotional = 25m, MaxNotionalPerTrade = 100m, MaxOpenSingleMarketPositions = 3, MaxTotalSingleMarketExposure = 300m, MaxPositionsPerCycle = 1, CooldownSecondsPerMarket = 300 };
+    [Fact]
+    public async Task OperationalQuietMode_suppresses_below_min_console_and_detected_audit_spam()
+    {
+        var state = new BotRuntimeState(new RuntimeStateOptions { MaxSingleMarketOpportunities = 200, MaxSingleMarketExecutions = 100 });
+        var audit = NewAudit();
+        var markets = Enumerable.Range(0, 50).Select(i => Market($"m{i}")).ToList();
+        var provider = new MapProvider(markets.ToDictionary(m => m.id, m => BookFor(m, yes: 0.50m, no: 0.499m)));
+        var output = await CaptureConsole(() => NewEngine(provider, state, Options(), quiet: true, audit: audit).ScanAsync(markets, NewPaper(), new SemaphoreSlim(8)));
+        Assert.DoesNotContain("[SINGLE_MARKET_EDGE_PENDING]", output);
+        Assert.DoesNotContain("Stage=SingleMarketDetected", output);
+        Assert.Contains("[SINGLE_MARKET_SCAN_SUMMARY]", output);
+        Assert.Equal(50, state.SingleMarketSnapshot.Summary.BelowMinEdge);
+        Assert.DoesNotContain(audit.ListAudit(1000), x => x.Stage is "SingleMarketDetected" or "SingleMarketEdgePending");
+    }
+
+    [Fact]
+    public async Task Data_quality_rejections_are_aggregated_by_reason_with_bounded_samples()
+    {
+        var runtime = new RuntimeStateOptions { MaxSingleMarketDataQualitySamples = 3, MaxSingleMarketNearMisses = 2 };
+        var state = new BotRuntimeState(runtime);
+        var markets = new[] { Market("missing-yes"), Market("missing-no"), Market("bad-sum"), Market("same-token") }.ToList();
+        var books = new Dictionary<string, BinaryOrderBookSnapshot>
+        {
+            ["missing-yes"] = BookFor(markets[0], yes: null, no: 0.95m),
+            ["missing-no"] = BookFor(markets[1], yes: 0.05m, no: null),
+            ["bad-sum"] = BookFor(markets[2], yes: 0.39m, no: 0.43m),
+            ["same-token"] = BookFor(markets[3], yes: 0.05m, no: 0.95m) with { NoTokenId = "yes-same-token" }
+        };
+        await NewEngine(new MapProvider(books), state, Options(), quiet: true).ScanAsync(markets, NewPaper(), new SemaphoreSlim(4));
+        var summary = state.SingleMarketSnapshot.Summary;
+        Assert.Equal(4, summary.DataQualityRejected);
+        Assert.Equal(1, summary.DataQualityRejectedByReason["MissingYesAsk"]);
+        Assert.Equal(1, summary.DataQualityRejectedByReason["MissingNoAsk"]);
+        Assert.Equal(1, summary.DataQualityRejectedByReason["SuspiciousYesNoAskSum"]);
+        Assert.True(state.SingleMarketSnapshot.DataQualityRejectSamples.Count <= runtime.MaxSingleMarketDataQualitySamples);
+    }
+
+    [Fact]
+    public async Task Top_near_misses_keep_only_configured_top_n_and_payload_is_compact()
+    {
+        var opts = Options();
+        opts.TopNearMissCount = 2;
+        opts.NearMissMinEdge = -0.01m;
+        var state = new BotRuntimeState(new RuntimeStateOptions { MaxSingleMarketNearMisses = 2, MaxSingleMarketDataQualitySamples = 2 });
+        var markets = Enumerable.Range(0, 5).Select(i => Market($"near{i}")).ToList();
+        var books = markets.Select((m, i) => (m, edge: -0.001m * (i + 1))).ToDictionary(x => x.m.id, x => BookForEdge(x.m, x.edge));
+        await NewEngine(new MapProvider(books), state, opts, quiet: true).ScanAsync(markets, NewPaper(), new SemaphoreSlim(4));
+        Assert.Equal(2, state.SingleMarketSnapshot.TopNearMisses.Count);
+        Assert.True(state.SingleMarketSnapshot.TopNearMisses[0].EdgePerShare >= state.SingleMarketSnapshot.TopNearMisses[1].EdgePerShare);
+        Assert.Empty(state.SingleMarketSnapshot.PositiveCandidates);
+    }
+
+    [Fact]
+    public async Task Positive_edge_edge_stable_and_paper_open_still_log_per_market()
+    {
+        var state = new BotRuntimeState(new RuntimeStateOptions());
+        var engine = NewEngine(Book(), state, Options(), quiet: true);
+        var output = await CaptureConsole(async () =>
+        {
+            for (var i = 0; i < 5; i++) await engine.ScanAsync(new List<Market> { Market() }, NewPaper(), new SemaphoreSlim(1));
+        });
+        Assert.Contains("[SINGLE_MARKET_POSITIVE_EDGE_DETECTED]", output);
+        Assert.Contains("[SINGLE_MARKET_EDGE_STABLE]", output);
+        Assert.Contains("[SINGLE_MARKET_FILL_SIMULATION_PASSED]", output);
+        Assert.Contains("[PAPER POSITION OPENED]", output);
+    }
+
+
+    [Fact]
+    public async Task Execution_audit_remains_bounded_after_1000_low_value_scanned_markets()
+    {
+        var state = new BotRuntimeState(new RuntimeStateOptions { MaxExecutionAuditEvents = 500 });
+        var audit = NewAudit();
+        var markets = Enumerable.Range(0, 1000).Select(i => Market($"bulk{i}")).ToList();
+        var books = markets.ToDictionary(m => m.id, m => BookFor(m, yes: 0.50m, no: 0.499m));
+        await NewEngine(new MapProvider(books), state, Options(), quiet: true, audit: audit).ScanAsync(markets, NewPaper(), new SemaphoreSlim(32));
+        Assert.True(audit.ListAudit(1000).Count <= 500);
+        Assert.DoesNotContain(audit.ListAudit(1000), x => x.Stage is "SingleMarketDetected" or "SingleMarketEdgePending");
+    }
+
+    [Fact]
+    public void Runtime_logs_and_execution_audit_are_bounded_after_many_events()
+    {
+        var state = new BotRuntimeState(new RuntimeStateOptions { MaxRecentLogs = 10, MaxSignalREventBuffer = 5 });
+        for (var i = 0; i < 1000; i++)
+        {
+            state.AddLog(new TerminalLogEntry($"l{i}", DateTime.UtcNow, "info", "test", "x", i));
+            state.AddSignalREvent("singleMarketArbsUpdated");
+        }
+        Assert.Equal(10, state.Logs().Length);
+        Assert.Equal(5, state.SignalREventBufferCount);
+    }
+
+    private static SingleMarketOrderBookArbEngine NewEngine(BinaryOrderBookSnapshot book, BotRuntimeState state, SingleMarketArbOptions? opts = null, bool quiet = false, VerifiedBasketExecutionCoordinator? audit = null) => NewEngine(new FakeProvider(book), state, opts, quiet, audit);
+    private static SingleMarketOrderBookArbEngine NewEngine(IOrderBookProvider provider, BotRuntimeState state, SingleMarketArbOptions? opts = null, bool quiet = false, VerifiedBasketExecutionCoordinator? audit = null) => new(provider, 0.005m, 0.001m, 0.001m, null, new ExecutionSizingService(new ExecutionPolicy { MaxNotionalPerTrade = 100m, MinNotionalPerTrade = 25m }), opts ?? Options(), state, null, audit, quiet, new MultiOutcomeLoggingOptions { LogSingleMarketSummaryOnChangeOnly = false, LogSingleMarketDataQualityOnChangeOnly = false, LogSingleMarketSummaryEveryNCycles = 1, LogSingleMarketDataQualityEveryNCycles = 1, LogSingleMarketNearMissEveryNCycles = 1 });
+    private static SingleMarketArbOptions Options() => new() { RequiredConsecutiveEdgeScans = 3, RequiredConsecutiveExecutionReadyScans = 3, MinEdgePerShare = 0.005m, MinExpectedProfit = 0.50m, MinNotional = 25m, MaxNotionalPerTrade = 100m, MaxOpenSingleMarketPositions = 3, MaxTotalSingleMarketExposure = 300m, MaxPositionsPerCycle = 1, CooldownSecondsPerMarket = 300, AuditBelowMinEdgeEvents = false, AuditDetectedEvents = false, MaxAuditSamplesPerCycle = 20 };
     private static PaperTradingEngine NewPaper() => new(new ExecutionPolicy { MaxNotionalPerTrade = 100m, MinNotionalPerTrade = 25m, MaxOpenPositions = 100, MaxLockedCapital = 1000m, MaxExposurePerGroup = 300m }, null, null, new PaperPositionBook(Path.GetTempFileName()));
-    private static Market Market() => new() { id = "m1", question = "Will X win?", conditionId = "c1", outcomes = new() { "Yes", "No" }, clobTokenIds = new() { "yes-token", "no-token" } };
-    private static BinaryOrderBookSnapshot Book(decimal? yes = 0.235m, decimal? no = 0.733m, decimal yesSize = 200m, decimal noSize = 200m) => new("m1", "Will X win?", "yes-token", "no-token", null, yes.HasValue ? new BookQuote(yes.Value, yesSize) : null, null, no.HasValue ? new BookQuote(no.Value, noSize) : null, DateTime.UtcNow);
+    private static Market Market(string id = "m1") => new() { id = id, question = $"Will {id} win?", conditionId = $"c-{id}", outcomes = new() { "Yes", "No" }, clobTokenIds = new() { $"yes-{id}", $"no-{id}" } };
+    private static BinaryOrderBookSnapshot Book(decimal? yes = 0.235m, decimal? no = 0.733m, decimal yesSize = 200m, decimal noSize = 200m) => BookFor(Market(), yes, no, yesSize, noSize);
+    private static BinaryOrderBookSnapshot BookFor(Market market, decimal? yes = 0.235m, decimal? no = 0.733m, decimal yesSize = 200m, decimal noSize = 200m) => new(market.id, market.question, market.clobTokenIds[0], market.clobTokenIds[1], null, yes.HasValue ? new BookQuote(yes.Value, yesSize) : null, null, no.HasValue ? new BookQuote(no.Value, noSize) : null, DateTime.UtcNow);
+    private static BinaryOrderBookSnapshot BookForEdge(Market market, decimal edge)
+    {
+        var raw = 1m - edge - 0.002m;
+        return BookFor(market, 0.5m, raw - 0.5m, 200m, 200m);
+    }
+    private static VerifiedBasketExecutionCoordinator NewAudit() => new(Microsoft.Extensions.Options.Options.Create(new ExecutionOptions()), Microsoft.Extensions.Options.Options.Create(new TradingBotOptions { RuntimeState = new RuntimeStateOptions { MaxExecutionAuditEvents = 500 } }));
+    private static async Task<string> CaptureConsole(Func<Task> action)
+    {
+        var original = Console.Out;
+        using var writer = new StringWriter();
+        Console.SetOut(writer);
+        try { await action(); }
+        finally { Console.SetOut(original); }
+        return writer.ToString();
+    }
     private sealed class FakeProvider(BinaryOrderBookSnapshot book) : IOrderBookProvider { public Task<BinaryOrderBookSnapshot?> GetBinarySnapshotAsync(Market market, CancellationToken ct = default) => Task.FromResult<BinaryOrderBookSnapshot?>(book with { TimestampUtc = DateTime.UtcNow }); }
+    private sealed class MapProvider(IReadOnlyDictionary<string, BinaryOrderBookSnapshot> books) : IOrderBookProvider { public Task<BinaryOrderBookSnapshot?> GetBinarySnapshotAsync(Market market, CancellationToken ct = default) => Task.FromResult<BinaryOrderBookSnapshot?>(books[market.id] with { TimestampUtc = DateTime.UtcNow }); }
 }

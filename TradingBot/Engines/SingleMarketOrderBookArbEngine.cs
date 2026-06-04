@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Collections.Concurrent;
+using System.Text.Json;
 using TradingBot.Api;
 using TradingBot.Models;
 using TradingBot.Options;
@@ -19,6 +20,8 @@ public class SingleMarketOrderBookArbEngine
     private readonly ExecutionSizingService _sizing;
     private readonly bool _sizingLogsEnabled;
     private readonly SingleMarketArbOptions _options;
+    private readonly MultiOutcomeLoggingOptions _logging;
+    private readonly bool _operationalQuietMode;
     private readonly BotRuntimeState? _state;
     private readonly string? _contentRootPath;
     private readonly SingleMarketDataQualityValidator _dataQuality;
@@ -27,6 +30,11 @@ public class SingleMarketOrderBookArbEngine
     private readonly object _gate = new();
     private readonly Dictionary<string, MarketStability> _stability = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> _cooldownUntil = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _loggedDataQualityReasons = new(StringComparer.OrdinalIgnoreCase);
+    private string _lastSummaryHash = string.Empty;
+    private string _lastDataQualityHash = string.Empty;
+    private string _lastNearMissHash = string.Empty;
+    private long _scanId;
     private int _positionsOpenedThisCycle;
 
     public SingleMarketOrderBookArbEngine(
@@ -39,7 +47,9 @@ public class SingleMarketOrderBookArbEngine
         SingleMarketArbOptions? options = null,
         BotRuntimeState? state = null,
         string? contentRootPath = null,
-        VerifiedBasketExecutionCoordinator? audit = null)
+        VerifiedBasketExecutionCoordinator? audit = null,
+        bool operationalQuietMode = false,
+        MultiOutcomeLoggingOptions? logging = null)
     {
         _orderBooks = orderBooks;
         _options = options ?? new SingleMarketArbOptions { MinEdgePerShare = minEdgePerShare };
@@ -53,14 +63,21 @@ public class SingleMarketOrderBookArbEngine
         _contentRootPath = contentRootPath;
         _dataQuality = new SingleMarketDataQualityValidator(_options);
         _audit = audit;
+        _operationalQuietMode = operationalQuietMode;
+        _logging = logging ?? new MultiOutcomeLoggingOptions();
     }
 
     public async Task<SingleMarketScanStats> ScanAsync(List<Market> markets, PaperTradingEngine paper, SemaphoreSlim semaphore, CancellationToken ct = default)
     {
         _positionsOpenedThisCycle = 0;
-        var tasks = markets.Select(market => ScanMarketAsync(market, paper, semaphore, ct));
+        var scanId = Interlocked.Increment(ref _scanId);
+        var diagnostics = new SingleMarketCycleDiagnostics(scanId);
+        var tasks = markets.Select(market => ScanMarketAsync(market, paper, semaphore, diagnostics, ct));
         var results = await Task.WhenAll(tasks);
+        var summary = BuildAndPublishSnapshot(diagnostics);
+        MaybeLogSummaries(summary, diagnostics);
         ExportLatest();
+
         var skipReasons = new Dictionary<string, int>();
         var nearMisses = new List<NearMissOpportunity>();
         var edges = new List<decimal>();
@@ -73,15 +90,17 @@ public class SingleMarketOrderBookArbEngine
         return new SingleMarketScanStats(results.Length, results.Count(x => x.BookOk), results.Count(x => x.BothAsks), results.Count(x => x.Candidate), results.Count(x => x.Executed), results.Count(x => x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value > 0m), results.Count(x => x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value < 0m), results.Count(x => x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value == 0m), skipReasons, nearMisses, edges.Count>0?edges.Max():null, edges.Count>0?edges.Min():null);
     }
 
-    private async Task<SingleMarketScanResult> ScanMarketAsync(Market market, PaperTradingEngine paper, SemaphoreSlim semaphore, CancellationToken ct)
+    private async Task<SingleMarketScanResult> ScanMarketAsync(Market market, PaperTradingEngine paper, SemaphoreSlim semaphore, SingleMarketCycleDiagnostics diagnostics, CancellationToken ct)
     {
         await semaphore.WaitAsync(ct);
         try
         {
+            diagnostics.IncrementScanned();
             if (!_options.Enabled) return SingleMarketScanResult.Empty;
             var now = DateTime.UtcNow;
             var book = await _orderBooks.GetBinarySnapshotAsync(market, ct);
             if (book == null) return SingleMarketScanResult.Empty;
+            diagnostics.IncrementBookOk();
             if (book.TimestampUtc == default) book = book with { TimestampUtc = now };
 
             var yes = book.YesAsk?.Price ?? 0m;
@@ -89,15 +108,21 @@ public class SingleMarketOrderBookArbEngine
             var rawCost = yes + no;
             var adjustedCost = rawCost + _feeBuffer + _slippageBuffer;
             var edge = 1m - adjustedCost;
+            diagnostics.RecordEdge(edge);
+
             var dq = _dataQuality.Validate(market, book, now);
             if (!dq.IsValid)
             {
+                diagnostics.AddDataQualityReject(dq.Reason, Sample(book, market.conditionId, yes, no, rawCost, dq.Reason, edge));
                 var reject = BuildDto(book, market.conditionId, SingleMarketArbState.Rejected, yes, no, rawCost, edge, 0m, 0m, 0m, "Rejected", "NotRun", "NotOpened", dq.Reason, 0, 0);
-                RecordOpportunity(reject, "SingleMarketDataQualityRejected");
-                Console.WriteLine($"[SINGLE_MARKET_DATA_QUALITY_REJECTED] Market={book.Question} Reason={dq.Reason} YesAsk={yes} NoAsk={no} RawSum={rawCost}");
+                MaybeStoreOpportunity(reject, highValue: IsHighSeverityDataQuality(dq.Reason));
+                MaybeAudit(reject, "SingleMarketDataQualityRejected", highValue: IsHighSeverityDataQuality(dq.Reason), sampled: diagnostics.ShouldAuditSample(_options.MaxAuditSamplesPerCycle));
+                if (ShouldLogDataQualityReject(dq.Reason))
+                    Console.WriteLine($"[SINGLE_MARKET_DATA_QUALITY_REJECTED] Market={book.Question} Reason={dq.Reason} YesAsk={yes} NoAsk={no} RawSum={rawCost}");
                 return new SingleMarketScanResult(true, book.YesAsk != null && book.NoAsk != null, false, false, adjustedCost, book.Question, edge, dq.Reason, null);
             }
 
+            diagnostics.IncrementBothAsks();
             var quantityAvailable = Math.Min(book.YesAsk!.Size, book.NoAsk!.Size);
             var sizing = _sizing.SizeByNotional(quantityAvailable, adjustedCost);
             var quantity = sizing.ExecutableQuantity;
@@ -106,32 +131,44 @@ public class SingleMarketOrderBookArbEngine
 
             var expected = quantity * edge;
             RecordMonitor(book, edge, adjustedCost, quantity);
-            RecordOpportunity(BuildDto(book, market.conditionId, SingleMarketArbState.CandidateDetected, yes, no, rawCost, edge, expected, quantity, quantity * adjustedCost, "Passed", "NotRun", "NotOpened", null, GetStability(book.MarketId).EdgeScans, GetStability(book.MarketId).ExecutionScans), "SingleMarketDetected");
+            var detected = BuildDto(book, market.conditionId, SingleMarketArbState.CandidateDetected, yes, no, rawCost, edge, expected, quantity, quantity * adjustedCost, "Passed", "NotRun", "NotOpened", null, GetStability(book.MarketId).EdgeScans, GetStability(book.MarketId).ExecutionScans);
+            if (_options.AuditDetectedEvents) MaybeAudit(detected, "SingleMarketDetected", highValue: false, sampled: diagnostics.ShouldAuditSample(_options.MaxAuditSamplesPerCycle));
 
             if (edge < _minEdgePerShare || quantity <= 0m || expected < _options.MinExpectedProfit || quantity * adjustedCost < _options.MinNotional)
             {
                 ResetStability(book.MarketId);
                 var reason = edge < _minEdgePerShare ? "BelowMinEdge" : quantity <= 0m ? "InsufficientLiquidity" : expected < _options.MinExpectedProfit ? "BelowMinExpectedProfit" : "BelowMinNotional";
-                RecordOpportunity(BuildDto(book, market.conditionId, SingleMarketArbState.EdgePending, yes, no, rawCost, edge, expected, quantity, quantity * adjustedCost, "Passed", "NotRun", "NotOpened", reason, 0, 0), "SingleMarketEdgePending");
-                Console.WriteLine($"[SINGLE_MARKET_EDGE_PENDING] MarketId={book.MarketId} Reason={reason} Edge={edge:0.####}");
+                diagnostics.AddReject(reason);
+                if (edge < _minEdgePerShare) diagnostics.AddNearMiss(NearMiss(book, market.conditionId, yes, no, rawCost, edge));
+                var pending = BuildDto(book, market.conditionId, SingleMarketArbState.EdgePending, yes, no, rawCost, edge, expected, quantity, quantity * adjustedCost, "Passed", "NotRun", "NotOpened", reason, 0, 0);
+                if (_options.AuditBelowMinEdgeEvents || reason != "BelowMinEdge") MaybeAudit(pending, "SingleMarketEdgePending", highValue: false, sampled: diagnostics.ShouldAuditSample(_options.MaxAuditSamplesPerCycle));
+                if (!_operationalQuietMode && reason != "BelowMinEdge") Console.WriteLine($"[SINGLE_MARKET_EDGE_PENDING] MarketId={book.MarketId} Reason={reason} Edge={edge:0.####}");
                 return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,reason,null);
             }
+
+            diagnostics.IncrementPositiveEdge();
+            var positive = BuildDto(book, market.conditionId, SingleMarketArbState.EdgePending, yes, no, rawCost, edge, expected, quantity, quantity * adjustedCost, "Passed", "NotRun", "NotOpened", "WaitingForEdgeStability", GetStability(book.MarketId).EdgeScans, GetStability(book.MarketId).ExecutionScans);
+            diagnostics.AddPositiveCandidate(positive);
+            MaybeStoreOpportunity(positive, highValue: true);
+            MaybeAudit(positive, "SingleMarketPositiveEdgeDetected", highValue: true, sampled: true);
+            Console.WriteLine($"[SINGLE_MARKET_POSITIVE_EDGE_DETECTED] MarketId={book.MarketId} Edge={edge:0.####} ExpectedProfit={expected:0.####} Qty={quantity:0.####}");
 
             var st = IncrementEdge(book.MarketId);
             if (st.EdgeScans < _options.RequiredConsecutiveEdgeScans)
             {
-                RecordOpportunity(BuildDto(book, market.conditionId, SingleMarketArbState.EdgePending, yes, no, rawCost, edge, expected, quantity, quantity * adjustedCost, "Passed", "NotRun", "NotOpened", "WaitingForEdgeStability", st.EdgeScans, st.ExecutionScans), "SingleMarketEdgePending");
-                Console.WriteLine($"[SINGLE_MARKET_EDGE_PENDING] MarketId={book.MarketId} Consecutive={st.EdgeScans} Required={_options.RequiredConsecutiveEdgeScans} Edge={edge:0.####}");
                 return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,"EdgePending",null);
             }
 
-            RecordOpportunity(BuildDto(book, market.conditionId, SingleMarketArbState.EdgeStable, yes, no, rawCost, edge, expected, quantity, quantity * adjustedCost, "Passed", "NotRun", "NotOpened", null, st.EdgeScans, st.ExecutionScans), "SingleMarketEdgeStable");
+            diagnostics.IncrementEdgeStable();
+            RecordHighValue(BuildDto(book, market.conditionId, SingleMarketArbState.EdgeStable, yes, no, rawCost, edge, expected, quantity, quantity * adjustedCost, "Passed", "NotRun", "NotOpened", null, st.EdgeScans, st.ExecutionScans), "SingleMarketEdgeStable");
+            Console.WriteLine($"[SINGLE_MARKET_EDGE_STABLE] MarketId={book.MarketId} Edge={edge:0.####} Consecutive={st.EdgeScans}");
 
             var readinessReason = CheckExecutionReadiness(book, quantity, expected, quantity * adjustedCost);
             if (readinessReason != "Ok")
             {
                 ResetExecution(book.MarketId);
-                RecordOpportunity(BuildDto(book, market.conditionId, SingleMarketArbState.ExecutionReadinessPending, yes, no, rawCost, edge, expected, quantity, quantity * adjustedCost, "Passed", "NotRun", "NotOpened", readinessReason, st.EdgeScans, 0), "SingleMarketEdgeStable");
+                diagnostics.AddReject(readinessReason);
+                RecordHighValue(BuildDto(book, market.conditionId, SingleMarketArbState.ExecutionReadinessPending, yes, no, rawCost, edge, expected, quantity, quantity * adjustedCost, "Passed", "NotRun", "NotOpened", readinessReason, st.EdgeScans, 0), "SingleMarketRiskRejected");
                 Console.WriteLine($"[SINGLE_MARKET_EXECUTION_READINESS_PENDING] MarketId={book.MarketId} Reason={readinessReason}");
                 return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,readinessReason,null);
             }
@@ -139,19 +176,19 @@ public class SingleMarketOrderBookArbEngine
             st = IncrementExecution(book.MarketId);
             if (st.ExecutionScans < _options.RequiredConsecutiveExecutionReadyScans)
             {
-                RecordOpportunity(BuildDto(book, market.conditionId, SingleMarketArbState.ExecutionReadinessPending, yes, no, rawCost, edge, expected, quantity, quantity * adjustedCost, "Passed", "NotRun", "NotOpened", "WaitingForExecutionReadinessStability", st.EdgeScans, st.ExecutionScans), "SingleMarketEdgeStable");
-                Console.WriteLine($"[SINGLE_MARKET_EXECUTION_READINESS_PENDING] MarketId={book.MarketId} Consecutive={st.ExecutionScans} Required={_options.RequiredConsecutiveExecutionReadyScans}");
                 return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,"ExecutionReadinessPending",null);
             }
 
-            RecordOpportunity(BuildDto(book, market.conditionId, SingleMarketArbState.ExecutionStable, yes, no, rawCost, edge, expected, quantity, quantity * adjustedCost, "Passed", "NotRun", "NotOpened", null, st.EdgeScans, st.ExecutionScans), "SingleMarketExecutionReadinessStable");
+            diagnostics.IncrementExecutionReady();
+            RecordHighValue(BuildDto(book, market.conditionId, SingleMarketArbState.ExecutionStable, yes, no, rawCost, edge, expected, quantity, quantity * adjustedCost, "Passed", "NotRun", "NotOpened", null, st.EdgeScans, st.ExecutionScans), "SingleMarketExecutionReadinessStable");
             Console.WriteLine($"[SINGLE_MARKET_EXECUTION_READINESS_STABLE] MarketId={book.MarketId} Edge={edge:0.####} Qty={quantity:0.####}");
 
             var suppression = CheckDuplicateAndCooldown(paper, book.MarketId);
             if (suppression != "Ok")
             {
                 RecordSuppression(book.MarketId);
-                RecordOpportunity(BuildDto(book, market.conditionId, SingleMarketArbState.SuppressedDuplicate, yes, no, rawCost, edge, expected, quantity, quantity * adjustedCost, "Passed", "NotRun", "Suppressed", suppression, st.EdgeScans, st.ExecutionScans), "SingleMarketDuplicateSuppressed");
+                diagnostics.AddReject(suppression);
+                RecordHighValue(BuildDto(book, market.conditionId, SingleMarketArbState.SuppressedDuplicate, yes, no, rawCost, edge, expected, quantity, quantity * adjustedCost, "Passed", "NotRun", "Suppressed", suppression, st.EdgeScans, st.ExecutionScans), "SingleMarketDuplicateSuppressed");
                 Console.WriteLine($"[SINGLE_MARKET_EXECUTION_SUPPRESSED] MarketId={book.MarketId} Reason={suppression}");
                 return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,suppression,null);
             }
@@ -160,33 +197,43 @@ public class SingleMarketOrderBookArbEngine
             if (risk == "Ok" && !TryReserveCycleSlot()) risk = "MaxPositionsPerCycleReached";
             if (risk != "Ok")
             {
-                RecordOpportunity(BuildDto(book, market.conditionId, SingleMarketArbState.Rejected, yes, no, rawCost, edge, expected, quantity, quantity * adjustedCost, "Passed", "NotRun", "Rejected", risk, st.EdgeScans, st.ExecutionScans), "SingleMarketRiskRejected");
+                diagnostics.AddReject(risk);
+                RecordHighValue(BuildDto(book, market.conditionId, SingleMarketArbState.Rejected, yes, no, rawCost, edge, expected, quantity, quantity * adjustedCost, "Passed", "NotRun", "Rejected", risk, st.EdgeScans, st.ExecutionScans), "SingleMarketRiskRejected");
                 Console.WriteLine($"[SINGLE_MARKET_PRETRADE_REJECTED] MarketId={book.MarketId} Reason={risk}");
                 return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,risk,null);
             }
 
             Console.WriteLine($"[SINGLE_MARKET_DRY_RUN_ORDER_PLAN_CREATED] MarketId={book.MarketId} PaperOnly={_options.PaperOnly.ToString().ToLowerInvariant()} Qty={quantity:0.####}");
-            RecordOpportunity(BuildDto(book, market.conditionId, SingleMarketArbState.DryRunPlanCreated, yes, no, rawCost, edge, expected, quantity, quantity * adjustedCost, "Passed", "Pending", "NotOpened", null, st.EdgeScans, st.ExecutionScans), "SingleMarketDryRunOrderPlanCreated");
+            RecordHighValue(BuildDto(book, market.conditionId, SingleMarketArbState.DryRunPlanCreated, yes, no, rawCost, edge, expected, quantity, quantity * adjustedCost, "Passed", "Pending", "NotOpened", null, st.EdgeScans, st.ExecutionScans), "SingleMarketDryRunOrderPlanCreated");
 
             var fill = _fillSimulator.Simulate(book, quantity, _feeBuffer, _slippageBuffer);
             if (!fill.Passed || fill.AdjustedEdgePerShare < _minEdgePerShare || fill.ExpectedProfit < _options.MinExpectedProfit)
             {
                 var reason = !fill.Passed ? fill.Reason : "FillAdjustedProfitBelowThreshold";
-                RecordOpportunity(BuildDto(book, market.conditionId, SingleMarketArbState.Rejected, yes, no, rawCost, fill.AdjustedEdgePerShare, fill.ExpectedProfit, quantity, fill.SimulatedCost, "Passed", "Rejected", "Rejected", reason, st.EdgeScans, st.ExecutionScans), "SingleMarketRiskRejected");
+                diagnostics.AddReject(reason);
+                RecordHighValue(BuildDto(book, market.conditionId, SingleMarketArbState.Rejected, yes, no, rawCost, fill.AdjustedEdgePerShare, fill.ExpectedProfit, quantity, fill.SimulatedCost, "Passed", "Rejected", "Rejected", reason, st.EdgeScans, st.ExecutionScans), "SingleMarketFillRejected");
                 Console.WriteLine($"[SINGLE_MARKET_FILL_REJECTED] MarketId={book.MarketId} Reason={reason} PlannedQty={quantity:0.####} FullyFillableQty={fill.FullyFillableQty:0.####}");
                 return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,reason,null);
             }
+            diagnostics.IncrementFillPassed();
             Console.WriteLine($"[SINGLE_MARKET_FILL_SIMULATION_PASSED] MarketId={book.MarketId} Qty={quantity:0.####} FullyFillableQty={fill.FullyFillableQty:0.####} SimulatedCost={fill.SimulatedCost:0.####}");
-            RecordOpportunity(BuildDto(book, market.conditionId, SingleMarketArbState.FillSimulationPassed, yes, no, rawCost, fill.AdjustedEdgePerShare, fill.ExpectedProfit, quantity, fill.SimulatedCost, "Passed", "Passed", "NotOpened", null, st.EdgeScans, st.ExecutionScans), "SingleMarketFillSimulationPassed");
+            RecordHighValue(BuildDto(book, market.conditionId, SingleMarketArbState.FillSimulationPassed, yes, no, rawCost, fill.AdjustedEdgePerShare, fill.ExpectedProfit, quantity, fill.SimulatedCost, "Passed", "Passed", "NotOpened", null, st.EdgeScans, st.ExecutionScans), "SingleMarketFillSimulationPassed");
 
             var opportunity = new ArbOpportunity(new ArbLeg(book.MarketId, book.Question, "YES", fill.YesAveragePrice, book.YesAsk.Size), new ArbLeg(book.MarketId, book.Question, "NO", fill.NoAveragePrice, book.NoAsk.Size), quantity, fill.SimulatedCost / quantity, fill.AdjustedEdgePerShare, fill.ExpectedProfit, 1.0, "SingleMarketBuyBoth", StrategyName);
             var equityBefore = paper.Equity;
             var executed = paper.RecordArbitrage(opportunity);
-            if (!executed) return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,"PaperRejected",null);
+            if (!executed)
+            {
+                diagnostics.AddReject("PaperOpenBlocked");
+                Console.WriteLine($"[SINGLE_MARKET_PAPER_OPEN_BLOCKED] MarketId={book.MarketId} Reason=PaperRejected");
+                return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,"PaperRejected",null);
+            }
+            diagnostics.IncrementPaperOpened();
             RecordOpened(book.MarketId);
             var execution = new SingleMarketPaperExecutionDto(Guid.NewGuid().ToString("N"), DateTime.UtcNow, book.MarketId, book.Question, StrategyName, quantity, fill.YesAveragePrice, fill.NoAveragePrice, fill.SimulatedCost, fill.AdjustedEdgePerShare, fill.ExpectedProfit, paper.Balance, paper.LockedCapital, paper.Equity, "Opened", true);
             _state?.AddSingleMarketExecution(execution);
-            RecordOpportunity(BuildDto(book, market.conditionId, SingleMarketArbState.PaperOpened, yes, no, rawCost, fill.AdjustedEdgePerShare, fill.ExpectedProfit, quantity, fill.SimulatedCost, "Passed", "Passed", $"Opened EquityUnchanged={paper.Equity == equityBefore}", null, st.EdgeScans, st.ExecutionScans), "SingleMarketPaperOpened");
+            diagnostics.AddExecution(execution);
+            RecordHighValue(BuildDto(book, market.conditionId, SingleMarketArbState.PaperOpened, yes, no, rawCost, fill.AdjustedEdgePerShare, fill.ExpectedProfit, quantity, fill.SimulatedCost, "Passed", "Passed", $"Opened EquityUnchanged={paper.Equity == equityBefore}", null, st.EdgeScans, st.ExecutionScans), "SingleMarketPaperOpened");
             return new SingleMarketScanResult(true,true,true,true,adjustedCost,book.Question,edge,null,null);
         }
         catch (Exception ex)
@@ -244,6 +291,126 @@ public class SingleMarketOrderBookArbEngine
         return "Ok";
     }
 
+    private SingleMarketScanSummaryDto BuildAndPublishSnapshot(SingleMarketCycleDiagnostics diagnostics)
+    {
+        var rejectCounts = diagnostics.RejectCounts.ToDictionary(k => k.Key, v => v.Value, StringComparer.OrdinalIgnoreCase);
+        var dataQualityCounts = diagnostics.DataQualityCounts.ToDictionary(k => k.Key, v => v.Value, StringComparer.OrdinalIgnoreCase);
+        var topReject = rejectCounts.OrderByDescending(x => x.Value).ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase).FirstOrDefault();
+        var topNearMisses = diagnostics.NearMisses
+            .Where(x => x.EdgePerShare >= _options.NearMissMinEdge && x.EdgePerShare < _minEdgePerShare)
+            .OrderByDescending(x => x.EdgePerShare)
+            .Take(_options.TopNearMissCount)
+            .ToArray();
+        var positive = diagnostics.PositiveCandidates.OrderByDescending(x => x.EdgePerShare).Take(_options.TopPositiveCandidateCount).ToArray();
+        var dqSamples = diagnostics.DataQualitySamples.Take(_options.TopDataQualityRejectSampleCount).ToArray();
+        var executions = _state?.SingleMarketExecutions().TakeLast(_options.TopExecutionCount).ToArray() ?? diagnostics.Executions.Take(_options.TopExecutionCount).ToArray();
+        var summary = new SingleMarketScanSummaryDto(
+            DateTime.UtcNow,
+            diagnostics.ScanId,
+            diagnostics.Scanned,
+            diagnostics.BookOk,
+            diagnostics.BothAsks,
+            diagnostics.DataQualityRejected,
+            diagnostics.BelowMinEdge,
+            diagnostics.PositiveEdge,
+            diagnostics.EdgeStable,
+            diagnostics.ExecutionReady,
+            diagnostics.FillPassed,
+            diagnostics.PaperOpened,
+            diagnostics.BestEdgeSeen,
+            topReject.Key ?? "None",
+            topReject.Value,
+            rejectCounts,
+            dataQualityCounts);
+        var snapshot = new SingleMarketArbSnapshotDto(DateTime.UtcNow, diagnostics.ScanId, summary, positive, topNearMisses, dqSamples, executions);
+        _state?.SetSingleMarketSnapshot(snapshot);
+        return summary;
+    }
+
+    private void MaybeLogSummaries(SingleMarketScanSummaryDto summary, SingleMarketCycleDiagnostics diagnostics)
+    {
+        var summaryHash = $"{Bucket(summary.Scanned, 25)}|{summary.PositiveEdge}|{summary.TopRejectReason}|{summary.PaperOpened}|{Bucket(summary.BestEdgeSeen ?? 0m, 0.001m)}";
+        if (ShouldLog(ref _lastSummaryHash, summaryHash, summary.ScanId, _logging.LogSingleMarketSummaryEveryNCycles, _logging.LogSingleMarketSummaryOnChangeOnly))
+        {
+            Console.WriteLine($"[SINGLE_MARKET_SCAN_SUMMARY] Scanned={summary.Scanned} DataQualityRejected={summary.DataQualityRejected} BelowMinEdge={summary.BelowMinEdge} PositiveEdge={summary.PositiveEdge} EdgeStable={summary.EdgeStable} ExecutionReady={summary.ExecutionReady} FillPassed={summary.FillPassed} PaperOpened={summary.PaperOpened} TopReject={summary.TopRejectReason}:{summary.TopRejectCount} BestEdge={summary.BestEdgeSeen:0.####}");
+        }
+
+        var dqHash = string.Join("|", summary.DataQualityRejectedByReason.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{Bucket(x.Value, 10)}"));
+        if (summary.DataQualityRejected > 0 && ShouldLog(ref _lastDataQualityHash, dqHash, summary.ScanId, _logging.LogSingleMarketDataQualityEveryNCycles, _logging.LogSingleMarketDataQualityOnChangeOnly))
+        {
+            var counts = string.Join(" ", summary.DataQualityRejectedByReason.OrderByDescending(x => x.Value).ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}={x.Value}"));
+            Console.WriteLine($"[SINGLE_MARKET_DATA_QUALITY_SUMMARY] TotalRejected={summary.DataQualityRejected} {counts} Samples={Math.Min(_options.TopDataQualityRejectSampleCount, diagnostics.DataQualitySamples.Count)}");
+        }
+
+        var topNearMisses = diagnostics.NearMisses.Where(x => x.EdgePerShare >= _options.NearMissMinEdge && x.EdgePerShare < _minEdgePerShare).OrderByDescending(x => x.EdgePerShare).Take(5).ToArray();
+        var nearHash = string.Join("|", topNearMisses.Select(x => $"{x.MarketId}:{Bucket(x.EdgePerShare, 0.001m)}"));
+        if (topNearMisses.Length > 0 && ShouldLog(ref _lastNearMissHash, nearHash, summary.ScanId, _logging.LogSingleMarketNearMissEveryNCycles, true))
+        {
+            foreach (var n in topNearMisses)
+                Console.WriteLine($"[SINGLE_MARKET_TOP_NEAR_MISS] MarketId={n.MarketId} Edge={n.EdgePerShare:0.####} RequiredImprovement={n.RequiredImprovement:0.####}");
+        }
+    }
+
+    private bool ShouldLog(ref string lastHash, string hash, long scanId, int everyNCycles, bool onChangeOnly)
+    {
+        var changed = !string.Equals(lastHash, hash, StringComparison.Ordinal);
+        var periodic = everyNCycles > 0 && scanId % everyNCycles == 0;
+        if (!onChangeOnly || changed || periodic)
+        {
+            lastHash = hash;
+            return true;
+        }
+        return false;
+    }
+
+    private static int Bucket(int value, int size) => size <= 1 ? value : value / size * size;
+    private static decimal Bucket(decimal value, decimal size) => size <= 0m ? value : Math.Round(value / size, 0, MidpointRounding.AwayFromZero) * size;
+
+    private bool ShouldLogDataQualityReject(string reason)
+    {
+        if (!_operationalQuietMode) return IsHighSeverityDataQuality(reason);
+        if (!IsHighSeverityDataQuality(reason)) return false;
+        lock (_gate) return _loggedDataQualityReasons.Add(reason);
+    }
+
+    private static bool IsHighSeverityDataQuality(string reason)
+        => reason is "SuspiciousYesNoAskSum" or "SameYesNoTokenId" or "MarketIdMismatch";
+
+    private void RecordHighValue(SingleMarketArbOpportunityDto dto, string auditStage)
+    {
+        MaybeStoreOpportunity(dto, highValue: true);
+        MaybeAudit(dto, auditStage, highValue: true, sampled: true);
+    }
+
+    private void MaybeStoreOpportunity(SingleMarketArbOpportunityDto dto, bool highValue)
+    {
+        if (highValue) _state?.AddSingleMarketOpportunity(dto);
+    }
+
+    private void MaybeAudit(SingleMarketArbOpportunityDto dto, string auditStage, bool highValue, bool sampled)
+    {
+        if (!highValue && !sampled) return;
+        _audit?.Audit(new ExecutionAuditEvent(DateTime.UtcNow, dto.Id, dto.MarketId, dto.Strategy, auditStage, dto.State.ToString(), dto.Reason ?? "Ok", dto.EdgePerShare, dto.ExpectedProfit, dto.PlannedNotional, dto.Quantity, $"PaperOnly={dto.PaperOnly}; DataQuality={dto.DataQualityStatus}; Fill={dto.FillSimulationStatus}; Paper={dto.PaperStatus}"));
+        if (highValue || !_operationalQuietMode)
+            Console.WriteLine($"[EXECUTION_AUDIT] Stage={auditStage} MarketId={dto.MarketId} State={dto.State} Reason={dto.Reason ?? "Ok"}");
+    }
+
+    private void ExportLatest()
+    {
+        if (_state is null || string.IsNullOrWhiteSpace(_contentRootPath)) return;
+        var dir = Path.Combine(_contentRootPath, "exports");
+        Directory.CreateDirectory(dir);
+        var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+        File.WriteAllText(Path.Combine(dir, "single-market-arb-opportunities-latest.json"), JsonSerializer.Serialize(_state.SingleMarketSnapshot, jsonOptions));
+        File.WriteAllText(Path.Combine(dir, "single-market-paper-executions-latest.json"), JsonSerializer.Serialize(_state.SingleMarketExecutions().TakeLast(100), jsonOptions));
+    }
+
+    private SingleMarketDataQualityRejectSampleDto Sample(BinaryOrderBookSnapshot book, string? conditionId, decimal yes, decimal no, decimal raw, string reason, decimal edge)
+        => new(DateTime.UtcNow, book.MarketId, conditionId, book.Question, reason, yes == 0m ? null : yes, no == 0m ? null : no, raw, edge);
+
+    private SingleMarketNearMissDto NearMiss(BinaryOrderBookSnapshot book, string? conditionId, decimal yes, decimal no, decimal raw, decimal edge)
+        => new(DateTime.UtcNow, book.MarketId, conditionId, book.Question, yes, no, raw, edge, _minEdgePerShare - edge);
+
     private void RecordOpened(string marketId) { lock (_gate) _cooldownUntil[marketId] = DateTime.UtcNow.AddSeconds(_options.CooldownSecondsPerMarket); }
     private void RecordSuppression(string marketId) { lock (_gate) _cooldownUntil[marketId] = DateTime.UtcNow.AddSeconds(_options.CooldownSecondsPerMarket); }
     private MarketStability GetStability(string marketId) { lock (_gate) return _stability.TryGetValue(marketId, out var s) ? s : new(); }
@@ -255,24 +422,76 @@ public class SingleMarketOrderBookArbEngine
     private SingleMarketArbOpportunityDto BuildDto(BinaryOrderBookSnapshot book, string? conditionId, SingleMarketArbState state, decimal yes, decimal no, decimal raw, decimal edge, decimal expected, decimal qty, decimal notional, string dq, string fill, string paper, string? reason, int edgeScans, int executionScans)
         => new($"{book.MarketId}:{DateTime.UtcNow:yyyyMMddHHmmssfff}:{state}", DateTime.UtcNow, book.MarketId, conditionId, book.Question, StrategyName, state, yes, no, raw, edge, expected, qty, notional, dq, fill, paper, reason, edgeScans, executionScans, true);
 
-    private void RecordOpportunity(SingleMarketArbOpportunityDto dto, string auditStage)
-    {
-        _state?.AddSingleMarketOpportunity(dto);
-        _audit?.Audit(new ExecutionAuditEvent(DateTime.UtcNow, dto.Id, dto.MarketId, dto.Strategy, auditStage, dto.State.ToString(), dto.Reason ?? "Ok", dto.EdgePerShare, dto.ExpectedProfit, dto.PlannedNotional, dto.Quantity, $"PaperOnly={dto.PaperOnly}; DataQuality={dto.DataQualityStatus}; Fill={dto.FillSimulationStatus}; Paper={dto.PaperStatus}"));
-        Console.WriteLine($"[EXECUTION_AUDIT] Stage={auditStage} MarketId={dto.MarketId} State={dto.State} Reason={dto.Reason ?? "Ok"}");
-    }
-
-    private void ExportLatest()
-    {
-        if (_state is null || string.IsNullOrWhiteSpace(_contentRootPath)) return;
-        var dir = Path.Combine(_contentRootPath, "exports");
-        Directory.CreateDirectory(dir);
-        var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
-        File.WriteAllText(Path.Combine(dir, "single-market-arb-opportunities-latest.json"), JsonSerializer.Serialize(_state.SingleMarketOpportunities().TakeLast(_options is null ? 200 : 200), jsonOptions));
-        File.WriteAllText(Path.Combine(dir, "single-market-paper-executions-latest.json"), JsonSerializer.Serialize(_state.SingleMarketExecutions().TakeLast(100), jsonOptions));
-    }
-
     private sealed record MarketStability(int EdgeScans = 0, int ExecutionScans = 0);
     private record SingleMarketScanResult(bool BookOk,bool BothAsks,bool Candidate,bool Executed,decimal? AdjustedCost,string? Question,decimal? Edge,string? SkipReason,NearMissOpportunity? NearMiss)
     { public static SingleMarketScanResult Empty => new(false,false,false,false,null,null,null,null,null); }
+
+    private sealed class SingleMarketCycleDiagnostics(long scanId)
+    {
+        private int _scanned;
+        private int _bookOk;
+        private int _bothAsks;
+        private int _dataQualityRejected;
+        private int _belowMinEdge;
+        private int _positiveEdge;
+        private int _edgeStable;
+        private int _executionReady;
+        private int _fillPassed;
+        private int _paperOpened;
+        private int _auditSamples;
+        private decimal? _bestEdgeSeen;
+        private readonly object _edgeGate = new();
+        public long ScanId { get; } = scanId;
+        public int Scanned => Volatile.Read(ref _scanned);
+        public int BookOk => Volatile.Read(ref _bookOk);
+        public int BothAsks => Volatile.Read(ref _bothAsks);
+        public int DataQualityRejected => Volatile.Read(ref _dataQualityRejected);
+        public int BelowMinEdge => Volatile.Read(ref _belowMinEdge);
+        public int PositiveEdge => Volatile.Read(ref _positiveEdge);
+        public int EdgeStable => Volatile.Read(ref _edgeStable);
+        public int ExecutionReady => Volatile.Read(ref _executionReady);
+        public int FillPassed => Volatile.Read(ref _fillPassed);
+        public int PaperOpened => Volatile.Read(ref _paperOpened);
+        public decimal? BestEdgeSeen { get { lock (_edgeGate) return _bestEdgeSeen; } }
+        public ConcurrentDictionary<string, int> RejectCounts { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public ConcurrentDictionary<string, int> DataQualityCounts { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public ConcurrentBag<SingleMarketDataQualityRejectSampleDto> DataQualitySamples { get; } = new();
+        public ConcurrentBag<SingleMarketNearMissDto> NearMisses { get; } = new();
+        public ConcurrentBag<SingleMarketArbOpportunityDto> PositiveCandidates { get; } = new();
+        public ConcurrentBag<SingleMarketPaperExecutionDto> Executions { get; } = new();
+        public void IncrementScanned() => Interlocked.Increment(ref _scanned);
+        public void IncrementBookOk() => Interlocked.Increment(ref _bookOk);
+        public void IncrementBothAsks() => Interlocked.Increment(ref _bothAsks);
+        public void IncrementPositiveEdge() => Interlocked.Increment(ref _positiveEdge);
+        public void IncrementEdgeStable() => Interlocked.Increment(ref _edgeStable);
+        public void IncrementExecutionReady() => Interlocked.Increment(ref _executionReady);
+        public void IncrementFillPassed() => Interlocked.Increment(ref _fillPassed);
+        public void IncrementPaperOpened() => Interlocked.Increment(ref _paperOpened);
+        public void RecordEdge(decimal edge) { lock (_edgeGate) if (!_bestEdgeSeen.HasValue || edge > _bestEdgeSeen.Value) _bestEdgeSeen = edge; }
+        public void AddReject(string reason)
+        {
+            RejectCounts.AddOrUpdate(reason, 1, (_, x) => x + 1);
+            if (reason == "BelowMinEdge") Interlocked.Increment(ref _belowMinEdge);
+        }
+        public void AddDataQualityReject(string reason, SingleMarketDataQualityRejectSampleDto sample)
+        {
+            Interlocked.Increment(ref _dataQualityRejected);
+            AddReject(reason);
+            DataQualityCounts.AddOrUpdate(reason, 1, (_, x) => x + 1);
+            DataQualitySamples.Add(sample);
+        }
+        public void AddNearMiss(SingleMarketNearMissDto nearMiss) => NearMisses.Add(nearMiss);
+        public void AddPositiveCandidate(SingleMarketArbOpportunityDto dto) => PositiveCandidates.Add(dto);
+        public void AddExecution(SingleMarketPaperExecutionDto dto) => Executions.Add(dto);
+        public bool ShouldAuditSample(int maxSamples)
+        {
+            if (maxSamples <= 0) return false;
+            while (true)
+            {
+                var cur = Volatile.Read(ref _auditSamples);
+                if (cur >= maxSamples) return false;
+                if (Interlocked.CompareExchange(ref _auditSamples, cur + 1, cur) == cur) return true;
+            }
+        }
+    }
 }

@@ -246,6 +246,11 @@ public class MultiOutcomeLoggingOptions
     public bool LogVerifiedUnresolvedSamplesOnChangeOnly { get; set; } = true;
     public int LogVerifiedUnresolvedSamplesEveryNCycles { get; set; } = 100;
     public int MaxVerifiedUnresolvedSamplesToLog { get; set; } = 5;
+    public int LogSingleMarketSummaryEveryNCycles { get; set; } = 25;
+    public bool LogSingleMarketSummaryOnChangeOnly { get; set; } = true;
+    public int LogSingleMarketDataQualityEveryNCycles { get; set; } = 25;
+    public bool LogSingleMarketDataQualityOnChangeOnly { get; set; } = true;
+    public int LogSingleMarketNearMissEveryNCycles { get; set; } = 25;
     public bool LogAllowlistRepairSuggestionsOnChangeOnly { get; set; } = true;
     public int LogAllowlistRepairSuggestionsEveryNCycles { get; set; } = 100;
     public bool LogAllowlistRepairOnChangeOnly { get; set; } = true;
@@ -313,6 +318,14 @@ public class SingleMarketArbOptions
     public decimal MaxReasonableYesNoAskSum { get; set; } = 1.05m;
     public bool RejectSuspiciousAskSum { get; set; } = true;
     public int MaxOrderbookAgeMs { get; set; } = 5000;
+    public bool AuditBelowMinEdgeEvents { get; set; } = false;
+    public bool AuditDetectedEvents { get; set; } = false;
+    public int MaxAuditSamplesPerCycle { get; set; } = 20;
+    public int TopNearMissCount { get; set; } = 10;
+    public decimal NearMissMinEdge { get; set; } = -0.005m;
+    public int TopPositiveCandidateCount { get; set; } = 20;
+    public int TopDataQualityRejectSampleCount { get; set; } = 20;
+    public int TopExecutionCount { get; set; } = 20;
 }
 
 public class RuntimeStateOptions
@@ -333,6 +346,8 @@ public class RuntimeStateOptions
     public int MaxFillSimulations { get; set; } = 100;
     public int MaxPaperPositions { get; set; } = 100;
     public int MaxSingleMarketOpportunities { get; set; } = 200;
+    public int MaxSingleMarketNearMisses { get; set; } = 50;
+    public int MaxSingleMarketDataQualitySamples { get; set; } = 100;
     public int MaxSingleMarketExecutions { get; set; } = 100;
     public int MaxSignalREventBuffer { get; set; } = 100;
     public int MaxProfileComparisonHistory { get; set; } = 100;

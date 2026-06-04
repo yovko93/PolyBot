@@ -20,6 +20,7 @@ public class BotRuntimeState
     public VerifiedBasketScreenerDto? VerifiedBasketScreener { get; private set; }
     public RiskStateDto Risk { get; private set; } = new(100,5,0.003m,0.25m,300,0,5,0,100,new(),true,true,true,true,DateTime.UtcNow,0);
     public BotControlStateDto Controls { get; private set; } = new(false, "RUNNING", DateTime.UtcNow, 0);
+    public SingleMarketArbSnapshotDto SingleMarketSnapshot { get; private set; } = new(DateTime.UtcNow, 0, new SingleMarketScanSummaryDto(DateTime.UtcNow, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null, "None", 0, new Dictionary<string,int>(), new Dictionary<string,int>()), Array.Empty<SingleMarketArbOpportunityDto>(), Array.Empty<SingleMarketNearMissDto>(), Array.Empty<SingleMarketDataQualityRejectSampleDto>(), Array.Empty<SingleMarketPaperExecutionDto>());
     private readonly ConcurrentQueue<OpportunityDto> _opps = new();
     private readonly ConcurrentQueue<TradeLogEntryDto> _trades = new();
     private readonly ConcurrentQueue<PaperPositionDto> _positions = new();
@@ -80,6 +81,19 @@ public class BotRuntimeState
     public void SetMultiOutcomeReviewReport(IEnumerable<object> items){lock(_gate) MultiOutcomeReviewReport = items.Take(_runtime.MaxRejectedCandidateSamples).ToArray();}
     public void SetVerifiedBasketScreener(VerifiedBasketScreenerDto? d){lock(_gate) VerifiedBasketScreener=d;}
     public void SetControls(BotControlStateDto c){lock(_gate) Controls=c;}
+    public void SetSingleMarketSnapshot(SingleMarketArbSnapshotDto snapshot)
+    {
+        lock(_gate)
+        {
+            SingleMarketSnapshot = snapshot with
+            {
+                PositiveCandidates = snapshot.PositiveCandidates.Take(_runtime.MaxSingleMarketOpportunities).ToArray(),
+                TopNearMisses = snapshot.TopNearMisses.Take(_runtime.MaxSingleMarketNearMisses).ToArray(),
+                DataQualityRejectSamples = snapshot.DataQualityRejectSamples.Take(_runtime.MaxSingleMarketDataQualitySamples).ToArray(),
+                PaperExecutions = snapshot.PaperExecutions.Take(_runtime.MaxSingleMarketExecutions).ToArray()
+            };
+        }
+    }
     public void AddOpportunity(OpportunityDto o){_opps.Enqueue(o); Trim(_opps,_runtime.MaxCandidateGroupsInMemory);}
     public void ReplaceOpportunities(IEnumerable<OpportunityDto> items){while(_opps.TryDequeue(out _)){} foreach(var i in items.Take(_runtime.MaxCandidateGroupsInMemory)) _opps.Enqueue(i); Trim(_opps,_runtime.MaxCandidateGroupsInMemory);}
     public void AddTrade(TradeLogEntryDto t){_trades.Enqueue(t); Trim(_trades,500);}
@@ -121,6 +135,8 @@ public class BotRuntimeState
         ["exports"] = ExportQueueCount,
         ["patchPreviewItems"] = PatchPreviewItemsCount,
         ["singleMarketOpportunities"] = SingleMarketOpportunitiesCount,
+        ["singleMarketNearMisses"] = SingleMarketSnapshot.TopNearMisses.Count,
+        ["singleMarketDataQualitySamples"] = SingleMarketSnapshot.DataQualityRejectSamples.Count,
         ["singleMarketExecutions"] = SingleMarketExecutionsCount
     };
     public void ClearNonEssentialRuntimeState()
@@ -132,6 +148,7 @@ public class BotRuntimeState
         while(_signalREventBuffer.TryDequeue(out _)){}
         while(_singleMarketOpportunities.TryDequeue(out _)){}
         while(_singleMarketExecutions.TryDequeue(out _)){}
+        SetSingleMarketSnapshot(SingleMarketSnapshot with { PositiveCandidates = Array.Empty<SingleMarketArbOpportunityDto>(), TopNearMisses = Array.Empty<SingleMarketNearMissDto>(), DataQualityRejectSamples = Array.Empty<SingleMarketDataQualityRejectSampleDto>(), PaperExecutions = Array.Empty<SingleMarketPaperExecutionDto>() });
         TrimAll();
     }
     public OpportunityDto[] Opportunities()=>_opps.ToArray();
