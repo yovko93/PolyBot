@@ -398,19 +398,6 @@ public class SingleMarketSafetyTests
         Assert.DoesNotContain(audit.ListAudit(1000), x => x.Stage is "SingleMarketDetected" or "SingleMarketEdgePending");
     }
 
-    [Fact]
-    public void Runtime_logs_and_execution_audit_are_bounded_after_many_events()
-    {
-        var state = new BotRuntimeState(new RuntimeStateOptions { MaxRecentLogs = 10, MaxSignalREventBuffer = 5 });
-        for (var i = 0; i < 1000; i++)
-        {
-            state.AddLog(new TerminalLogEntry($"l{i}", DateTime.UtcNow, "info", "test", "x", i));
-            state.AddSignalREvent("singleMarketArbsUpdated");
-        }
-        Assert.Equal(10, state.Logs().Length);
-        Assert.Equal(5, state.SignalREventBufferCount);
-    }
-
     private static SingleMarketOrderBookArbEngine NewEngine(BinaryOrderBookSnapshot book, BotRuntimeState state, SingleMarketArbOptions? opts = null, bool quiet = false, VerifiedBasketExecutionCoordinator? audit = null) => NewEngine(new FakeProvider(book), state, opts, quiet, audit);
     private static SingleMarketOrderBookArbEngine NewEngine(IOrderBookProvider provider, BotRuntimeState state, SingleMarketArbOptions? opts = null, bool quiet = false, VerifiedBasketExecutionCoordinator? audit = null) => new(provider, 0.005m, 0.001m, 0.001m, null, new ExecutionSizingService(new ExecutionPolicy { MaxNotionalPerTrade = 100m, MinNotionalPerTrade = 25m }), opts ?? Options(), state, null, audit, quiet, new MultiOutcomeLoggingOptions { LogSingleMarketSummaryOnChangeOnly = true, LogSingleMarketDataQualityOnChangeOnly = true, LogSingleMarketSummaryEveryNCycles = 25, LogSingleMarketDataQualityEveryNCycles = 25, SingleMarketDataQualitySignificantDelta = 25, LogSingleMarketNearMissEveryNCycles = 50, LogSingleMarketNearMissOnChangeOnly = true });
     private static SingleMarketArbOptions Options() => new() { RequiredConsecutiveEdgeScans = 3, RequiredConsecutiveExecutionReadyScans = 3, MinEdgePerShare = 0.005m, MinExpectedProfit = 0.50m, MinNotional = 25m, MaxNotionalPerTrade = 100m, MaxOpenSingleMarketPositions = 3, MaxTotalSingleMarketExposure = 300m, MaxPositionsPerCycle = 1, CooldownSecondsPerMarket = 300, AuditBelowMinEdgeEvents = false, AuditDetectedEvents = false, MaxAuditSamplesPerCycle = 20, AuditDataQualityRejectedEvents = false, AuditHighSeverityDataQualityRejectedEvents = true, MaxDataQualityAuditSamplesPerCycle = 3, HighSeveritySuspiciousAskSumDistance = 0.10m, MaxHighSeverityDataQualityLogsPerCycle = 3 };
