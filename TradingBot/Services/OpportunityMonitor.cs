@@ -340,7 +340,7 @@ public class OpportunityMonitor
 
         _dryRunOrderBuilder.SavePlan(plan);
 
-        Console.WriteLine("[DRY-RUN LIVE ORDER PLAN CREATED]");
+        Console.WriteLine("[DRY_RUN_ORDER_PLAN_CREATED]");
         Console.WriteLine($"Plan: {plan.PlanId}");
         Console.WriteLine($"Orders: {plan.Orders.Count}");
         Console.WriteLine($"Estimated cost: {plan.TotalEstimatedCost:0.####}");

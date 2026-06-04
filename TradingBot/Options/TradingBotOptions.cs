@@ -77,6 +77,7 @@ public class TradingBotOptions
     public MultiOutcomeReviewOptions MultiOutcomeReview { get; set; } = new();
     public AllowlistRepairOptions AllowlistRepair { get; set; } = new();
     public RuntimeStateOptions RuntimeState { get; set; } = new();
+    public SingleMarketArbOptions SingleMarketArb { get; set; } = new();
     public MarketDiscoveryOptions MarketDiscovery { get; set; } = new();
     public SignalROptions SignalR { get; set; } = new();
     public RuntimeHealthOptions RuntimeHealth { get; set; } = new();
@@ -294,6 +295,26 @@ public class AllowlistRepairLockedGroupOptions
     public bool AllowPatchPreview { get; set; } = false;
 }
 
+public class SingleMarketArbOptions
+{
+    public bool Enabled { get; set; } = true;
+    public bool PaperOnly { get; set; } = true;
+    public int RequiredConsecutiveEdgeScans { get; set; } = 3;
+    public int RequiredConsecutiveExecutionReadyScans { get; set; } = 3;
+    public decimal MinEdgePerShare { get; set; } = 0.005m;
+    public decimal MinExpectedProfit { get; set; } = 0.50m;
+    public decimal MinNotional { get; set; } = 25m;
+    public decimal MaxNotionalPerTrade { get; set; } = 100m;
+    public int MaxOpenSingleMarketPositions { get; set; } = 3;
+    public decimal MaxTotalSingleMarketExposure { get; set; } = 300m;
+    public int MaxPositionsPerCycle { get; set; } = 1;
+    public int CooldownSecondsPerMarket { get; set; } = 300;
+    public decimal MinReasonableYesNoAskSum { get; set; } = 0.90m;
+    public decimal MaxReasonableYesNoAskSum { get; set; } = 1.05m;
+    public bool RejectSuspiciousAskSum { get; set; } = true;
+    public int MaxOrderbookAgeMs { get; set; } = 5000;
+}
+
 public class RuntimeStateOptions
 {
     public int MaxRejectedMultiOutcomeSamples { get; set; } = 100;
@@ -311,6 +332,8 @@ public class RuntimeStateOptions
     public int MaxDryRunOrderPlans { get; set; } = 100;
     public int MaxFillSimulations { get; set; } = 100;
     public int MaxPaperPositions { get; set; } = 100;
+    public int MaxSingleMarketOpportunities { get; set; } = 200;
+    public int MaxSingleMarketExecutions { get; set; } = 100;
     public int MaxSignalREventBuffer { get; set; } = 100;
     public int MaxProfileComparisonHistory { get; set; } = 100;
     public int MaxVerifiedRankingHistory { get; set; } = 100;

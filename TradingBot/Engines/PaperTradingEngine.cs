@@ -38,6 +38,17 @@ public class PaperTradingEngine
     public decimal Equity => Balance + LockedCapital + UnrealizedPnl;
     public List<Position> Positions { get; } = new();
 
+    public bool HasOpenSingleMarketPosition(string marketId, string strategy)
+    {
+        return _positionBook?.GetOpenPositions().Any(p => p.Status == PaperPositionStatus.Open && p.GroupKey.Equals($"single-market:{marketId}", StringComparison.OrdinalIgnoreCase) && (p.Engine.Equals("SingleMarketBuyBoth", StringComparison.OrdinalIgnoreCase) || p.Strategy.Equals(strategy, StringComparison.OrdinalIgnoreCase) || p.Strategy.Equals("TWO_LEG_ARB", StringComparison.OrdinalIgnoreCase))) == true;
+    }
+
+    public int CountOpenSingleMarketPositions()
+        => _positionBook?.GetOpenPositions().Count(p => p.Status == PaperPositionStatus.Open && p.GroupKey.StartsWith("single-market:", StringComparison.OrdinalIgnoreCase)) ?? 0;
+
+    public decimal GetOpenSingleMarketExposure()
+        => _positionBook?.GetOpenPositions().Where(p => p.Status == PaperPositionStatus.Open && p.GroupKey.StartsWith("single-market:", StringComparison.OrdinalIgnoreCase)).Sum(p => p.TotalCost) ?? 0m;
+
     public void Execute(TradeSignal signal, string marketId)
     {
         if (signal.Action == TradeAction.None)
@@ -210,7 +221,7 @@ public class PaperTradingEngine
                 totalCost: totalCost,
                 expectedProfit: expectedProfit,
                 guaranteedPayoutPerShare: 1m,
-                engine: opportunity.Engine //todo engineName
+                engine: engineName
             );
 
             if (position == null)
@@ -230,8 +241,8 @@ public class PaperTradingEngine
             _journal?.Record(new ExecutionJournalRecord(
                 TimestampUtc: DateTime.UtcNow,
                 Mode: "PAPER",
-                Engine: "StandardArb",
-                Strategy: "TWO_LEG_ARB",
+                Engine: engineName,
+                Strategy: opportunity.Strategy,
                 Key: $"{opportunity.Leg1.MarketId}|{opportunity.Leg1.Outcome}|{opportunity.Leg2.MarketId}|{opportunity.Leg2.Outcome}",
                 Quantity: executableQuantity,
                 TotalCost: totalCost,

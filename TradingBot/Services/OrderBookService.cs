@@ -92,7 +92,8 @@ public class OrderBookService : IOrderBookProvider
             YesBid: GetBestBid(yesBook),
             YesAsk: GetBestAsk(yesBook),
             NoBid: GetBestBid(noBook),
-            NoAsk: GetBestAsk(noBook)
+            NoAsk: GetBestAsk(noBook),
+            TimestampUtc: DateTime.UtcNow
         );
 
         lock (_cacheLock)
@@ -183,7 +184,8 @@ public class OrderBookService : IOrderBookProvider
                     YesBid: GetBestBid(yesBook),
                     YesAsk: GetBestAsk(yesBook),
                     NoBid: GetBestBid(noBook),
-                    NoAsk: GetBestAsk(noBook)
+                    NoAsk: GetBestAsk(noBook),
+                    TimestampUtc: now
                 );
 
                 _snapshotCache[market.id] = (now, snapshot);

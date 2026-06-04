@@ -184,6 +184,8 @@ app.MapGet("/api/bot/dry-run-order-plans", (VerifiedBasketExecutionCoordinator a
     Results.Ok(audit.ListDryRunPlanSummaries(Math.Clamp(limit ?? 50, 1, 500))));
 app.MapGet("/api/bot/dry-run-fill-simulations", (VerifiedBasketExecutionCoordinator audit, int? limit) => Results.Ok(audit.ListFillSimulations(Math.Clamp(limit ?? 50, 1, 500))));
 app.MapGet("/api/bot/execution-plans", (BotRuntimeState s, int? limit) => s.Trades().TakeLast(Math.Clamp(limit ?? 100, 1, 500)).ToArray());
+app.MapGet("/api/bot/single-market-arbs", (BotRuntimeState s, int? limit) => s.SingleMarketOpportunities().TakeLast(Math.Clamp(limit ?? 200, 1, 500)).ToArray());
+app.MapGet("/api/bot/single-market-paper-executions", (BotRuntimeState s, int? limit) => s.SingleMarketExecutions().TakeLast(Math.Clamp(limit ?? 100, 1, 500)).ToArray());
 app.MapGet("/api/bot/controls", (BotRuntimeState s) => s.Controls);
 app.MapPost("/api/bot/controls/pause", async (BotRuntimeState s, IHubContext<BotHub> hub) =>
 {
@@ -295,7 +297,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var paper = new PaperTradingEngine(executionPolicy, executionJournal, executionDecisionService, positionBook);
     var monitor = new OpportunityMonitor(Path.Combine(AppContext.BaseDirectory, "data", "arb-opportunities.csv"), options.MinEdgePerShare, -0.02m, TimeSpan.FromMinutes(2), options.MinExpectedProfit, new DryRunLiveOrderBuilder(minEdgePerShare: -0.01m, maxPlanCost: 100000m, minSize: 1m, tickSize: 0.001m, orderType: LiveOrderType.FOK, policy: executionPolicy));
     var semaphore = new SemaphoreSlim(options.MaxConcurrentRequests);
-    var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketSlippage, options.SingleMarketFees, monitor, sizing);
+    var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketFees, options.SingleMarketSlippage, monitor, sizing, options.SingleMarketArb, state, contentRootPath, verifiedExecution);
 
     var config = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory).AddJsonFile("appsettings.json", optional: true).Build();
     config.GetSection(CrossExchangeOptions.SectionName).Bind(crossOptions);
@@ -1309,6 +1311,10 @@ static async Task PushUiUpdates(BotRuntimeState state, IHubContext<BotHub> hub, 
         await hub.Clients.All.SendAsync("botStatusUpdated", state.Status);
         state.AddSignalREvent("equityUpdated");
         await hub.Clients.All.SendAsync("equityUpdated", TrimPayload(state, "equityUpdated", state.Equity().TakeLast(options.SignalR.MaxPayloadItems).ToArray(), options));
+        state.AddSignalREvent("singleMarketArbsUpdated");
+        await hub.Clients.All.SendAsync("singleMarketArbsUpdated", TrimPayload(state, "singleMarketArbsUpdated", state.SingleMarketOpportunities().TakeLast(options.RuntimeState.MaxSingleMarketOpportunities).ToArray(), options));
+        state.AddSignalREvent("singleMarketPaperExecutionsUpdated");
+        await hub.Clients.All.SendAsync("singleMarketPaperExecutionsUpdated", TrimPayload(state, "singleMarketPaperExecutionsUpdated", state.SingleMarketExecutions().TakeLast(options.RuntimeState.MaxSingleMarketExecutions).ToArray(), options));
         state.AddSignalREvent("terminalLogsUpdated");
         await hub.Clients.All.SendAsync("terminalLogsUpdated", TrimPayload(state, "terminalLogsUpdated", state.Logs().TakeLast(options.SignalR.MaxRecentLogsToBroadcast).ToArray(), options));
     }
