@@ -212,8 +212,10 @@ public class MultiOutcomeLoggingOptions
     public bool LogVerifiedBasketOnlyOnChange { get; set; } = true;
     public bool LogVerifiedBasketRanking { get; set; } = true;
     public int LogVerifiedBasketRankingEveryNCycles { get; set; } = 25;
+    public int LogVerifiedRankingEveryNCycles { get; set; } = 100;
     public bool LogVerifiedBasketOnlyOnChangeRanking { get; set; } = true;
     public bool LogVerifiedBasketRankingOnChangeOnly { get; set; } = true;
+    public bool LogVerifiedRankingOnChangeOnly { get; set; } = true;
     public bool LogScanConfigEachCycle { get; set; } = false;
     public bool LogVerifiedBasketDetailsOnChangeOnly { get; set; } = true;
     public int LogVerifiedBasketDetailsEveryNCycles { get; set; } = 50;
@@ -231,6 +233,7 @@ public class MultiOutcomeLoggingOptions
     public bool LogCandidateScanWhenRejectDistributionChanges { get; set; } = true;
     public int CandidateScanSignificantCountDelta { get; set; } = 15;
     public int CandidateScanBucketSize { get; set; } = 10;
+    public int CandidateScanMaterialReasonDelta { get; set; } = 10;
     public bool LogCandidateScanWhenOnlyRejected { get; set; } = false;
     public int LogVerifiedScanEveryNCycles { get; set; } = 100;
     public int LogAllowlistHealthEveryNCycles { get; set; } = 25;
@@ -258,8 +261,15 @@ public class MultiOutcomeLoggingOptions
     public bool LogVerifiedUnresolvedOnChangeOnly { get; set; } = true;
     public bool LogAllowlistRepairSuggestionsOnChangeOnly { get; set; } = true;
     public int LogAllowlistRepairSuggestionsEveryNCycles { get; set; } = 100;
+    public bool LogRepairSuggestionsOnChangeOnly { get; set; } = true;
+    public int LogRepairSuggestionsEveryNCycles { get; set; } = 100;
+    public bool SuppressRepeatedRepairSnapshotLogs { get; set; } = true;
     public bool LogAllowlistRepairOnChangeOnly { get; set; } = true;
     public int LogAllowlistRepairEveryNCycles { get; set; } = 100;
+    public bool LogSingleMarketFullCycleOnlyOnCompletion { get; set; } = true;
+    public int LogSingleMarketCompletedCycleEveryNCycles { get; set; } = 10;
+    public bool LogSingleMarketCompletedCycleOnChangeOnly { get; set; } = true;
+    public decimal VerifiedScanSignificantEdgeDelta { get; set; } = 0.005m;
     public bool LogRepairHistoryValidationOnChangeOnly { get; set; } = true;
     public int LogRepairHistoryValidationEveryNCycles { get; set; } = 100;
 }
@@ -294,7 +304,9 @@ public class AllowlistRepairOptions
     public decimal MinRefreshMatchScore { get; set; } = 0.70m;
     public bool PreferStableCachedMatches { get; set; } = true;
     public bool UseLatestCandidateExportForRepair { get; set; } = true;
-    public int RequiredStableRepairSnapshots { get; set; } = 2;
+    public bool DiagnosticsOnlyDuringSoak { get; set; } = false;
+    public int RequiredStableRepairSnapshots { get; set; } = 3;
+    public bool QuarantineOnActionChange { get; set; } = true;
     public List<AllowlistRepairLockedGroupOptions> LockedGroups { get; set; } = new();
 }
 
@@ -331,6 +343,7 @@ public class SingleMarketArbOptions
     public int MaxDataQualityAuditSamplesPerCycle { get; set; } = 3;
     public decimal HighSeveritySuspiciousAskSumDistance { get; set; } = 0.10m;
     public int MaxHighSeverityDataQualityLogsPerCycle { get; set; } = 3;
+    public int HighSeverityDataQualityCooldownMinutes { get; set; } = 30;
     public bool LogTopNearMissesToConsole { get; set; } = false;
     public int ConsoleTopNearMissCount { get; set; } = 3;
     public int TopNearMissCount { get; set; } = 10;
@@ -338,6 +351,9 @@ public class SingleMarketArbOptions
     public int TopPositiveCandidateCount { get; set; } = 20;
     public int TopDataQualityRejectSampleCount { get; set; } = 20;
     public int TopExecutionCount { get; set; } = 20;
+    public bool LogBatchSummaries { get; set; } = false;
+    public bool LogCycleProgress { get; set; } = false;
+    public int CycleProgressEveryNBatches { get; set; } = 25;
 }
 
 public class RuntimeStateOptions
@@ -383,6 +399,10 @@ public class RuntimeHealthOptions
     public bool Enabled { get; set; } = true;
     public bool LogOnStartup { get; set; } = true;
     public int LogEveryMinutes { get; set; } = 2;
+    public int SoakTrendWindowMinutes { get; set; } = 20;
+    public double StableMemorySlopeMbPerMinute { get; set; } = 5;
+    public double StableMemoryMaxDeltaMb { get; set; } = 150;
+    public int LogSoakStatusEveryMinutes { get; set; } = 10;
 }
 
 public class RuntimeMemoryOptions

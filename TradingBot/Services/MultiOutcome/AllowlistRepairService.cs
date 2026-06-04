@@ -20,6 +20,7 @@ public sealed class AllowlistRepairService
     private readonly Dictionary<string, List<AllowlistRepairHistoryEntry>> _repairHistory = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, RepairHistoryStatus> _repairHistoryStatus = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _loggedRepairLockFingerprints = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _loggedDiagnosticsOnlySuppressions = new(StringComparer.OrdinalIgnoreCase);
     private const int MaxRepairHistorySnapshotsPerGroup = 5;
     private readonly AllowlistRepairLockProvider? _lockProvider;
     private IReadOnlyDictionary<string, AllowlistRepairLockedGroupOptions> _cachedOptionLocks = new Dictionary<string, AllowlistRepairLockedGroupOptions>(StringComparer.OrdinalIgnoreCase);
@@ -450,9 +451,16 @@ public sealed class AllowlistRepairService
             Console.WriteLine($"[ALLOWLIST_REPAIR_LOCKED] Group={patch.GroupKey} Reason={status.Reason}");
         if (status.Quarantined)
             Console.WriteLine($"[ALLOWLIST_REPAIR_QUARANTINED] Group={patch.GroupKey} Reason={status.Reason} MarketIds=[{string.Join(',', status.OscillatingMarketIds)}]");
+        if (options.DiagnosticsOnlyDuringSoak && IsNonCriticalRepairPatch(patch) && !status.Locked && !status.NoOp
+            && _loggedDiagnosticsOnlySuppressions.Add($"{snapshotId}|{patch.GroupKey}|DiagnosticsOnlyDuringSoak"))
+            Console.WriteLine($"[ALLOWLIST_REPAIR_PATCH_SUPPRESSED] Group={patch.GroupKey} Reason=DiagnosticsOnlyDuringSoak");
 
         if (status.Quarantined || status.Locked || status.NoOp || status.Unstable)
             return MakeReviewOnlyPatch(patch, status);
+        if (options.DiagnosticsOnlyDuringSoak && IsNonCriticalRepairPatch(patch))
+        {
+            return MakeReviewOnlyPatch(patch, new RepairHistoryStatus(false, false, false, false, true, [], string.Empty, string.Empty, nameof(AllowlistRepairRecommendedAction.NeedsManualReview), "Low", "DiagnosticsOnlyDuringSoak"));
+        }
 
         return patch;
     }
@@ -464,6 +472,10 @@ public sealed class AllowlistRepairService
             return new RepairHistoryStatus(false, true, false, noOp, false, [], string.Empty, string.Empty, nameof(AllowlistRepairRecommendedAction.NeedsManualReview), "Unsafe", string.IsNullOrWhiteSpace(lockReason) ? "ManualLock" : lockReason);
         if (_repairHistoryStatus.TryGetValue(groupKey, out var previousStatus) && previousStatus.OscillationDetected)
             return previousStatus with { Quarantined = true, RecommendedAction = nameof(AllowlistRepairRecommendedAction.NeedsManualReview), RepairConfidence = "Unsafe", Reason = string.IsNullOrWhiteSpace(previousStatus.Reason) ? "RepairDiffOscillation" : previousStatus.Reason };
+        if (options.QuarantineOnActionChange && _repairHistoryStatus.TryGetValue(groupKey, out var previousActionStatus)
+            && !string.IsNullOrWhiteSpace(previousActionStatus.CurrentAction)
+            && !string.Equals(previousActionStatus.CurrentAction, patch.CurrentAction, StringComparison.OrdinalIgnoreCase))
+            return new RepairHistoryStatus(false, false, true, false, false, [], previousActionStatus.CurrentAction, patch.CurrentAction, nameof(AllowlistRepairRecommendedAction.NeedsManualReview), "Unsafe", "RepairActionChanged");
 
         var history = _repairHistory.TryGetValue(groupKey, out var list) ? list : [];
         var inverse = history
@@ -718,6 +730,9 @@ public sealed class AllowlistRepairService
             or nameof(AllowlistRepairRecommendedAction.RefreshFromCandidateExport)
             or nameof(AllowlistRepairRecommendedAction.DisableMissingMarkets)
             or nameof(AllowlistRepairRecommendedAction.NeedsManualReview);
+
+    private static bool IsNonCriticalRepairPatch(AllowlistRepairPatchItem p)
+        => p.PatchType is "ReplaceGroup" or "PruneGroup" or "DisableGroup";
 
     private static bool IsPatchablePatch(AllowlistRepairPatchItem p)
         => (p.PatchType is "ReplaceGroup" or "PruneGroup" or "DisableGroup")

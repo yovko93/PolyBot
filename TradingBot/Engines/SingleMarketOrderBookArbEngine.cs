@@ -39,6 +39,7 @@ public class SingleMarketOrderBookArbEngine
     private int _highSeverityDataQualityLogsThisCycle;
     private int _highSeverityDataQualitySuppressedThisCycle;
     private int _dataQualityAuditSamplesThisCycle;
+    private readonly Dictionary<string, DateTime> _highSeverityDataQualityLastLoggedAt = new(StringComparer.OrdinalIgnoreCase);
     private long _scanId;
     private int _positionsOpenedThisCycle;
 
@@ -128,8 +129,9 @@ public class SingleMarketOrderBookArbEngine
                 MaybeStoreOpportunity(reject, highValue: IsHighSeverityDataQuality(dq.Reason, rawCost));
                 var highSeverityDataQuality = IsHighSeverityDataQuality(dq.Reason, rawCost);
                 if (highSeverityDataQuality) diagnostics.IncrementHighSeverityDataQuality();
-                MaybeAuditDataQuality(reject, dq.Reason, rawCost, edge, diagnostics);
-                if (ShouldLogDataQualityReject(dq.Reason, rawCost))
+                var suppressHighSeverityForCooldown = highSeverityDataQuality && IsHighSeverityDataQualityInCooldown(book.MarketId, dq.Reason, now);
+                MaybeAuditDataQuality(reject, dq.Reason, rawCost, edge, diagnostics, suppressHighSeverityForCooldown);
+                if (ShouldLogDataQualityReject(book.MarketId, dq.Reason, rawCost, now))
                     Console.WriteLine($"[SINGLE_MARKET_DATA_QUALITY_REJECTED] Market={book.Question} Reason={dq.Reason} YesAsk={yes} NoAsk={no} RawSum={rawCost}");
                 return new SingleMarketScanResult(true, book.YesAsk != null && book.NoAsk != null, false, false, adjustedCost, book.Question, edge, dq.Reason, null);
             }
@@ -466,11 +468,45 @@ public class SingleMarketOrderBookArbEngine
     private static int Bucket(int value, int size) => size <= 1 ? value : value / size * size;
     private static decimal Bucket(decimal value, decimal size) => size <= 0m ? value : Math.Round(value / size, 0, MidpointRounding.AwayFromZero) * size;
 
-    private bool ShouldLogDataQualityReject(string reason, decimal rawSum)
+    private bool ShouldLogDataQualityReject(string marketId, string reason, decimal rawSum, DateTime nowUtc)
     {
         if (!IsHighSeverityDataQuality(reason, rawSum)) return false;
-        if (!_operationalQuietMode) return true;
-        return TryReserveHighSeverityDataQualityLog();
+        if (_operationalQuietMode && IsHighSeverityDataQualityInCooldown(marketId, reason, nowUtc))
+        {
+            IncrementSuppressedHighSeverityDataQuality();
+            return false;
+        }
+        if (_operationalQuietMode && !TryReserveHighSeverityDataQualityLog()) return false;
+        MarkHighSeverityDataQualityLogged(marketId, reason, nowUtc);
+        return true;
+    }
+
+    private bool IsHighSeverityDataQualityInCooldown(string marketId, string reason, DateTime nowUtc)
+    {
+        var cooldown = TimeSpan.FromMinutes(Math.Max(0, _options.HighSeverityDataQualityCooldownMinutes));
+        if (cooldown <= TimeSpan.Zero) return false;
+        var key = $"{marketId}|{reason}";
+        lock (_gate)
+            return _highSeverityDataQualityLastLoggedAt.TryGetValue(key, out var last) && nowUtc - last < cooldown;
+    }
+
+    private void MarkHighSeverityDataQualityLogged(string marketId, string reason, DateTime nowUtc)
+    {
+        var cooldown = TimeSpan.FromMinutes(Math.Max(0, _options.HighSeverityDataQualityCooldownMinutes));
+        if (cooldown <= TimeSpan.Zero) return;
+        var key = $"{marketId}|{reason}";
+        lock (_gate)
+        {
+            _highSeverityDataQualityLastLoggedAt[key] = nowUtc;
+            var cutoff = nowUtc - cooldown;
+            foreach (var stale in _highSeverityDataQualityLastLoggedAt.Where(x => x.Value < cutoff).Select(x => x.Key).ToArray())
+                _highSeverityDataQualityLastLoggedAt.Remove(stale);
+        }
+    }
+
+    private void IncrementSuppressedHighSeverityDataQuality()
+    {
+        lock (_gate) _highSeverityDataQualitySuppressedThisCycle++;
     }
 
     private bool IsHighSeverityDataQuality(string reason, decimal rawSum)
@@ -496,8 +532,9 @@ public class SingleMarketOrderBookArbEngine
         if (highValue) _state?.AddSingleMarketOpportunity(dto);
     }
 
-    private void MaybeAuditDataQuality(SingleMarketArbOpportunityDto dto, string reason, decimal rawSum, decimal edge, SingleMarketCycleDiagnostics diagnostics)
+    private void MaybeAuditDataQuality(SingleMarketArbOpportunityDto dto, string reason, decimal rawSum, decimal edge, SingleMarketCycleDiagnostics diagnostics, bool suppressHighSeverityForCooldown = false)
     {
+        if (suppressHighSeverityForCooldown) return;
         var firstReason = diagnostics.MarkDataQualityAuditReason(reason);
         var highSeverity = IsHighSeverityDataQuality(reason, rawSum);
         var positiveRejected = edge >= _minEdgePerShare && reason is not ("MissingYesAsk" or "MissingNoAsk");

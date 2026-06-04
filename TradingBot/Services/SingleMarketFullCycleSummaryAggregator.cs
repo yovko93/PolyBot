@@ -64,17 +64,20 @@ public sealed class SingleMarketFullCycleSummaryAggregator
         return Current();
     }
 
-    public bool ShouldLog(SingleMarketFullCycleSummary summary, MultiOutcomeLoggingOptions logging, bool fullCycleComplete)
+    public bool ShouldLog(SingleMarketFullCycleSummary summary, MultiOutcomeLoggingOptions logging, bool fullCycleComplete, bool debug = false)
     {
         if (summary.MarketsScanned <= 0) return false;
+        if (logging.LogSingleMarketFullCycleOnlyOnCompletion && !fullCycleComplete && !debug)
+            return false;
+
         var fingerprint = Fingerprint(summary, logging);
         var changed = !string.Equals(_lastLoggedFingerprint, fingerprint, StringComparison.Ordinal);
-        var periodic = logging.LogSingleMarketDataQualityEveryNCycles > 0 && summary.CycleId % logging.LogSingleMarketDataQualityEveryNCycles == 0;
+        var periodic = logging.LogSingleMarketCompletedCycleEveryNCycles > 0 && summary.CycleId % logging.LogSingleMarketCompletedCycleEveryNCycles == 0;
         var critical = summary.PositiveEdge > _lastLoggedPositiveEdgeCount
             || summary.PaperOpened > _lastLoggedPaperOpenedCount
             || summary.HighSeverityRejectCount > _lastLoggedHighSeverityRejectCount;
-        var materialFullCycleChange = fullCycleComplete && (!logging.LogSingleMarketDataQualityOnChangeOnly || changed);
-        var shouldLog = !_hasLogged || critical || periodic || materialFullCycleChange;
+        var materialFullCycleChange = fullCycleComplete && (!logging.LogSingleMarketCompletedCycleOnChangeOnly || changed);
+        var shouldLog = (!_hasLogged && fullCycleComplete) || critical || periodic || materialFullCycleChange || (debug && changed);
         if (!shouldLog) return false;
         _hasLogged = true;
         _lastLoggedFingerprint = fingerprint;
@@ -88,7 +91,7 @@ public sealed class SingleMarketFullCycleSummaryAggregator
     {
         var best = summary.BestValidEdge.HasValue ? summary.BestValidEdge.Value.ToString("0.####") : "N/A";
         var bestRejected = summary.BestRejectedRawEdge.HasValue ? summary.BestRejectedRawEdge.Value.ToString("0.####") : "N/A";
-        return $"[SINGLE_MARKET_FULL_CYCLE_SUMMARY] Cycle={summary.CycleId} Batches={summary.BatchesSeen} Markets={summary.MarketsScanned} DataQualityRejected={summary.DataQualityRejected} BelowMinEdge={summary.BelowMinEdge} PositiveEdge={summary.PositiveEdge} EdgeStable={summary.EdgeStable} ExecutionReady={summary.ExecutionReady} FillPassed={summary.FillPassed} PaperOpened={summary.PaperOpened} BestEdge={best} BestRejectedRawEdge={bestRejected} HighSeverityRejects={summary.HighSeverityRejectCount}";
+        return $"[SINGLE_MARKET_FULL_CYCLE_SUMMARY] Cycle={summary.CycleId} Completed=true Batches={summary.BatchesSeen} Markets={summary.MarketsScanned} DataQualityRejected={summary.DataQualityRejected} BelowMinEdge={summary.BelowMinEdge} PositiveEdge={summary.PositiveEdge} EdgeStable={summary.EdgeStable} ExecutionReady={summary.ExecutionReady} FillPassed={summary.FillPassed} PaperOpened={summary.PaperOpened} BestEdge={best} BestRejectedRawEdge={bestRejected} HighSeverityRejects={summary.HighSeverityRejectCount}";
     }
 
     private SingleMarketFullCycleSummary Current()
