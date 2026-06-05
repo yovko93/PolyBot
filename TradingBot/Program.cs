@@ -49,7 +49,7 @@ var app = builder.Build();
 app.UseCors("ui");
 var options = app.Services.GetRequiredService<IOptions<TradingBotOptions>>().Value;
 PaperPhaseValidationHarness.LogStartupConfig(options, app.Environment.EnvironmentName, app.Environment.ContentRootPath, builder.Configuration.Sources, args);
-PaperPhaseValidationHarness.LogPaperModeStartup(options);
+PaperPhaseValidationHarness.LogPaperModeStartup(options, app.Environment.EnvironmentName, builder.Configuration.Sources, args);
 var listenUrl = options.ListenUrl;
 
 app.MapHealthChecks("/health");

@@ -245,8 +245,21 @@ public sealed class PaperPhaseValidationHarness
         else if (!cfg.InjectSyntheticOpportunity) Console.WriteLine("[PAPER_PHASE_VALIDATION_DISABLED] Reason=InjectSyntheticOpportunityFalse");
     }
 
-    public static void LogPaperModeStartup(TradingBotOptions options)
+    public const string TradingModeSectionPath = $"{TradingBotOptions.SectionName}:TradingMode";
+    public const string PaperRiskSectionPath = $"{TradingBotOptions.SectionName}:PaperRisk";
+
+    public static void LogPaperModeStartup(
+        TradingBotOptions options,
+        string environmentName = "Unknown",
+        IEnumerable<object>? configurationSources = null,
+        IEnumerable<string>? commandLineArgs = null)
     {
+        var environment = string.IsNullOrWhiteSpace(environmentName) ? "Unknown" : environmentName;
+        Console.WriteLine($"[PAPER_MODE_CONFIG_SOURCE] SectionPath={TradingModeSectionPath} PaperRiskPath={PaperRiskSectionPath} Environment={environment} LoadedConfigFiles={FormatLoadedConfigFiles(configurationSources)} CommandLineArgs={FormatCommandLineArgs(commandLineArgs)}");
+        if (string.Equals(environment, "PaperPhase2", StringComparison.OrdinalIgnoreCase) && options.TradingMode.PaperPhase != 2)
+        {
+            Console.WriteLine($"[PAPER_MODE_CONFIG_ERROR] Environment=PaperPhase2 Reason=ExpectedPaperPhase2ButEffectivePhaseWas{options.TradingMode.PaperPhase}");
+        }
         Console.WriteLine($"[PAPER_MODE] PaperTradingEnabled={options.TradingMode.PaperTradingEnabled.ToString().ToLowerInvariant()} PaperPhase={options.TradingMode.PaperPhase} LiveTrading={options.TradingMode.LiveTradingEnabled.ToString().ToLowerInvariant()} Validation={options.PaperPhaseValidation.Enabled.ToString().ToLowerInvariant()} MaxPaperNotionalPerTrade={options.PaperRisk.MaxPaperNotionalPerTrade:0.####} MaxPaperTotalExposure={options.PaperRisk.MaxPaperTotalExposure:0.####} MaxPaperOpenPerHour={options.PaperRisk.MaxPaperOpenPerHour}");
     }
 
