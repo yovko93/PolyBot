@@ -117,7 +117,7 @@ public class MemoryBoundsTests
     public void Execution_audit_remains_within_configured_cap_after_60_minute_simulated_soak()
     {
         var runtime = new RuntimeStateOptions { MaxExecutionAuditEvents = 30 };
-        var audit = new VerifiedBasketExecutionCoordinator(Options.Create(new ExecutionOptions()), Options.Create(new TradingBotOptions { RuntimeState = runtime }));
+        var audit = new VerifiedBasketExecutionCoordinator(Microsoft.Extensions.Options.Options.Create(new ExecutionOptions()), Microsoft.Extensions.Options.Options.Create(new TradingBotOptions { RuntimeState = runtime }));
 
         for (var minute = 0; minute < 60; minute++)
         for (var i = 0; i < 3; i++)

@@ -38,7 +38,7 @@ public class OrderBookService : IOrderBookProvider
     public bool LogInvalidBatchPayloadSamples { get; set; } = true;
     public int MaxInvalidPayloadSamplesToLog { get; set; } = 5;
     public bool OperationalQuietMode { get; set; } = true;
-    public MultiOutcomeLoggingOptions Logging { get; set; } = new();
+    public TradingBot.Options.MultiOutcomeLoggingOptions Logging { get; set; } = new();
     public QuietLogGate? QuietLogGate { get; set; }
 
     private readonly Dictionary<string, (DateTime Time, ClobOrderBook? Book)> _bookCache = new();
@@ -59,7 +59,7 @@ public class OrderBookService : IOrderBookProvider
     public int SnapshotCacheCount { get { lock (_cacheLock) return _snapshotCache.Count; } }
     public int CacheEntryCount { get { lock (_cacheLock) return _bookCache.Count + _snapshotCache.Count; } }
     public void ConfigureCache(TimeSpan ttl, int maxEntries) { _cacheTtl = ttl; _maxCacheEntries = Math.Max(1, maxEntries); }
-    public void ConfigureBatchOptions(OrderBookOptions options, bool operationalQuietMode, MultiOutcomeLoggingOptions logging, QuietLogGate? quietLogGate = null)
+    public void ConfigureBatchOptions(TradingBot.Options.OrderBookOptions options, bool operationalQuietMode, TradingBot.Options.MultiOutcomeLoggingOptions logging, QuietLogGate? quietLogGate = null)
     {
         MaxBatchBookRequestSize = Math.Max(1, options.MaxBatchBookRequestSize);
         SplitBatchOnBadRequest = options.SplitBatchOnBadRequest;
@@ -524,7 +524,7 @@ public class OrderBookService : IOrderBookProvider
                     Console.WriteLine($"[BATCH_BOOK_ERROR] Status=400 BatchSize={batch.Count} RetryStrategy=None");
                 }
 
-                return BatchPostResult.BadRequest(0, batch.Count);
+                return BatchPostResult.FromBadRequest(0, batch.Count);
             }
 
             if (!response.IsSuccessStatusCode)
@@ -825,7 +825,7 @@ public sealed record BatchPayloadValidationResult(
 public sealed record BatchPostResult(int Loaded, bool BadRequest, bool Timeout, int FailedTokens)
 {
     public static BatchPostResult Success(int loaded) => new(loaded, false, false, 0);
-    public static BatchPostResult BadRequest(int loaded, int failedTokens) => new(loaded, true, false, failedTokens);
+    public static BatchPostResult FromBadRequest(int loaded, int failedTokens) => new(loaded, true, false, failedTokens);
     public static BatchPostResult Failed(int loaded, bool timeout = false) => new(loaded, false, timeout, 0);
 }
 
