@@ -52,13 +52,16 @@ public class RuntimeMemorySafetyTests
         state.AddLog(new TerminalLogEntryDto("1", DateTime.UtcNow, "info", "test", "log", 1));
         state.AddSignalREvent("test");
 
-        var health = RuntimeHealthSnapshot.From(state);
+        var options = new TradingBotOptions { TradingMode = new TradingModeOptions { PaperPhase = 2 } };
+        var health = RuntimeHealthSnapshot.From(state, options);
 
         Assert.True(health.ProcessMemoryMb > 0);
         Assert.Equal(1, health.RecentLogsCount);
         Assert.Equal(1, health.SignalREventBufferCount);
+        Assert.Equal(2, health.PaperPhase);
         Assert.Contains("[RUNTIME_HEALTH]", health.ToLogLine());
         Assert.Contains("ProcessMb=", health.ToLogLine());
+        Assert.Contains("PaperPhase=2", health.ToLogLine());
     }
 
 

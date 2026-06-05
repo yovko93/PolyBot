@@ -322,7 +322,7 @@ public class PaperTradingEngine
             ));
 
             Console.WriteLine(
-                $"[PAPER TRUE ARB EXECUTED] " +
+                $"[PAPER_SINGLE_MARKET_ARBITRAGE_OPENED] " +
                 $"Qty={executableQuantity:0.####}, " +
                 $"Cost={totalCost:0.####}, " +
                 $"ExpectedProfit={expectedProfit:0.####}, " +

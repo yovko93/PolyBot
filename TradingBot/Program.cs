@@ -229,7 +229,7 @@ app.MapPost("/api/bot/controls/resume", async (BotRuntimeState s, IHubContext<Bo
 });
 app.MapGet("/api/bot/logs/recent", (BotRuntimeState s, int? limit) => s.Logs().TakeLast(Math.Clamp(limit ?? 300, 1, 1000)).ToArray());
 app.MapGet("/api/bot/equity", (BotRuntimeState s, int? limit) => s.Equity().TakeLast(Math.Clamp(limit ?? 500, 1, 1000)).ToArray());
-app.MapGet("/api/bot/runtime-health", (BotRuntimeState s, QuietLogGate q) => { s.SetQuietLogGateStats(q.Snapshot()); return Results.Ok(RuntimeHealthSnapshot.From(s)); });
+app.MapGet("/api/bot/runtime-health", (BotRuntimeState s, QuietLogGate q, IOptions<TradingBotOptions> o) => { s.SetQuietLogGateStats(q.Snapshot()); return Results.Ok(RuntimeHealthSnapshot.From(s, o.Value)); });
 app.MapHub<BotHub>("/hubs/bot");
 
 var apiTask = app.RunAsync(listenUrl);
@@ -272,7 +272,7 @@ _ = Task.Run(async () =>
         void LogRuntimeHealthAndSoakStatus()
         {
             state.SetQuietLogGateStats(quietLogGate.Snapshot());
-            var health = RuntimeHealthSnapshot.From(state);
+            var health = RuntimeHealthSnapshot.From(state, options);
             var trend = RuntimeHealthTrendTracker.RecordAndAnalyze(health, options.RuntimeHealth);
             Console.WriteLine(health.ToLogLine());
             ExportRuntimeSoakStatus(state, options, app.Environment.ContentRootPath);
