@@ -95,7 +95,7 @@ public sealed class VerifiedBasketExecutionCoordinator
         }
 
         var key = $"{e.GroupKey}|{e.Stage}|{e.Status}|{e.Reason}";
-        var material = $"{e.NetEdge:0.0000}|{e.ExpectedProfit:0.00}|{e.EstimatedCost:0.00}|{e.Quantity:0.####}|{e.Details}";
+        var material = $"{e.NetEdge:0.0000}|{e.ExpectedProfit:0.00}|{e.Cost:0.00}|{e.Qty:0.####}|{e.Details}";
         var now = DateTime.UtcNow;
         lock (_gate)
         {

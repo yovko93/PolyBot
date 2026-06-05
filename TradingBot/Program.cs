@@ -653,7 +653,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         var edge = formula.NetEdge;
                         var trackedState = stability.Track(g.GroupKey, screen, options.RuntimeState.MaxVerifiedBasketEdgeHistoryPerGroup, executionOptions.RequiredConsecutiveExecutableScans, executionOptions.MinStableNetEdgePerBasket, executionOptions.MaxNetEdgeVolatility);
                         basketStateByGroup[g.GroupKey] = trackedState;
-                        var isExec = edge >= executionOptions.MinNetEdgePerBasket;
+                        var isExec = edge >= options.VerifiedBasketArb.MinNetEdgePerBasket;
                         var strategyName = "BUY_ALL_NO_MUTUALLY_EXCLUSIVE";
                         var hasOpenPosition = positionBook.GetOpenPositions().Any(x => x.GroupKey.Equals(g.GroupKey, StringComparison.OrdinalIgnoreCase) && x.Strategy == strategyName);
                         if (hasOpenPosition)
