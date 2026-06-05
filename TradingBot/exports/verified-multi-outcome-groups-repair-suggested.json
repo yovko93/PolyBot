@@ -1,15 +1,15 @@
 {
-  "snapshotId": "candidate-export-8dec2ddfc710176-ef557a8880da",
-  "generatedAt": "2026-06-05T08:40:49.189297Z",
-  "timestamp": "2026-06-05T08:40:49.1892971Z",
+  "snapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+  "generatedAt": "2026-06-05T15:25:26.2957161Z",
+  "timestamp": "2026-06-05T15:25:26.2957163Z",
   "note": "Suggested only. Does not overwrite config/verified-multi-outcome-groups.json. Review manually before copying.",
   "summary": {
     "configuredGroups": 11,
     "healthy": 0,
     "monitoringOnly": 8,
     "needsPricingPrune": 0,
-    "needsRefresh": 3,
-    "brokenConfig": 0,
+    "needsRefresh": 2,
+    "brokenConfig": 1,
     "disabled": 0,
     "ignored": 0,
     "broken": 3,
@@ -19,15 +19,15 @@
     "healthy": 0,
     "monitoringOnly": 8,
     "needsPricingPrune": 0,
-    "needsRefresh": 3,
-    "brokenConfig": 0,
+    "needsRefresh": 2,
+    "brokenConfig": 1,
     "disabled": 0,
     "ignored": 0,
     "brokenTotal": 3,
     "hasMissingNoAsk": 0,
     "hasMarketMismatch": 3,
-    "hasCandidateRefreshMatch": 2,
-    "hasSuggestedTemplate": 1
+    "hasCandidateRefreshMatch": 0,
+    "hasSuggestedTemplate": 0
   },
   "groups": [
     {
@@ -124,74 +124,17 @@
       "groupKey": "winner:2026 women s us open|kind:generic",
       "title": "winner:2026 women s us open|kind:generic",
       "currentEnabled": true,
-      "healthCategory": "NeedsRefresh",
-      "recommendedAction": "RefreshFromCandidateExport",
-      "repairConfidence": "High",
-      "suggestedAction": "RefreshFromCandidateExport",
-      "suggestedEnabled": true,
-      "suggestedTemplate": {
-        "enabled": true,
-        "groupKey": "winner:2026 women s us open|kind:generic",
-        "title": "winner:2026 women s us open|kind:generic",
-        "verificationStatus": "Verified",
-        "groupType": "MutuallyExclusiveWinner",
-        "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-        "marketIds": [
-          "1088686",
-          "1088653"
-        ],
-        "conditionIds": [
-          "0x43c4d1796b7d8e7a6f54d655c282daec9b6883edbe21434dd9b85a5b5f499453",
-          "0x81474d7afeab3c4a69fd893fb4938ae513b216d0e2ecc75f6b8e2885db13b4a7"
-        ],
-        "requiredOutcomeCount": 2,
-        "requireExactOutcomeCount": false,
-        "settlementNotes": "Refreshed from candidate export. Manually verify mutually exclusive settlement before enabling.",
-        "verifiedBy": "manual-review-required",
-        "verifiedAt": "2026-06-05"
-      },
+      "healthCategory": "BrokenConfig",
+      "recommendedAction": "DisableMissingMarkets",
+      "repairConfidence": "Low",
+      "suggestedAction": "DisableMissingMarkets",
+      "suggestedEnabled": false,
+      "suggestedTemplate": null,
       "suggestedPrunedTemplate": null,
-      "suggestedRefreshedTemplate": {
-        "enabled": true,
-        "groupKey": "winner:2026 women s us open|kind:generic",
-        "title": "winner:2026 women s us open|kind:generic",
-        "verificationStatus": "Verified",
-        "groupType": "MutuallyExclusiveWinner",
-        "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-        "marketIds": [
-          "1088686",
-          "1088653"
-        ],
-        "conditionIds": [
-          "0x43c4d1796b7d8e7a6f54d655c282daec9b6883edbe21434dd9b85a5b5f499453",
-          "0x81474d7afeab3c4a69fd893fb4938ae513b216d0e2ecc75f6b8e2885db13b4a7"
-        ],
-        "requiredOutcomeCount": 2,
-        "requireExactOutcomeCount": false,
-        "settlementNotes": "Refreshed from candidate export. Manually verify mutually exclusive settlement before enabling.",
-        "verifiedBy": "manual-review-required",
-        "verifiedAt": "2026-06-05"
-      },
-      "diff": {
-        "suggestedMarketCount": 2,
-        "removedMarketIds": [
-          "1088662",
-          "1088680",
-          "1088679",
-          "0x4b408f8e5e035d5498751ff0048fca5fc472ce1f774d703b3e9f323590ebe3a6",
-          "0xdaba177a8a9e34e55a1663bf89f7bc20e94829bbf5f254832d778d574fb29b54",
-          "0xaed5fc200c5322ecf7e4d09fc8287de5325c3c64b15c1e85af9f945abdb7aaeb"
-        ],
-        "addedMarketIds": [
-          "1088686",
-          "1088653"
-        ],
-        "changedConditionIds": []
-      },
+      "suggestedRefreshedTemplate": null,
+      "diff": null,
       "notes": [
-        "Stable candidate match: winner:2026 women s us open|kind:generic score=0.85.",
-        "Candidate match missing for 2 repair snapshot(s); hysteresis prevents immediate downgrade.",
-        "Market mismatch; stable refreshed candidate is available for manual review."
+        "No stable candidate match found in repair snapshot; manual review required."
       ],
       "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
@@ -281,7 +224,6 @@
       "suggestedRefreshedTemplate": null,
       "diff": null,
       "notes": [
-        "Stable candidate match: winner:2nd round of 2026 peru presidential election by 4 8|kind:person score=0.771.",
         "ManualLock: Manual review required due to repair diff oscillation on marketId 947269"
       ],
       "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."

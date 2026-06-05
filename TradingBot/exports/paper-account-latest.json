@@ -1,12 +1,14 @@
 {
-  "initialCash": 1000,
-  "cash": 750.00000000000000000000000001,
-  "lockedCapital": 249.99999999999999999999999999,
-  "openExposure": 249.99999999999999999999999999,
-  "realizedPnl": 0,
-  "unrealizedPnl": 0,
-  "equity": 1000.0000000000000000000000000,
-  "openPositionsCount": 1,
-  "openBasketPositionsCount": 1,
-  "lastUpdatedAt": "2026-05-28T15:18:00.426496Z"
+  "Cash": 980.620,
+  "Locked": 19.380,
+  "Equity": 1000.000,
+  "RealizedPnl": 0,
+  "OpenPositions": 1,
+  "TotalExposure": 19.380,
+  "PositionsByStrategy": {
+    "BUY_YES_AND_BUY_NO": 1
+  },
+  "HourlyOpenCount": 0,
+  "LastOpenAt": "2026-06-05T12:44:40.4420801Z",
+  "BlockedCountsByReason": {}
 }

@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-06-05T08:40:49.2076391Z",
-  "snapshotId": "candidate-export-8dec2ddfc710176-ef557a8880da",
+  "timestamp": "2026-06-05T15:25:26.867271Z",
+  "snapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
   "sourceConfigPath": "config/verified-multi-outcome-groups.json",
   "mode": "ManualPreviewOnly",
   "willOverwriteRealConfig": false,
@@ -9,7 +9,7 @@
     "patchableHighConfidence": 0,
     "patchableMediumConfidence": 0,
     "lowConfidenceReviewOnly": 2,
-    "disabledSuggested": 0,
+    "disabledSuggested": 1,
     "expectedHealthyAfterApply": 8,
     "quarantined": 0,
     "noOp": 0,
@@ -18,7 +18,7 @@
   "patches": [
     {
       "groupKey": "winner:2026 women s us open|kind:generic",
-      "currentAction": "NeedsManualReview",
+      "currentAction": "DisableMissingMarkets",
       "confidence": "Low",
       "patchType": "ReviewOnly",
       "currentGroup": {
@@ -46,10 +46,7 @@
       },
       "proposedGroup": null,
       "diff": {
-        "addedMarketIds": [
-          "1088686",
-          "1088653"
-        ],
+        "addedMarketIds": [],
         "removedMarketIds": [
           "1088662",
           "1088680",
@@ -58,24 +55,21 @@
         "changedConditionIds": [
           "0x4b408f8e5e035d5498751ff0048fca5fc472ce1f774d703b3e9f323590ebe3a6",
           "0xdaba177a8a9e34e55a1663bf89f7bc20e94829bbf5f254832d778d574fb29b54",
-          "0xaed5fc200c5322ecf7e4d09fc8287de5325c3c64b15c1e85af9f945abdb7aaeb",
-          "0x43c4d1796b7d8e7a6f54d655c282daec9b6883edbe21434dd9b85a5b5f499453",
-          "0x81474d7afeab3c4a69fd893fb4938ae513b216d0e2ecc75f6b8e2885db13b4a7"
+          "0xaed5fc200c5322ecf7e4d09fc8287de5325c3c64b15c1e85af9f945abdb7aaeb"
         ],
         "missingNoAskMarketIds": [],
         "requiredOutcomeCountBefore": 3,
-        "requiredOutcomeCountAfter": 2,
+        "requiredOutcomeCountAfter": null,
         "enabledBefore": true,
-        "enabledAfter": true
+        "enabledAfter": null
       },
       "riskNotes": [
         "Preview only; this workflow never overwrites config/verified-multi-outcome-groups.json.",
-        "Refresh replaces marketIds/conditionIds from the candidate export; verify settlement remains mutually exclusive.",
         "Low confidence. Review before disabling or refreshing.",
-        "DiagnosticsOnlyDuringSoak"
+        "Low confidence. Review before disabling or refreshing."
       ],
-      "manualInstructions": "No trusted automatic config change. Review diagnostics manually; this group is quarantined/review-only until repair diff stability is proven.",
-      "expectedResultAfterApply": "DiagnosticsOnlyDuringSoak"
+      "manualInstructions": "No trusted automatic config change. Review diagnostics manually; do not copy an executable group from this preview.",
+      "expectedResultAfterApply": "Group remains in suggested config but disabled until markets can be manually repaired."
     },
     {
       "groupKey": "winner:1st round of 2026 colombian presidential election|kind:person",

@@ -1,34 +1,36 @@
 [
   {
-    "Id": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE_winner_2026_colombian_presidential_election_kind_person_569366-NO_569368-NO_569373-NO",
-    "OpenedAt": "2026-05-28T15:17:59.7706041Z",
-    "ClosedAt": null,
-    "Strategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-    "Group": "winner:2026 colombian presidential election|kind:person",
-    "Legs": [
-      "NO:Will Ivan Cepeda Castro win the 2026 Colombian presidential election?",
-      "NO:Will Abelardo de la Espriella  win the 2026 Colombian presidential election?",
-      "NO:Will Paloma Valencia win the 2026 Colombian presidential election?"
-    ],
-    "Qty": 126.07160867372667675239536056,
-    "Cost": 249.99999999999999999999999999,
-    "CostPerBasket": 1.983,
-    "GuaranteedPayout": 252.14321734745335350479072112,
-    "MaxPayout": 378.21482602118003025718608168,
-    "GrossEdgeAtOpen": 0.0115,
-    "NetEdgeAtOpen": 0.0115,
-    "ExpectedProfit": 1.4498234997478567826525466464,
-    "LockedCapital": 249.99999999999999999999999999,
-    "ActiveProfile": "Conservative",
-    "Source": "VerifiedMultiOutcome",
-    "CurrentNoAskSum": 1.983,
-    "CurrentExitValue": null,
-    "UnrealizedPnl": 0,
-    "MtmStatus": "Incomplete",
-    "MissingExitPrices": 3,
-    "RealizedPayout": null,
-    "RealizedProfit": null,
-    "Status": "OPEN",
-    "Sequence": 1277
+    "PositionId": "SingleMarketBuyBoth_2370341_YES_2370341_NO",
+    "GroupKey": "single-market:2370341",
+    "Strategy": "BUY_YES_AND_BUY_NO",
+    "Engine": "SingleMarketBuyBoth",
+    "OpenedAtUtc": "2026-06-05T12:44:40.4420801Z",
+    "status": "Open",
+    "Quantity": 20,
+    "TotalCost": 19.380,
+    "CostPerBasket": 0.969,
+    "GuaranteedPayout": 20,
+    "ExpectedProfit": 0.620,
+    "LockedCapital": 19.380,
+    "OpenedFromSimulatedFills": true,
+    "FillSimulationId": "d6729d7693804e43a15c7048480af273",
+    "legs": [
+      {
+        "MarketId": "2370341",
+        "Question": "Will President Trump attend the NBA Finals?",
+        "Outcome": "YES",
+        "Price": 0.927,
+        "Quantity": 20,
+        "Notional": 18.540
+      },
+      {
+        "MarketId": "2370341",
+        "Question": "Will President Trump attend the NBA Finals?",
+        "Outcome": "NO",
+        "Price": 0.04,
+        "Quantity": 20,
+        "Notional": 0.80
+      }
+    ]
   }
 ]
