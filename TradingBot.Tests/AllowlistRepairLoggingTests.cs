@@ -534,6 +534,40 @@ public class AllowlistRepairLoggingTests
         return ScanLogSummaryService.BuildUnresolvedDiagnostics(allowlist, resolved, repair, loggedGroupKeys);
     }
 
+
+    [Fact]
+    public void Rejected_only_multi_candidate_scan_logs_first_then_suppresses_unchanged_buckets()
+    {
+        var throttle = new LogThrottle();
+        var fingerprint = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint("AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 9 }, 10, 10);
+
+        Assert.True(throttle.ShouldLog("MULTI_CANDIDATE_SCAN", fingerprint, true, 100));
+        Assert.False(throttle.ShouldLog("MULTI_CANDIDATE_SCAN", fingerprint, true, 100));
+    }
+
+    [Fact]
+    public void Multi_candidate_scan_small_candidate_count_changes_are_not_material()
+    {
+        var first = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint("AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 8 }, 10, 10);
+        var small = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint("AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 15 }, 10, 10);
+        var materialReasonBucket = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint("AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 20 }, 10, 10);
+
+        Assert.Equal(first, small);
+        Assert.NotEqual(first, materialReasonBucket);
+    }
+
+    [Fact]
+    public void Womens_us_open_action_flip_flop_is_diagnostics_only_and_suppressed_during_soak()
+    {
+        var group = "winner:2026 women s us open|kind:generic";
+        var throttle = new LogThrottle();
+        var fingerprint = ScanLogSummaryService.RepairActionDirectionFingerprint(group, "RefreshFromCandidateExport", "NeedsManualReview");
+
+        Assert.True(ScanLogSummaryService.IsWomenUsOpenRepairFlipFlop(group, "RefreshFromCandidateExport", "NeedsManualReview", "RepairSnapshotReclassified"));
+        Assert.True(throttle.ShouldLog($"ALLOWLIST_REPAIR_UNSTABLE_SUPPRESSED:{group}", fingerprint, true, 100));
+        Assert.False(throttle.ShouldLog($"ALLOWLIST_REPAIR_UNSTABLE_SUPPRESSED:{group}", fingerprint, true, 100));
+    }
+
     private static VerifiedBasketScreener.ScreenResult Row(decimal active, decimal experimental, string classification = "Monitor") => new(
         "g",
         2,

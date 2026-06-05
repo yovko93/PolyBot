@@ -83,6 +83,15 @@ public class TradingBotOptions
     public RuntimeHealthOptions RuntimeHealth { get; set; } = new();
     public RuntimeMemoryOptions RuntimeMemory { get; set; } = new();
     public CacheOptions Caches { get; set; } = new();
+    public OrderBookOptions OrderBook { get; set; } = new();
+}
+
+public class OrderBookOptions
+{
+    public int MaxBatchBookRequestSize { get; set; } = 100;
+    public bool SplitBatchOnBadRequest { get; set; } = true;
+    public bool LogInvalidBatchPayloadSamples { get; set; } = true;
+    public int MaxInvalidPayloadSamplesToLog { get; set; } = 5;
 }
 public class MarketDiscoveryOptions
 {
@@ -264,6 +273,16 @@ public class MultiOutcomeLoggingOptions
     public bool LogRepairSuggestionsOnChangeOnly { get; set; } = true;
     public int LogRepairSuggestionsEveryNCycles { get; set; } = 100;
     public bool SuppressRepeatedRepairSnapshotLogs { get; set; } = true;
+    public int QuietModeDefaultEveryNCycles { get; set; } = 100;
+    public int QuietModeDefaultEveryMinutes { get; set; } = 10;
+    public bool QuietModeSuppressRepeatedHash { get; set; } = true;
+    public int QuietModeMaxSameEventPerHour { get; set; } = 3;
+    public int MaxMultiCandidateScanLogsPerHour { get; set; } = 5;
+    public int MaxMultiVerifiedScanLogsPerHour { get; set; } = 5;
+    public int MaxProfileComparisonDetailLogsPerHour { get; set; } = 10;
+    public int MaxRepairSuggestionLogsPerHour { get; set; } = 10;
+    public int MaxDataQualityAuditLogsPerHour { get; set; } = 20;
+    public int MaxRepeatedSameMarketDataQualityLogsPerHour { get; set; } = 1;
     public bool LogAllowlistRepairOnChangeOnly { get; set; } = true;
     public int LogAllowlistRepairEveryNCycles { get; set; } = 100;
     public bool LogSingleMarketFullCycleOnlyOnCompletion { get; set; } = true;
@@ -341,9 +360,11 @@ public class SingleMarketArbOptions
     public bool AuditHighSeverityDataQualityRejectedEvents { get; set; } = true;
     public int MaxAuditSamplesPerCycle { get; set; } = 20;
     public int MaxDataQualityAuditSamplesPerCycle { get; set; } = 3;
+    public int MaxHighSeverityDataQualityAuditLogsPerHour { get; set; } = 20;
+    public int MaxRepeatedSameMarketDataQualityLogsPerHour { get; set; } = 1;
     public decimal HighSeveritySuspiciousAskSumDistance { get; set; } = 0.10m;
     public int MaxHighSeverityDataQualityLogsPerCycle { get; set; } = 3;
-    public int HighSeverityDataQualityCooldownMinutes { get; set; } = 30;
+    public int HighSeverityDataQualityCooldownMinutes { get; set; } = 60;
     public bool LogTopNearMissesToConsole { get; set; } = false;
     public int ConsoleTopNearMissCount { get; set; } = 3;
     public int TopNearMissCount { get; set; } = 10;

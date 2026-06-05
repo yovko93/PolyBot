@@ -27,6 +27,7 @@ public class SingleMarketOrderBookArbEngine
     private readonly SingleMarketDataQualityValidator _dataQuality;
     private readonly SingleMarketFillSimulator _fillSimulator = new();
     private readonly VerifiedBasketExecutionCoordinator? _audit;
+    private readonly QuietLogGate? _quietLogGate;
     private readonly object _gate = new();
     private readonly Dictionary<string, MarketStability> _stability = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> _cooldownUntil = new(StringComparer.OrdinalIgnoreCase);
@@ -39,6 +40,7 @@ public class SingleMarketOrderBookArbEngine
     private int _highSeverityDataQualityLogsThisCycle;
     private int _highSeverityDataQualitySuppressedThisCycle;
     private int _dataQualityAuditSamplesThisCycle;
+    private readonly SingleMarketDataQualityAuditHourlyCap _highSeverityDataQualityAuditHourlyCap = new();
     private readonly Dictionary<string, DateTime> _highSeverityDataQualityLastLoggedAt = new(StringComparer.OrdinalIgnoreCase);
     private long _scanId;
     private int _positionsOpenedThisCycle;
@@ -55,7 +57,8 @@ public class SingleMarketOrderBookArbEngine
         string? contentRootPath = null,
         VerifiedBasketExecutionCoordinator? audit = null,
         bool operationalQuietMode = false,
-        MultiOutcomeLoggingOptions? logging = null)
+        MultiOutcomeLoggingOptions? logging = null,
+        QuietLogGate? quietLogGate = null)
     {
         _orderBooks = orderBooks;
         _options = options ?? new SingleMarketArbOptions { MinEdgePerShare = minEdgePerShare };
@@ -71,6 +74,7 @@ public class SingleMarketOrderBookArbEngine
         _audit = audit;
         _operationalQuietMode = operationalQuietMode;
         _logging = logging ?? new MultiOutcomeLoggingOptions();
+        _quietLogGate = quietLogGate;
     }
 
     public async Task<SingleMarketScanStats> ScanAsync(List<Market> markets, PaperTradingEngine paper, SemaphoreSlim semaphore, CancellationToken ct = default)
@@ -129,9 +133,9 @@ public class SingleMarketOrderBookArbEngine
                 MaybeStoreOpportunity(reject, highValue: IsHighSeverityDataQuality(dq.Reason, rawCost));
                 var highSeverityDataQuality = IsHighSeverityDataQuality(dq.Reason, rawCost);
                 if (highSeverityDataQuality) diagnostics.IncrementHighSeverityDataQuality();
-                var suppressHighSeverityForCooldown = highSeverityDataQuality && IsHighSeverityDataQualityInCooldown(book.MarketId, dq.Reason, now);
-                MaybeAuditDataQuality(reject, dq.Reason, rawCost, edge, diagnostics, suppressHighSeverityForCooldown);
-                if (ShouldLogDataQualityReject(book.MarketId, dq.Reason, rawCost, now))
+                var shouldLogDataQualityReject = ShouldLogDataQualityReject(book.MarketId, dq.Reason, rawCost, now);
+                MaybeAuditDataQuality(reject, dq.Reason, rawCost, edge, diagnostics, suppressHighSeverityForCooldown: highSeverityDataQuality && !shouldLogDataQualityReject);
+                if (shouldLogDataQualityReject)
                     Console.WriteLine($"[SINGLE_MARKET_DATA_QUALITY_REJECTED] Market={book.Question} Reason={dq.Reason} YesAsk={yes} NoAsk={no} RawSum={rawCost}");
                 return new SingleMarketScanResult(true, book.YesAsk != null && book.NoAsk != null, false, false, adjustedCost, book.Question, edge, dq.Reason, null);
             }
@@ -477,9 +481,30 @@ public class SingleMarketOrderBookArbEngine
             return false;
         }
         if (_operationalQuietMode && !TryReserveHighSeverityDataQualityLog()) return false;
+
+        var shouldLog = _quietLogGate?.ShouldLog(
+            new LogEventKey("single-market", "SINGLE_MARKET_DATA_QUALITY_REJECTED", MarketId: marketId),
+            new LogEventFingerprint($"{marketId}|{reason}", reason),
+            LogImportance.Important,
+            QuietPolicy(Math.Max(1, _logging.LogSingleMarketDataQualityEveryNCycles), Math.Max(1, _options.MaxRepeatedSameMarketDataQualityLogsPerHour))) ?? true;
+        if (!shouldLog)
+        {
+            IncrementSuppressedHighSeverityDataQuality();
+            return false;
+        }
+
         MarkHighSeverityDataQualityLogged(marketId, reason, nowUtc);
         return true;
     }
+
+    private QuietLogPolicy QuietPolicy(int everyNCycles, int maxPerHour)
+        => new(
+            _operationalQuietMode,
+            everyNCycles,
+            everyNCycles == 0 ? 0 : Math.Max(1, _logging.QuietModeDefaultEveryMinutes),
+            _logging.QuietModeSuppressRepeatedHash,
+            maxPerHour,
+            !_operationalQuietMode);
 
     private bool IsHighSeverityDataQualityInCooldown(string marketId, string reason, DateTime nowUtc)
     {
@@ -543,12 +568,26 @@ public class SingleMarketOrderBookArbEngine
         var positiveSample = positiveRejected && firstReason;
         if (!(enabledSample || highSeveritySample || positiveSample)) return;
         if (!TryReserveDataQualityAuditSample(_options.MaxDataQualityAuditSamplesPerCycle)) return;
+        if (highSeverity && reason == "SuspiciousYesNoAskSum" && !_highSeverityDataQualityAuditHourlyCap.TryReserve(_options.MaxHighSeverityDataQualityAuditLogsPerHour, DateTime.UtcNow, out var capLogDue, out var cappedCount))
+        {
+            if (capLogDue) Console.WriteLine($"[SINGLE_MARKET_DATA_QUALITY_AUDIT_HOURLY_CAP_REACHED] Count={cappedCount}");
+            return;
+        }
         MaybeAudit(dto, "SingleMarketDataQualityRejected", highValue: highSeverity || positiveRejected, sampled: true);
     }
 
     private void MaybeAudit(SingleMarketArbOpportunityDto dto, string auditStage, bool highValue, bool sampled)
     {
         if (!highValue && !sampled) return;
+        if (auditStage == "SingleMarketDataQualityRejected")
+        {
+            var shouldAudit = _quietLogGate?.ShouldLog(
+                new LogEventKey("execution-audit", "EXECUTION_AUDIT", MarketId: dto.MarketId, Strategy: dto.Strategy),
+                new LogEventFingerprint($"{dto.MarketId}|{dto.Reason ?? "Ok"}", dto.Reason ?? "Ok"),
+                LogImportance.Normal,
+                QuietPolicy(Math.Max(1, _logging.QuietModeDefaultEveryNCycles), Math.Max(1, _logging.MaxDataQualityAuditLogsPerHour))) ?? true;
+            if (!shouldAudit) return;
+        }
         _audit?.Audit(new ExecutionAuditEvent(DateTime.UtcNow, dto.Id, dto.MarketId, dto.Strategy, auditStage, dto.State.ToString(), dto.Reason ?? "Ok", dto.EdgePerShare, dto.ExpectedProfit, dto.PlannedNotional, dto.Quantity, $"PaperOnly={dto.PaperOnly}; DataQuality={dto.DataQualityStatus}; Fill={dto.FillSimulationStatus}; Paper={dto.PaperStatus}"));
         if (highValue || !_operationalQuietMode)
             Console.WriteLine($"[EXECUTION_AUDIT] Stage={auditStage} MarketId={dto.MarketId} State={dto.State} Reason={dto.Reason ?? "Ok"}");

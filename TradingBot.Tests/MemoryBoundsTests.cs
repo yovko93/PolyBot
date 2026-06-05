@@ -1,5 +1,7 @@
 using TradingBot.Api;
 using TradingBot.Options;
+using Microsoft.Extensions.Options;
+using TradingBot.Models;
 using TradingBot.Services;
 using Xunit;
 
@@ -77,6 +79,68 @@ public class MemoryBoundsTests
         Assert.True(state.ExecutionAuditCount <= runtime.MaxExecutionAuditEvents);
     }
 
+
+
+    [Fact]
+    public void High_severity_data_quality_audit_hourly_cap_works()
+    {
+        var cap = new TradingBot.Services.SingleMarketDataQualityAuditHourlyCap();
+        var start = DateTime.UtcNow;
+
+        Assert.True(cap.TryReserve(30, start, out var firstLogDue, out var firstCount));
+        Assert.False(firstLogDue);
+        for (var i = 1; i < 30; i++) Assert.True(cap.TryReserve(30, start.AddMinutes(1), out _, out _));
+
+        Assert.False(cap.TryReserve(30, start.AddMinutes(2), out var capLogDue, out var cappedCount));
+        Assert.True(capLogDue);
+        Assert.Equal(30, cappedCount);
+        Assert.False(cap.TryReserve(30, start.AddMinutes(3), out var repeatedLogDue, out _));
+        Assert.False(repeatedLogDue);
+        Assert.True(cap.TryReserve(30, start.AddHours(1).AddSeconds(1), out var resetLogDue, out _));
+        Assert.False(resetLogDue);
+    }
+
+    [Fact]
+    public void Logs_remain_within_max_recent_logs_after_60_minute_simulated_soak()
+    {
+        var runtime = new RuntimeStateOptions { MaxRecentLogs = 500 };
+        var state = new BotRuntimeState(runtime);
+
+        for (var minute = 0; minute < 60; minute++)
+        for (var i = 0; i < 50; i++)
+            state.AddLog(new TerminalLogEntryDto($"soak-{minute}-{i}", DateTime.UtcNow.AddMinutes(minute), "info", "soak", "simulated", i));
+
+        Assert.True(state.Logs().Length <= runtime.MaxRecentLogs);
+    }
+
+    [Fact]
+    public void Execution_audit_remains_within_configured_cap_after_60_minute_simulated_soak()
+    {
+        var runtime = new RuntimeStateOptions { MaxExecutionAuditEvents = 30 };
+        var audit = new VerifiedBasketExecutionCoordinator(Microsoft.Extensions.Options.Options.Create(new ExecutionOptions()), Microsoft.Extensions.Options.Options.Create(new TradingBotOptions { RuntimeState = runtime }));
+
+        for (var minute = 0; minute < 60; minute++)
+        for (var i = 0; i < 3; i++)
+            audit.Audit(new ExecutionAuditEvent(DateTime.UtcNow.AddMinutes(minute), $"opp-{minute}-{i}", "group", "strategy", "SingleMarketDataQualityRejected", "Rejected", "SuspiciousYesNoAskSum", 0, 0, 0, 0, "simulated"));
+
+        Assert.True(audit.ListAudit(500).Count <= runtime.MaxExecutionAuditEvents);
+    }
+
+
+    [Fact]
+    public void RuntimeHealth_includes_quiet_suppression_counters()
+    {
+        var state = new BotRuntimeState();
+        state.SetQuietLogGateStats(new QuietLogGateStats(123, 7, new Dictionary<string, long> { ["multi"] = 123 }, new Dictionary<string, long> { ["multi"] = 7 }, 4, 2));
+
+        var health = RuntimeHealthSnapshot.From(state);
+        var line = health.ToLogLine();
+
+        Assert.Equal(123, health.QuietSuppressedTotal);
+        Assert.Contains("QuietSuppressed=123", line);
+        Assert.Contains("EmittedLogs=7", line);
+        Assert.Contains("LogGateCache=4", line);
+    }
 
     [Fact]
     public void SignalR_buffer_remains_bounded_after_20000_events()

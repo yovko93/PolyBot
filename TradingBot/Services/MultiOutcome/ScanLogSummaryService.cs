@@ -81,15 +81,23 @@ public static class ScanLogSummaryService
 
 
     public static string RejectedOnlyCandidateScanFingerprint(string topReject, IReadOnlyDictionary<string, int> rejectedByReason, int candidateCountBucketSize, int reasonBucketSize)
+        => RejectedOnlyCandidateScanFingerprint(rejectedByReason.Values.Sum(), topReject, rejectedByReason, candidateCountBucketSize, reasonBucketSize);
+
+    public static string RejectedOnlyCandidateScanFingerprint(int candidateCount, string topReject, IReadOnlyDictionary<string, int> rejectedByReason, int candidateCountBucketSize, int reasonBucketSize)
     {
-        // Rejected-only scans are operationally useful only when the dominant reject class changes.
-        // Do not include small count fluctuations here; 8 -> 9 -> 15 should stay quiet.
-        var reasonKeys = string.Join(",", rejectedByReason.Keys.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
-        return $"top:{topReject}|reasons:{reasonKeys}";
+        // Rejected-only scans are operationally useful only when the dominant reject class changes,
+        // an executable appears, or a 20-wide candidate/reason bucket changes. Small discovery
+        // fluctuations such as 8 -> 9 -> 10 -> 13 -> 18 should stay quiet.
+        var candidateBucket = Math.Max(20, candidateCountBucketSize * 2);
+        var reasonBucket = Math.Max(20, reasonBucketSize * 2);
+        var reasonBuckets = string.Join(",", rejectedByReason
+            .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(x => $"{x.Key}:{(int)Math.Floor(x.Value / (decimal)reasonBucket)}"));
+        return $"top:{topReject}|candidateBucket:{(int)Math.Floor(candidateCount / (decimal)candidateBucket)}|reasonBuckets:{reasonBuckets}";
     }
 
     public static string RejectedOnlyCandidateScanFingerprint(string topReject, IReadOnlyDictionary<string, int> rejectedByReason, int reasonBucketSize)
-        => RejectedOnlyCandidateScanFingerprint(topReject, rejectedByReason, reasonBucketSize, reasonBucketSize);
+        => RejectedOnlyCandidateScanFingerprint(rejectedByReason.Values.Sum(), topReject, rejectedByReason, reasonBucketSize, reasonBucketSize);
 
     public static string RepairSuggestionStableHash(string groupKey, string action, string confidence, IEnumerable<string> addedIds, IEnumerable<string> removedIds, int missingNoAsk, bool locked, bool quarantined)
     {
@@ -97,6 +105,16 @@ public static class ScanLogSummaryService
         var removed = string.Join(",", removedIds.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
         return $"group:{groupKey}|action:{action}|confidence:{confidence}|added:{added}|removed:{removed}|missing:{missingNoAsk}|locked:{locked.ToString().ToLowerInvariant()}|quarantined:{quarantined.ToString().ToLowerInvariant()}";
     }
+
+    public static string RepairActionDirectionFingerprint(string groupKey, string? previousAction, string currentAction)
+        => $"group:{groupKey}|direction:{previousAction ?? string.Empty}->{currentAction}";
+
+    public static bool IsWomenUsOpenRepairFlipFlop(string groupKey, string? previousAction, string currentAction, string reasonForChange)
+        => groupKey.Equals("winner:2026 women s us open|kind:generic", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(previousAction)
+            && !previousAction.Equals(currentAction, StringComparison.OrdinalIgnoreCase)
+            && (reasonForChange.Equals("RepairSnapshotReclassified", StringComparison.OrdinalIgnoreCase)
+                || reasonForChange.Equals("NoMatchAcrossSnapshots", StringComparison.OrdinalIgnoreCase));
 
     public static bool ShouldSuppressRejectedOnlyCandidateScan(bool operationalQuietMode, bool logCandidateScanWhenOnlyRejected, bool rejectedOnlyCandidateScan, string currentFingerprint, string lastFingerprint, bool periodic)
         => operationalQuietMode

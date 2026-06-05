@@ -1,5 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 using TradingBot.Models;
+using TradingBot.Options;
 using TradingBot.Services;
 
 namespace TradingBot.Engines;
@@ -23,6 +24,9 @@ public class MultiOutcomeGroupArbEngine
     private readonly bool _logRejectedCandidates;
     private readonly int _rejectedSampleSize;
     private readonly bool _logRejectedSamplesOnlyInDebug;
+    private readonly bool _operationalQuietMode;
+    private readonly MultiOutcomeLoggingOptions _logging;
+    private readonly QuietLogGate? _quietLogGate;
 
     // Used only by requote gate. The main execution decision still belongs to PaperTradingEngine.
     private readonly decimal _requoteMinExpectedProfit;
@@ -41,7 +45,10 @@ public class MultiOutcomeGroupArbEngine
         bool logRejectedSummary = true,
         int rejectedSampleSize = 5,
         bool logRejectedSamplesOnlyInDebug = true,
-        MutuallyExclusiveGroupValidator? validator = null)
+        MutuallyExclusiveGroupValidator? validator = null,
+        bool operationalQuietMode = false,
+        MultiOutcomeLoggingOptions? logging = null,
+        QuietLogGate? quietLogGate = null)
     {
         _orderBooks = orderBooks;
         _minEdgePerShare = minEdgePerShare;
@@ -57,6 +64,9 @@ public class MultiOutcomeGroupArbEngine
         _logRejectedSummary = logRejectedSummary;
         _rejectedSampleSize = Math.Clamp(rejectedSampleSize, 1, 25);
         _logRejectedSamplesOnlyInDebug = logRejectedSamplesOnlyInDebug;
+        _operationalQuietMode = operationalQuietMode;
+        _logging = logging ?? new MultiOutcomeLoggingOptions();
+        _quietLogGate = quietLogGate;
     }
 
     public async Task<MultiOutcomeScanReport> ScanAsync(
@@ -529,12 +539,21 @@ public class MultiOutcomeGroupArbEngine
         return new MultiOutcomeScanReport(scannedGroups, evaluated, verified, results.Count(x=>x.VerificationStatus=="HighConfidence"), results.Count(x=>x.VerificationStatus=="Candidate"), executable, configuredIncomplete, bestCandidate?.NoBasketEdge ?? 0m, bestVerified?.NoBasketEdge ?? 0m, results.Where(x=>x.NoBasketExecuted).OrderByDescending(x=>x.NoBasketEdge ?? decimal.MinValue).FirstOrDefault()?.NoBasketEdge ?? 0m, bestVerified?.GroupKey ?? "", rejectedByReason.OrderByDescending(g=>g.Value).FirstOrDefault().Key ?? "None", rejectedByReason, rejected.Take(25).ToArray(), candidatesForReview);
     }
 
-    private static void PrintSummary(MultiOutcomeScanReport report, bool logSummary, bool logSamples, int sampleSize)
+    private void PrintSummary(MultiOutcomeScanReport report, bool logSummary, bool logSamples, int sampleSize)
     {
         var rejected = report.GroupsDetected - report.GroupsVerified;
         var reasonSummary = string.Join(",", report.RejectedByReason.Select(x => $"{x.Key}:{x.Value}"));
         if (logSummary)
-            Console.WriteLine($"[MULTI_CANDIDATE_SCAN] Candidates={report.GroupsDetected} Rejected={rejected} TopReject={report.TopSkipReason} RejectedByReason={{{reasonSummary}}}");
+        {
+            var fingerprint = TradingBot.Services.MultiOutcome.ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint(report.GroupsDetected, report.TopSkipReason, report.RejectedByReason, Math.Max(1, _logging.CandidateScanBucketSize), Math.Max(1, _logging.CandidateScanMaterialReasonDelta));
+            var shouldLog = _quietLogGate?.ShouldLog(
+                new LogEventKey("multi-candidate", "MULTI_CANDIDATE_SCAN"),
+                new LogEventFingerprint(fingerprint, fingerprint),
+                report.ExecutableGroups > 0 ? LogImportance.Critical : LogImportance.Normal,
+                new QuietLogPolicy(_operationalQuietMode, Math.Max(1, _logging.LogCandidateScanEveryNCycles), Math.Max(1, _logging.QuietModeDefaultEveryMinutes), _logging.QuietModeSuppressRepeatedHash, Math.Max(1, _logging.MaxMultiCandidateScanLogsPerHour), _logging.DebugVerifiedMismatch)) ?? true;
+            if (shouldLog)
+                Console.WriteLine($"[MULTI_CANDIDATE_SCAN] Candidates={report.GroupsDetected} Rejected={rejected} TopReject={report.TopSkipReason} RejectedByReason={{{reasonSummary}}}");
+        }
         if (logSamples)
         {
             foreach (var grp in report.TopRejectedSamples.GroupBy(x => x.Reason))
