@@ -1,5 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 using TradingBot.Models;
+using TradingBot.Options;
 using TradingBot.Services;
 
 namespace TradingBot.Engines;
