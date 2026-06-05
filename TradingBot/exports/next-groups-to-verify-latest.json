@@ -1,9 +1,9 @@
 [
   {
-    "groupKey": "winner:on 2026 06 06|kind:generic",
-    "title": "winner:on 2026 06 06|kind:generic",
-    "detectedMarketsCount": 5,
-    "pricedLegs": 5,
+    "groupKey": "winner:2026 men s us open|kind:generic",
+    "title": "winner:2026 men s us open|kind:generic",
+    "detectedMarketsCount": 6,
+    "pricedLegs": 6,
     "missingNoAsk": 0,
     "estimatedGrossEdge": null,
     "estimatedNetEdgeConservative": null,
@@ -13,35 +13,37 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:on 2026 06 06|kind:generic",
-      "title": "winner:on 2026 06 06|kind:generic",
+      "groupKey": "winner:2026 men s us open|kind:generic",
+      "title": "winner:2026 men s us open|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "2373165",
-        "2421889",
-        "2277072",
-        "2421877",
-        "2421871"
+        "1088486",
+        "1088473",
+        "1088480",
+        "1088478",
+        "1088489",
+        "1088479"
       ],
       "conditionIds": [
-        "0x3d0749e72d7688132be87ecf2d25b9d55a9622e59cccb4d93f1b819a17bf659f",
-        "0xaf869054f543549166b523500589b3ff69a8e90a6e3b7c3ac33a4cdb88dc8759",
-        "0x306b98d35252384bcde3b5680de2ba7feef1680b6375e1a92952798c0ed80d89",
-        "0x4da87d7e7cf04e0bdfe05830c3e08b2c9ec43baf813a1844df89e232075df6bc",
-        "0xbd6a22e4f8399fe9b678cf52f6b9e8ef603d5df220f63ab6567c51388defdeb5"
+        "0x893c4cee5898ad4dcd93964ec1d10675233886c13ac1b2d4708e3a32b54a504f",
+        "0x15f8f202d13a8bf70566cc9d015331f2b7c4673ce7c0f3bd9274122143da98d7",
+        "0xf7c252ad31286ada89db99be13597440c560902399c76c38467fa86b0afafc38",
+        "0x2212033b5adefa053fe4c71067daa55118aa7e97cd9599f3d31d49bbc5778674",
+        "0x60ec73dedf897f7e3d5cdb9c936ef95b518308048710b121b1d78b1faf8b6624",
+        "0x6b934e09bcaa5d0cb9405c6dcc101781f3fa14d47dd3fc57eb65c28b7cd0ee80"
       ],
-      "requiredOutcomeCount": 5,
+      "requiredOutcomeCount": 6,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-06-04"
+      "verifiedAt": "2026-06-05"
     }
   },
   {
-    "groupKey": "winner:2026 minnesota governor republican primary election|kind:person",
-    "title": "winner:2026 minnesota governor republican primary election|kind:person",
+    "groupKey": "winner:2026 south carolina governor democratic primary election|kind:person",
+    "title": "winner:2026 south carolina governor democratic primary election|kind:person",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
     "missingNoAsk": 0,
@@ -53,29 +55,29 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:2026 minnesota governor republican primary election|kind:person",
-      "title": "winner:2026 minnesota governor republican primary election|kind:person",
+      "groupKey": "winner:2026 south carolina governor democratic primary election|kind:person",
+      "title": "winner:2026 south carolina governor democratic primary election|kind:person",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "907993",
-        "907983"
+        "906915",
+        "906913"
       ],
       "conditionIds": [
-        "0xbbd623c4191ca76dec466507375d6df85b403b7e14f9cbd3d09f2c450ae0cd96",
-        "0xd25c820d3aee1c735c0fa62c36f4905632ab8c6988653b5b4134593b3209eb7f"
+        "0x5c8dc748cfec530d07f450add0f80996a742d36d532058b39bd561cd6e67d841",
+        "0xa96c73d510776218ee2ff7d056226c876f67c892a6f7b8d9d5aa30d186d2c89b"
       ],
       "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-06-04"
+      "verifiedAt": "2026-06-05"
     }
   },
   {
-    "groupKey": "winner:bronze boot at 2026 fifa world cup|kind:generic",
-    "title": "winner:bronze boot at 2026 fifa world cup|kind:generic",
+    "groupKey": "winner:2026 nevada governor democratic primary election|kind:person",
+    "title": "winner:2026 nevada governor democratic primary election|kind:person",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
     "missingNoAsk": 0,
@@ -87,65 +89,29 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:bronze boot at 2026 fifa world cup|kind:generic",
-      "title": "winner:bronze boot at 2026 fifa world cup|kind:generic",
+      "groupKey": "winner:2026 nevada governor democratic primary election|kind:person",
+      "title": "winner:2026 nevada governor democratic primary election|kind:person",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "2432138",
-        "2430902"
+        "824179",
+        "824180"
       ],
       "conditionIds": [
-        "0x37224ee514aa364be93a5e4f0b15f15e71c6b3851ce189b9a2d64b087b4c85ea",
-        "0x437dea980bbce4bb82236ea55c2f7f9f6dfb81e6e478045673530a751cd2d1ed"
+        "0xf762b70509052cd499fcb48285f09573113874bb004cb6ab85f3e7d203569de2",
+        "0x9504d0074cc8dccb98f6c1e8ae836591cf2e649528c8df564eae428c0cc7e69b"
       ],
       "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-06-04"
+      "verifiedAt": "2026-06-05"
     }
   },
   {
-    "groupKey": "winner:2027 nfl afc championship|kind:generic",
-    "title": "winner:2027 nfl afc championship|kind:generic",
-    "detectedMarketsCount": 3,
-    "pricedLegs": 3,
-    "missingNoAsk": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "rawOnlyEdge": null,
-    "candidateQualityScore": 90,
-    "safetyClassification": "SafeForManualVerification",
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:2027 nfl afc championship|kind:generic",
-      "title": "winner:2027 nfl afc championship|kind:generic",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "1361093",
-        "1361084",
-        "1361082"
-      ],
-      "conditionIds": [
-        "0x983223b53e2dc149079e8919efa1a85f4f2cefe5723e2cdd25d962a122f4f9e3",
-        "0xf56c3543401052711ed407ec692c414e3ccde973a1195cf7274f71d1981c9242",
-        "0x13ef35d4bf77d5e1cb891b15fde4af75a2f9ed8044b898ec9596b1515afbf06a"
-      ],
-      "requiredOutcomeCount": 3,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-06-04"
-    }
-  },
-  {
-    "groupKey": "winner:on 2026 06 25|kind:generic",
-    "title": "winner:on 2026 06 25|kind:generic",
+    "groupKey": "winner:golden ball at 2026 fifa world cup|kind:generic",
+    "title": "winner:golden ball at 2026 fifa world cup|kind:generic",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
     "missingNoAsk": 0,
@@ -157,24 +123,24 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:on 2026 06 25|kind:generic",
-      "title": "winner:on 2026 06 25|kind:generic",
+      "groupKey": "winner:golden ball at 2026 fifa world cup|kind:generic",
+      "title": "winner:golden ball at 2026 fifa world cup|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "1897336",
-        "1897356"
+        "2431011",
+        "2431016"
       ],
       "conditionIds": [
-        "0xbb8523862374b3edc90cb813b125bd30e8e27030be53fcf40d1f76152339f8d0",
-        "0x32552863fe8014da2613037970661f0d49f415c86a88cb3d65af7a43395bc4ad"
+        "0x3c1e350aa870dde083412c0f2a98b1b8acea2b956d7740c9a4f70c6843e2a662",
+        "0x1a32ef5cbc5396ae447be27f9e2eaa6d65156c0d5b8491bdf8616f4099687c8b"
       ],
       "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-06-04"
+      "verifiedAt": "2026-06-05"
     }
   }
 ]

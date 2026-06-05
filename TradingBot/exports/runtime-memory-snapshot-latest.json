@@ -1,0 +1,213 @@
+{
+  "timestamp": "2026-06-05T05:37:15.8786981Z",
+  "memory": {
+    "ProcessMemoryMb": 1101.78,
+    "GcTotalMemoryMb": 714.41,
+    "PrivateMemoryMb": 1050.5,
+    "WorkingSetMb": 1101.78,
+    "Gen0Collections": 5413,
+    "Gen1Collections": 1852,
+    "Gen2Collections": 608,
+    "ThreadCount": 22,
+    "HandleCount": 637,
+    "Uptime": "07:06:35.7661616",
+    "ScannerCycleId": 465698,
+    "LastScanDurationMs": 4795,
+    "RecentLogsCount": 100,
+    "ScannerHistoryCount": 50,
+    "CandidateSnapshotCount": 0,
+    "RepairHistoryCount": 15,
+    "UnresolvedDiagnosticsCount": 0,
+    "DryRunOrderPlansCount": 0,
+    "FillSimulationsCount": 0,
+    "ExecutionAuditCount": 7,
+    "SignalREventBufferCount": 0,
+    "OrderbookCacheCount": 2144,
+    "MarketCacheCount": 7955,
+    "ExportQueueCount": 0,
+    "PatchPreviewItemsCount": 3,
+    "SingleMarketOpportunitiesCount": 0,
+    "SingleMarketNearMissesCount": 0,
+    "SingleMarketDataQualitySamplesCount": 0,
+    "SingleMarketExecutionsCount": 0,
+    "DuplicateGroupKeyWarnings": 0,
+    "QuietSuppressedTotal": 79641,
+    "EmittedLogs": 647,
+    "LogGateCacheSize": 71,
+    "QuietCappedSuppressions": 38142,
+    "QuietSuppressedByCategory": {
+      "allowlist-repair": 38615,
+      "profile-comparison": 22255,
+      "verified-basket": 3705,
+      "multi-verified": 11034,
+      "multi-candidate": 3688,
+      "single-market": 344
+    },
+    "EmittedByCategory": {
+      "allowlist-repair": 345,
+      "profile-comparison": 113,
+      "verified-basket": 23,
+      "multi-candidate": 40,
+      "multi-verified": 112,
+      "single-market": 7,
+      "execution-audit": 7
+    }
+  },
+  "collectionCounts": {
+    "recentLogs": 100,
+    "scannerHistory": 50,
+    "candidateSnapshots": 0,
+    "repairHistory": 15,
+    "unresolvedDiagnostics": 0,
+    "dryRunOrderPlans": 0,
+    "fillSimulations": 0,
+    "executionAudit": 7,
+    "signalREventBuffer": 0,
+    "orderbookCache": 2144,
+    "marketCache": 7955,
+    "exports": 0,
+    "patchPreviewItems": 3,
+    "singleMarketOpportunities": 0,
+    "singleMarketNearMisses": 0,
+    "singleMarketDataQualitySamples": 0,
+    "singleMarketExecutions": 0
+  },
+  "topCacheSizes": {
+    "orderbookCacheCount": 2144,
+    "marketCacheCount": 7955
+  },
+  "scannerState": {
+    "Sequence": 465698,
+    "LastScanDurationMs": 4795,
+    "IsPaused": true,
+    "Reason": "MEMORY_CRITICAL"
+  },
+  "lastLogsSummary": [
+    {
+      "Timestamp": "2026-06-05T05:36:21.5465163Z",
+      "Level": "info",
+      "Source": "console",
+      "Message": "[ALLOWLIST_HEALTH] Configured=11 Healthy=0 MonitoringOnly=8 NeedsPricingPrune=0 NeedsRefresh=3 BrokenConfig=0 Disabled=0 Ignored=0 BrokenTotal=3"
+    },
+    {
+      "Timestamp": "2026-06-05T05:36:21.6437959Z",
+      "Level": "error",
+      "Source": "scanner",
+      "Message": "{\u0022event\u0022:\u0022scan_error\u0022,\u0022message\u0022:\u0022Operation is not valid due to the current state of the object.\u0022}"
+    },
+    {
+      "Timestamp": "2026-06-05T05:36:24.6492949Z",
+      "Level": "info",
+      "Source": "scanner",
+      "Message": "{\u0022event\u0022:\u0022scan_start\u0022,\u0022timestamp\u0022:\u00222026-06-05T05:36:24.6477542Z\u0022}"
+    },
+    {
+      "Timestamp": "2026-06-05T05:36:28.6609942Z",
+      "Level": "error",
+      "Source": "scanner",
+      "Message": "{\u0022event\u0022:\u0022scan_error\u0022,\u0022message\u0022:\u0022Operation is not valid due to the current state of the object.\u0022}"
+    },
+    {
+      "Timestamp": "2026-06-05T05:36:31.6734743Z",
+      "Level": "info",
+      "Source": "scanner",
+      "Message": "{\u0022event\u0022:\u0022scan_start\u0022,\u0022timestamp\u0022:\u00222026-06-05T05:36:31.6715532Z\u0022}"
+    },
+    {
+      "Timestamp": "2026-06-05T05:36:35.5349239Z",
+      "Level": "error",
+      "Source": "scanner",
+      "Message": "{\u0022event\u0022:\u0022scan_error\u0022,\u0022message\u0022:\u0022Operation is not valid due to the current state of the object.\u0022}"
+    },
+    {
+      "Timestamp": "2026-06-05T05:36:38.5470803Z",
+      "Level": "info",
+      "Source": "scanner",
+      "Message": "{\u0022event\u0022:\u0022scan_start\u0022,\u0022timestamp\u0022:\u00222026-06-05T05:36:38.5458479Z\u0022}"
+    },
+    {
+      "Timestamp": "2026-06-05T05:36:42.6296268Z",
+      "Level": "error",
+      "Source": "scanner",
+      "Message": "{\u0022event\u0022:\u0022scan_error\u0022,\u0022message\u0022:\u0022Operation is not valid due to the current state of the object.\u0022}"
+    },
+    {
+      "Timestamp": "2026-06-05T05:36:43.2699903Z",
+      "Level": "info",
+      "Source": "console",
+      "Message": "[RUNTIME_HEALTH] ProcessMb=1067.49 GcMb=667.22 WorkingSetMb=1067.49 Logs=500 ScannerHistory=500 CandidateSnapshots=2 RepairHistory=15 ExecutionAudit=7 SignalRBuffer=100 OrderbookCache=2144 MarketCache=7955 PatchPreviewItems=3 SingleMarketOp"
+    },
+    {
+      "Timestamp": "2026-06-05T05:36:45.6361132Z",
+      "Level": "info",
+      "Source": "scanner",
+      "Message": "{\u0022event\u0022:\u0022scan_start\u0022,\u0022timestamp\u0022:\u00222026-06-05T05:36:45.6340572Z\u0022}"
+    },
+    {
+      "Timestamp": "2026-06-05T05:36:49.8564806Z",
+      "Level": "info",
+      "Source": "console",
+      "Message": "[ALLOWLIST_REPAIR_NO_MATCH] Group=winner:2026 women s us open|kind:generic ConsecutiveMisses=3 RequiredForDowngrade=5"
+    },
+    {
+      "Timestamp": "2026-06-05T05:36:49.9278195Z",
+      "Level": "error",
+      "Source": "scanner",
+      "Message": "{\u0022event\u0022:\u0022scan_error\u0022,\u0022message\u0022:\u0022Operation is not valid due to the current state of the object.\u0022}"
+    },
+    {
+      "Timestamp": "2026-06-05T05:36:52.9283174Z",
+      "Level": "info",
+      "Source": "scanner",
+      "Message": "{\u0022event\u0022:\u0022scan_start\u0022,\u0022timestamp\u0022:\u00222026-06-05T05:36:52.9272409Z\u0022}"
+    },
+    {
+      "Timestamp": "2026-06-05T05:36:57.4190882Z",
+      "Level": "info",
+      "Source": "console",
+      "Message": "[MULTI_VERIFIED_SCAN] Configured=11 Resolved=8 Unresolved=3 BrokenConfigCount=0 NeedsRefreshCount=1 ReviewOnlyCount=2 MonitoringOnlyUnresolvedCount=0 OtherUnresolvedCount=0 UnresolvedSamplesShown=0 SuppressedUnresolvedSamples=3 UnresolvedTo"
+    },
+    {
+      "Timestamp": "2026-06-05T05:36:57.453145Z",
+      "Level": "error",
+      "Source": "scanner",
+      "Message": "{\u0022event\u0022:\u0022scan_error\u0022,\u0022message\u0022:\u0022Operation is not valid due to the current state of the object.\u0022}"
+    },
+    {
+      "Timestamp": "2026-06-05T05:37:00.4684197Z",
+      "Level": "info",
+      "Source": "scanner",
+      "Message": "{\u0022event\u0022:\u0022scan_start\u0022,\u0022timestamp\u0022:\u00222026-06-05T05:37:00.4670775Z\u0022}"
+    },
+    {
+      "Timestamp": "2026-06-05T05:37:05.0612292Z",
+      "Level": "error",
+      "Source": "scanner",
+      "Message": "{\u0022event\u0022:\u0022scan_error\u0022,\u0022message\u0022:\u0022Operation is not valid due to the current state of the object.\u0022}"
+    },
+    {
+      "Timestamp": "2026-06-05T05:37:08.0718062Z",
+      "Level": "info",
+      "Source": "scanner",
+      "Message": "{\u0022event\u0022:\u0022scan_start\u0022,\u0022timestamp\u0022:\u00222026-06-05T05:37:08.0707111Z\u0022}"
+    },
+    {
+      "Timestamp": "2026-06-05T05:37:12.8653371Z",
+      "Level": "error",
+      "Source": "scanner",
+      "Message": "{\u0022event\u0022:\u0022scan_error\u0022,\u0022message\u0022:\u0022Operation is not valid due to the current state of the object.\u0022}"
+    },
+    {
+      "Timestamp": "2026-06-05T05:37:15.8743555Z",
+      "Level": "info",
+      "Source": "console",
+      "Message": "[MEMORY_CRITICAL] ProcessMb=1101.81 Action=PauseScannerAndClearCaches"
+    }
+  ],
+  "process": {
+    "Count": 22,
+    "HandleCount": 637,
+    "PrivateMemorySize64": 1101529088,
+    "WorkingSet64": 1155309568
+  }
+}

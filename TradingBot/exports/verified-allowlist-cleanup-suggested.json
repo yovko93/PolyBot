@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAtUtc": "2026-06-04T19:02:18.201149Z",
+    "generatedAtUtc": "2026-06-05T08:40:49.2403262Z",
     "note": "suggested only"
   },
   "groups": [
@@ -98,18 +98,74 @@
       "GroupKey": "winner:2026 women s us open|kind:generic",
       "Title": "winner:2026 women s us open|kind:generic",
       "CurrentEnabled": true,
-      "HealthCategory": "BrokenConfig",
-      "RecommendedAction": "DisableMissingMarkets",
-      "RepairConfidence": "Low",
-      "SuggestedAction": "DisableMissingMarkets",
-      "SuggestedEnabled": false,
-      "SuggestedTemplate": null,
+      "HealthCategory": "NeedsRefresh",
+      "RecommendedAction": "RefreshFromCandidateExport",
+      "RepairConfidence": "High",
+      "SuggestedAction": "RefreshFromCandidateExport",
+      "SuggestedEnabled": true,
+      "SuggestedTemplate": {
+        "enabled": true,
+        "groupKey": "winner:2026 women s us open|kind:generic",
+        "title": "winner:2026 women s us open|kind:generic",
+        "verificationStatus": "Verified",
+        "groupType": "MutuallyExclusiveWinner",
+        "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+        "marketIds": [
+          "1088686",
+          "1088653"
+        ],
+        "conditionIds": [
+          "0x43c4d1796b7d8e7a6f54d655c282daec9b6883edbe21434dd9b85a5b5f499453",
+          "0x81474d7afeab3c4a69fd893fb4938ae513b216d0e2ecc75f6b8e2885db13b4a7"
+        ],
+        "requiredOutcomeCount": 2,
+        "requireExactOutcomeCount": false,
+        "settlementNotes": "Refreshed from candidate export. Manually verify mutually exclusive settlement before enabling.",
+        "verifiedBy": "manual-review-required",
+        "verifiedAt": "2026-06-05"
+      },
       "SuggestedPrunedTemplate": null,
-      "SuggestedRefreshedTemplate": null,
-      "Diff": null,
+      "SuggestedRefreshedTemplate": {
+        "enabled": true,
+        "groupKey": "winner:2026 women s us open|kind:generic",
+        "title": "winner:2026 women s us open|kind:generic",
+        "verificationStatus": "Verified",
+        "groupType": "MutuallyExclusiveWinner",
+        "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+        "marketIds": [
+          "1088686",
+          "1088653"
+        ],
+        "conditionIds": [
+          "0x43c4d1796b7d8e7a6f54d655c282daec9b6883edbe21434dd9b85a5b5f499453",
+          "0x81474d7afeab3c4a69fd893fb4938ae513b216d0e2ecc75f6b8e2885db13b4a7"
+        ],
+        "requiredOutcomeCount": 2,
+        "requireExactOutcomeCount": false,
+        "settlementNotes": "Refreshed from candidate export. Manually verify mutually exclusive settlement before enabling.",
+        "verifiedBy": "manual-review-required",
+        "verifiedAt": "2026-06-05"
+      },
+      "Diff": {
+        "suggestedMarketCount": 2,
+        "removedMarketIds": [
+          "1088662",
+          "1088680",
+          "1088679",
+          "0x4b408f8e5e035d5498751ff0048fca5fc472ce1f774d703b3e9f323590ebe3a6",
+          "0xdaba177a8a9e34e55a1663bf89f7bc20e94829bbf5f254832d778d574fb29b54",
+          "0xaed5fc200c5322ecf7e4d09fc8287de5325c3c64b15c1e85af9f945abdb7aaeb"
+        ],
+        "addedMarketIds": [
+          "1088686",
+          "1088653"
+        ],
+        "changedConditionIds": []
+      },
       "Notes": [
-        "Candidate match missing for 5 repair snapshot(s); hysteresis prevents immediate downgrade.",
-        "No stable candidate match yet. ConsecutiveSnapshotMisses=5."
+        "Stable candidate match: winner:2026 women s us open|kind:generic score=0.85.",
+        "Candidate match missing for 2 repair snapshot(s); hysteresis prevents immediate downgrade.",
+        "Market mismatch; stable refreshed candidate is available for manual review."
       ],
       "CopyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
@@ -199,6 +255,7 @@
       "SuggestedRefreshedTemplate": null,
       "Diff": null,
       "Notes": [
+        "Stable candidate match: winner:2nd round of 2026 peru presidential election by 4 8|kind:person score=0.771.",
         "ManualLock: Manual review required due to repair diff oscillation on marketId 947269"
       ],
       "CopyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
