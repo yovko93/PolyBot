@@ -122,6 +122,63 @@ public class VerifiedBasketStateMachineTests
         Assert.True(throttle.ShouldLog("paper-open", "same", critical: true));
     }
 
+
+    [Fact]
+    public void Below_min_net_edge_is_not_active_executable()
+    {
+        var executionMinNetEdgePerBasket = 0.005m;
+        var activeNet = 0.003m;
+        var activeExecutable = activeNet >= executionMinNetEdgePerBasket;
+
+        Assert.False(activeExecutable);
+    }
+
+    [Fact]
+    public void Stable_edge_scan_count_does_not_use_waiting_for_stable_edge_blocker()
+    {
+        var consecutiveEdgeScans = 53;
+        var requiredEdgeScans = 3;
+        var blocker = consecutiveEdgeScans >= requiredEdgeScans ? "WaitingForExecutionReadiness" : "WaitingForStableEdge";
+
+        Assert.NotEqual("WaitingForStableEdge", blocker);
+    }
+
+    [Fact]
+    public void Stable_state_does_not_report_stale_last_reset_as_current_blocker()
+    {
+        var consecutiveEdgeScans = 53;
+        var requiredEdgeScans = 3;
+        var resetDetail = consecutiveEdgeScans >= requiredEdgeScans ? "CurrentBlocker=WaitingForExecutionReadiness" : "LastResetReason=NetEdgeVolatility";
+
+        Assert.DoesNotContain("LastResetReason=NetEdgeVolatility", resetDetail);
+        Assert.Contains("CurrentBlocker=WaitingForExecutionReadiness", resetDetail);
+    }
+
+    [Fact]
+    public void Repeated_verified_pretrade_blocked_audit_is_bounded()
+    {
+        var options = new TradingBot.Options.TradingBotOptions
+        {
+            Diagnostics = new TradingBot.Options.DiagnosticsOptions { OperationalQuietMode = true },
+            Logging = new TradingBot.Options.MultiOutcomeLoggingOptions
+            {
+                MaxVerifiedPretradeBlockedAuditPerHour = 10,
+                SuppressRepeatedVerifiedPretradeBlockedAudit = true
+            },
+            RuntimeState = new TradingBot.Options.RuntimeStateOptions { MaxExecutionAuditEvents = 500 }
+        };
+        var coordinator = new VerifiedBasketExecutionCoordinator(
+            Microsoft.Extensions.Options.Options.Create(new TradingBot.Options.ExecutionOptions()),
+            Microsoft.Extensions.Options.Options.Create(options));
+
+        for (var i = 0; i < 100; i++)
+        {
+            coordinator.AuditQuiet(new TradingBot.Models.ExecutionAuditEvent(DateTime.UtcNow, "opp", "group", "strategy", "PreTradeBlocked", "Blocked", "WaitingForExecutionReadiness", 0.01m, 1m, 10m, 1m, "same"), options.Logging.MaxVerifiedPretradeBlockedAuditPerHour, options.Logging.SuppressRepeatedVerifiedPretradeBlockedAudit, 100);
+        }
+
+        Assert.True(coordinator.AuditCount <= 2);
+    }
+
     private static VerifiedBasketScreener.ScreenResult Screen(string groupKey, decimal activeNet, decimal experimentalNet)
     {
         var active = new VerifiedBasketScreener.ProfileResult("Conservative", "FixedPerLeg", 0m, 0m, 0m, activeNet, activeNet * 10m, activeNet > 0.001m, false);

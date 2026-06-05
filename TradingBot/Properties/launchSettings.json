@@ -7,6 +7,15 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
       "applicationUrl": "https://localhost:53942;http://localhost:53943"
+    },
+    "TradingBot.Validation": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Validation",
+        "DOTNET_ENVIRONMENT": "Validation"
+      },
+      "applicationUrl": "http://localhost:53943"
     }
   }
 }
