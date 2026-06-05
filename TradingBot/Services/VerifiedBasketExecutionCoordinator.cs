@@ -18,6 +18,8 @@ public sealed class VerifiedBasketExecutionCoordinator
     private readonly ConcurrentQueue<BasketOrderPlan> _dryRunPlans = new();
     private readonly ConcurrentQueue<FillSimulationResult> _fillSimulations = new();
     private readonly Dictionary<string, int> _duplicateSuppressionByGroup = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, QuietAuditState> _quietAuditStates = new(StringComparer.OrdinalIgnoreCase);
+    private readonly TradingBotOptions _botOptions;
 
     public VerifiedBasketExecutionCoordinator(IOptions<ExecutionOptions> executionOptions)
         : this(executionOptions, Microsoft.Extensions.Options.Options.Create(new TradingBotOptions())) { }
@@ -25,7 +27,8 @@ public sealed class VerifiedBasketExecutionCoordinator
     public VerifiedBasketExecutionCoordinator(IOptions<ExecutionOptions> executionOptions, IOptions<TradingBotOptions> botOptions)
     {
         _execution = executionOptions.Value;
-        _runtime = botOptions.Value.RuntimeState;
+        _botOptions = botOptions.Value;
+        _runtime = _botOptions.RuntimeState;
     }
 
     public IReadOnlyList<ExecutionAuditEvent> ListAudit(int limit = 200) => _audit.TakeLast(Math.Clamp(limit, 1, _runtime.MaxExecutionAuditEvents)).ToArray();
@@ -81,6 +84,41 @@ public sealed class VerifiedBasketExecutionCoordinator
     {
         _audit.Enqueue(e);
         while (_audit.Count > _runtime.MaxExecutionAuditEvents) _audit.TryDequeue(out _);
+    }
+
+    public bool AuditQuiet(ExecutionAuditEvent e, int? maxPerHour = null, bool suppressRepeated = true, int everyNCycles = 100)
+    {
+        if (!suppressRepeated || !_botOptions.Diagnostics.OperationalQuietMode)
+        {
+            Audit(e);
+            return true;
+        }
+
+        var key = $"{e.GroupKey}|{e.Stage}|{e.Status}|{e.Reason}";
+        var material = $"{e.NetEdge:0.0000}|{e.ExpectedProfit:0.00}|{e.EstimatedCost:0.00}|{e.Quantity:0.####}|{e.Details}";
+        var now = DateTime.UtcNow;
+        lock (_gate)
+        {
+            if (!_quietAuditStates.TryGetValue(key, out var state) || now - state.WindowStartUtc >= TimeSpan.FromHours(1))
+            {
+                state = new QuietAuditState(now);
+                _quietAuditStates[key] = state;
+            }
+
+            state.Cycles++;
+            var changed = !string.Equals(state.LastMaterial, material, StringComparison.OrdinalIgnoreCase);
+            var periodic = everyNCycles > 0 && state.Cycles % everyNCycles == 0;
+            var first = state.Cycles == 1;
+            var cap = Math.Max(0, maxPerHour ?? _botOptions.Logging.QuietModeMaxSameEventPerHour);
+            if (!(first || changed || periodic) || (cap > 0 && state.EmittedThisHour >= cap))
+                return false;
+
+            state.LastMaterial = material;
+            state.EmittedThisHour++;
+        }
+
+        Audit(e);
+        return true;
     }
 
     public void RecordDryRunPlan(BasketOrderPlan plan)
@@ -339,6 +377,14 @@ public sealed class VerifiedBasketExecutionCoordinator
 
     private void AuditEvent(VerifiedMultiOutcomeOpportunity opp, string stage, string status, string reason)
         => Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, stage, status, reason, opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
+
+    private sealed class QuietAuditState(DateTime windowStartUtc)
+    {
+        public DateTime WindowStartUtc { get; } = windowStartUtc;
+        public int Cycles { get; set; }
+        public int EmittedThisHour { get; set; }
+        public string LastMaterial { get; set; } = string.Empty;
+    }
 
     private static string BuildIdempotencyKey(VerifiedMultiOutcomeOpportunity opp)
     {

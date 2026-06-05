@@ -335,6 +335,9 @@ public class MultiOutcomeLoggingOptions
     public int MaxRepairSuggestionLogsPerHour { get; set; } = 10;
     public int MaxDataQualityAuditLogsPerHour { get; set; } = 20;
     public int MaxRepeatedSameMarketDataQualityLogsPerHour { get; set; } = 1;
+    public int MaxVerifiedPretradeBlockedAuditPerHour { get; set; } = 10;
+    public int MaxVerifiedArbDetectedAuditPerHour { get; set; } = 10;
+    public bool SuppressRepeatedVerifiedPretradeBlockedAudit { get; set; } = true;
     public bool LogAllowlistRepairOnChangeOnly { get; set; } = true;
     public int LogAllowlistRepairEveryNCycles { get; set; } = 100;
     public bool LogSingleMarketFullCycleOnlyOnCompletion { get; set; } = true;

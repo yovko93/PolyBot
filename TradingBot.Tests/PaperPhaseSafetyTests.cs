@@ -194,6 +194,69 @@ public class PaperPhaseSafetyTests
         Assert.True(File.Exists(Path.Combine(dir, "exports", "paper-executions-latest.json")));
     }
 
+
+    [Fact] public void PaperPhaseValidation_config_logs_enabled_and_disabled_state()
+    {
+        var original = Console.Out;
+        using var writer = new StringWriter();
+        Console.SetOut(writer);
+        try
+        {
+            PaperPhaseValidationHarness.LogStartupConfig(new TradingBotOptions());
+            var enabled = Options();
+            enabled.PaperPhaseValidation = new PaperPhaseValidationOptions { Enabled = true, InjectSyntheticOpportunity = true, RunOnce = true, MaxSyntheticPaperOpens = 1, RequireExplicitConfigFlag = true };
+            PaperPhaseValidationHarness.LogStartupConfig(enabled);
+        }
+        finally
+        {
+            Console.SetOut(original);
+        }
+        var text = writer.ToString();
+        Assert.Contains("[PAPER_PHASE_VALIDATION_CONFIG] Enabled=false", text);
+        Assert.Contains("[PAPER_PHASE_VALIDATION_DISABLED] Reason=ConfigDisabled", text);
+        Assert.Contains("[PAPER_PHASE_VALIDATION_CONFIG] Enabled=true InjectSyntheticOpportunity=true", text);
+    }
+
+    [Fact] public void PaperPhaseValidation_harness_does_not_run_when_default_false()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var options = Options();
+        var book = new PaperPositionBook(Path.Combine(dir, "paper-positions.csv"));
+        var paper = new PaperTradingEngine(positionBook: book, botOptions: options);
+
+        var result = new PaperPhaseValidationHarness().TryRun(options, paper, book, new BotRuntimeState(), dir);
+
+        Assert.Null(result);
+        Assert.Empty(book.OpenPositions);
+    }
+
+    [Fact] public void PaperPhaseValidation_failure_logs_exact_stage_and_reason()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var options = Options();
+        options.PaperPhaseValidation = new PaperPhaseValidationOptions { Enabled = true, InjectSyntheticOpportunity = true, SyntheticOpportunityType = "Unsupported", RunOnce = true, MaxSyntheticPaperOpens = 1, RequireExplicitConfigFlag = true };
+        var book = new PaperPositionBook(Path.Combine(dir, "paper-positions.csv"));
+        var paper = new PaperTradingEngine(positionBook: book, botOptions: options);
+        var original = Console.Out;
+        using var writer = new StringWriter();
+        Console.SetOut(writer);
+        PaperPhaseValidationResult? result;
+        try
+        {
+            result = new PaperPhaseValidationHarness().TryRun(options, paper, book, new BotRuntimeState(), dir);
+        }
+        finally
+        {
+            Console.SetOut(original);
+        }
+
+        Assert.NotNull(result);
+        Assert.False(result!.Passed);
+        Assert.Equal("SyntheticOpportunityCreation", result.FailureStage);
+        Assert.Equal("UnsupportedSyntheticOpportunityType", result.FailureReason);
+        Assert.Contains("[PAPER_PHASE_VALIDATION_FAILED] Stage=SyntheticOpportunityCreation Reason=UnsupportedSyntheticOpportunityType", writer.ToString());
+    }
+
     [Fact] public void UI_shows_PaperOnly_and_LiveTrading_false()
     {
         var ui = File.ReadAllText(Path.Combine("..", "..", "..", "..", "TradingBot.UI", "src", "App.tsx"));

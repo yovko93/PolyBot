@@ -47,7 +47,8 @@ builder.Services.AddSingleton<IBotUiLogger, BotUiLogger>();
 
 var app = builder.Build();
 app.UseCors("ui");
-var options = builder.Configuration.GetSection(TradingBotOptions.SectionName).Get<TradingBotOptions>() ?? new TradingBotOptions();
+var options = app.Services.GetRequiredService<IOptions<TradingBotOptions>>().Value;
+PaperPhaseValidationHarness.LogStartupConfig(options);
 var listenUrl = options.ListenUrl;
 
 app.MapHealthChecks("/health");
@@ -349,7 +350,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var executionJournal = new ExecutionJournal(executionJournalPath);
     var positionBook = new PaperPositionBook(Path.Combine(AppContext.BaseDirectory, "data", "paper-positions.csv"));
     var paper = new PaperTradingEngine(executionPolicy, executionJournal, executionDecisionService, positionBook, options);
-    new PaperPhaseValidationHarness().TryRun(options, paper, positionBook, state, contentRootPath);
+    var paperValidationHarness = new PaperPhaseValidationHarness();
+    paperValidationHarness.TryRun(options, paper, positionBook, state, contentRootPath);
     var monitor = new OpportunityMonitor(Path.Combine(AppContext.BaseDirectory, "data", "arb-opportunities.csv"), options.MinEdgePerShare, -0.02m, TimeSpan.FromMinutes(2), options.MinExpectedProfit, new DryRunLiveOrderBuilder(minEdgePerShare: -0.01m, maxPlanCost: 100000m, minSize: 1m, tickSize: 0.001m, orderType: LiveOrderType.FOK, policy: executionPolicy));
     var semaphore = new SemaphoreSlim(options.MaxConcurrentRequests);
     var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketFees, options.SingleMarketSlippage, monitor, sizing, options.SingleMarketArb, state, contentRootPath, verifiedExecution, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate);
@@ -649,7 +651,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             continue;
                         }
                         var edge = formula.NetEdge;
-                        var isExec = edge > options.MultiOutcomeArbitrage.MinMultiOutcomeEdge;
+                        var trackedState = stability.Track(g.GroupKey, screen, options.RuntimeState.MaxVerifiedBasketEdgeHistoryPerGroup, executionOptions.RequiredConsecutiveExecutableScans, executionOptions.MinStableNetEdgePerBasket, executionOptions.MaxNetEdgeVolatility);
+                        basketStateByGroup[g.GroupKey] = trackedState;
+                        var isExec = edge >= executionOptions.MinNetEdgePerBasket;
                         var strategyName = "BUY_ALL_NO_MUTUALLY_EXCLUSIVE";
                         var hasOpenPosition = positionBook.GetOpenPositions().Any(x => x.GroupKey.Equals(g.GroupKey, StringComparison.OrdinalIgnoreCase) && x.Strategy == strategyName);
                         if (hasOpenPosition)
@@ -676,23 +680,26 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             var opp = new VerifiedMultiOutcomeOpportunity($"verified-{g.GroupKey}-{DateTime.UtcNow:yyyyMMddHHmmss}", strategyName, g.GroupKey, g.Title, "Verified", legs.Length, formula.GuaranteedPayout, formula.NoAskSum, formula.GrossEdge, formula.NetEdge, activeCostProfileName, maxLiquidityQty, maxLiquidityExpectedProfit, options.MultiOutcomeArbitrage.MaxNotionalPerGroup, maxLiquidityQty * formula.NoAskSum, "PaperExecutable", legs);
                             promotedVerifiedOpportunities.Add(opp);
 
-                            verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "Detected", "Ok", "VerifiedExecutable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
-                            verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PromotedToOpportunity", "Ok", "Actionable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
+                            verifiedExecution.AuditQuiet(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "Detected", "Ok", "VerifiedExecutable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""), options.Logging.MaxVerifiedArbDetectedAuditPerHour, true, 100);
+                            verifiedExecution.AuditQuiet(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PromotedToOpportunity", "Ok", "Actionable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""), options.Logging.MaxVerifiedArbDetectedAuditPerHour, true, 100);
                             var st = stability.State(opp.GroupKey);
                             var edgeDecision = edgeStabilityLogThrottle.Evaluate(opp.GroupKey, st, stability.Consecutive(opp.GroupKey), executionOptions.RequiredConsecutiveExecutableScans, opp.NetEdge, stability.StateAge(opp.GroupKey), stability.LastResetReason(opp.GroupKey));
                             if (st == VerifiedBasketState.EdgeExecutablePending)
                             {
-                                verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "EdgeStabilityPending", "Pending", "WaitingConsecutiveExecutableScans", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, $"ConsecutiveEdgeScans={edgeDecision.ConsecutiveEdgeScans};RequiredEdgeScans={edgeDecision.RequiredEdgeScans};StateAgeSeconds={edgeDecision.StateAge.TotalSeconds:0};LastResetReason={edgeDecision.LastResetReason}"));
+                                verifiedExecution.AuditQuiet(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "EdgeStabilityPending", "Pending", "WaitingForStableEdge", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, $"ConsecutiveEdgeScans={edgeDecision.ConsecutiveEdgeScans};RequiredEdgeScans={edgeDecision.RequiredEdgeScans};StateAgeSeconds={edgeDecision.StateAge.TotalSeconds:0};LastResetReason={edgeDecision.LastResetReason}"), options.Logging.MaxVerifiedPretradeBlockedAuditPerHour, options.Logging.SuppressRepeatedVerifiedPretradeBlockedAudit, 100);
                                 if (edgeDecision.LogPending) Console.WriteLine($"[EDGE_STABILITY_PENDING] Group={opp.GroupKey} Consecutive={edgeDecision.ConsecutiveEdgeScans} Required={edgeDecision.RequiredEdgeScans} NetEdge={opp.NetEdge:0.####} StateAgeSeconds={edgeDecision.StateAge.TotalSeconds:0} LastResetReason={edgeDecision.LastResetReason}");
                                 if (edgeDecision.LogStalled) Console.WriteLine($"[EDGE_STABILITY_STALLED] Group={opp.GroupKey} Reason={edgeDecision.LastResetReason} Consecutive={edgeDecision.ConsecutiveEdgeScans} Required={edgeDecision.RequiredEdgeScans} StateAgeSeconds={edgeDecision.StateAge.TotalSeconds:0}");
                             }
                             if (st == VerifiedBasketState.EdgeStable)
                                 verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "EdgeStable", "Ok", "EdgeStable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
-                            if (st != VerifiedBasketState.EdgeExecutablePending) Console.WriteLine($"[VERIFIED_ARB_DETECTED] Group={opp.GroupKey} NetEdge={opp.NetEdge} MaxLiquidityQty={maxLiquidityQty} MaxLiquidityExpectedProfit={maxLiquidityExpectedProfit} Status=RequiresSizing");
+                            if (st != VerifiedBasketState.EdgeExecutablePending && ShouldQuietLog("multi-verified", "VERIFIED_ARB_DETECTED", $"{opp.GroupKey}|{Math.Round(opp.NetEdge, 4)}|{st}", LogImportance.Important, $"{Math.Round(opp.NetEdge, 4)}|{st}", opp.GroupKey, everyNCycles: 100, maxPerHour: options.Logging.MaxVerifiedArbDetectedAuditPerHour)) Console.WriteLine($"[VERIFIED_ARB_DETECTED] Group={opp.GroupKey} NetEdge={opp.NetEdge} MaxLiquidityQty={maxLiquidityQty} MaxLiquidityExpectedProfit={maxLiquidityExpectedProfit} Status=RequiresSizing");
                             if (options.EnablePaperTrading && options.MultiOutcomeArbitrage.Enabled && options.ExecutionMode == "PAPER" && st is not (VerifiedBasketState.EdgeStable or VerifiedBasketState.ExecutionReadinessPending or VerifiedBasketState.ExecutionStable))
                             {
-                                verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PreTradeBlocked", "Blocked", "WaitingForStableExecutableSignal", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, $"ConsecutiveEdgeScans={edgeDecision.ConsecutiveEdgeScans};RequiredEdgeScans={edgeDecision.RequiredEdgeScans};StateAgeSeconds={edgeDecision.StateAge.TotalSeconds:0};LastResetReason={edgeDecision.LastResetReason}"));
-                                if (st != VerifiedBasketState.EdgeExecutablePending || edgeDecision.LogPending || edgeDecision.LogStalled) Console.WriteLine($"[VERIFIED_PRETRADE_BLOCKED] Group={opp.GroupKey} Reason=WaitingForStableExecutableSignal State={st} ConsecutiveEdgeScans={edgeDecision.ConsecutiveEdgeScans} RequiredEdgeScans={edgeDecision.RequiredEdgeScans} StateAgeSeconds={edgeDecision.StateAge.TotalSeconds:0} LastResetReason={edgeDecision.LastResetReason}");
+                                var stableEnough = edgeDecision.ConsecutiveEdgeScans >= edgeDecision.RequiredEdgeScans;
+                                var blocker = stableEnough ? (st == VerifiedBasketState.DiagnosticsOnly ? "DiagnosticsOnlyProfile" : "WaitingForExecutionReadiness") : "WaitingForStableEdge";
+                                var resetDetail = stableEnough ? $"CurrentBlocker={blocker}" : $"LastResetReason={edgeDecision.LastResetReason}";
+                                verifiedExecution.AuditQuiet(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PreTradeBlocked", "Blocked", blocker, opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, $"ConsecutiveEdgeScans={edgeDecision.ConsecutiveEdgeScans};RequiredEdgeScans={edgeDecision.RequiredEdgeScans};StateAgeSeconds={edgeDecision.StateAge.TotalSeconds:0};{resetDetail}"), options.Logging.MaxVerifiedPretradeBlockedAuditPerHour, options.Logging.SuppressRepeatedVerifiedPretradeBlockedAudit, 100);
+                                if ((st != VerifiedBasketState.EdgeExecutablePending || edgeDecision.LogPending || edgeDecision.LogStalled) && ShouldQuietLog("multi-verified", "VERIFIED_PRETRADE_BLOCKED", $"{opp.GroupKey}|{Math.Round(opp.NetEdge, 4)}|{blocker}|{st}|{resetDetail}", LogImportance.Important, $"{Math.Round(opp.NetEdge, 4)}|{blocker}", opp.GroupKey, everyNCycles: 100, maxPerHour: options.Logging.MaxVerifiedPretradeBlockedAuditPerHour)) Console.WriteLine($"[VERIFIED_PRETRADE_BLOCKED] Group={opp.GroupKey} Reason={blocker} State={st} ConsecutiveEdgeScans={edgeDecision.ConsecutiveEdgeScans} RequiredEdgeScans={edgeDecision.RequiredEdgeScans} StateAgeSeconds={edgeDecision.StateAge.TotalSeconds:0} {resetDetail}");
                                 continue;
                             }
                             verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "ExecutionReadinessStarted", "Started", "SizingReadinessSample", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""));
@@ -713,8 +720,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             {
                                 verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "ExecutionReadinessRejected", "Rejected", readiness.NotReadyReason ?? "NotReady", opp.NetEdge, readiness.PlannedExpectedProfit, readiness.PlannedCost, readiness.PlannedQty, $"MinQty={executionOptions.MinPlannedBasketQty}"));
                                 Console.WriteLine($"[EXECUTION_READINESS_REJECTED] Group={opp.GroupKey} Reason={readiness.NotReadyReason} PlannedQty={readiness.PlannedQty:0.####} MinQty={executionOptions.MinPlannedBasketQty} MaxQtyByLiquidity={readiness.MaxQtyByLiquidity:0.####}");
-                                verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PreTradeBlocked", "Blocked", "WaitingForExecutionReadiness", opp.NetEdge, readiness.PlannedExpectedProfit, readiness.PlannedCost, readiness.PlannedQty, ""));
-                                Console.WriteLine($"[VERIFIED_PRETRADE_BLOCKED] Group={opp.GroupKey} Reason=WaitingForExecutionReadiness State={st}");
+                                verifiedExecution.AuditQuiet(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PreTradeBlocked", "Blocked", "WaitingForExecutionReadiness", opp.NetEdge, readiness.PlannedExpectedProfit, readiness.PlannedCost, readiness.PlannedQty, ""), options.Logging.MaxVerifiedPretradeBlockedAuditPerHour, options.Logging.SuppressRepeatedVerifiedPretradeBlockedAudit, 100);
+                                if (ShouldQuietLog("multi-verified", "VERIFIED_PRETRADE_BLOCKED", $"{opp.GroupKey}|{Math.Round(opp.NetEdge, 4)}|WaitingForExecutionReadiness|{st}", LogImportance.Important, $"{Math.Round(opp.NetEdge, 4)}|WaitingForExecutionReadiness", opp.GroupKey, everyNCycles: 100, maxPerHour: options.Logging.MaxVerifiedPretradeBlockedAuditPerHour)) Console.WriteLine($"[VERIFIED_PRETRADE_BLOCKED] Group={opp.GroupKey} Reason=WaitingForExecutionReadiness State={st}");
                                 state.AddOpportunity(new OpportunityDto(opp.Id, DateTime.UtcNow, 1, opp.Strategy, opp.GroupKey, opp.Title, "NO", opp.NetEdge, readiness.PlannedExpectedProfit, readiness.PlannedCost, opp.GuaranteedPayout, readiness.PlannedQty, false, "WAITING_FOR_EXECUTION_READINESS", readiness.NotReadyReason, state.NextSeq()));
                                 continue;
                             }
@@ -722,8 +729,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             {
                                 verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "ExecutionReadinessPending", "Pending", "WaitingConsecutiveExecutionReadyScans", opp.NetEdge, readiness.PlannedExpectedProfit, readiness.PlannedCost, readiness.PlannedQty, $"ConsecutiveReady={readiness.ConsecutiveReadyScans};Required={readiness.RequiredConsecutiveReadyScans}"));
                                 Console.WriteLine($"[EXECUTION_READINESS_PENDING] Group={opp.GroupKey} ConsecutiveReady={readiness.ConsecutiveReadyScans} Required={readiness.RequiredConsecutiveReadyScans} PlannedQty={readiness.PlannedQty:0.####} PlannedCost={readiness.PlannedCost:0.####} ExpectedProfit={readiness.PlannedExpectedProfit:0.####}");
-                                verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PreTradeBlocked", "Blocked", "WaitingForExecutionReadiness", opp.NetEdge, readiness.PlannedExpectedProfit, readiness.PlannedCost, readiness.PlannedQty, ""));
-                                Console.WriteLine($"[VERIFIED_PRETRADE_BLOCKED] Group={opp.GroupKey} Reason=WaitingForExecutionReadiness State={st}");
+                                verifiedExecution.AuditQuiet(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PreTradeBlocked", "Blocked", "WaitingForExecutionReadiness", opp.NetEdge, readiness.PlannedExpectedProfit, readiness.PlannedCost, readiness.PlannedQty, ""), options.Logging.MaxVerifiedPretradeBlockedAuditPerHour, options.Logging.SuppressRepeatedVerifiedPretradeBlockedAudit, 100);
+                                if (ShouldQuietLog("multi-verified", "VERIFIED_PRETRADE_BLOCKED", $"{opp.GroupKey}|{Math.Round(opp.NetEdge, 4)}|WaitingForExecutionReadiness|{st}", LogImportance.Important, $"{Math.Round(opp.NetEdge, 4)}|WaitingForExecutionReadiness", opp.GroupKey, everyNCycles: 100, maxPerHour: options.Logging.MaxVerifiedPretradeBlockedAuditPerHour)) Console.WriteLine($"[VERIFIED_PRETRADE_BLOCKED] Group={opp.GroupKey} Reason=WaitingForExecutionReadiness State={st}");
                                 state.AddOpportunity(new OpportunityDto(opp.Id, DateTime.UtcNow, 1, opp.Strategy, opp.GroupKey, opp.Title, "NO", opp.NetEdge, readiness.PlannedExpectedProfit, readiness.PlannedCost, opp.GuaranteedPayout, readiness.PlannedQty, false, "WAITING_FOR_EXECUTION_READINESS", "WaitingForExecutionReadiness", state.NextSeq()));
                                 continue;
                             }
@@ -1017,7 +1024,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     foreach (var row in snapshot.VerifiedBaskets)
                     {
                         var prevState = basketStateByGroup.TryGetValue(row.GroupKey, out var pstate) ? pstate : VerifiedBasketState.NotExecutable;
-                        var cur = stability.Track(row.GroupKey, row, options.RuntimeState.MaxVerifiedBasketEdgeHistoryPerGroup, executionOptions.RequiredConsecutiveExecutableScans, executionOptions.MinStableNetEdgePerBasket, executionOptions.MaxNetEdgeVolatility);
+                        var cur = stability.State(row.GroupKey);
                         basketStateByGroup[row.GroupKey] = cur;
                         if (prevState != cur) Console.WriteLine($"[VERIFIED_BASKET_STATE_CHANGE] Group={row.GroupKey} From={prevState} To={cur} Reason=Transition");
                     }
@@ -1137,7 +1144,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     verifiedScanFingerprint = options.Diagnostics.OperationalQuietMode
                         ? quietVerifiedFingerprint
                         : $"{verifiedScanFingerprint}|{unresolvedCounts.BrokenConfig}|{unresolvedCounts.NeedsRefresh}|{unresolvedCounts.ReviewOnly}|{unresolvedCounts.MonitoringOnly}|{unresolvedCounts.Other}|{unresolvedCounts.SamplesShown}|{unresolvedCounts.Suppressed}";
-                    var verifiedImportance = (activeExecutable > 0 || paperOpenedCount > 0) ? LogImportance.Critical : LogImportance.Normal;
+                    var verifiedImportance = paperOpenedCount > 0 ? LogImportance.Critical : activeExecutable > 0 ? LogImportance.Important : LogImportance.Normal;
                     var shouldLogVerifiedScan = ShouldQuietLog("multi-verified", "MULTI_VERIFIED_SCAN", verifiedScanFingerprint, verifiedImportance, verifiedScanFingerprint, everyNCycles: options.Logging.LogVerifiedScanEveryNCycles, maxPerHour: options.Logging.MaxMultiVerifiedScanLogsPerHour);
                     if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} BrokenConfigCount={unresolvedCounts.BrokenConfig} NeedsRefreshCount={unresolvedCounts.NeedsRefresh} ReviewOnlyCount={unresolvedCounts.ReviewOnly} MonitoringOnlyUnresolvedCount={unresolvedCounts.MonitoringOnly} OtherUnresolvedCount={unresolvedCounts.Other} UnresolvedSamplesShown={unresolvedCounts.SamplesShown} SuppressedUnresolvedSamples={unresolvedCounts.Suppressed} UnresolvedTotal={unresolvedCounts.Total} Evaluated={verifiedEvaluated} ActiveExecutable={activeExecutable} ExperimentalCandidates={experimentalCandidates} DiagnosticsOnlyPositive={diagnosticsOnlyPositive} PaperOpened={paperOpenedCount} SuppressedDuplicate={suppressedDuplicateCount} Mismatch={verifiedMismatch} BestActiveNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestExperimentalNet={bestExperimentalText} BestAlternateProfileNet={bestAlternateProfileNet} BestRaw={bestRaw}");
                     if (!unresolvedCounts.InvariantOk)
