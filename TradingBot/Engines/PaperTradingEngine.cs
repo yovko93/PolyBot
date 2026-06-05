@@ -1,5 +1,6 @@
 ﻿using TradingBot.Models;
 using TradingBot.Services;
+using TradingBot.Options;
 
 namespace TradingBot.Engines;
 
@@ -16,17 +17,23 @@ public class PaperTradingEngine
     private readonly ExecutionJournal? _journal;
     private readonly ExecutionDecisionService _decisionService;
     private readonly PaperPositionBook? _positionBook;
+    private readonly TradingBotOptions _botOptions;
+    private readonly Dictionary<string, int> _blockedCountsByReason = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<DateTime> _paperOpenTimesUtc = new();
+    private readonly Dictionary<string, DateTime> _cooldownUntilByKey = new(StringComparer.OrdinalIgnoreCase);
 
     public PaperTradingEngine(
         ExecutionPolicy? policy = null,
         ExecutionJournal? journal = null,
         ExecutionDecisionService? decisionService = null,
-        PaperPositionBook? positionBook = null)
+        PaperPositionBook? positionBook = null,
+        TradingBotOptions? botOptions = null)
     {
         _policy = policy ?? new ExecutionPolicy();
         _journal = journal;
         _decisionService = decisionService ?? new ExecutionDecisionService(_policy);
         _positionBook = positionBook;
+        _botOptions = botOptions ?? new TradingBotOptions();
     }
 
     public decimal Balance { get; private set; } = 1000m;
@@ -36,7 +43,55 @@ public class PaperTradingEngine
     public decimal UnrealizedPnl { get; private set; } = 0m;
 
     public decimal Equity => Balance + LockedCapital + UnrealizedPnl;
+    public IReadOnlyDictionary<string, int> BlockedCountsByReason => _blockedCountsByReason;
+    public int HourlyOpenCount => _paperOpenTimesUtc.Count(x => x >= DateTime.UtcNow.AddHours(-1));
     public List<Position> Positions { get; } = new();
+
+    private PaperAccountSnapshotForGate BuildGateAccount()
+    {
+        var open = _positionBook?.GetOpenPositions() ?? new List<PaperPosition>();
+        return new PaperAccountSnapshotForGate(
+            Balance,
+            open.Sum(p => p.TotalCost),
+            open.Count,
+            open.GroupBy(p => p.Strategy, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase),
+            HourlyOpenCount);
+    }
+
+    private bool ValidatePaperOpen(PaperPreTradeOpportunity opportunity, out string reason)
+    {
+        var gate = new PaperPreTradeGate(_botOptions);
+        var result = gate.Validate(opportunity, BuildGateAccount());
+        reason = result.Reason;
+        if (!result.Approved)
+        {
+            _blockedCountsByReason[reason] = _blockedCountsByReason.TryGetValue(reason, out var c) ? c + 1 : 1;
+            if (reason is "DuplicateOpenPosition" or "CooldownActive" or "MaxPaperOpenPerHourReached")
+                Console.WriteLine($"[PAPER_OPEN_SUPPRESSED] Reason={reason} Strategy={opportunity.Strategy} MarketOrGroup={opportunity.MarketOrGroup}");
+            return false;
+        }
+        return true;
+    }
+
+    private void MarkPaperOpened(string marketOrGroup, PaperStrategyKind kind)
+    {
+        var now = DateTime.UtcNow;
+        _paperOpenTimesUtc.RemoveAll(x => x < now.AddHours(-1));
+        _paperOpenTimesUtc.Add(now);
+        var seconds = kind == PaperStrategyKind.SingleMarket ? _botOptions.SingleMarketArb.CooldownSecondsPerMarket : _botOptions.VerifiedBasketArb.CooldownSecondsPerGroup;
+        _cooldownUntilByKey[marketOrGroup] = now.AddSeconds(Math.Max(0, seconds));
+    }
+
+    private bool IsCooldownActive(string key)
+    {
+        if (!_cooldownUntilByKey.TryGetValue(key, out var until)) return false;
+        if (DateTime.UtcNow < until) return true;
+        _cooldownUntilByKey.Remove(key);
+        return false;
+    }
+
+    public bool HasOpenPaperPosition(string marketOrGroup, string strategy)
+        => _positionBook?.GetOpenPositions().Any(p => p.Status == PaperPositionStatus.Open && p.GroupKey.Equals(marketOrGroup, StringComparison.OrdinalIgnoreCase) && p.Strategy.Equals(strategy, StringComparison.OrdinalIgnoreCase)) == true;
 
     public bool HasOpenSingleMarketPosition(string marketId, string strategy)
     {
@@ -155,6 +210,11 @@ public class PaperTradingEngine
 
     public bool RecordArbitrage(ArbOpportunity opportunity)
     {
+        Console.WriteLine("[PAPER_ORDER_PLAN_CREATED] Strategy=SingleMarket MarketOrGroup=" + BuildTwoLegRiskGroupKey(opportunity));
+        Console.WriteLine("[PAPER_FILL_SIMULATION_PASSED] Strategy=SingleMarket MarketOrGroup=" + BuildTwoLegRiskGroupKey(opportunity));
+        var pretradeGroupKey = BuildTwoLegRiskGroupKey(opportunity);
+        if (!ValidatePaperOpen(new PaperPreTradeOpportunity(opportunity.Strategy, pretradeGroupKey, PaperStrategyKind.SingleMarket, _botOptions.SingleMarketArb.PaperOnly, Math.Min(opportunity.Quantity * opportunity.CostPerShare, _botOptions.SingleMarketArb.MaxNotionalPerTrade), opportunity.ExpectedProfit, true, true, true, true, HasOpenPaperPosition(pretradeGroupKey, opportunity.Strategy), IsCooldownActive(pretradeGroupKey)), out _)) return false;
+
         if (!_policy.AllowSingleMarketArbs && !_policy.AllowThresholdArbs)
         {
             return false;
@@ -234,8 +294,10 @@ public class PaperTradingEngine
             Balance -= totalCost;
             LockedCapital += totalCost;
             ExpectedProfit += expectedProfit;
+            MarkPaperOpened(groupKey, PaperStrategyKind.SingleMarket);
 
-            Console.WriteLine($"[PAPER POSITION OPENED] ID={position.PositionId}");
+            Console.WriteLine($"[PAPER_POSITION_OPENED] ID={position.PositionId}");
+            Console.WriteLine($"[PAPER_SINGLE_MARKET_OPENED] MarketId={opportunity.Leg1.MarketId} Qty={executableQuantity:0.####} Cost={totalCost:0.####} ExpectedProfit={expectedProfit:0.####}");
             Console.WriteLine($"[PAPER ACCOUNT] Cash={Balance:0.####} Locked={LockedCapital:0.####} OpenExposure={LockedCapital:0.####} UnrealizedPnl={UnrealizedPnl:0.####} RealizedPnl={RealizedPnl:0.####} Equity={Equity:0.####}");
 
             _journal?.Record(new ExecutionJournalRecord(
@@ -372,6 +434,10 @@ public class PaperTradingEngine
                 return false;
             }
 
+            Console.WriteLine($"[PAPER_ORDER_PLAN_CREATED] Strategy=VerifiedBasket MarketOrGroup={opportunity.GroupKey}");
+            Console.WriteLine($"[PAPER_FILL_SIMULATION_PASSED] Strategy=VerifiedBasket MarketOrGroup={opportunity.GroupKey}");
+            if (!ValidatePaperOpen(new PaperPreTradeOpportunity(opportunity.Strategy, opportunity.GroupKey, PaperStrategyKind.VerifiedBasket, _botOptions.VerifiedBasketArb.PaperOnly, Math.Min(opportunity.Quantity * opportunity.CostPerShare, _botOptions.VerifiedBasketArb.MaxNotionalPerTrade), opportunity.ExpectedProfit, true, true, true, true, HasOpenPaperPosition(opportunity.GroupKey, opportunity.Strategy), IsCooldownActive(opportunity.GroupKey)), out _)) return false;
+
             var gv = _groupValidator.Validate(opportunity.GroupKey, "generic", opportunity.Legs);
             if (!gv.IsValidForNoBasketArbitrage)
             {
@@ -434,6 +500,9 @@ public class PaperTradingEngine
             Balance -= decision.TotalCost;
             LockedCapital += decision.TotalCost;
             ExpectedProfit += decision.ExpectedProfit;
+            MarkPaperOpened(opportunity.GroupKey, PaperStrategyKind.VerifiedBasket);
+            Console.WriteLine($"[PAPER_POSITION_OPENED] ID={position.PositionId}");
+            Console.WriteLine($"[PAPER_VERIFIED_BASKET_OPENED] Group={opportunity.GroupKey} Legs={opportunity.Legs.Count} Cost={decision.TotalCost:0.####} ExpectedProfit={decision.ExpectedProfit:0.####}");
 
             Console.WriteLine(
                 $"[PAPER BASKET ARB EXECUTED] " +
@@ -529,6 +598,7 @@ public class PaperTradingEngine
             LockedCapital += totalCost;
             ExpectedProfit += expectedProfit;
             _accountedBasketPositionIds.Add(position.PositionId);
+            MarkPaperOpened(position.GroupKey, PaperStrategyKind.VerifiedBasket);
             return true;
         }
     }

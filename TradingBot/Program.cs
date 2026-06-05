@@ -73,6 +73,22 @@ app.MapGet("/api/bot/paper-account", (BotRuntimeState s) => Results.Ok(new
     openPositionsCount = s.Status.OpenPositions,
     openBasketPositionsCount = s.Status.OpenPositions
 }));
+app.MapGet("/api/bot/paper/account", (BotRuntimeState s) => Results.Ok(new
+{
+    cash = s.Status.Cash,
+    locked = s.Status.LockedCapital,
+    equity = s.Status.Equity,
+    realizedPnl = s.Status.RealizedPnl,
+    openPositions = s.Status.OpenPositions,
+    totalExposure = s.Status.LockedCapital,
+    positionsByStrategy = s.Positions().GroupBy(p => p.Strategy ?? "unknown", StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase),
+    hourlyOpenCount = s.PaperOpenCountLastHour,
+    lastOpenAt = s.Positions().Select(p => p.OpenedAt).DefaultIfEmpty().Max(),
+    blockedCountsByReason = s.PaperPretradeRejectsByReason,
+    noLiveOrdersSubmitted = true
+}));
+app.MapGet("/api/bot/paper/positions", (BotRuntimeState s) => s.Positions());
+app.MapGet("/api/bot/paper/executions", (BotRuntimeState s) => s.SingleMarketExecutions().Cast<object>().Concat(s.Trades().Where(t => string.Equals(t.Status, "PAPER_EXECUTED", StringComparison.OrdinalIgnoreCase)).Cast<object>()).TakeLast(300).ToArray());
 app.MapGet("/api/bot/verified-allowlist-health", (IHostEnvironment env) =>
 {
     var path = Path.Combine(env.ContentRootPath, "exports/verified-allowlist-health-latest.json");
@@ -228,7 +244,7 @@ logger.LogInfo("startup", $"[CONFIG] Scanner Mode={options.Mode} MarketScanLimit
 logger.LogInfo("startup", $"[DIAGNOSTICS] DebuggerSafeMode={options.Diagnostics.DebuggerSafeMode} DetailedLogs={(!options.Diagnostics.DebuggerSafeMode).ToString().ToLowerInvariant()} MaxRecentLogs={options.RuntimeState.MaxRecentLogs}");
 logger.LogInfo("startup", $"[DIAGNOSTICS] OperationalQuietMode={options.Diagnostics.OperationalQuietMode.ToString().ToLowerInvariant()}");
 Console.WriteLine($"[DIAGNOSTICS] OperationalQuietMode={options.Diagnostics.OperationalQuietMode.ToString().ToLowerInvariant()}");
-Console.WriteLine($"[SOAK_READINESS] OperationalQuietMode={options.Diagnostics.OperationalQuietMode.ToString().ToLowerInvariant()} RuntimeHealth={options.RuntimeHealth.Enabled.ToString().ToLowerInvariant()} MemoryGuard=true BoundedCollections=true SignalRPayloadLimits={(options.SignalR.MaxPayloadItems > 0 && options.SignalR.MaxPayloadBytes > 0).ToString().ToLowerInvariant()} PaperOnly={options.PaperOnly.ToString().ToLowerInvariant()} LiveTrading={options.EnableLiveExecution.ToString().ToLowerInvariant()}");
+Console.WriteLine($"[SOAK_READINESS] OperationalQuietMode={options.Diagnostics.OperationalQuietMode.ToString().ToLowerInvariant()} RuntimeHealth={options.RuntimeHealth.Enabled.ToString().ToLowerInvariant()} MemoryGuard=true BoundedCollections=true SignalRPayloadLimits={(options.SignalR.MaxPayloadItems > 0 && options.SignalR.MaxPayloadBytes > 0).ToString().ToLowerInvariant()} PaperOnly={options.PaperOnly.ToString().ToLowerInvariant()} LiveTrading={options.TradingMode.LiveTradingEnabled.ToString().ToLowerInvariant()} PaperTradingEnabled={options.TradingMode.PaperTradingEnabled.ToString().ToLowerInvariant()} PaperPhase={options.TradingMode.PaperPhase}");
 logger.LogInfo("startup", $"[CONFIG] MultiOutcome FeePerLeg={options.MultiOutcomeArbitrage.FeePerLeg} SlippagePerLeg={options.MultiOutcomeArbitrage.SlippageBufferPerLeg} SafetyPerGroup={options.MultiOutcomeArbitrage.SafetyBufferPerGroup} MinNetEdgePerBasket={options.MultiOutcomeArbitrage.MinMultiOutcomeEdge} MinExpectedProfit={options.MultiOutcomeArbitrage.MinExpectedProfit} EnableSensitivityDiagnostics={options.MultiOutcomeArbitrage.EnableSensitivityDiagnostics}");
 var executionCfg = app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value;
 logger.LogInfo("startup", $"[CONFIG] Execution PaperOnly={executionCfg.PaperOnly.ToString().ToLowerInvariant()} MaxNotionalPerBasket={executionCfg.MaxNotionalPerBasket} MaxOpenBasketPositions={executionCfg.MaxOpenBasketPositions} MaxExposurePerGroup={executionCfg.MaxExposurePerGroup} DuplicateCooldownMinutes={executionCfg.DuplicateCooldownMinutes}");
@@ -313,13 +329,13 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var kalshiOptions = new KalshiOptions();
     var executionPolicy = new ExecutionPolicy
     {
-        MaxNotionalPerTrade = options.MaxNotionalPerTrade,
+        MaxNotionalPerTrade = Math.Min(options.MaxNotionalPerTrade, options.PaperRisk.MaxPaperNotionalPerTrade),
         MinNotionalPerTrade = options.MinNotionalPerTrade,
         MinEdgePerShare = options.MinEdgePerShare,
         MinExpectedProfit = options.MinExpectedProfit,
-        MaxLockedCapital = options.MaxLockedCapital,
-        MaxOpenPositions = options.MaxOpenPositions,
-        MaxExposurePerGroup = options.MaxExposurePerGroup,
+        MaxLockedCapital = Math.Min(options.MaxLockedCapital, options.PaperRisk.MaxPaperTotalExposure),
+        MaxOpenPositions = Math.Min(options.MaxOpenPositions, options.PaperRisk.MaxPaperPositionsTotal),
+        MaxExposurePerGroup = Math.Min(options.MaxExposurePerGroup, options.PaperRisk.MaxPaperTotalExposure),
         AllowBasketArbs = true,
         AllowSingleMarketArbs = true,
         AllowCompleteSetSellArbs = true,
@@ -332,7 +348,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var executionJournalPath = Path.Combine(AppContext.BaseDirectory, "data", "execution-journal.csv");
     var executionJournal = new ExecutionJournal(executionJournalPath);
     var positionBook = new PaperPositionBook(Path.Combine(AppContext.BaseDirectory, "data", "paper-positions.csv"));
-    var paper = new PaperTradingEngine(executionPolicy, executionJournal, executionDecisionService, positionBook);
+    var paper = new PaperTradingEngine(executionPolicy, executionJournal, executionDecisionService, positionBook, options);
     var monitor = new OpportunityMonitor(Path.Combine(AppContext.BaseDirectory, "data", "arb-opportunities.csv"), options.MinEdgePerShare, -0.02m, TimeSpan.FromMinutes(2), options.MinExpectedProfit, new DryRunLiveOrderBuilder(minEdgePerShare: -0.01m, maxPlanCost: 100000m, minSize: 1m, tickSize: 0.001m, orderType: LiveOrderType.FOK, policy: executionPolicy));
     var semaphore = new SemaphoreSlim(options.MaxConcurrentRequests);
     var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketFees, options.SingleMarketSlippage, monitor, sizing, options.SingleMarketArb, state, contentRootPath, verifiedExecution, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate);
@@ -759,9 +775,19 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                     verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "DryRunFillSimulationPassed", "Ok", "FullyFillable", simulatedNetEdge, fill.FillAdjustedExpectedProfit, fill.EstimatedFilledCost, fill.SafeExecutableQty, $"Orders={fill.RequestedOrdersCount};FillAdjustedNetEdge={fill.FillAdjustedNetEdgePerBasket};FillAdjustedExpectedProfit={fill.FillAdjustedExpectedProfit}"));
                                     Console.WriteLine($"[DRY_RUN_FILL_SIMULATION_PASSED] Group={opp.GroupKey} Orders={plan.Orders.Count} PlannedQty={pre.Quantity:0.####} FullyFillableQty={fill.FullyFillableQty:0.####} PlannedNet={fill.PlannedNetEdgePerBasket:0.####} FillAdjustedNet={fill.FillAdjustedNetEdgePerBasket:0.####} PlannedExpectedProfit={fill.PlannedExpectedProfit:0.####} FillAdjustedExpectedProfit={fill.FillAdjustedExpectedProfit:0.####} EstimatedCost={fill.EstimatedFilledCost:0.####}");
                                 }
-                                var opened = verifiedExecution.OpenPaperPosition(opp, pre, positionBook, plan, fill);
-                                if (opened is null) Console.WriteLine($"[PAPER BASKET SKIPPED] Group={opp.GroupKey} Reason={(fill.Status == FillSimulationStatus.FullyFillable ? "DuplicateOpenPosition" : "FillSimulationFailed")}");
-                                else { stability.MarkPaperOpened(opp.GroupKey); paper.RegisterExternalBasketOpen(opened, opened.TotalCost, opened.ExpectedProfit); Console.WriteLine($"[PAPER BASKET OPENED] Group={opp.GroupKey} Legs={opp.LegsCount} Qty={opened.Quantity:0.####} Cost={opened.TotalCost:0.####} GrossEdge={opened.GrossEdgeAtOpen:0.####} NetEdge={opened.NetEdgeAtOpen:0.####} FillAdjustedNetEdge={fill.FillAdjustedNetEdgePerBasket:0.####} ExpectedProfit={opened.ExpectedProfit:0.####} CostSource=FillSimulation Profile={opened.ActiveProfile}"); Console.WriteLine($"[PAPER ACCOUNT] Cash={paper.Balance:0.####} Locked={paper.LockedCapital:0.####} OpenExposure={paper.LockedCapital:0.####} UnrealizedPnl={paper.UnrealizedPnl:0.####} RealizedPnl={paper.RealizedPnl:0.####} Equity={paper.Equity:0.####} OpenPositions={positionBook.OpenPositions.Count}"); var mtmFingerprint=$"{opp.GroupKey}|Incomplete|{opp.LegsCount}"; mtmCycle++; var logMtm = !options.Logging.LogPaperMtmOnChangeOnly || mtmFingerprint != lastMtmFingerprint || (options.Logging.LogPaperMtmEveryNCycles > 0 && mtmCycle % options.Logging.LogPaperMtmEveryNCycles == 0); lastMtmFingerprint = mtmFingerprint; if (logMtm) Console.WriteLine($"[PAPER_BASKET_MTM] Group={opp.GroupKey} MtMStatus=Incomplete MissingExitPrices={opp.LegsCount}"); verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "MtMUpdated", "Ok", "Incomplete", opened.NetEdgeAtOpen, 0m, opened.TotalCost, opened.Quantity, $"MissingExitPrices={opp.LegsCount}")); }
+                                PaperPosition? opened = null;
+                                var openPositionsForGate = positionBook.GetOpenPositions();
+                                var paperGate = new PaperPreTradeGate(options).Validate(
+                                    new PaperPreTradeOpportunity(opp.Strategy, opp.GroupKey, PaperStrategyKind.VerifiedBasket, options.VerifiedBasketArb.PaperOnly, fill.EstimatedFilledCost, fill.FillAdjustedExpectedProfit, true, true, fill.Status == FillSimulationStatus.FullyFillable, true, openPositionsForGate.Any(p => p.GroupKey.Equals(opp.GroupKey, StringComparison.OrdinalIgnoreCase) && p.Strategy.Equals(opp.Strategy, StringComparison.OrdinalIgnoreCase)), false),
+                                    new PaperAccountSnapshotForGate(paper.Balance, openPositionsForGate.Sum(p => p.TotalCost), openPositionsForGate.Count, openPositionsForGate.GroupBy(p => p.Strategy, StringComparer.OrdinalIgnoreCase).ToDictionary(gp => gp.Key, gp => gp.Count(), StringComparer.OrdinalIgnoreCase), paper.HourlyOpenCount));
+                                if (!paperGate.Approved)
+                                {
+                                    state.RecordPaperPretradeReject(paperGate.Reason);
+                                    if (paperGate.Reason is "DuplicateOpenPosition" or "CooldownActive" or "MaxPaperOpenPerHourReached") Console.WriteLine($"[PAPER_OPEN_SUPPRESSED] Reason={paperGate.Reason} Strategy={opp.Strategy} MarketOrGroup={opp.GroupKey}");
+                                }
+                                else opened = verifiedExecution.OpenPaperPosition(opp, pre, positionBook, plan, fill);
+                                if (opened is null) Console.WriteLine($"[PAPER BASKET SKIPPED] Group={opp.GroupKey} Reason={(paperGate.Approved ? (fill.Status == FillSimulationStatus.FullyFillable ? "DuplicateOpenPosition" : "FillSimulationFailed") : paperGate.Reason)}");
+                                else { stability.MarkPaperOpened(opp.GroupKey); paper.RegisterExternalBasketOpen(opened, opened.TotalCost, opened.ExpectedProfit); Console.WriteLine($"[PAPER_POSITION_OPENED] ID={opened.PositionId}"); Console.WriteLine($"[PAPER_VERIFIED_BASKET_OPENED] Group={opp.GroupKey} Legs={opp.LegsCount} Cost={opened.TotalCost:0.####} ExpectedProfit={opened.ExpectedProfit:0.####}"); Console.WriteLine($"[PAPER BASKET OPENED] Group={opp.GroupKey} Legs={opp.LegsCount} Qty={opened.Quantity:0.####} Cost={opened.TotalCost:0.####} GrossEdge={opened.GrossEdgeAtOpen:0.####} NetEdge={opened.NetEdgeAtOpen:0.####} FillAdjustedNetEdge={fill.FillAdjustedNetEdgePerBasket:0.####} ExpectedProfit={opened.ExpectedProfit:0.####} CostSource=FillSimulation Profile={opened.ActiveProfile}"); Console.WriteLine($"[PAPER ACCOUNT] Cash={paper.Balance:0.####} Locked={paper.LockedCapital:0.####} OpenExposure={paper.LockedCapital:0.####} UnrealizedPnl={paper.UnrealizedPnl:0.####} RealizedPnl={paper.RealizedPnl:0.####} Equity={paper.Equity:0.####} OpenPositions={positionBook.OpenPositions.Count}"); var mtmFingerprint=$"{opp.GroupKey}|Incomplete|{opp.LegsCount}"; mtmCycle++; var logMtm = !options.Logging.LogPaperMtmOnChangeOnly || mtmFingerprint != lastMtmFingerprint || (options.Logging.LogPaperMtmEveryNCycles > 0 && mtmCycle % options.Logging.LogPaperMtmEveryNCycles == 0); lastMtmFingerprint = mtmFingerprint; if (logMtm) Console.WriteLine($"[PAPER_BASKET_MTM] Group={opp.GroupKey} MtMStatus=Incomplete MissingExitPrices={opp.LegsCount}"); verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "MtMUpdated", "Ok", "Incomplete", opened.NetEdgeAtOpen, 0m, opened.TotalCost, opened.Quantity, $"MissingExitPrices={opp.LegsCount}")); }
                             }
                         }
 
@@ -1603,7 +1629,9 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
         Diagnostics: diag,
         Sequence: state.NextSeq()));
     state.SetRisk(new RiskStateDto(p.MaxNotionalPerTrade, p.MinNotionalPerTrade, p.MinEdgePerShare, p.MinExpectedProfit, p.MaxLockedCapital, paper.LockedCapital, p.MaxOpenPositions, pb.OpenPositions.Count, p.MaxExposurePerGroup, new Dictionary<string, decimal>(), p.AllowBasketArbs, p.AllowSingleMarketArbs, p.AllowCompleteSetSellArbs, p.AllowThresholdArbs, DateTime.UtcNow, state.NextSeq()));
-    state.SetStatus(new BotStatusDto("PAPER", !state.Controls.IsPaused, "CONNECTED", paper.Balance, paper.LockedCapital, paper.Equity, 0m, paper.ExpectedProfit, pb.OpenPositions.Count, top.Count, DateTime.UtcNow, DateTime.UtcNow));
+    state.SetStatus(new BotStatusDto("PAPER", !state.Controls.IsPaused, "CONNECTED", paper.Balance, paper.LockedCapital, paper.Equity, paper.RealizedPnl, paper.ExpectedProfit, pb.OpenPositions.Count, top.Count, DateTime.UtcNow, DateTime.UtcNow));
+    state.SetPaperOpenCountLastHour(paper.HourlyOpenCount);
+    PaperAccountExporter.ExportLatest(Path.Combine(contentRootPath, "exports"), paper, pb, state.SingleMarketExecutions(), paper.BlockedCountsByReason);
     state.AddEquity(new EquityPointDto(DateTime.UtcNow, paper.Equity, state.NextSeq()));
 }
 

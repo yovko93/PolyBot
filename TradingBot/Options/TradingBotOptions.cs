@@ -50,6 +50,9 @@ public class TradingBotOptions
     public bool EnableLiveExecution { get; set; } = false;
     public bool EnablePaperTrading { get; set; } = true;
     public bool PaperOnly { get; set; } = true;
+    public TradingModeOptions TradingMode { get; set; } = new();
+    public PaperRiskOptions PaperRisk { get; set; } = new();
+    public VerifiedBasketArbOptions VerifiedBasketArb { get; set; } = new();
     public bool EnableExperimentalProfilePaper { get; set; } = false;
     public string ExperimentalPaperProfile { get; set; } = "PolymarketApprox";
     public bool RequireStableExperimentalSignals { get; set; } = true;
@@ -84,6 +87,44 @@ public class TradingBotOptions
     public RuntimeMemoryOptions RuntimeMemory { get; set; } = new();
     public CacheOptions Caches { get; set; } = new();
     public OrderBookOptions OrderBook { get; set; } = new();
+}
+
+public class TradingModeOptions
+{
+    public bool LiveTradingEnabled { get; set; } = false;
+    public bool PaperTradingEnabled { get; set; } = true;
+    public int PaperPhase { get; set; } = 1;
+}
+
+public class PaperRiskOptions
+{
+    public int MaxPaperPositionsTotal { get; set; } = 3;
+    public int MaxPaperPositionsPerStrategy { get; set; } = 1;
+    public int MaxPaperOpenPerHour { get; set; } = 1;
+    public decimal MaxPaperNotionalPerTrade { get; set; } = 25m;
+    public decimal MaxPaperTotalExposure { get; set; } = 75m;
+    public bool RequireFillSimulation { get; set; } = true;
+    public bool RequireStableEdge { get; set; } = true;
+    public bool RequireExecutionReadinessStable { get; set; } = true;
+    public bool RequireDataQualityPass { get; set; } = true;
+    public bool RequireDuplicateSuppression { get; set; } = true;
+    public bool AllowSingleMarketPaper { get; set; } = true;
+    public bool AllowVerifiedBasketPaper { get; set; } = true;
+    public bool AllowExperimentalPaper { get; set; } = false;
+    public bool AllowRepairSuggestedGroups { get; set; } = false;
+}
+
+public class VerifiedBasketArbOptions
+{
+    public bool PaperOnly { get; set; } = true;
+    public int RequiredConsecutiveEdgeScans { get; set; } = 3;
+    public int RequiredConsecutiveExecutionReadyScans { get; set; } = 3;
+    public decimal MinNetEdgePerBasket { get; set; } = 0.005m;
+    public decimal MinExpectedProfit { get; set; } = 0.50m;
+    public decimal MaxNotionalPerTrade { get; set; } = 25m;
+    public int MaxOpenVerifiedBasketPositions { get; set; } = 1;
+    public decimal MaxTotalVerifiedBasketExposure { get; set; } = 25m;
+    public int CooldownSecondsPerGroup { get; set; } = 1800;
 }
 
 public class OrderBookOptions
