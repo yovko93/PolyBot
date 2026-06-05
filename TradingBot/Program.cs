@@ -349,6 +349,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var executionJournal = new ExecutionJournal(executionJournalPath);
     var positionBook = new PaperPositionBook(Path.Combine(AppContext.BaseDirectory, "data", "paper-positions.csv"));
     var paper = new PaperTradingEngine(executionPolicy, executionJournal, executionDecisionService, positionBook, options);
+    new PaperPhaseValidationHarness().TryRun(options, paper, positionBook, state, contentRootPath);
     var monitor = new OpportunityMonitor(Path.Combine(AppContext.BaseDirectory, "data", "arb-opportunities.csv"), options.MinEdgePerShare, -0.02m, TimeSpan.FromMinutes(2), options.MinExpectedProfit, new DryRunLiveOrderBuilder(minEdgePerShare: -0.01m, maxPlanCost: 100000m, minSize: 1m, tickSize: 0.001m, orderType: LiveOrderType.FOK, policy: executionPolicy));
     var semaphore = new SemaphoreSlim(options.MaxConcurrentRequests);
     var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketFees, options.SingleMarketSlippage, monitor, sizing, options.SingleMarketArb, state, contentRootPath, verifiedExecution, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate);
@@ -1382,16 +1383,24 @@ static async Task PushUiUpdates(BotRuntimeState state, IHubContext<BotHub> hub, 
         verifiedExecution.ExportDryRunPlans(Path.Combine(contentRootPath, "exports/dry-run-order-plans-latest.json"), options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile, true);
         verifiedExecution.ExportFillSimulations(Path.Combine(contentRootPath, "exports/dry-run-fill-simulations-latest.json"));
         File.WriteAllText(Path.Combine(contentRootPath, "exports/paper-positions-latest.json"), System.Text.Json.JsonSerializer.Serialize(state.Positions().TakeLast(200), new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(Path.Combine(contentRootPath, "exports/paper-executions-latest.json"), System.Text.Json.JsonSerializer.Serialize(state.SingleMarketExecutions().TakeLast(options.RuntimeState.MaxSingleMarketExecutions), new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
         File.WriteAllText(Path.Combine(contentRootPath, "exports/paper-account-latest.json"), System.Text.Json.JsonSerializer.Serialize(new {
             initialCash = 1000m,
             cash = state.Status.Cash,
+            locked = state.Status.LockedCapital,
             lockedCapital = state.Status.LockedCapital,
-            openExposure = state.Status.LockedCapital,
+            equity = state.Status.Equity,
             realizedPnl = state.Status.RealizedPnl,
             unrealizedPnl = state.Positions().Where(p => p.MtmStatus != "Incomplete").Sum(p => p.UnrealizedPnl),
-            equity = state.Status.Equity,
+            openPositions = state.Status.OpenPositions,
             openPositionsCount = state.Status.OpenPositions,
             openBasketPositionsCount = state.Status.OpenPositions,
+            totalExposure = state.Status.LockedCapital,
+            openExposure = state.Status.LockedCapital,
+            positionsByStrategy = state.Positions().GroupBy(p => p.Strategy ?? "unknown", StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase),
+            hourlyOpenCount = state.PaperOpenCountLastHour,
+            lastOpenAt = state.Positions().Select(p => p.OpenedAt).DefaultIfEmpty().Max(),
+            blockedCountsByReason = state.PaperPretradeRejectsByReason,
             lastUpdatedAt = state.Status.LastScanTime
         }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
         ExportRuntimeSoakStatus(state, options, contentRootPath);

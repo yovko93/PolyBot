@@ -144,6 +144,56 @@ public class PaperPhaseSafetyTests
         Assert.Equal(1, h.PaperPretradeRejects);
     }
 
+
+    [Fact] public void PaperPhaseValidation_defaults_disabled()
+    {
+        var options = new TradingBotOptions().PaperPhaseValidation;
+        Assert.False(options.Enabled);
+        Assert.False(options.InjectSyntheticOpportunity);
+        Assert.True(options.RunOnce);
+        Assert.Equal(1, options.MaxSyntheticPaperOpens);
+        Assert.True(options.RequireExplicitConfigFlag);
+    }
+
+    [Fact] public void PaperPhaseValidation_harness_opens_once_and_suppresses_duplicate()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var options = Options();
+        options.PaperPhaseValidation = new PaperPhaseValidationOptions
+        {
+            Enabled = true,
+            InjectSyntheticOpportunity = true,
+            SyntheticOpportunityType = "SingleMarketBuyBoth",
+            RunOnce = true,
+            MaxSyntheticPaperOpens = 1,
+            RequireExplicitConfigFlag = true
+        };
+        var book = new PaperPositionBook(Path.Combine(dir, "paper-positions.csv"));
+        var paper = new PaperTradingEngine(new ExecutionPolicy { MaxNotionalPerTrade = 25m, MinNotionalPerTrade = 1m, MaxLockedCapital = 75m, MaxOpenPositions = 3, MaxExposurePerGroup = 75m }, positionBook: book, botOptions: options);
+        var state = new BotRuntimeState();
+
+        var result = new PaperPhaseValidationHarness().TryRun(options, paper, book, state, dir);
+
+        Assert.NotNull(result);
+        Assert.True(result!.Passed);
+        Assert.Equal(1, result.PaperOpened);
+        Assert.Equal(1, result.DuplicateSuppressed);
+        Assert.Equal(0, result.LiveOrders);
+        Assert.Equal(0, result.SigningAttempts);
+        Assert.Equal(1, book.OpenPositions.Count);
+        Assert.Equal(1, state.PaperExecutionsCount);
+        Assert.True(result.PaperExposure > 0m);
+        Assert.True(result.CashAfter < result.CashBefore);
+        Assert.True(result.LockedAfter > result.LockedBefore);
+        Assert.Equal(result.EquityBefore, result.EquityAfter);
+        Assert.Equal(0m, result.RealizedPnlAfter);
+        Assert.Equal("Open", result.PositionStatus);
+        Assert.True(File.Exists(Path.Combine(dir, "exports", "paper-phase-validation-latest.json")));
+        Assert.True(File.Exists(Path.Combine(dir, "exports", "paper-account-latest.json")));
+        Assert.True(File.Exists(Path.Combine(dir, "exports", "paper-positions-latest.json")));
+        Assert.True(File.Exists(Path.Combine(dir, "exports", "paper-executions-latest.json")));
+    }
+
     [Fact] public void UI_shows_PaperOnly_and_LiveTrading_false()
     {
         var ui = File.ReadAllText(Path.Combine("..", "..", "..", "..", "TradingBot.UI", "src", "App.tsx"));

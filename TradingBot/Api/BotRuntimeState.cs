@@ -87,7 +87,7 @@ public class BotRuntimeState
     public int PaperPretradeRejects => Volatile.Read(ref _paperPretradeRejects);
     public int PaperDuplicateSuppressions => Volatile.Read(ref _paperDuplicateSuppressions);
     public long LiveTradingBlockedCount => TradingBot.Services.LiveTradingGuard.BlockedCount;
-    public int PaperExecutionsCount => Volatile.Read(ref _paperExecutionsCount) + SingleMarketExecutionsCount;
+    public int PaperExecutionsCount => SingleMarketExecutionsCount + Volatile.Read(ref _paperExecutionsCount);
     public IReadOnlyDictionary<string, int> PaperPretradeRejectsByReason { get { lock (_paperCountersGate) return new Dictionary<string, int>(_paperPretradeRejectsByReason, StringComparer.OrdinalIgnoreCase); } }
     public long NextSeq()=>Interlocked.Increment(ref _seq);
     public void SetStatus(BotStatusDto s){lock(_gate) Status=s;}
@@ -121,7 +121,7 @@ public class BotRuntimeState
     public void AddLog(TerminalLogEntryDto l){_logs.Enqueue(l); Trim(_logs,_runtime.MaxRecentLogs);}
     public void AddEquity(EquityPointDto e){_equity.Enqueue(e); Trim(_equity,500);}
     public void AddSingleMarketOpportunity(SingleMarketArbOpportunityDto o){_singleMarketOpportunities.Enqueue(o); Trim(_singleMarketOpportunities,_runtime.MaxSingleMarketOpportunities);}
-    public void AddSingleMarketExecution(SingleMarketPaperExecutionDto e){_singleMarketExecutions.Enqueue(e); Interlocked.Increment(ref _paperExecutionsCount); Trim(_singleMarketExecutions,_runtime.MaxSingleMarketExecutions);}
+    public void AddSingleMarketExecution(SingleMarketPaperExecutionDto e){_singleMarketExecutions.Enqueue(e); Trim(_singleMarketExecutions,_runtime.MaxSingleMarketExecutions);}
     public void ReplaceSingleMarketOpportunities(IEnumerable<SingleMarketArbOpportunityDto> items){while(_singleMarketOpportunities.TryDequeue(out _)){} foreach(var i in items.Take(_runtime.MaxSingleMarketOpportunities)) _singleMarketOpportunities.Enqueue(i); Trim(_singleMarketOpportunities,_runtime.MaxSingleMarketOpportunities);}
     public void ReplaceSingleMarketExecutions(IEnumerable<SingleMarketPaperExecutionDto> items){while(_singleMarketExecutions.TryDequeue(out _)){} foreach(var i in items.Take(_runtime.MaxSingleMarketExecutions)) _singleMarketExecutions.Enqueue(i); Trim(_singleMarketExecutions,_runtime.MaxSingleMarketExecutions);}
     public void AddSignalREvent(string eventName){_signalREventBuffer.Enqueue($"{DateTime.UtcNow:O}|{eventName}"); Trim(_signalREventBuffer,_runtime.MaxSignalREventBuffer);}
@@ -136,6 +136,7 @@ public class BotRuntimeState
     }
     public void RecordPaperDuplicateSuppression() => Interlocked.Increment(ref _paperDuplicateSuppressions);
     public void SetPaperOpenCountLastHour(int count) => PaperOpenCountLastHour = count;
+    public void RecordPaperExecution() => Interlocked.Increment(ref _paperExecutionsCount);
 
     public void SetRuntimeCounts(int? repairHistoryCount = null, int? dryRunOrderPlansCount = null, int? fillSimulationsCount = null, int? executionAuditCount = null, int? orderbookCacheCount = null, int? marketCacheCount = null, int? exportQueueCount = null, int? patchPreviewItemsCount = null)
     {
