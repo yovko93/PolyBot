@@ -83,6 +83,15 @@ public class TradingBotOptions
     public RuntimeHealthOptions RuntimeHealth { get; set; } = new();
     public RuntimeMemoryOptions RuntimeMemory { get; set; } = new();
     public CacheOptions Caches { get; set; } = new();
+    public OrderBookOptions OrderBook { get; set; } = new();
+}
+
+public class OrderBookOptions
+{
+    public int MaxBatchBookRequestSize { get; set; } = 100;
+    public bool SplitBatchOnBadRequest { get; set; } = true;
+    public bool LogInvalidBatchPayloadSamples { get; set; } = true;
+    public int MaxInvalidPayloadSamplesToLog { get; set; } = 5;
 }
 public class MarketDiscoveryOptions
 {

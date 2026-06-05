@@ -1,7 +1,10 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Globalization;
+using System.Net;
+using System.Text.RegularExpressions;
 using TradingBot.Models;
+using TradingBot.Options;
 using System.Diagnostics;
 
 namespace TradingBot.Services;
@@ -16,6 +19,11 @@ public class OrderBookService : IOrderBookProvider
     private long _timeouts;
     private long _httpErrors;
     private long _parseErrors;
+    private long _batchBadRequests;
+    private long _batchTimeouts;
+    private long _batchRetrySuccesses;
+    private long _batchInvalidTokens;
+    private long _batchSuppressedErrors;
     private readonly HttpClient _http;
     private readonly object _cacheLock = new();
 
@@ -25,6 +33,13 @@ public class OrderBookService : IOrderBookProvider
     private readonly System.Collections.Concurrent.ConcurrentQueue<string> _bookCacheMissSamples = new();
     public bool LogBookCacheMissDetails { get; set; } = false;
     public int BookCacheMissSampleSize { get; set; } = 5;
+    public int MaxBatchBookRequestSize { get; set; } = 100;
+    public bool SplitBatchOnBadRequest { get; set; } = true;
+    public bool LogInvalidBatchPayloadSamples { get; set; } = true;
+    public int MaxInvalidPayloadSamplesToLog { get; set; } = 5;
+    public bool OperationalQuietMode { get; set; } = true;
+    public MultiOutcomeLoggingOptions Logging { get; set; } = new();
+    public QuietLogGate? QuietLogGate { get; set; }
 
     private readonly Dictionary<string, (DateTime Time, ClobOrderBook? Book)> _bookCache = new();
     private readonly Dictionary<string, (DateTime Time, BinaryOrderBookSnapshot? Snapshot)> _snapshotCache = new();
@@ -44,6 +59,16 @@ public class OrderBookService : IOrderBookProvider
     public int SnapshotCacheCount { get { lock (_cacheLock) return _snapshotCache.Count; } }
     public int CacheEntryCount { get { lock (_cacheLock) return _bookCache.Count + _snapshotCache.Count; } }
     public void ConfigureCache(TimeSpan ttl, int maxEntries) { _cacheTtl = ttl; _maxCacheEntries = Math.Max(1, maxEntries); }
+    public void ConfigureBatchOptions(OrderBookOptions options, bool operationalQuietMode, MultiOutcomeLoggingOptions logging, QuietLogGate? quietLogGate = null)
+    {
+        MaxBatchBookRequestSize = Math.Max(1, options.MaxBatchBookRequestSize);
+        SplitBatchOnBadRequest = options.SplitBatchOnBadRequest;
+        LogInvalidBatchPayloadSamples = options.LogInvalidBatchPayloadSamples;
+        MaxInvalidPayloadSamplesToLog = Math.Max(0, options.MaxInvalidPayloadSamplesToLog);
+        OperationalQuietMode = operationalQuietMode;
+        Logging = logging;
+        QuietLogGate = quietLogGate;
+    }
 
     public async Task<BinaryOrderBookSnapshot?> GetBinarySnapshotAsync(
         Market market,
@@ -212,7 +237,12 @@ public class OrderBookService : IOrderBookProvider
             Timeouts: Interlocked.Read(ref _timeouts),
             HttpErrors: Interlocked.Read(ref _httpErrors),
             ParseErrors: Interlocked.Read(ref _parseErrors),
-            BookCacheMisses: Interlocked.Read(ref _bookCacheMisses)
+            BookCacheMisses: Interlocked.Read(ref _bookCacheMisses),
+            BatchBadRequests: Interlocked.Read(ref _batchBadRequests),
+            BatchTimeouts: Interlocked.Read(ref _batchTimeouts),
+            BatchRetrySuccesses: Interlocked.Read(ref _batchRetrySuccesses),
+            BatchInvalidTokens: Interlocked.Read(ref _batchInvalidTokens),
+            BatchSuppressedErrors: Interlocked.Read(ref _batchSuppressedErrors)
         );
     }
 
@@ -229,6 +259,11 @@ public class OrderBookService : IOrderBookProvider
         Interlocked.Exchange(ref _bookCacheMissLogs, 0);
         Interlocked.Exchange(ref _singleRequestCallerLogs, 0);
         Interlocked.Exchange(ref _bookCacheMisses, 0);
+        Interlocked.Exchange(ref _batchBadRequests, 0);
+        Interlocked.Exchange(ref _batchTimeouts, 0);
+        Interlocked.Exchange(ref _batchRetrySuccesses, 0);
+        Interlocked.Exchange(ref _batchInvalidTokens, 0);
+        Interlocked.Exchange(ref _batchSuppressedErrors, 0);
         while (_bookCacheMissSamples.TryDequeue(out _)) { }
     }
 
@@ -408,114 +443,208 @@ public class OrderBookService : IOrderBookProvider
         }
     }
 
-    private async Task<int> TryPostBooksBatchAsync(
-    IEnumerable<string> batch,
-    Func<IEnumerable<string>, object> bodyFactory,
-    Dictionary<string, ClobOrderBook> result,
-    CancellationToken ct)
+    public BatchPayloadValidationResult ValidateBatchPayload(IEnumerable<string?> tokenIds, int? maxBatchSize = null)
     {
-        var requestedTokenIds = batch
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .ToList();
+        var maxSize = Math.Max(1, maxBatchSize ?? MaxBatchBookRequestSize);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var cleaned = new List<string>();
+        var nullsRemoved = 0;
+        var duplicatesRemoved = 0;
+        var invalidRemoved = 0;
+        var capped = false;
+        var invalidSamples = new List<string>();
+
+        foreach (var raw in tokenIds)
+        {
+            var token = NormalizeTokenId(raw);
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                nullsRemoved++;
+                continue;
+            }
+
+            if (!IsValidTokenIdFormat(token))
+            {
+                invalidRemoved++;
+                if (invalidSamples.Count < Math.Max(0, MaxInvalidPayloadSamplesToLog)) invalidSamples.Add(token);
+                continue;
+            }
+
+            if (!seen.Add(token))
+            {
+                duplicatesRemoved++;
+                continue;
+            }
+
+            if (cleaned.Count >= maxSize)
+            {
+                capped = true;
+                continue;
+            }
+
+            cleaned.Add(token);
+        }
+
+        return new BatchPayloadValidationResult(cleaned, nullsRemoved, duplicatesRemoved, invalidRemoved, capped, invalidSamples);
+    }
+
+    private async Task<BatchPostResult> TryPostBooksBatchAsync(
+        IReadOnlyList<string> batch,
+        Func<IEnumerable<string>, object> bodyFactory,
+        Dictionary<string, ClobOrderBook> result,
+        CancellationToken ct,
+        int depth = 0)
+    {
+        if (batch.Count == 0) return BatchPostResult.Success(0);
 
         try
         {
             var url = "https://clob.polymarket.com/books";
+            var jsonBody = JsonConvert.SerializeObject(bodyFactory(batch));
 
-            var jsonBody = JsonConvert.SerializeObject(bodyFactory(requestedTokenIds));
-
-            using var content = new StringContent(
-                jsonBody,
-                System.Text.Encoding.UTF8,
-                "application/json"
-            );
-
+            using var content = new StringContent(jsonBody, System.Text.Encoding.UTF8, "application/json");
             var response = await _http.PostAsync(url, content, ct);
             var json = await response.Content.ReadAsStringAsync(ct);
+
+            if (response.StatusCode == HttpStatusCode.BadRequest)
+            {
+                Interlocked.Increment(ref _httpErrors);
+                Interlocked.Increment(ref _batchBadRequests);
+                if (SplitBatchOnBadRequest && batch.Count > 1)
+                    return await SplitAndRetryBadRequestAsync(batch, bodyFactory, result, ct, depth, json);
+
+                if (batch.Count == 1)
+                {
+                    Interlocked.Increment(ref _batchInvalidTokens);
+                    if (ShouldLogBatchDiagnostic("BATCH_BOOK_INVALID_TOKEN_SUPPRESSED", batch[0], batch.Count))
+                        Console.WriteLine($"[BATCH_BOOK_INVALID_TOKEN_SUPPRESSED] TokenId={batch[0]} Reason=SingleTokenBadRequest");
+                }
+                else if (ShouldLogBatchDiagnostic("BATCH_BOOK_ERROR", $"badrequest:size:{batch.Count}", batch.Count))
+                {
+                    Console.WriteLine($"[BATCH_BOOK_ERROR] Status=400 BatchSize={batch.Count} RetryStrategy=None");
+                }
+
+                return BatchPostResult.BadRequest(0, batch.Count);
+            }
 
             if (!response.IsSuccessStatusCode)
             {
                 Interlocked.Increment(ref _httpErrors);
-                Console.WriteLine($"[BATCH BOOK ERROR] Status={(int)response.StatusCode} {response.StatusCode}");
-                Console.WriteLine($"[BATCH BOOK BODY] {Short(json)}");
-                return 0;
+                if (ShouldLogBatchDiagnostic("BATCH_BOOK_ERROR", response.StatusCode.ToString(), batch.Count))
+                    Console.WriteLine($"[BATCH_BOOK_ERROR] Status={(int)response.StatusCode} BatchSize={batch.Count} RetryStrategy=None");
+                return BatchPostResult.Failed(0);
             }
 
             var root = JToken.Parse(json);
             var booksArray = ExtractBooksArray(root);
-
             if (booksArray == null)
             {
                 Interlocked.Increment(ref _parseErrors);
-                Console.WriteLine($"[BATCH BOOK ERROR] Unexpected response shape: {root.Type}");
-                Console.WriteLine($"[BATCH BOOK BODY] {Short(json)}");
-                return 0;
+                if (ShouldLogBatchDiagnostic("BATCH_BOOK_ERROR", $"shape:{root.Type}", batch.Count))
+                    Console.WriteLine($"[BATCH_BOOK_ERROR] Status=ParseError BatchSize={batch.Count} RetryStrategy=None Shape={root.Type}");
+                return BatchPostResult.Failed(0);
             }
 
-            var loaded = 0;
+            var loaded = StoreBooks(booksArray, result);
+            if (loaded == 0 && ShouldLogBatchDiagnostic("BATCH_BOOK_ERROR", "loaded:0", batch.Count))
+                Console.WriteLine($"[BATCH_BOOK_ERROR] Status=NoBooksLoaded BatchSize={batch.Count} RetryStrategy=None");
 
-            for (int i = 0; i < booksArray.Count; i++)
-            {
-                var item = booksArray[i];
-
-                var book = item.ToObject<ClobOrderBook>();
-
-                if (book == null)
-                    continue;
-
-                var assetId =
-                    book.asset_id ??
-                    item["asset_id"]?.ToString() ??
-                    item["assetId"]?.ToString() ??
-                    item["token_id"]?.ToString() ??
-                    item["tokenId"]?.ToString();
-
-                assetId = NormalizeTokenId(assetId);
-
-                if (string.IsNullOrWhiteSpace(assetId))
-                {
-                    Console.WriteLine("[BATCH BOOK WARNING] Missing asset_id/token_id in book response.");
-                    continue;
-                }
-
-                lock (_cacheLock)
-                {
-                    _bookCache[assetId] = (DateTime.UtcNow, book);
-                    result[assetId] = book;
-                    TrimCacheLocked();
-                }
-
-                loaded++;
-                Interlocked.Increment(ref _batchBooksLoaded);
-            }
-
-            if (loaded == 0)
-            {
-                Console.WriteLine("[BATCH BOOK WARNING] Response parsed but loaded 0 books.");
-                Console.WriteLine($"[BATCH BOOK BODY] {Short(json)}");
-            }
-
-            return loaded;
+            return BatchPostResult.Success(loaded);
         }
         catch (TaskCanceledException)
         {
             Interlocked.Increment(ref _timeouts);
-            Console.WriteLine("[BATCH BOOK TIMEOUT]");
-            return 0;
+            Interlocked.Increment(ref _batchTimeouts);
+            if (ShouldLogBatchDiagnostic("BATCH_BOOK_TIMEOUT", "timeout", batch.Count))
+                Console.WriteLine($"[BATCH_BOOK_TIMEOUT] BatchSize={batch.Count}");
+            return BatchPostResult.Failed(0, timeout: true);
         }
         catch (HttpRequestException ex)
         {
             Interlocked.Increment(ref _httpErrors);
-            Console.WriteLine($"[BATCH BOOK HTTP ERROR] {ex.Message}");
-            return 0;
+            if (ShouldLogBatchDiagnostic("BATCH_BOOK_HTTP_ERROR", ex.Message, batch.Count))
+                Console.WriteLine($"[BATCH_BOOK_HTTP_ERROR] BatchSize={batch.Count} Message={Short(ex.Message)}");
+            return BatchPostResult.Failed(0);
         }
         catch (Exception ex)
         {
             Interlocked.Increment(ref _parseErrors);
-            Console.WriteLine($"[BATCH BOOK ERROR] {ex.Message}");
-            return 0;
+            if (ShouldLogBatchDiagnostic("BATCH_BOOK_ERROR", ex.Message, batch.Count))
+                Console.WriteLine($"[BATCH_BOOK_ERROR] BatchSize={batch.Count} Message={Short(ex.Message)}");
+            return BatchPostResult.Failed(0);
         }
     }
+
+    private async Task<BatchPostResult> SplitAndRetryBadRequestAsync(
+        IReadOnlyList<string> batch,
+        Func<IEnumerable<string>, object> bodyFactory,
+        Dictionary<string, ClobOrderBook> result,
+        CancellationToken ct,
+        int depth,
+        string responseBody)
+    {
+        if (ShouldLogBatchDiagnostic("BATCH_BOOK_BAD_REQUEST", $"size:{batch.Count}|failed:{batch.Count}", batch.Count))
+        {
+            Console.WriteLine($"[BATCH_BOOK_BAD_REQUEST] BatchSize={batch.Count} Action=SplitAndRetry");
+            Console.WriteLine($"[BATCH_BOOK_ERROR] Status=400 BatchSize={batch.Count} RetryStrategy=Split");
+        }
+
+        var half = Math.Max(1, batch.Count / 2);
+        var left = batch.Take(half).ToArray();
+        var right = batch.Skip(half).ToArray();
+        var before = result.Count;
+        var leftResult = await TryPostBooksBatchAsync(left, bodyFactory, result, ct, depth + 1);
+        var rightResult = await TryPostBooksBatchAsync(right, bodyFactory, result, ct, depth + 1);
+        var loaded = result.Count - before;
+        var failed = leftResult.FailedTokens + rightResult.FailedTokens;
+        if (loaded > 0) Interlocked.Increment(ref _batchRetrySuccesses);
+
+        if (ShouldLogBatchDiagnostic("BATCH_BOOK_RETRY_RESULT", $"original:{batch.Count}|failed:{failed / 20}", batch.Count))
+            Console.WriteLine($"[BATCH_BOOK_RETRY_RESULT] OriginalBatch={batch.Count} Successful={loaded} Failed={failed}");
+
+        return new BatchPostResult(loaded, leftResult.BadRequest || rightResult.BadRequest, leftResult.Timeout || rightResult.Timeout, failed);
+    }
+
+    private int StoreBooks(JArray booksArray, Dictionary<string, ClobOrderBook> result)
+    {
+        var loaded = 0;
+        for (int i = 0; i < booksArray.Count; i++)
+        {
+            var item = booksArray[i];
+            var book = item.ToObject<ClobOrderBook>();
+            if (book == null) continue;
+
+            var assetId = book.asset_id ?? item["asset_id"]?.ToString() ?? item["assetId"]?.ToString() ?? item["token_id"]?.ToString() ?? item["tokenId"]?.ToString();
+            assetId = NormalizeTokenId(assetId);
+            if (string.IsNullOrWhiteSpace(assetId)) continue;
+
+            lock (_cacheLock)
+            {
+                _bookCache[assetId] = (DateTime.UtcNow, book);
+                result[assetId] = book;
+                TrimCacheLocked();
+            }
+
+            loaded++;
+            Interlocked.Increment(ref _batchBooksLoaded);
+        }
+
+        return loaded;
+    }
+
+    private bool ShouldLogBatchDiagnostic(string eventName, string hash, int batchSize)
+    {
+        var shouldLog = QuietLogGate?.ShouldLog(
+            new LogEventKey("orderbook", eventName),
+            new LogEventFingerprint($"{eventName}|{hash}", $"size:{batchSize / 20}"),
+            LogImportance.Normal,
+            new QuietLogPolicy(OperationalQuietMode, Math.Max(1, Logging.QuietModeDefaultEveryNCycles), Math.Max(1, Logging.QuietModeDefaultEveryMinutes), Logging.QuietModeSuppressRepeatedHash, Math.Max(1, Logging.QuietModeMaxSameEventPerHour), !OperationalQuietMode)) ?? true;
+        if (!shouldLog) Interlocked.Increment(ref _batchSuppressedErrors);
+        return shouldLog;
+    }
+
+    private static bool IsValidTokenIdFormat(string tokenId)
+        => Regex.IsMatch(tokenId, "^[0-9]+$");
 
     private static string? NormalizeTokenId(string? tokenId)
     {
@@ -564,14 +693,18 @@ public class OrderBookService : IOrderBookProvider
      IEnumerable<string> tokenIds,
      CancellationToken ct = default)
     {
-        var ids = tokenIds
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Distinct()
-            .ToList();
-
+        var validation = ValidateBatchPayload(tokenIds, int.MaxValue);
         var result = new Dictionary<string, ClobOrderBook>();
 
-        if (ids.Count == 0)
+        if (validation.InvalidFormatRemoved > 0) Interlocked.Add(ref _batchInvalidTokens, validation.InvalidFormatRemoved);
+        if (LogInvalidBatchPayloadSamples && (validation.NullsRemoved > 0 || validation.DuplicatesRemoved > 0 || validation.InvalidFormatRemoved > 0))
+        {
+            var sampleHash = string.Join(',', validation.InvalidSamples);
+            if (ShouldLogBatchDiagnostic("BATCH_BOOK_PAYLOAD_DIAG", $"n:{validation.NullsRemoved}|d:{validation.DuplicatesRemoved}|i:{validation.InvalidFormatRemoved}|{sampleHash}", validation.TokenIds.Count))
+                Console.WriteLine($"[BATCH_BOOK_PAYLOAD_DIAG] BatchSize={validation.TokenIds.Count} DistinctTokenIds={validation.TokenIds.Count} NullsRemoved={validation.NullsRemoved} DuplicatesRemoved={validation.DuplicatesRemoved} InvalidFormatRemoved={validation.InvalidFormatRemoved}");
+        }
+
+        if (validation.TokenIds.Count == 0)
             return result;
 
         lock (_cacheLock)
@@ -579,14 +712,15 @@ public class OrderBookService : IOrderBookProvider
             _snapshotCache.Clear();
         }
 
-        const int batchSize = 50;
+        var batchSize = Math.Max(1, MaxBatchBookRequestSize);
 
-        foreach (var batch in ids.Chunk(batchSize))
+        foreach (var batch in validation.TokenIds.Chunk(batchSize))
         {
             Interlocked.Increment(ref _batchRequests);
+            var batchArray = batch.ToArray();
 
-            var loaded = await TryPostBooksBatchAsync(
-                batch,
+            var primary = await TryPostBooksBatchAsync(
+                batchArray,
                 bodyFactory: idsBatch => idsBatch
                     .Select(tokenId => new { token_id = tokenId })
                     .ToList(),
@@ -594,11 +728,11 @@ public class OrderBookService : IOrderBookProvider
                 ct
             );
 
-            if (loaded > 0)
+            if (primary.Loaded > 0 || primary.BadRequest)
                 continue;
 
-            loaded = await TryPostBooksBatchAsync(
-                batch,
+            _ = await TryPostBooksBatchAsync(
+                batchArray,
                 bodyFactory: idsBatch => new
                 {
                     @params = idsBatch
@@ -678,6 +812,21 @@ public class OrderBookService : IOrderBookProvider
         return _bookCacheMissSamples.Distinct().Take(capped).ToArray();
     }
 
+}
+
+public sealed record BatchPayloadValidationResult(
+    IReadOnlyList<string> TokenIds,
+    int NullsRemoved,
+    int DuplicatesRemoved,
+    int InvalidFormatRemoved,
+    bool Capped,
+    IReadOnlyList<string> InvalidSamples);
+
+public sealed record BatchPostResult(int Loaded, bool BadRequest, bool Timeout, int FailedTokens)
+{
+    public static BatchPostResult Success(int loaded) => new(loaded, false, false, 0);
+    public static BatchPostResult BadRequest(int loaded, int failedTokens) => new(loaded, true, false, failedTokens);
+    public static BatchPostResult Failed(int loaded, bool timeout = false) => new(loaded, false, timeout, 0);
 }
 
 public class ClobOrderBook

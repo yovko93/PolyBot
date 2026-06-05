@@ -38,13 +38,19 @@ public sealed record RuntimeHealthSnapshot(
     int LogGateCacheSize,
     long QuietCappedSuppressions,
     IReadOnlyDictionary<string, long> QuietSuppressedByCategory,
-    IReadOnlyDictionary<string, long> EmittedByCategory)
+    IReadOnlyDictionary<string, long> EmittedByCategory,
+    long BatchBookRequests,
+    long BatchBookBadRequests,
+    long BatchBookTimeouts,
+    long BatchBookRetrySuccesses,
+    long BatchBookInvalidTokens,
+    long BatchBookSuppressedErrors)
 {
     public string ToLogLine()
     {
         var suppressed = string.Join(",", QuietSuppressedByCategory.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value}"));
         var emitted = string.Join(",", EmittedByCategory.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value}"));
-        return $"[RUNTIME_HEALTH] ProcessMb={ProcessMemoryMb} GcMb={GcTotalMemoryMb} WorkingSetMb={WorkingSetMb} Logs={RecentLogsCount} ScannerHistory={ScannerHistoryCount} CandidateSnapshots={CandidateSnapshotCount} RepairHistory={RepairHistoryCount} ExecutionAudit={ExecutionAuditCount} SignalRBuffer={SignalREventBufferCount} OrderbookCache={OrderbookCacheCount} MarketCache={MarketCacheCount} PatchPreviewItems={PatchPreviewItemsCount} SingleMarketOpportunities={SingleMarketOpportunitiesCount} SingleMarketNearMisses={SingleMarketNearMissesCount} SingleMarketDataQualitySamples={SingleMarketDataQualitySamplesCount} SingleMarketExecutions={SingleMarketExecutionsCount} DuplicateGroupKeyWarnings={DuplicateGroupKeyWarnings} QuietSuppressed={QuietSuppressedTotal} EmittedLogs={EmittedLogs} LogGateCache={LogGateCacheSize} QuietSuppressedByCategory={{{suppressed}}} EmittedByCategory={{{emitted}}} Uptime={Uptime}";
+        return $"[RUNTIME_HEALTH] ProcessMb={ProcessMemoryMb} GcMb={GcTotalMemoryMb} WorkingSetMb={WorkingSetMb} Logs={RecentLogsCount} ScannerHistory={ScannerHistoryCount} CandidateSnapshots={CandidateSnapshotCount} RepairHistory={RepairHistoryCount} ExecutionAudit={ExecutionAuditCount} SignalRBuffer={SignalREventBufferCount} OrderbookCache={OrderbookCacheCount} MarketCache={MarketCacheCount} PatchPreviewItems={PatchPreviewItemsCount} SingleMarketOpportunities={SingleMarketOpportunitiesCount} SingleMarketNearMisses={SingleMarketNearMissesCount} SingleMarketDataQualitySamples={SingleMarketDataQualitySamplesCount} SingleMarketExecutions={SingleMarketExecutionsCount} DuplicateGroupKeyWarnings={DuplicateGroupKeyWarnings} QuietSuppressed={QuietSuppressedTotal} EmittedLogs={EmittedLogs} LogGateCache={LogGateCacheSize} QuietSuppressedByCategory={{{suppressed}}} EmittedByCategory={{{emitted}}} BatchBookRequests={BatchBookRequests} BatchBookBadRequests={BatchBookBadRequests} BatchBookTimeouts={BatchBookTimeouts} BatchBookRetrySuccesses={BatchBookRetrySuccesses} BatchBookInvalidTokens={BatchBookInvalidTokens} BatchBookSuppressedErrors={BatchBookSuppressedErrors} Uptime={Uptime}";
     }
 
     public static bool ShouldLogAt(DateTime nowUtc, DateTime lastLoggedAtUtc, int everyMinutes)
@@ -90,7 +96,13 @@ public sealed record RuntimeHealthSnapshot(
             LogGateCacheSize: state.QuietLogGateStats.LogGateCacheSize,
             QuietCappedSuppressions: state.QuietLogGateStats.CappedSuppressions,
             QuietSuppressedByCategory: state.QuietLogGateStats.QuietSuppressedByCategory,
-            EmittedByCategory: state.QuietLogGateStats.EmittedByCategory);
+            EmittedByCategory: state.QuietLogGateStats.EmittedByCategory,
+            BatchBookRequests: state.OrderBookServiceStats.BatchRequests,
+            BatchBookBadRequests: state.OrderBookServiceStats.BatchBadRequests,
+            BatchBookTimeouts: state.OrderBookServiceStats.BatchTimeouts,
+            BatchBookRetrySuccesses: state.OrderBookServiceStats.BatchRetrySuccesses,
+            BatchBookInvalidTokens: state.OrderBookServiceStats.BatchInvalidTokens,
+            BatchBookSuppressedErrors: state.OrderBookServiceStats.BatchSuppressedErrors);
     }
 }
 
@@ -142,7 +154,7 @@ public static class RuntimeHealthTrendTracker
     public static string ToSoakStatusLogLine(RuntimeHealthSnapshot health, RuntimeHealthTrend trend, TradingBot.Options.TradingBotOptions? options = null)
     {
         var logVolumeStable = options is null || IsLogVolumeStable(health, options);
-        return $"[SOAK_STATUS] Uptime={health.Uptime} ProcessMb={health.ProcessMemoryMb} DeltaMb={trend.MemoryDeltaMbWindow:0.##} SlopeMbPerMin={trend.MemorySlopeMbPerMinute:0.##} Logs={health.RecentLogsCount} ExecutionAudit={health.ExecutionAuditCount} SignalR={health.SignalREventBufferCount} PaperOpened={health.SingleMarketExecutionsCount} QuietSuppressed={health.QuietSuppressedTotal} MemoryStable={trend.IsMemoryStable.ToString().ToLowerInvariant()} LogVolumeStable={logVolumeStable.ToString().ToLowerInvariant()}";
+        return $"[SOAK_STATUS] Uptime={health.Uptime} ProcessMb={health.ProcessMemoryMb} DeltaMb={trend.MemoryDeltaMbWindow:0.##} SlopeMbPerMin={trend.MemorySlopeMbPerMinute:0.##} Logs={health.RecentLogsCount} ExecutionAudit={health.ExecutionAuditCount} SignalR={health.SignalREventBufferCount} PaperOpened={health.SingleMarketExecutionsCount} QuietSuppressed={health.QuietSuppressedTotal} BatchBookRequests={health.BatchBookRequests} BatchBookBadRequests={health.BatchBookBadRequests} BatchBookTimeouts={health.BatchBookTimeouts} BatchBookRetrySuccesses={health.BatchBookRetrySuccesses} BatchBookInvalidTokens={health.BatchBookInvalidTokens} BatchBookSuppressedErrors={health.BatchBookSuppressedErrors} MemoryStable={trend.IsMemoryStable.ToString().ToLowerInvariant()} LogVolumeStable={logVolumeStable.ToString().ToLowerInvariant()}";
     }
 
     public static bool IsLogVolumeStable(RuntimeHealthSnapshot health, TradingBot.Options.TradingBotOptions options)

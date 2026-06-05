@@ -306,6 +306,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var marketService = new MarketDataService(http);
     var orderbookService = new OrderBookService(http) { DisableSingleBookHttpFallback = true, LogPrefetchDetails = options.LogPrefetchDetails, LogBookCacheMissDetails = options.Logging.LogBookCacheMissDetails, BookCacheMissSampleSize = options.Logging.BookCacheMissSampleSize };
     orderbookService.ConfigureCache(TimeSpan.FromSeconds(Math.Max(1, options.Caches.OrderbookCacheTtlSeconds)), options.Caches.MaxOrderbookCacheEntries);
+    orderbookService.ConfigureBatchOptions(options.OrderBook, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate);
     var crossOptions = new CrossExchangeOptions();
     options.GetType();
     var feeOptions = new ExchangeFeesOptions();
@@ -1468,6 +1469,7 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
     state.ReplaceTrades(ReadTradeEntries(executionJournalPath, state, filtering));
 
     var s = obs.GetStats();
+    state.SetOrderBookServiceStats(s);
 
     var edges = top.Select(x => x.EdgePerShare).OrderBy(x => x).ToList();
     var median = edges.Count == 0 ? 0m : edges[edges.Count / 2];
