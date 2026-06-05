@@ -245,6 +245,11 @@ public sealed class PaperPhaseValidationHarness
         else if (!cfg.InjectSyntheticOpportunity) Console.WriteLine("[PAPER_PHASE_VALIDATION_DISABLED] Reason=InjectSyntheticOpportunityFalse");
     }
 
+    public static void LogPaperModeStartup(TradingBotOptions options)
+    {
+        Console.WriteLine($"[PAPER_MODE] PaperTradingEnabled={options.TradingMode.PaperTradingEnabled.ToString().ToLowerInvariant()} PaperPhase={options.TradingMode.PaperPhase} LiveTrading={options.TradingMode.LiveTradingEnabled.ToString().ToLowerInvariant()} Validation={options.PaperPhaseValidation.Enabled.ToString().ToLowerInvariant()} MaxPaperNotionalPerTrade={options.PaperRisk.MaxPaperNotionalPerTrade:0.####} MaxPaperTotalExposure={options.PaperRisk.MaxPaperTotalExposure:0.####} MaxPaperOpenPerHour={options.PaperRisk.MaxPaperOpenPerHour}");
+    }
+
     private static string FormatLoadedConfigFiles(IEnumerable<object>? configurationSources)
     {
         if (configurationSources is null) return "Unknown";

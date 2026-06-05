@@ -317,10 +317,14 @@ public class PaperPhaseSafetyTests
         Assert.Equal(2, options.SingleMarketArb.MaxOpenSingleMarketPositions);
         Assert.Equal(100m, options.SingleMarketArb.MaxTotalSingleMarketExposure);
         Assert.Equal(1800, options.SingleMarketArb.CooldownSecondsPerMarket);
+        Assert.True(options.SingleMarketArb.PaperOnly);
         Assert.Equal(50m, options.VerifiedBasketArb.MaxNotionalPerTrade);
         Assert.Equal(2, options.VerifiedBasketArb.MaxOpenVerifiedBasketPositions);
         Assert.Equal(100m, options.VerifiedBasketArb.MaxTotalVerifiedBasketExposure);
         Assert.Equal(1800, options.VerifiedBasketArb.CooldownSecondsPerGroup);
+        Assert.True(options.VerifiedBasketArb.PaperOnly);
+        Assert.False(options.PaperPhaseValidation.Enabled);
+        Assert.False(options.PaperPhaseValidation.InjectSyntheticOpportunity);
     }
 
     [Fact] public void PaperPhaseValidation_command_line_override_path_binds_enabled()
@@ -418,6 +422,28 @@ public class PaperPhaseSafetyTests
         Assert.Contains("[PAPER_PHASE_VALIDATION_CONFIG] Enabled=false", text);
         Assert.Contains("[PAPER_PHASE_VALIDATION_DISABLED] Reason=ConfigDisabled", text);
         Assert.Contains("[PAPER_PHASE_VALIDATION_CONFIG] Enabled=true InjectSyntheticOpportunity=true", text);
+    }
+
+    [Fact] public void PaperMode_startup_log_includes_phase2_safety_limits()
+    {
+        var options = Options();
+        options.TradingMode.PaperPhase = 2;
+        options.PaperRisk.MaxPaperNotionalPerTrade = 50m;
+        options.PaperRisk.MaxPaperTotalExposure = 200m;
+        options.PaperRisk.MaxPaperOpenPerHour = 2;
+        using var writer = new StringWriter();
+        var prev = Console.Out;
+        Console.SetOut(writer);
+        try
+        {
+            PaperPhaseValidationHarness.LogPaperModeStartup(options);
+        }
+        finally
+        {
+            Console.SetOut(prev);
+        }
+
+        Assert.Contains("[PAPER_MODE] PaperTradingEnabled=true PaperPhase=2 LiveTrading=false Validation=false MaxPaperNotionalPerTrade=50 MaxPaperTotalExposure=200 MaxPaperOpenPerHour=2", writer.ToString());
     }
 
     [Fact] public void PaperPhaseValidation_harness_does_not_run_when_default_false()
