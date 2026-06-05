@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAtUtc": "2026-06-05T15:25:27.1677914Z",
+    "generatedAtUtc": "2026-06-05T17:20:47.3872567Z",
     "note": "suggested only"
   },
   "groups": [
@@ -198,6 +198,7 @@
       "SuggestedRefreshedTemplate": null,
       "Diff": null,
       "Notes": [
+        "Stable candidate match: winner:2026 peruvian presidential election|kind:person score=1.",
         "ManualLock: Manual review required due to repair diff oscillation on marketId 947269"
       ],
       "CopyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."

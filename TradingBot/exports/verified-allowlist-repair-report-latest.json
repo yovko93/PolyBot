@@ -1,6 +1,6 @@
 {
-  "snapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
-  "timestamp": "2026-06-05T15:24:12.7202673Z",
+  "snapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
+  "timestamp": "2026-06-05T17:19:46.3557132Z",
   "summary": {
     "configuredGroups": 11,
     "healthy": 0,
@@ -24,25 +24,25 @@
     "brokenTotal": 3,
     "hasMissingNoAsk": 0,
     "hasMarketMismatch": 3,
-    "hasCandidateRefreshMatch": 0,
+    "hasCandidateRefreshMatch": 1,
     "hasSuggestedTemplate": 0
   },
   "invariantResult": true,
   "snapshot": {
-    "snapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
-    "createdAt": "2026-06-05T15:24:09.7162106Z",
-    "discoveryId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+    "snapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
+    "createdAt": "2026-06-05T17:19:43.3920171Z",
+    "discoveryId": "candidate-export-8dec326a26572ab-6e7879cb590e",
     "candidateExportPath": "C:\\Users\\Administrator\\Desktop\\PolyBot\\PolyBot\\TradingBot\\exports\\multi-outcome-candidates-latest.json",
-    "candidateGroupsCount": 17,
+    "candidateGroupsCount": 18,
     "verifiedGroupsCount": 11,
     "source": "CandidateExportSnapshot",
     "repairResults": [
       {
-        "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+        "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
         "actionVersion": 1,
         "previousAction": null,
         "currentAction": "KeepMonitoring",
-        "actionChangedAt": "2026-06-05T10:47:32.0864698Z",
+        "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
         "reasonForChange": "InitialSnapshot",
         "groupKey": "winner:2026 fifa world cup|kind:generic",
         "title": "winner:2026 fifa world cup|kind:generic",
@@ -74,11 +74,11 @@
         "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
       },
       {
-        "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+        "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
         "actionVersion": 1,
         "previousAction": null,
         "currentAction": "KeepMonitoring",
-        "actionChangedAt": "2026-06-05T10:47:32.0864698Z",
+        "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
         "reasonForChange": "InitialSnapshot",
         "groupKey": "winner:2028 democratic presidential nomination|kind:person",
         "title": "winner:2028 democratic presidential nomination|kind:person",
@@ -110,11 +110,11 @@
         "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
       },
       {
-        "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+        "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
         "actionVersion": 1,
         "previousAction": null,
         "currentAction": "KeepMonitoring",
-        "actionChangedAt": "2026-06-05T10:47:32.0864698Z",
+        "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
         "reasonForChange": "InitialSnapshot",
         "groupKey": "winner:2028 republican presidential nomination|kind:person",
         "title": "winner:2028 republican presidential nomination|kind:person",
@@ -146,11 +146,11 @@
         "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
       },
       {
-        "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+        "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
         "actionVersion": 1,
         "previousAction": null,
         "currentAction": "KeepMonitoring",
-        "actionChangedAt": "2026-06-05T10:47:32.0864698Z",
+        "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
         "reasonForChange": "InitialSnapshot",
         "groupKey": "winner:2028 us presidential election|kind:person",
         "title": "winner:2028 us presidential election|kind:person",
@@ -182,11 +182,11 @@
         "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
       },
       {
-        "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+        "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
         "actionVersion": 1,
         "previousAction": null,
         "currentAction": "KeepMonitoring",
-        "actionChangedAt": "2026-06-05T10:47:32.0864698Z",
+        "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
         "reasonForChange": "InitialSnapshot",
         "groupKey": "winner:2026 brazilian presidential election|kind:person",
         "title": "winner:2026 brazilian presidential election|kind:person",
@@ -218,11 +218,11 @@
         "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
       },
       {
-        "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+        "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
         "actionVersion": 1,
         "previousAction": null,
         "currentAction": "DisableMissingMarkets",
-        "actionChangedAt": "2026-06-05T10:47:32.0864698Z",
+        "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
         "reasonForChange": "InitialSnapshot",
         "groupKey": "winner:2026 women s us open|kind:generic",
         "title": "winner:2026 women s us open|kind:generic",
@@ -261,11 +261,11 @@
         "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
       },
       {
-        "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+        "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
         "actionVersion": 1,
         "previousAction": null,
         "currentAction": "KeepMonitoring",
-        "actionChangedAt": "2026-06-05T10:47:32.0864698Z",
+        "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
         "reasonForChange": "InitialSnapshot",
         "groupKey": "winner:2027 french presidential election|kind:person",
         "title": "winner:2027 french presidential election|kind:person",
@@ -297,11 +297,11 @@
         "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
       },
       {
-        "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+        "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
         "actionVersion": 1,
         "previousAction": null,
         "currentAction": "NeedsManualReview",
-        "actionChangedAt": "2026-06-05T10:47:32.0864698Z",
+        "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
         "reasonForChange": "InitialSnapshot",
         "groupKey": "winner:1st round of 2026 colombian presidential election|kind:person",
         "title": "winner:1st round of 2026 colombian presidential election|kind:person",
@@ -340,11 +340,11 @@
         "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
       },
       {
-        "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+        "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
         "actionVersion": 1,
         "previousAction": null,
         "currentAction": "KeepMonitoring",
-        "actionChangedAt": "2026-06-05T10:47:32.0864698Z",
+        "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
         "reasonForChange": "InitialSnapshot",
         "groupKey": "winner:2026 colombian presidential election|kind:person",
         "title": "winner:2026 colombian presidential election|kind:person",
@@ -376,12 +376,12 @@
         "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
       },
       {
-        "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
-        "actionVersion": 7,
-        "previousAction": "Keep",
+        "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
+        "actionVersion": 1,
+        "previousAction": null,
         "currentAction": "KeepMonitoring",
-        "actionChangedAt": "2026-06-05T13:26:23.8997272Z",
-        "reasonForChange": "RepairSnapshotReclassified",
+        "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
+        "reasonForChange": "InitialSnapshot",
         "groupKey": "winner:2026 nba finals|kind:generic",
         "title": "winner:2026 nba finals|kind:generic",
         "enabled": true,
@@ -412,11 +412,11 @@
         "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
       },
       {
-        "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+        "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
         "actionVersion": 1,
         "previousAction": null,
         "currentAction": "NeedsManualReview",
-        "actionChangedAt": "2026-06-05T10:47:32.0864698Z",
+        "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
         "reasonForChange": "InitialSnapshot",
         "groupKey": "winner:2026 peruvian presidential election|kind:person",
         "title": "winner:2026 peruvian presidential election|kind:person",
@@ -442,9 +442,25 @@
         "reason": "ManualLock: Manual review required due to repair diff oscillation on marketId 947269",
         "suggestedPrunedTemplate": null,
         "suggestedRefreshedTemplate": null,
-        "repairMatch": null,
+        "repairMatch": {
+          "candidateGroupKey": "winner:2026 peruvian presidential election|kind:person",
+          "score": 1.00,
+          "titleSimilarity": 1,
+          "marketOverlap": 1,
+          "conditionOverlap": 1,
+          "outcomeSemanticScore": 1,
+          "pricedLegs": 3,
+          "missingNoAsk": 0,
+          "addedMarketIds": [
+            "947269"
+          ],
+          "removedMarketIds": [],
+          "changedConditionIds": 1,
+          "confidence": "High"
+        },
         "consecutiveMatchMisses": 0,
         "notes": [
+          "Stable candidate match: winner:2026 peruvian presidential election|kind:person score=1.",
           "ManualLock: Manual review required due to repair diff oscillation on marketId 947269"
         ],
         "expectedResultAfterManualApply": "No automatic template is trusted; operator reviews candidate exports and current config.",
@@ -463,11 +479,11 @@
   "ignored": 0,
   "groups": [
     {
-      "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+      "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
       "actionVersion": 1,
       "previousAction": null,
       "currentAction": "KeepMonitoring",
-      "actionChangedAt": "2026-06-05T10:47:32.0864698Z",
+      "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
       "reasonForChange": "InitialSnapshot",
       "groupKey": "winner:2026 fifa world cup|kind:generic",
       "title": "winner:2026 fifa world cup|kind:generic",
@@ -499,11 +515,11 @@
       "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
     {
-      "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+      "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
       "actionVersion": 1,
       "previousAction": null,
       "currentAction": "KeepMonitoring",
-      "actionChangedAt": "2026-06-05T10:47:32.0864698Z",
+      "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
       "reasonForChange": "InitialSnapshot",
       "groupKey": "winner:2028 democratic presidential nomination|kind:person",
       "title": "winner:2028 democratic presidential nomination|kind:person",
@@ -535,11 +551,11 @@
       "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
     {
-      "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+      "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
       "actionVersion": 1,
       "previousAction": null,
       "currentAction": "KeepMonitoring",
-      "actionChangedAt": "2026-06-05T10:47:32.0864698Z",
+      "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
       "reasonForChange": "InitialSnapshot",
       "groupKey": "winner:2028 republican presidential nomination|kind:person",
       "title": "winner:2028 republican presidential nomination|kind:person",
@@ -571,11 +587,11 @@
       "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
     {
-      "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+      "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
       "actionVersion": 1,
       "previousAction": null,
       "currentAction": "KeepMonitoring",
-      "actionChangedAt": "2026-06-05T10:47:32.0864698Z",
+      "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
       "reasonForChange": "InitialSnapshot",
       "groupKey": "winner:2028 us presidential election|kind:person",
       "title": "winner:2028 us presidential election|kind:person",
@@ -607,11 +623,11 @@
       "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
     {
-      "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+      "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
       "actionVersion": 1,
       "previousAction": null,
       "currentAction": "KeepMonitoring",
-      "actionChangedAt": "2026-06-05T10:47:32.0864698Z",
+      "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
       "reasonForChange": "InitialSnapshot",
       "groupKey": "winner:2026 brazilian presidential election|kind:person",
       "title": "winner:2026 brazilian presidential election|kind:person",
@@ -643,11 +659,11 @@
       "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
     {
-      "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+      "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
       "actionVersion": 1,
       "previousAction": null,
       "currentAction": "DisableMissingMarkets",
-      "actionChangedAt": "2026-06-05T10:47:32.0864698Z",
+      "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
       "reasonForChange": "InitialSnapshot",
       "groupKey": "winner:2026 women s us open|kind:generic",
       "title": "winner:2026 women s us open|kind:generic",
@@ -686,11 +702,11 @@
       "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
     {
-      "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+      "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
       "actionVersion": 1,
       "previousAction": null,
       "currentAction": "KeepMonitoring",
-      "actionChangedAt": "2026-06-05T10:47:32.0864698Z",
+      "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
       "reasonForChange": "InitialSnapshot",
       "groupKey": "winner:2027 french presidential election|kind:person",
       "title": "winner:2027 french presidential election|kind:person",
@@ -722,11 +738,11 @@
       "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
     {
-      "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+      "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
       "actionVersion": 1,
       "previousAction": null,
       "currentAction": "NeedsManualReview",
-      "actionChangedAt": "2026-06-05T10:47:32.0864698Z",
+      "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
       "reasonForChange": "InitialSnapshot",
       "groupKey": "winner:1st round of 2026 colombian presidential election|kind:person",
       "title": "winner:1st round of 2026 colombian presidential election|kind:person",
@@ -765,11 +781,11 @@
       "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
     {
-      "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+      "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
       "actionVersion": 1,
       "previousAction": null,
       "currentAction": "KeepMonitoring",
-      "actionChangedAt": "2026-06-05T10:47:32.0864698Z",
+      "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
       "reasonForChange": "InitialSnapshot",
       "groupKey": "winner:2026 colombian presidential election|kind:person",
       "title": "winner:2026 colombian presidential election|kind:person",
@@ -801,12 +817,12 @@
       "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
     {
-      "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
-      "actionVersion": 7,
-      "previousAction": "Keep",
+      "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
+      "actionVersion": 1,
+      "previousAction": null,
       "currentAction": "KeepMonitoring",
-      "actionChangedAt": "2026-06-05T13:26:23.8997272Z",
-      "reasonForChange": "RepairSnapshotReclassified",
+      "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
+      "reasonForChange": "InitialSnapshot",
       "groupKey": "winner:2026 nba finals|kind:generic",
       "title": "winner:2026 nba finals|kind:generic",
       "enabled": true,
@@ -837,11 +853,11 @@
       "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."
     },
     {
-      "repairSnapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
+      "repairSnapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
       "actionVersion": 1,
       "previousAction": null,
       "currentAction": "NeedsManualReview",
-      "actionChangedAt": "2026-06-05T10:47:32.0864698Z",
+      "actionChangedAt": "2026-06-05T17:19:46.3557132Z",
       "reasonForChange": "InitialSnapshot",
       "groupKey": "winner:2026 peruvian presidential election|kind:person",
       "title": "winner:2026 peruvian presidential election|kind:person",
@@ -867,9 +883,25 @@
       "reason": "ManualLock: Manual review required due to repair diff oscillation on marketId 947269",
       "suggestedPrunedTemplate": null,
       "suggestedRefreshedTemplate": null,
-      "repairMatch": null,
+      "repairMatch": {
+        "candidateGroupKey": "winner:2026 peruvian presidential election|kind:person",
+        "score": 1.00,
+        "titleSimilarity": 1,
+        "marketOverlap": 1,
+        "conditionOverlap": 1,
+        "outcomeSemanticScore": 1,
+        "pricedLegs": 3,
+        "missingNoAsk": 0,
+        "addedMarketIds": [
+          "947269"
+        ],
+        "removedMarketIds": [],
+        "changedConditionIds": 1,
+        "confidence": "High"
+      },
       "consecutiveMatchMisses": 0,
       "notes": [
+        "Stable candidate match: winner:2026 peruvian presidential election|kind:person score=1.",
         "ManualLock: Manual review required due to repair diff oscillation on marketId 947269"
       ],
       "expectedResultAfterManualApply": "No automatic template is trusted; operator reviews candidate exports and current config.",

@@ -1,0 +1,21 @@
+{
+  "timestampUtc": "2026-06-05T17:18:57.4431Z",
+  "enabled": true,
+  "passed": true,
+  "failureStage": "Complete",
+  "failureReason": "Passed",
+  "paperOpened": 1,
+  "duplicateSuppressed": 1,
+  "liveOrders": 0,
+  "signingAttempts": 0,
+  "cashBefore": 1000,
+  "cashAfter": 989.20,
+  "lockedBefore": 0,
+  "lockedAfter": 10.80,
+  "equityBefore": 1000,
+  "equityAfter": 1000.00,
+  "realizedPnlAfter": 0,
+  "paperExposure": 10.80,
+  "paperOpenPositions": 1,
+  "positionStatus": "Open"
+}

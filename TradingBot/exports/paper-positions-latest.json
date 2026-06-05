@@ -1,35 +1,35 @@
 [
   {
-    "PositionId": "SingleMarketBuyBoth_2370341_YES_2370341_NO",
-    "GroupKey": "single-market:2370341",
-    "Strategy": "BUY_YES_AND_BUY_NO",
+    "PositionId": "SingleMarketBuyBoth___paper_phase_validation_single_market___YES___paper_phase_validation_single_market___NO",
+    "GroupKey": "single-market:__paper_phase_validation_single_market__",
+    "Strategy": "SingleMarketBuyBoth",
     "Engine": "SingleMarketBuyBoth",
-    "OpenedAtUtc": "2026-06-05T12:44:40.4420801Z",
+    "OpenedAtUtc": "2026-06-05T17:18:57.2184869Z",
     "status": "Open",
-    "Quantity": 20,
-    "TotalCost": 19.380,
-    "CostPerBasket": 0.969,
-    "GuaranteedPayout": 20,
-    "ExpectedProfit": 0.620,
-    "LockedCapital": 19.380,
+    "Quantity": 12,
+    "TotalCost": 10.80,
+    "CostPerBasket": 0.90,
+    "GuaranteedPayout": 12,
+    "ExpectedProfit": 1.20,
+    "LockedCapital": 10.80,
     "OpenedFromSimulatedFills": true,
-    "FillSimulationId": "d6729d7693804e43a15c7048480af273",
+    "FillSimulationId": "d14e061da89744578ead25a17b85401c",
     "legs": [
       {
-        "MarketId": "2370341",
-        "Question": "Will President Trump attend the NBA Finals?",
+        "MarketId": "__paper_phase_validation_single_market__",
+        "Question": "Paper Phase Validation Synthetic Market",
         "Outcome": "YES",
-        "Price": 0.927,
-        "Quantity": 20,
-        "Notional": 18.540
+        "Price": 0.45,
+        "Quantity": 12,
+        "Notional": 5.40
       },
       {
-        "MarketId": "2370341",
-        "Question": "Will President Trump attend the NBA Finals?",
+        "MarketId": "__paper_phase_validation_single_market__",
+        "Question": "Paper Phase Validation Synthetic Market",
         "Outcome": "NO",
-        "Price": 0.04,
-        "Quantity": 20,
-        "Notional": 0.80
+        "Price": 0.45,
+        "Quantity": 12,
+        "Notional": 5.40
       }
     ]
   }

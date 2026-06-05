@@ -1,7 +1,7 @@
 {
-  "snapshotId": "candidate-export-8dec3167d9a7b7a-8787aebd7410",
-  "generatedAt": "2026-06-05T15:25:26.2957161Z",
-  "timestamp": "2026-06-05T15:25:26.2957163Z",
+  "snapshotId": "candidate-export-8dec326a26572ab-6e7879cb590e",
+  "generatedAt": "2026-06-05T17:20:47.1571738Z",
+  "timestamp": "2026-06-05T17:20:47.1571738Z",
   "note": "Suggested only. Does not overwrite config/verified-multi-outcome-groups.json. Review manually before copying.",
   "summary": {
     "configuredGroups": 11,
@@ -26,7 +26,7 @@
     "brokenTotal": 3,
     "hasMissingNoAsk": 0,
     "hasMarketMismatch": 3,
-    "hasCandidateRefreshMatch": 0,
+    "hasCandidateRefreshMatch": 1,
     "hasSuggestedTemplate": 0
   },
   "groups": [
@@ -224,6 +224,7 @@
       "suggestedRefreshedTemplate": null,
       "diff": null,
       "notes": [
+        "Stable candidate match: winner:2026 peruvian presidential election|kind:person score=1.",
         "ManualLock: Manual review required due to repair diff oscillation on marketId 947269"
       ],
       "copyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."

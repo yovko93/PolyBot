@@ -1,14 +1,16 @@
 {
-  "Cash": 980.620,
-  "Locked": 19.380,
-  "Equity": 1000.000,
+  "Cash": 989.20,
+  "Locked": 10.80,
+  "Equity": 1000.00,
   "RealizedPnl": 0,
   "OpenPositions": 1,
-  "TotalExposure": 19.380,
+  "TotalExposure": 10.80,
   "PositionsByStrategy": {
-    "BUY_YES_AND_BUY_NO": 1
+    "SingleMarketBuyBoth": 1
   },
-  "HourlyOpenCount": 0,
-  "LastOpenAt": "2026-06-05T12:44:40.4420801Z",
-  "BlockedCountsByReason": {}
+  "HourlyOpenCount": 1,
+  "LastOpenAt": "2026-06-05T17:18:57.2184869Z",
+  "BlockedCountsByReason": {
+    "DuplicateOpenPosition": 1
+  }
 }
