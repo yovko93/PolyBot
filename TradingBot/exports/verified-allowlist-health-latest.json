@@ -20,7 +20,7 @@
     "BrokenTotal": 3,
     "HasMissingNoAsk": 0,
     "HasMarketMismatch": 3,
-    "HasCandidateRefreshMatch": 1,
+    "HasCandidateRefreshMatch": 0,
     "HasSuggestedTemplate": 0
   },
   "groups": [

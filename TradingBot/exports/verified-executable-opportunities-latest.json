@@ -1,17 +1,7 @@
 {
-  "timestamp": "2026-06-05T17:20:47.5057049Z",
+  "timestamp": "2026-06-05T22:12:50.5806258Z",
   "activeProfile": "Conservative",
   "executableVerifiedBaskets": [],
   "preTradeResults": [],
-  "paperPositions": [
-    {
-      "PositionId": "SingleMarketBuyBoth___paper_phase_validation_single_market___YES___paper_phase_validation_single_market___NO",
-      "GroupKey": "single-market:__paper_phase_validation_single_market__",
-      "Strategy": "SingleMarketBuyBoth",
-      "TotalCost": 10.80,
-      "ExpectedProfit": 1.20,
-      "OpenedAtUtc": "2026-06-05T17:18:57.2184869Z",
-      "status": "Open"
-    }
-  ]
+  "paperPositions": []
 }

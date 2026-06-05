@@ -1,5 +1,5 @@
 {
-  "Timestamp": "2026-06-05T17:20:47.4107171Z",
+  "Timestamp": "2026-06-05T22:12:50.45511Z",
   "ActiveProfile": "Conservative",
   "ExperimentalProfile": "PolymarketApprox",
   "Profiles": [
@@ -9,16 +9,16 @@
     "RawOnly"
   ],
   "BestByActiveProfile": {
-    "GroupKey": "winner:2026 colombian presidential election|kind:person",
+    "GroupKey": "winner:2026 nba finals|kind:generic",
     "Legs": 2,
     "GuaranteedPayout": 1,
-    "NoAskSum": 1.00,
-    "GrossEdge": 0.00,
-    "ActiveProfileNetEdge": -0.0040,
+    "NoAskSum": 0.996,
+    "GrossEdge": 0.004,
+    "ActiveProfileNetEdge": 0.0000,
     "ExecutableQty": 0,
-    "ExpectedProfit": -0.0040,
+    "ExpectedProfit": 0.0000,
     "DominantCost": "Fees",
-    "Classification": "NearExecutable",
+    "Classification": "RawPositiveNetNegative",
     "BestProfile": "RawOnly",
     "ProfileResults": [
       {
@@ -27,8 +27,8 @@
         "Fees": 0.002,
         "Slippage": 0.0010,
         "Safety": 0.001,
-        "NetEdge": -0.0040,
-        "ExpectedProfit": -0.0040,
+        "NetEdge": 0.0000,
+        "ExpectedProfit": 0.0000,
         "WouldBeExecutable": false,
         "DiagnosticsOnly": false
       },
@@ -38,9 +38,9 @@
         "Fees": 0,
         "Slippage": 0.0010,
         "Safety": 0.001,
-        "NetEdge": -0.0020,
-        "ExpectedProfit": -0.0020,
-        "WouldBeExecutable": false,
+        "NetEdge": 0.0020,
+        "ExpectedProfit": 0.0020,
+        "WouldBeExecutable": true,
         "DiagnosticsOnly": true
       },
       {
@@ -49,9 +49,9 @@
         "Fees": 0,
         "Slippage": 0,
         "Safety": 0.001,
-        "NetEdge": -0.001,
-        "ExpectedProfit": -0.001,
-        "WouldBeExecutable": false,
+        "NetEdge": 0.003,
+        "ExpectedProfit": 0.003,
+        "WouldBeExecutable": true,
         "DiagnosticsOnly": true
       },
       {
@@ -60,9 +60,9 @@
         "Fees": 0,
         "Slippage": 0,
         "Safety": 0,
-        "NetEdge": 0.00,
-        "ExpectedProfit": 0.00,
-        "WouldBeExecutable": false,
+        "NetEdge": 0.004,
+        "ExpectedProfit": 0.004,
+        "WouldBeExecutable": true,
         "DiagnosticsOnly": true
       }
     ],
@@ -71,95 +71,87 @@
         "Qty": 1,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.0040,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 5,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.0200,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 10,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.0400,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 25,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.1000,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 50,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.2000,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
-      },
-      {
-        "Qty": 3997.53,
-        "DepthAvailable": false,
-        "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -15.990120,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       }
     ],
     "TopMissingReason": "None",
-    "EvaluatedAt": "2026-06-05T17:20:46.9917561Z",
-    "CostReductionNeeded": 0.0040,
+    "EvaluatedAt": "2026-06-05T22:12:50.2042235Z",
+    "CostReductionNeeded": 0,
     "NearExecutable": true,
     "RecommendedAction": "NearExecutableReviewCosts",
-    "DiagnosticsOnlyPositiveProfiles": [],
-    "ExperimentalProfileNetEdge": -0.0020,
-    "ExecutionStatus": 1
+    "DiagnosticsOnlyPositiveProfiles": [
+      "PolymarketApprox",
+      "OrderbookOnly",
+      "RawOnly"
+    ],
+    "ExperimentalProfileNetEdge": 0.0020,
+    "ExecutionStatus": 3
   },
   "BestByRawEdge": {
-    "GroupKey": "winner:2026 colombian presidential election|kind:person",
+    "GroupKey": "winner:2026 nba finals|kind:generic",
     "Legs": 2,
     "GuaranteedPayout": 1,
-    "NoAskSum": 1.00,
-    "GrossEdge": 0.00,
-    "ActiveProfileNetEdge": -0.0040,
+    "NoAskSum": 0.996,
+    "GrossEdge": 0.004,
+    "ActiveProfileNetEdge": 0.0000,
     "ExecutableQty": 0,
-    "ExpectedProfit": -0.0040,
+    "ExpectedProfit": 0.0000,
     "DominantCost": "Fees",
-    "Classification": "NearExecutable",
+    "Classification": "RawPositiveNetNegative",
     "BestProfile": "RawOnly",
     "ProfileResults": [
       {
@@ -168,8 +160,8 @@
         "Fees": 0.002,
         "Slippage": 0.0010,
         "Safety": 0.001,
-        "NetEdge": -0.0040,
-        "ExpectedProfit": -0.0040,
+        "NetEdge": 0.0000,
+        "ExpectedProfit": 0.0000,
         "WouldBeExecutable": false,
         "DiagnosticsOnly": false
       },
@@ -179,9 +171,9 @@
         "Fees": 0,
         "Slippage": 0.0010,
         "Safety": 0.001,
-        "NetEdge": -0.0020,
-        "ExpectedProfit": -0.0020,
-        "WouldBeExecutable": false,
+        "NetEdge": 0.0020,
+        "ExpectedProfit": 0.0020,
+        "WouldBeExecutable": true,
         "DiagnosticsOnly": true
       },
       {
@@ -190,9 +182,9 @@
         "Fees": 0,
         "Slippage": 0,
         "Safety": 0.001,
-        "NetEdge": -0.001,
-        "ExpectedProfit": -0.001,
-        "WouldBeExecutable": false,
+        "NetEdge": 0.003,
+        "ExpectedProfit": 0.003,
+        "WouldBeExecutable": true,
         "DiagnosticsOnly": true
       },
       {
@@ -201,9 +193,9 @@
         "Fees": 0,
         "Slippage": 0,
         "Safety": 0,
-        "NetEdge": 0.00,
-        "ExpectedProfit": 0.00,
-        "WouldBeExecutable": false,
+        "NetEdge": 0.004,
+        "ExpectedProfit": 0.004,
+        "WouldBeExecutable": true,
         "DiagnosticsOnly": true
       }
     ],
@@ -212,95 +204,87 @@
         "Qty": 1,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.0040,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 5,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.0200,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 10,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.0400,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 25,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.1000,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 50,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.2000,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
-      },
-      {
-        "Qty": 3997.53,
-        "DepthAvailable": false,
-        "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -15.990120,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       }
     ],
     "TopMissingReason": "None",
-    "EvaluatedAt": "2026-06-05T17:20:46.9917561Z",
-    "CostReductionNeeded": 0.0040,
+    "EvaluatedAt": "2026-06-05T22:12:50.2042235Z",
+    "CostReductionNeeded": 0,
     "NearExecutable": true,
     "RecommendedAction": "NearExecutableReviewCosts",
-    "DiagnosticsOnlyPositiveProfiles": [],
-    "ExperimentalProfileNetEdge": -0.0020,
-    "ExecutionStatus": 1
+    "DiagnosticsOnlyPositiveProfiles": [
+      "PolymarketApprox",
+      "OrderbookOnly",
+      "RawOnly"
+    ],
+    "ExperimentalProfileNetEdge": 0.0020,
+    "ExecutionStatus": 3
   },
   "BestByConservative": {
-    "GroupKey": "winner:2026 colombian presidential election|kind:person",
+    "GroupKey": "winner:2026 nba finals|kind:generic",
     "Legs": 2,
     "GuaranteedPayout": 1,
-    "NoAskSum": 1.00,
-    "GrossEdge": 0.00,
-    "ActiveProfileNetEdge": -0.0040,
+    "NoAskSum": 0.996,
+    "GrossEdge": 0.004,
+    "ActiveProfileNetEdge": 0.0000,
     "ExecutableQty": 0,
-    "ExpectedProfit": -0.0040,
+    "ExpectedProfit": 0.0000,
     "DominantCost": "Fees",
-    "Classification": "NearExecutable",
+    "Classification": "RawPositiveNetNegative",
     "BestProfile": "RawOnly",
     "ProfileResults": [
       {
@@ -309,8 +293,8 @@
         "Fees": 0.002,
         "Slippage": 0.0010,
         "Safety": 0.001,
-        "NetEdge": -0.0040,
-        "ExpectedProfit": -0.0040,
+        "NetEdge": 0.0000,
+        "ExpectedProfit": 0.0000,
         "WouldBeExecutable": false,
         "DiagnosticsOnly": false
       },
@@ -320,9 +304,9 @@
         "Fees": 0,
         "Slippage": 0.0010,
         "Safety": 0.001,
-        "NetEdge": -0.0020,
-        "ExpectedProfit": -0.0020,
-        "WouldBeExecutable": false,
+        "NetEdge": 0.0020,
+        "ExpectedProfit": 0.0020,
+        "WouldBeExecutable": true,
         "DiagnosticsOnly": true
       },
       {
@@ -331,9 +315,9 @@
         "Fees": 0,
         "Slippage": 0,
         "Safety": 0.001,
-        "NetEdge": -0.001,
-        "ExpectedProfit": -0.001,
-        "WouldBeExecutable": false,
+        "NetEdge": 0.003,
+        "ExpectedProfit": 0.003,
+        "WouldBeExecutable": true,
         "DiagnosticsOnly": true
       },
       {
@@ -342,9 +326,9 @@
         "Fees": 0,
         "Slippage": 0,
         "Safety": 0,
-        "NetEdge": 0.00,
-        "ExpectedProfit": 0.00,
-        "WouldBeExecutable": false,
+        "NetEdge": 0.004,
+        "ExpectedProfit": 0.004,
+        "WouldBeExecutable": true,
         "DiagnosticsOnly": true
       }
     ],
@@ -353,95 +337,87 @@
         "Qty": 1,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.0040,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 5,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.0200,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 10,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.0400,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 25,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.1000,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 50,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.2000,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
-      },
-      {
-        "Qty": 3997.53,
-        "DepthAvailable": false,
-        "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -15.990120,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       }
     ],
     "TopMissingReason": "None",
-    "EvaluatedAt": "2026-06-05T17:20:46.9917561Z",
-    "CostReductionNeeded": 0.0040,
+    "EvaluatedAt": "2026-06-05T22:12:50.2042235Z",
+    "CostReductionNeeded": 0,
     "NearExecutable": true,
     "RecommendedAction": "NearExecutableReviewCosts",
-    "DiagnosticsOnlyPositiveProfiles": [],
-    "ExperimentalProfileNetEdge": -0.0020,
-    "ExecutionStatus": 1
+    "DiagnosticsOnlyPositiveProfiles": [
+      "PolymarketApprox",
+      "OrderbookOnly",
+      "RawOnly"
+    ],
+    "ExperimentalProfileNetEdge": 0.0020,
+    "ExecutionStatus": 3
   },
   "BestByPolymarketApprox": {
-    "GroupKey": "winner:2026 colombian presidential election|kind:person",
+    "GroupKey": "winner:2026 nba finals|kind:generic",
     "Legs": 2,
     "GuaranteedPayout": 1,
-    "NoAskSum": 1.00,
-    "GrossEdge": 0.00,
-    "ActiveProfileNetEdge": -0.0040,
+    "NoAskSum": 0.996,
+    "GrossEdge": 0.004,
+    "ActiveProfileNetEdge": 0.0000,
     "ExecutableQty": 0,
-    "ExpectedProfit": -0.0040,
+    "ExpectedProfit": 0.0000,
     "DominantCost": "Fees",
-    "Classification": "NearExecutable",
+    "Classification": "RawPositiveNetNegative",
     "BestProfile": "RawOnly",
     "ProfileResults": [
       {
@@ -450,8 +426,8 @@
         "Fees": 0.002,
         "Slippage": 0.0010,
         "Safety": 0.001,
-        "NetEdge": -0.0040,
-        "ExpectedProfit": -0.0040,
+        "NetEdge": 0.0000,
+        "ExpectedProfit": 0.0000,
         "WouldBeExecutable": false,
         "DiagnosticsOnly": false
       },
@@ -461,9 +437,9 @@
         "Fees": 0,
         "Slippage": 0.0010,
         "Safety": 0.001,
-        "NetEdge": -0.0020,
-        "ExpectedProfit": -0.0020,
-        "WouldBeExecutable": false,
+        "NetEdge": 0.0020,
+        "ExpectedProfit": 0.0020,
+        "WouldBeExecutable": true,
         "DiagnosticsOnly": true
       },
       {
@@ -472,9 +448,9 @@
         "Fees": 0,
         "Slippage": 0,
         "Safety": 0.001,
-        "NetEdge": -0.001,
-        "ExpectedProfit": -0.001,
-        "WouldBeExecutable": false,
+        "NetEdge": 0.003,
+        "ExpectedProfit": 0.003,
+        "WouldBeExecutable": true,
         "DiagnosticsOnly": true
       },
       {
@@ -483,9 +459,9 @@
         "Fees": 0,
         "Slippage": 0,
         "Safety": 0,
-        "NetEdge": 0.00,
-        "ExpectedProfit": 0.00,
-        "WouldBeExecutable": false,
+        "NetEdge": 0.004,
+        "ExpectedProfit": 0.004,
+        "WouldBeExecutable": true,
         "DiagnosticsOnly": true
       }
     ],
@@ -494,95 +470,87 @@
         "Qty": 1,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.0040,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 5,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.0200,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 10,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.0400,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 25,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.1000,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 50,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.2000,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
-      },
-      {
-        "Qty": 3997.53,
-        "DepthAvailable": false,
-        "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -15.990120,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       }
     ],
     "TopMissingReason": "None",
-    "EvaluatedAt": "2026-06-05T17:20:46.9917561Z",
-    "CostReductionNeeded": 0.0040,
+    "EvaluatedAt": "2026-06-05T22:12:50.2042235Z",
+    "CostReductionNeeded": 0,
     "NearExecutable": true,
     "RecommendedAction": "NearExecutableReviewCosts",
-    "DiagnosticsOnlyPositiveProfiles": [],
-    "ExperimentalProfileNetEdge": -0.0020,
-    "ExecutionStatus": 1
+    "DiagnosticsOnlyPositiveProfiles": [
+      "PolymarketApprox",
+      "OrderbookOnly",
+      "RawOnly"
+    ],
+    "ExperimentalProfileNetEdge": 0.0020,
+    "ExecutionStatus": 3
   },
   "BestByRaw": {
-    "GroupKey": "winner:2026 colombian presidential election|kind:person",
+    "GroupKey": "winner:2026 nba finals|kind:generic",
     "Legs": 2,
     "GuaranteedPayout": 1,
-    "NoAskSum": 1.00,
-    "GrossEdge": 0.00,
-    "ActiveProfileNetEdge": -0.0040,
+    "NoAskSum": 0.996,
+    "GrossEdge": 0.004,
+    "ActiveProfileNetEdge": 0.0000,
     "ExecutableQty": 0,
-    "ExpectedProfit": -0.0040,
+    "ExpectedProfit": 0.0000,
     "DominantCost": "Fees",
-    "Classification": "NearExecutable",
+    "Classification": "RawPositiveNetNegative",
     "BestProfile": "RawOnly",
     "ProfileResults": [
       {
@@ -591,8 +559,8 @@
         "Fees": 0.002,
         "Slippage": 0.0010,
         "Safety": 0.001,
-        "NetEdge": -0.0040,
-        "ExpectedProfit": -0.0040,
+        "NetEdge": 0.0000,
+        "ExpectedProfit": 0.0000,
         "WouldBeExecutable": false,
         "DiagnosticsOnly": false
       },
@@ -602,9 +570,9 @@
         "Fees": 0,
         "Slippage": 0.0010,
         "Safety": 0.001,
-        "NetEdge": -0.0020,
-        "ExpectedProfit": -0.0020,
-        "WouldBeExecutable": false,
+        "NetEdge": 0.0020,
+        "ExpectedProfit": 0.0020,
+        "WouldBeExecutable": true,
         "DiagnosticsOnly": true
       },
       {
@@ -613,9 +581,9 @@
         "Fees": 0,
         "Slippage": 0,
         "Safety": 0.001,
-        "NetEdge": -0.001,
-        "ExpectedProfit": -0.001,
-        "WouldBeExecutable": false,
+        "NetEdge": 0.003,
+        "ExpectedProfit": 0.003,
+        "WouldBeExecutable": true,
         "DiagnosticsOnly": true
       },
       {
@@ -624,9 +592,9 @@
         "Fees": 0,
         "Slippage": 0,
         "Safety": 0,
-        "NetEdge": 0.00,
-        "ExpectedProfit": 0.00,
-        "WouldBeExecutable": false,
+        "NetEdge": 0.004,
+        "ExpectedProfit": 0.004,
+        "WouldBeExecutable": true,
         "DiagnosticsOnly": true
       }
     ],
@@ -635,95 +603,87 @@
         "Qty": 1,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.0040,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 5,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.0200,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 10,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.0400,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 25,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.1000,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 50,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.2000,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
-      },
-      {
-        "Qty": 3997.53,
-        "DepthAvailable": false,
-        "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -15.990120,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       }
     ],
     "TopMissingReason": "None",
-    "EvaluatedAt": "2026-06-05T17:20:46.9917561Z",
-    "CostReductionNeeded": 0.0040,
+    "EvaluatedAt": "2026-06-05T22:12:50.2042235Z",
+    "CostReductionNeeded": 0,
     "NearExecutable": true,
     "RecommendedAction": "NearExecutableReviewCosts",
-    "DiagnosticsOnlyPositiveProfiles": [],
-    "ExperimentalProfileNetEdge": -0.0020,
-    "ExecutionStatus": 1
+    "DiagnosticsOnlyPositiveProfiles": [
+      "PolymarketApprox",
+      "OrderbookOnly",
+      "RawOnly"
+    ],
+    "ExperimentalProfileNetEdge": 0.0020,
+    "ExecutionStatus": 3
   },
   "BestNearExecutable": {
-    "GroupKey": "winner:2026 colombian presidential election|kind:person",
+    "GroupKey": "winner:2026 nba finals|kind:generic",
     "Legs": 2,
     "GuaranteedPayout": 1,
-    "NoAskSum": 1.00,
-    "GrossEdge": 0.00,
-    "ActiveProfileNetEdge": -0.0040,
+    "NoAskSum": 0.996,
+    "GrossEdge": 0.004,
+    "ActiveProfileNetEdge": 0.0000,
     "ExecutableQty": 0,
-    "ExpectedProfit": -0.0040,
+    "ExpectedProfit": 0.0000,
     "DominantCost": "Fees",
-    "Classification": "NearExecutable",
+    "Classification": "RawPositiveNetNegative",
     "BestProfile": "RawOnly",
     "ProfileResults": [
       {
@@ -732,8 +692,8 @@
         "Fees": 0.002,
         "Slippage": 0.0010,
         "Safety": 0.001,
-        "NetEdge": -0.0040,
-        "ExpectedProfit": -0.0040,
+        "NetEdge": 0.0000,
+        "ExpectedProfit": 0.0000,
         "WouldBeExecutable": false,
         "DiagnosticsOnly": false
       },
@@ -743,9 +703,9 @@
         "Fees": 0,
         "Slippage": 0.0010,
         "Safety": 0.001,
-        "NetEdge": -0.0020,
-        "ExpectedProfit": -0.0020,
-        "WouldBeExecutable": false,
+        "NetEdge": 0.0020,
+        "ExpectedProfit": 0.0020,
+        "WouldBeExecutable": true,
         "DiagnosticsOnly": true
       },
       {
@@ -754,9 +714,9 @@
         "Fees": 0,
         "Slippage": 0,
         "Safety": 0.001,
-        "NetEdge": -0.001,
-        "ExpectedProfit": -0.001,
-        "WouldBeExecutable": false,
+        "NetEdge": 0.003,
+        "ExpectedProfit": 0.003,
+        "WouldBeExecutable": true,
         "DiagnosticsOnly": true
       },
       {
@@ -765,9 +725,9 @@
         "Fees": 0,
         "Slippage": 0,
         "Safety": 0,
-        "NetEdge": 0.00,
-        "ExpectedProfit": 0.00,
-        "WouldBeExecutable": false,
+        "NetEdge": 0.004,
+        "ExpectedProfit": 0.004,
+        "WouldBeExecutable": true,
         "DiagnosticsOnly": true
       }
     ],
@@ -776,83 +736,75 @@
         "Qty": 1,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.0040,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 5,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.0200,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 10,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.0400,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 25,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.1000,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       },
       {
         "Qty": 50,
         "DepthAvailable": false,
         "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -0.2000,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
-      },
-      {
-        "Qty": 3997.53,
-        "DepthAvailable": false,
-        "DepthMode": "BestAskOnly",
-        "WeightedAverageNoAskPerLeg": 0.50,
-        "NoAskSumAtQty": 1.00,
-        "GrossEdgePerBasket": 0.00,
-        "NetEdgePerBasket": -0.0040,
-        "ExpectedProfit": -15.990120,
-        "LimitingLeg": "569366",
-        "MaxExecutableQty": 3997.53
+        "WeightedAverageNoAskPerLeg": 0.498,
+        "NoAskSumAtQty": 0.996,
+        "GrossEdgePerBasket": 0.004,
+        "NetEdgePerBasket": 0.0000,
+        "ExpectedProfit": 0.0000,
+        "LimitingLeg": "553866",
+        "MaxExecutableQty": 5
       }
     ],
     "TopMissingReason": "None",
-    "EvaluatedAt": "2026-06-05T17:20:46.9917561Z",
-    "CostReductionNeeded": 0.0040,
+    "EvaluatedAt": "2026-06-05T22:12:50.2042235Z",
+    "CostReductionNeeded": 0,
     "NearExecutable": true,
     "RecommendedAction": "NearExecutableReviewCosts",
-    "DiagnosticsOnlyPositiveProfiles": [],
-    "ExperimentalProfileNetEdge": -0.0020,
-    "ExecutionStatus": 1
+    "DiagnosticsOnlyPositiveProfiles": [
+      "PolymarketApprox",
+      "OrderbookOnly",
+      "RawOnly"
+    ],
+    "ExperimentalProfileNetEdge": 0.0020,
+    "ExecutionStatus": 3
   },
   "NearExecutableBaskets": [
     {
@@ -924,7 +876,7 @@
           "NetEdgePerBasket": -0.0040,
           "ExpectedProfit": -0.0040,
           "LimitingLeg": "569366",
-          "MaxExecutableQty": 3997.53
+          "MaxExecutableQty": 251.43
         },
         {
           "Qty": 5,
@@ -936,7 +888,7 @@
           "NetEdgePerBasket": -0.0040,
           "ExpectedProfit": -0.0200,
           "LimitingLeg": "569366",
-          "MaxExecutableQty": 3997.53
+          "MaxExecutableQty": 251.43
         },
         {
           "Qty": 10,
@@ -948,7 +900,7 @@
           "NetEdgePerBasket": -0.0040,
           "ExpectedProfit": -0.0400,
           "LimitingLeg": "569366",
-          "MaxExecutableQty": 3997.53
+          "MaxExecutableQty": 251.43
         },
         {
           "Qty": 25,
@@ -960,7 +912,7 @@
           "NetEdgePerBasket": -0.0040,
           "ExpectedProfit": -0.1000,
           "LimitingLeg": "569366",
-          "MaxExecutableQty": 3997.53
+          "MaxExecutableQty": 251.43
         },
         {
           "Qty": 50,
@@ -972,23 +924,23 @@
           "NetEdgePerBasket": -0.0040,
           "ExpectedProfit": -0.2000,
           "LimitingLeg": "569366",
-          "MaxExecutableQty": 3997.53
+          "MaxExecutableQty": 251.43
         },
         {
-          "Qty": 3997.53,
+          "Qty": 251.43,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
           "WeightedAverageNoAskPerLeg": 0.50,
           "NoAskSumAtQty": 1.00,
           "GrossEdgePerBasket": 0.00,
           "NetEdgePerBasket": -0.0040,
-          "ExpectedProfit": -15.990120,
+          "ExpectedProfit": -1.005720,
           "LimitingLeg": "569366",
-          "MaxExecutableQty": 3997.53
+          "MaxExecutableQty": 251.43
         }
       ],
       "TopMissingReason": "None",
-      "EvaluatedAt": "2026-06-05T17:20:46.9917561Z",
+      "EvaluatedAt": "2026-06-05T22:12:50.0728746Z",
       "CostReductionNeeded": 0.0040,
       "NearExecutable": true,
       "RecommendedAction": "NearExecutableReviewCosts",
@@ -1000,13 +952,13 @@
       "GroupKey": "winner:2026 nba finals|kind:generic",
       "Legs": 2,
       "GuaranteedPayout": 1,
-      "NoAskSum": 1.000,
-      "GrossEdge": 0.000,
-      "ActiveProfileNetEdge": -0.0040,
+      "NoAskSum": 0.996,
+      "GrossEdge": 0.004,
+      "ActiveProfileNetEdge": 0.0000,
       "ExecutableQty": 0,
-      "ExpectedProfit": -0.0040,
+      "ExpectedProfit": 0.0000,
       "DominantCost": "Fees",
-      "Classification": "NearExecutable",
+      "Classification": "RawPositiveNetNegative",
       "BestProfile": "RawOnly",
       "ProfileResults": [
         {
@@ -1015,8 +967,8 @@
           "Fees": 0.002,
           "Slippage": 0.0010,
           "Safety": 0.001,
-          "NetEdge": -0.0040,
-          "ExpectedProfit": -0.0040,
+          "NetEdge": 0.0000,
+          "ExpectedProfit": 0.0000,
           "WouldBeExecutable": false,
           "DiagnosticsOnly": false
         },
@@ -1026,9 +978,9 @@
           "Fees": 0,
           "Slippage": 0.0010,
           "Safety": 0.001,
-          "NetEdge": -0.0020,
-          "ExpectedProfit": -0.0020,
-          "WouldBeExecutable": false,
+          "NetEdge": 0.0020,
+          "ExpectedProfit": 0.0020,
+          "WouldBeExecutable": true,
           "DiagnosticsOnly": true
         },
         {
@@ -1037,9 +989,9 @@
           "Fees": 0,
           "Slippage": 0,
           "Safety": 0.001,
-          "NetEdge": -0.001,
-          "ExpectedProfit": -0.001,
-          "WouldBeExecutable": false,
+          "NetEdge": 0.003,
+          "ExpectedProfit": 0.003,
+          "WouldBeExecutable": true,
           "DiagnosticsOnly": true
         },
         {
@@ -1048,9 +1000,9 @@
           "Fees": 0,
           "Slippage": 0,
           "Safety": 0,
-          "NetEdge": 0.000,
-          "ExpectedProfit": 0.000,
-          "WouldBeExecutable": false,
+          "NetEdge": 0.004,
+          "ExpectedProfit": 0.004,
+          "WouldBeExecutable": true,
           "DiagnosticsOnly": true
         }
       ],
@@ -1059,86 +1011,211 @@
           "Qty": 1,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.500,
-          "NoAskSumAtQty": 1.000,
-          "GrossEdgePerBasket": 0.000,
-          "NetEdgePerBasket": -0.0040,
-          "ExpectedProfit": -0.0040,
+          "WeightedAverageNoAskPerLeg": 0.498,
+          "NoAskSumAtQty": 0.996,
+          "GrossEdgePerBasket": 0.004,
+          "NetEdgePerBasket": 0.0000,
+          "ExpectedProfit": 0.0000,
           "LimitingLeg": "553866",
-          "MaxExecutableQty": 30.22
+          "MaxExecutableQty": 5
         },
         {
           "Qty": 5,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.500,
-          "NoAskSumAtQty": 1.000,
-          "GrossEdgePerBasket": 0.000,
-          "NetEdgePerBasket": -0.0040,
-          "ExpectedProfit": -0.0200,
+          "WeightedAverageNoAskPerLeg": 0.498,
+          "NoAskSumAtQty": 0.996,
+          "GrossEdgePerBasket": 0.004,
+          "NetEdgePerBasket": 0.0000,
+          "ExpectedProfit": 0.0000,
           "LimitingLeg": "553866",
-          "MaxExecutableQty": 30.22
+          "MaxExecutableQty": 5
         },
         {
           "Qty": 10,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.500,
-          "NoAskSumAtQty": 1.000,
-          "GrossEdgePerBasket": 0.000,
-          "NetEdgePerBasket": -0.0040,
-          "ExpectedProfit": -0.0400,
+          "WeightedAverageNoAskPerLeg": 0.498,
+          "NoAskSumAtQty": 0.996,
+          "GrossEdgePerBasket": 0.004,
+          "NetEdgePerBasket": 0.0000,
+          "ExpectedProfit": 0.0000,
           "LimitingLeg": "553866",
-          "MaxExecutableQty": 30.22
+          "MaxExecutableQty": 5
         },
         {
           "Qty": 25,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.500,
-          "NoAskSumAtQty": 1.000,
-          "GrossEdgePerBasket": 0.000,
-          "NetEdgePerBasket": -0.0040,
-          "ExpectedProfit": -0.1000,
+          "WeightedAverageNoAskPerLeg": 0.498,
+          "NoAskSumAtQty": 0.996,
+          "GrossEdgePerBasket": 0.004,
+          "NetEdgePerBasket": 0.0000,
+          "ExpectedProfit": 0.0000,
           "LimitingLeg": "553866",
-          "MaxExecutableQty": 30.22
-        },
-        {
-          "Qty": 30.22,
-          "DepthAvailable": false,
-          "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.500,
-          "NoAskSumAtQty": 1.000,
-          "GrossEdgePerBasket": 0.000,
-          "NetEdgePerBasket": -0.0040,
-          "ExpectedProfit": -0.120880,
-          "LimitingLeg": "553866",
-          "MaxExecutableQty": 30.22
+          "MaxExecutableQty": 5
         },
         {
           "Qty": 50,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.500,
-          "NoAskSumAtQty": 1.000,
-          "GrossEdgePerBasket": 0.000,
-          "NetEdgePerBasket": -0.0040,
-          "ExpectedProfit": -0.2000,
+          "WeightedAverageNoAskPerLeg": 0.498,
+          "NoAskSumAtQty": 0.996,
+          "GrossEdgePerBasket": 0.004,
+          "NetEdgePerBasket": 0.0000,
+          "ExpectedProfit": 0.0000,
           "LimitingLeg": "553866",
-          "MaxExecutableQty": 30.22
+          "MaxExecutableQty": 5
         }
       ],
       "TopMissingReason": "None",
-      "EvaluatedAt": "2026-06-05T17:20:47.1444564Z",
-      "CostReductionNeeded": 0.0040,
+      "EvaluatedAt": "2026-06-05T22:12:50.2042235Z",
+      "CostReductionNeeded": 0,
       "NearExecutable": true,
       "RecommendedAction": "NearExecutableReviewCosts",
-      "DiagnosticsOnlyPositiveProfiles": [],
-      "ExperimentalProfileNetEdge": -0.0020,
-      "ExecutionStatus": 1
+      "DiagnosticsOnlyPositiveProfiles": [
+        "PolymarketApprox",
+        "OrderbookOnly",
+        "RawOnly"
+      ],
+      "ExperimentalProfileNetEdge": 0.0020,
+      "ExecutionStatus": 3
     }
   ],
   "VerifiedBaskets": [
+    {
+      "GroupKey": "winner:2026 nba finals|kind:generic",
+      "Legs": 2,
+      "GuaranteedPayout": 1,
+      "NoAskSum": 0.996,
+      "GrossEdge": 0.004,
+      "ActiveProfileNetEdge": 0.0000,
+      "ExecutableQty": 0,
+      "ExpectedProfit": 0.0000,
+      "DominantCost": "Fees",
+      "Classification": "RawPositiveNetNegative",
+      "BestProfile": "RawOnly",
+      "ProfileResults": [
+        {
+          "ProfileName": "Conservative",
+          "FeeModel": "FixedPerLeg",
+          "Fees": 0.002,
+          "Slippage": 0.0010,
+          "Safety": 0.001,
+          "NetEdge": 0.0000,
+          "ExpectedProfit": 0.0000,
+          "WouldBeExecutable": false,
+          "DiagnosticsOnly": false
+        },
+        {
+          "ProfileName": "PolymarketApprox",
+          "FeeModel": "NoneOrExternalized",
+          "Fees": 0,
+          "Slippage": 0.0010,
+          "Safety": 0.001,
+          "NetEdge": 0.0020,
+          "ExpectedProfit": 0.0020,
+          "WouldBeExecutable": true,
+          "DiagnosticsOnly": true
+        },
+        {
+          "ProfileName": "OrderbookOnly",
+          "FeeModel": "None",
+          "Fees": 0,
+          "Slippage": 0,
+          "Safety": 0.001,
+          "NetEdge": 0.003,
+          "ExpectedProfit": 0.003,
+          "WouldBeExecutable": true,
+          "DiagnosticsOnly": true
+        },
+        {
+          "ProfileName": "RawOnly",
+          "FeeModel": "None",
+          "Fees": 0,
+          "Slippage": 0,
+          "Safety": 0,
+          "NetEdge": 0.004,
+          "ExpectedProfit": 0.004,
+          "WouldBeExecutable": true,
+          "DiagnosticsOnly": true
+        }
+      ],
+      "QuantityScenarios": [
+        {
+          "Qty": 1,
+          "DepthAvailable": false,
+          "DepthMode": "BestAskOnly",
+          "WeightedAverageNoAskPerLeg": 0.498,
+          "NoAskSumAtQty": 0.996,
+          "GrossEdgePerBasket": 0.004,
+          "NetEdgePerBasket": 0.0000,
+          "ExpectedProfit": 0.0000,
+          "LimitingLeg": "553866",
+          "MaxExecutableQty": 5
+        },
+        {
+          "Qty": 5,
+          "DepthAvailable": false,
+          "DepthMode": "BestAskOnly",
+          "WeightedAverageNoAskPerLeg": 0.498,
+          "NoAskSumAtQty": 0.996,
+          "GrossEdgePerBasket": 0.004,
+          "NetEdgePerBasket": 0.0000,
+          "ExpectedProfit": 0.0000,
+          "LimitingLeg": "553866",
+          "MaxExecutableQty": 5
+        },
+        {
+          "Qty": 10,
+          "DepthAvailable": false,
+          "DepthMode": "BestAskOnly",
+          "WeightedAverageNoAskPerLeg": 0.498,
+          "NoAskSumAtQty": 0.996,
+          "GrossEdgePerBasket": 0.004,
+          "NetEdgePerBasket": 0.0000,
+          "ExpectedProfit": 0.0000,
+          "LimitingLeg": "553866",
+          "MaxExecutableQty": 5
+        },
+        {
+          "Qty": 25,
+          "DepthAvailable": false,
+          "DepthMode": "BestAskOnly",
+          "WeightedAverageNoAskPerLeg": 0.498,
+          "NoAskSumAtQty": 0.996,
+          "GrossEdgePerBasket": 0.004,
+          "NetEdgePerBasket": 0.0000,
+          "ExpectedProfit": 0.0000,
+          "LimitingLeg": "553866",
+          "MaxExecutableQty": 5
+        },
+        {
+          "Qty": 50,
+          "DepthAvailable": false,
+          "DepthMode": "BestAskOnly",
+          "WeightedAverageNoAskPerLeg": 0.498,
+          "NoAskSumAtQty": 0.996,
+          "GrossEdgePerBasket": 0.004,
+          "NetEdgePerBasket": 0.0000,
+          "ExpectedProfit": 0.0000,
+          "LimitingLeg": "553866",
+          "MaxExecutableQty": 5
+        }
+      ],
+      "TopMissingReason": "None",
+      "EvaluatedAt": "2026-06-05T22:12:50.2042235Z",
+      "CostReductionNeeded": 0,
+      "NearExecutable": true,
+      "RecommendedAction": "NearExecutableReviewCosts",
+      "DiagnosticsOnlyPositiveProfiles": [
+        "PolymarketApprox",
+        "OrderbookOnly",
+        "RawOnly"
+      ],
+      "ExperimentalProfileNetEdge": 0.0020,
+      "ExecutionStatus": 3
+    },
     {
       "GroupKey": "winner:2026 colombian presidential election|kind:person",
       "Legs": 2,
@@ -1208,7 +1285,7 @@
           "NetEdgePerBasket": -0.0040,
           "ExpectedProfit": -0.0040,
           "LimitingLeg": "569366",
-          "MaxExecutableQty": 3997.53
+          "MaxExecutableQty": 251.43
         },
         {
           "Qty": 5,
@@ -1220,7 +1297,7 @@
           "NetEdgePerBasket": -0.0040,
           "ExpectedProfit": -0.0200,
           "LimitingLeg": "569366",
-          "MaxExecutableQty": 3997.53
+          "MaxExecutableQty": 251.43
         },
         {
           "Qty": 10,
@@ -1232,7 +1309,7 @@
           "NetEdgePerBasket": -0.0040,
           "ExpectedProfit": -0.0400,
           "LimitingLeg": "569366",
-          "MaxExecutableQty": 3997.53
+          "MaxExecutableQty": 251.43
         },
         {
           "Qty": 25,
@@ -1244,7 +1321,7 @@
           "NetEdgePerBasket": -0.0040,
           "ExpectedProfit": -0.1000,
           "LimitingLeg": "569366",
-          "MaxExecutableQty": 3997.53
+          "MaxExecutableQty": 251.43
         },
         {
           "Qty": 50,
@@ -1256,164 +1333,23 @@
           "NetEdgePerBasket": -0.0040,
           "ExpectedProfit": -0.2000,
           "LimitingLeg": "569366",
-          "MaxExecutableQty": 3997.53
+          "MaxExecutableQty": 251.43
         },
         {
-          "Qty": 3997.53,
+          "Qty": 251.43,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
           "WeightedAverageNoAskPerLeg": 0.50,
           "NoAskSumAtQty": 1.00,
           "GrossEdgePerBasket": 0.00,
           "NetEdgePerBasket": -0.0040,
-          "ExpectedProfit": -15.990120,
+          "ExpectedProfit": -1.005720,
           "LimitingLeg": "569366",
-          "MaxExecutableQty": 3997.53
+          "MaxExecutableQty": 251.43
         }
       ],
       "TopMissingReason": "None",
-      "EvaluatedAt": "2026-06-05T17:20:46.9917561Z",
-      "CostReductionNeeded": 0.0040,
-      "NearExecutable": true,
-      "RecommendedAction": "NearExecutableReviewCosts",
-      "DiagnosticsOnlyPositiveProfiles": [],
-      "ExperimentalProfileNetEdge": -0.0020,
-      "ExecutionStatus": 1
-    },
-    {
-      "GroupKey": "winner:2026 nba finals|kind:generic",
-      "Legs": 2,
-      "GuaranteedPayout": 1,
-      "NoAskSum": 1.000,
-      "GrossEdge": 0.000,
-      "ActiveProfileNetEdge": -0.0040,
-      "ExecutableQty": 0,
-      "ExpectedProfit": -0.0040,
-      "DominantCost": "Fees",
-      "Classification": "NearExecutable",
-      "BestProfile": "RawOnly",
-      "ProfileResults": [
-        {
-          "ProfileName": "Conservative",
-          "FeeModel": "FixedPerLeg",
-          "Fees": 0.002,
-          "Slippage": 0.0010,
-          "Safety": 0.001,
-          "NetEdge": -0.0040,
-          "ExpectedProfit": -0.0040,
-          "WouldBeExecutable": false,
-          "DiagnosticsOnly": false
-        },
-        {
-          "ProfileName": "PolymarketApprox",
-          "FeeModel": "NoneOrExternalized",
-          "Fees": 0,
-          "Slippage": 0.0010,
-          "Safety": 0.001,
-          "NetEdge": -0.0020,
-          "ExpectedProfit": -0.0020,
-          "WouldBeExecutable": false,
-          "DiagnosticsOnly": true
-        },
-        {
-          "ProfileName": "OrderbookOnly",
-          "FeeModel": "None",
-          "Fees": 0,
-          "Slippage": 0,
-          "Safety": 0.001,
-          "NetEdge": -0.001,
-          "ExpectedProfit": -0.001,
-          "WouldBeExecutable": false,
-          "DiagnosticsOnly": true
-        },
-        {
-          "ProfileName": "RawOnly",
-          "FeeModel": "None",
-          "Fees": 0,
-          "Slippage": 0,
-          "Safety": 0,
-          "NetEdge": 0.000,
-          "ExpectedProfit": 0.000,
-          "WouldBeExecutable": false,
-          "DiagnosticsOnly": true
-        }
-      ],
-      "QuantityScenarios": [
-        {
-          "Qty": 1,
-          "DepthAvailable": false,
-          "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.500,
-          "NoAskSumAtQty": 1.000,
-          "GrossEdgePerBasket": 0.000,
-          "NetEdgePerBasket": -0.0040,
-          "ExpectedProfit": -0.0040,
-          "LimitingLeg": "553866",
-          "MaxExecutableQty": 30.22
-        },
-        {
-          "Qty": 5,
-          "DepthAvailable": false,
-          "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.500,
-          "NoAskSumAtQty": 1.000,
-          "GrossEdgePerBasket": 0.000,
-          "NetEdgePerBasket": -0.0040,
-          "ExpectedProfit": -0.0200,
-          "LimitingLeg": "553866",
-          "MaxExecutableQty": 30.22
-        },
-        {
-          "Qty": 10,
-          "DepthAvailable": false,
-          "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.500,
-          "NoAskSumAtQty": 1.000,
-          "GrossEdgePerBasket": 0.000,
-          "NetEdgePerBasket": -0.0040,
-          "ExpectedProfit": -0.0400,
-          "LimitingLeg": "553866",
-          "MaxExecutableQty": 30.22
-        },
-        {
-          "Qty": 25,
-          "DepthAvailable": false,
-          "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.500,
-          "NoAskSumAtQty": 1.000,
-          "GrossEdgePerBasket": 0.000,
-          "NetEdgePerBasket": -0.0040,
-          "ExpectedProfit": -0.1000,
-          "LimitingLeg": "553866",
-          "MaxExecutableQty": 30.22
-        },
-        {
-          "Qty": 30.22,
-          "DepthAvailable": false,
-          "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.500,
-          "NoAskSumAtQty": 1.000,
-          "GrossEdgePerBasket": 0.000,
-          "NetEdgePerBasket": -0.0040,
-          "ExpectedProfit": -0.120880,
-          "LimitingLeg": "553866",
-          "MaxExecutableQty": 30.22
-        },
-        {
-          "Qty": 50,
-          "DepthAvailable": false,
-          "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.500,
-          "NoAskSumAtQty": 1.000,
-          "GrossEdgePerBasket": 0.000,
-          "NetEdgePerBasket": -0.0040,
-          "ExpectedProfit": -0.2000,
-          "LimitingLeg": "553866",
-          "MaxExecutableQty": 30.22
-        }
-      ],
-      "TopMissingReason": "None",
-      "EvaluatedAt": "2026-06-05T17:20:47.1444564Z",
+      "EvaluatedAt": "2026-06-05T22:12:50.0728746Z",
       "CostReductionNeeded": 0.0040,
       "NearExecutable": true,
       "RecommendedAction": "NearExecutableReviewCosts",
@@ -1425,11 +1361,11 @@
       "GroupKey": "winner:2026 fifa world cup|kind:generic",
       "Legs": 35,
       "GuaranteedPayout": 34,
-      "NoAskSum": 34.002,
-      "GrossEdge": -0.002,
-      "ActiveProfileNetEdge": -0.0555,
+      "NoAskSum": 34.004,
+      "GrossEdge": -0.004,
+      "ActiveProfileNetEdge": -0.0575,
       "ExecutableQty": 0,
-      "ExpectedProfit": -0.0555,
+      "ExpectedProfit": -0.0575,
       "DominantCost": "Fees",
       "Classification": "FarFromExecutable",
       "BestProfile": "RawOnly",
@@ -1440,8 +1376,8 @@
           "Fees": 0.035,
           "Slippage": 0.0175,
           "Safety": 0.001,
-          "NetEdge": -0.0555,
-          "ExpectedProfit": -0.0555,
+          "NetEdge": -0.0575,
+          "ExpectedProfit": -0.0575,
           "WouldBeExecutable": false,
           "DiagnosticsOnly": false
         },
@@ -1451,8 +1387,8 @@
           "Fees": 0,
           "Slippage": 0.0175,
           "Safety": 0.001,
-          "NetEdge": -0.0205,
-          "ExpectedProfit": -0.0205,
+          "NetEdge": -0.0225,
+          "ExpectedProfit": -0.0225,
           "WouldBeExecutable": false,
           "DiagnosticsOnly": true
         },
@@ -1462,8 +1398,8 @@
           "Fees": 0,
           "Slippage": 0,
           "Safety": 0.001,
-          "NetEdge": -0.003,
-          "ExpectedProfit": -0.003,
+          "NetEdge": -0.005,
+          "ExpectedProfit": -0.005,
           "WouldBeExecutable": false,
           "DiagnosticsOnly": true
         },
@@ -1473,8 +1409,8 @@
           "Fees": 0,
           "Slippage": 0,
           "Safety": 0,
-          "NetEdge": -0.002,
-          "ExpectedProfit": -0.002,
+          "NetEdge": -0.004,
+          "ExpectedProfit": -0.004,
           "WouldBeExecutable": false,
           "DiagnosticsOnly": true
         }
@@ -1484,93 +1420,93 @@
           "Qty": 1,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.9714857142857142857142857143,
-          "NoAskSumAtQty": 34.002,
-          "GrossEdgePerBasket": -0.002,
-          "NetEdgePerBasket": -0.0555,
-          "ExpectedProfit": -0.0555,
-          "LimitingLeg": "558985",
-          "MaxExecutableQty": 153.13
+          "WeightedAverageNoAskPerLeg": 0.9715428571428571428571428571,
+          "NoAskSumAtQty": 34.004,
+          "GrossEdgePerBasket": -0.004,
+          "NetEdgePerBasket": -0.0575,
+          "ExpectedProfit": -0.0575,
+          "LimitingLeg": "558974",
+          "MaxExecutableQty": 29466.72
         },
         {
           "Qty": 5,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.9714857142857142857142857143,
-          "NoAskSumAtQty": 34.002,
-          "GrossEdgePerBasket": -0.002,
-          "NetEdgePerBasket": -0.0555,
-          "ExpectedProfit": -0.2775,
-          "LimitingLeg": "558985",
-          "MaxExecutableQty": 153.13
+          "WeightedAverageNoAskPerLeg": 0.9715428571428571428571428571,
+          "NoAskSumAtQty": 34.004,
+          "GrossEdgePerBasket": -0.004,
+          "NetEdgePerBasket": -0.0575,
+          "ExpectedProfit": -0.2875,
+          "LimitingLeg": "558974",
+          "MaxExecutableQty": 29466.72
         },
         {
           "Qty": 10,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.9714857142857142857142857143,
-          "NoAskSumAtQty": 34.002,
-          "GrossEdgePerBasket": -0.002,
-          "NetEdgePerBasket": -0.0555,
-          "ExpectedProfit": -0.5550,
-          "LimitingLeg": "558985",
-          "MaxExecutableQty": 153.13
+          "WeightedAverageNoAskPerLeg": 0.9715428571428571428571428571,
+          "NoAskSumAtQty": 34.004,
+          "GrossEdgePerBasket": -0.004,
+          "NetEdgePerBasket": -0.0575,
+          "ExpectedProfit": -0.5750,
+          "LimitingLeg": "558974",
+          "MaxExecutableQty": 29466.72
         },
         {
           "Qty": 25,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.9714857142857142857142857143,
-          "NoAskSumAtQty": 34.002,
-          "GrossEdgePerBasket": -0.002,
-          "NetEdgePerBasket": -0.0555,
-          "ExpectedProfit": -1.3875,
-          "LimitingLeg": "558985",
-          "MaxExecutableQty": 153.13
+          "WeightedAverageNoAskPerLeg": 0.9715428571428571428571428571,
+          "NoAskSumAtQty": 34.004,
+          "GrossEdgePerBasket": -0.004,
+          "NetEdgePerBasket": -0.0575,
+          "ExpectedProfit": -1.4375,
+          "LimitingLeg": "558974",
+          "MaxExecutableQty": 29466.72
         },
         {
           "Qty": 50,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.9714857142857142857142857143,
-          "NoAskSumAtQty": 34.002,
-          "GrossEdgePerBasket": -0.002,
-          "NetEdgePerBasket": -0.0555,
-          "ExpectedProfit": -2.7750,
-          "LimitingLeg": "558985",
-          "MaxExecutableQty": 153.13
+          "WeightedAverageNoAskPerLeg": 0.9715428571428571428571428571,
+          "NoAskSumAtQty": 34.004,
+          "GrossEdgePerBasket": -0.004,
+          "NetEdgePerBasket": -0.0575,
+          "ExpectedProfit": -2.8750,
+          "LimitingLeg": "558974",
+          "MaxExecutableQty": 29466.72
         },
         {
-          "Qty": 153.13,
+          "Qty": 29466.72,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.9714857142857142857142857143,
-          "NoAskSumAtQty": 34.002,
-          "GrossEdgePerBasket": -0.002,
-          "NetEdgePerBasket": -0.0555,
-          "ExpectedProfit": -8.498715,
-          "LimitingLeg": "558985",
-          "MaxExecutableQty": 153.13
+          "WeightedAverageNoAskPerLeg": 0.9715428571428571428571428571,
+          "NoAskSumAtQty": 34.004,
+          "GrossEdgePerBasket": -0.004,
+          "NetEdgePerBasket": -0.0575,
+          "ExpectedProfit": -1694.336400,
+          "LimitingLeg": "558974",
+          "MaxExecutableQty": 29466.72
         }
       ],
       "TopMissingReason": "None",
-      "EvaluatedAt": "2026-06-05T17:20:45.9143225Z",
-      "CostReductionNeeded": 0.0555,
+      "EvaluatedAt": "2026-06-05T22:12:48.8987238Z",
+      "CostReductionNeeded": 0.0575,
       "NearExecutable": false,
       "RecommendedAction": "DisableUntilBetterPricing",
       "DiagnosticsOnlyPositiveProfiles": [],
-      "ExperimentalProfileNetEdge": -0.0205,
+      "ExperimentalProfileNetEdge": -0.0225,
       "ExecutionStatus": 0
     },
     {
       "GroupKey": "winner:2026 brazilian presidential election|kind:person",
       "Legs": 9,
       "GuaranteedPayout": 8,
-      "NoAskSum": 8.326,
-      "GrossEdge": -0.326,
-      "ActiveProfileNetEdge": -0.3405,
+      "NoAskSum": 8.309,
+      "GrossEdge": -0.309,
+      "ActiveProfileNetEdge": -0.3235,
       "ExecutableQty": 0,
-      "ExpectedProfit": -0.3405,
+      "ExpectedProfit": -0.3235,
       "DominantCost": "Fees",
       "Classification": "FarFromExecutable",
       "BestProfile": "RawOnly",
@@ -1581,8 +1517,8 @@
           "Fees": 0.009,
           "Slippage": 0.0045,
           "Safety": 0.001,
-          "NetEdge": -0.3405,
-          "ExpectedProfit": -0.3405,
+          "NetEdge": -0.3235,
+          "ExpectedProfit": -0.3235,
           "WouldBeExecutable": false,
           "DiagnosticsOnly": false
         },
@@ -1592,8 +1528,8 @@
           "Fees": 0,
           "Slippage": 0.0045,
           "Safety": 0.001,
-          "NetEdge": -0.3315,
-          "ExpectedProfit": -0.3315,
+          "NetEdge": -0.3145,
+          "ExpectedProfit": -0.3145,
           "WouldBeExecutable": false,
           "DiagnosticsOnly": true
         },
@@ -1603,8 +1539,8 @@
           "Fees": 0,
           "Slippage": 0,
           "Safety": 0.001,
-          "NetEdge": -0.327,
-          "ExpectedProfit": -0.327,
+          "NetEdge": -0.310,
+          "ExpectedProfit": -0.310,
           "WouldBeExecutable": false,
           "DiagnosticsOnly": true
         },
@@ -1614,8 +1550,8 @@
           "Fees": 0,
           "Slippage": 0,
           "Safety": 0,
-          "NetEdge": -0.326,
-          "ExpectedProfit": -0.326,
+          "NetEdge": -0.309,
+          "ExpectedProfit": -0.309,
           "WouldBeExecutable": false,
           "DiagnosticsOnly": true
         }
@@ -1625,93 +1561,81 @@
           "Qty": 1,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.9251111111111111111111111111,
-          "NoAskSumAtQty": 8.326,
-          "GrossEdgePerBasket": -0.326,
-          "NetEdgePerBasket": -0.3405,
-          "ExpectedProfit": -0.3405,
+          "WeightedAverageNoAskPerLeg": 0.9232222222222222222222222222,
+          "NoAskSumAtQty": 8.309,
+          "GrossEdgePerBasket": -0.309,
+          "NetEdgePerBasket": -0.3235,
+          "ExpectedProfit": -0.3235,
           "LimitingLeg": "601829",
-          "MaxExecutableQty": 103.75
+          "MaxExecutableQty": 5
         },
         {
           "Qty": 5,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.9251111111111111111111111111,
-          "NoAskSumAtQty": 8.326,
-          "GrossEdgePerBasket": -0.326,
-          "NetEdgePerBasket": -0.3405,
-          "ExpectedProfit": -1.7025,
+          "WeightedAverageNoAskPerLeg": 0.9232222222222222222222222222,
+          "NoAskSumAtQty": 8.309,
+          "GrossEdgePerBasket": -0.309,
+          "NetEdgePerBasket": -0.3235,
+          "ExpectedProfit": -1.6175,
           "LimitingLeg": "601829",
-          "MaxExecutableQty": 103.75
+          "MaxExecutableQty": 5
         },
         {
           "Qty": 10,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.9251111111111111111111111111,
-          "NoAskSumAtQty": 8.326,
-          "GrossEdgePerBasket": -0.326,
-          "NetEdgePerBasket": -0.3405,
-          "ExpectedProfit": -3.4050,
+          "WeightedAverageNoAskPerLeg": 0.9232222222222222222222222222,
+          "NoAskSumAtQty": 8.309,
+          "GrossEdgePerBasket": -0.309,
+          "NetEdgePerBasket": -0.3235,
+          "ExpectedProfit": -3.2350,
           "LimitingLeg": "601829",
-          "MaxExecutableQty": 103.75
+          "MaxExecutableQty": 5
         },
         {
           "Qty": 25,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.9251111111111111111111111111,
-          "NoAskSumAtQty": 8.326,
-          "GrossEdgePerBasket": -0.326,
-          "NetEdgePerBasket": -0.3405,
-          "ExpectedProfit": -8.5125,
+          "WeightedAverageNoAskPerLeg": 0.9232222222222222222222222222,
+          "NoAskSumAtQty": 8.309,
+          "GrossEdgePerBasket": -0.309,
+          "NetEdgePerBasket": -0.3235,
+          "ExpectedProfit": -8.0875,
           "LimitingLeg": "601829",
-          "MaxExecutableQty": 103.75
+          "MaxExecutableQty": 5
         },
         {
           "Qty": 50,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.9251111111111111111111111111,
-          "NoAskSumAtQty": 8.326,
-          "GrossEdgePerBasket": -0.326,
-          "NetEdgePerBasket": -0.3405,
-          "ExpectedProfit": -17.0250,
+          "WeightedAverageNoAskPerLeg": 0.9232222222222222222222222222,
+          "NoAskSumAtQty": 8.309,
+          "GrossEdgePerBasket": -0.309,
+          "NetEdgePerBasket": -0.3235,
+          "ExpectedProfit": -16.1750,
           "LimitingLeg": "601829",
-          "MaxExecutableQty": 103.75
-        },
-        {
-          "Qty": 103.75,
-          "DepthAvailable": false,
-          "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.9251111111111111111111111111,
-          "NoAskSumAtQty": 8.326,
-          "GrossEdgePerBasket": -0.326,
-          "NetEdgePerBasket": -0.3405,
-          "ExpectedProfit": -35.326875,
-          "LimitingLeg": "601829",
-          "MaxExecutableQty": 103.75
+          "MaxExecutableQty": 5
         }
       ],
       "TopMissingReason": "None",
-      "EvaluatedAt": "2026-06-05T17:20:46.7147466Z",
-      "CostReductionNeeded": 0.3405,
+      "EvaluatedAt": "2026-06-05T22:12:49.7354974Z",
+      "CostReductionNeeded": 0.3235,
       "NearExecutable": false,
       "RecommendedAction": "DisableUntilBetterPricing",
       "DiagnosticsOnlyPositiveProfiles": [],
-      "ExperimentalProfileNetEdge": -0.3315,
+      "ExperimentalProfileNetEdge": -0.3145,
       "ExecutionStatus": 0
     },
     {
       "GroupKey": "winner:2028 republican presidential nomination|kind:person",
       "Legs": 5,
       "GuaranteedPayout": 4,
-      "NoAskSum": 4.649,
-      "GrossEdge": -0.649,
-      "ActiveProfileNetEdge": -0.6575,
+      "NoAskSum": 4.648,
+      "GrossEdge": -0.648,
+      "ActiveProfileNetEdge": -0.6565,
       "ExecutableQty": 0,
-      "ExpectedProfit": -0.6575,
+      "ExpectedProfit": -0.6565,
       "DominantCost": "Fees",
       "Classification": "FarFromExecutable",
       "BestProfile": "RawOnly",
@@ -1722,8 +1646,8 @@
           "Fees": 0.005,
           "Slippage": 0.0025,
           "Safety": 0.001,
-          "NetEdge": -0.6575,
-          "ExpectedProfit": -0.6575,
+          "NetEdge": -0.6565,
+          "ExpectedProfit": -0.6565,
           "WouldBeExecutable": false,
           "DiagnosticsOnly": false
         },
@@ -1733,8 +1657,8 @@
           "Fees": 0,
           "Slippage": 0.0025,
           "Safety": 0.001,
-          "NetEdge": -0.6525,
-          "ExpectedProfit": -0.6525,
+          "NetEdge": -0.6515,
+          "ExpectedProfit": -0.6515,
           "WouldBeExecutable": false,
           "DiagnosticsOnly": true
         },
@@ -1744,8 +1668,8 @@
           "Fees": 0,
           "Slippage": 0,
           "Safety": 0.001,
-          "NetEdge": -0.650,
-          "ExpectedProfit": -0.650,
+          "NetEdge": -0.649,
+          "ExpectedProfit": -0.649,
           "WouldBeExecutable": false,
           "DiagnosticsOnly": true
         },
@@ -1755,8 +1679,8 @@
           "Fees": 0,
           "Slippage": 0,
           "Safety": 0,
-          "NetEdge": -0.649,
-          "ExpectedProfit": -0.649,
+          "NetEdge": -0.648,
+          "ExpectedProfit": -0.648,
           "WouldBeExecutable": false,
           "DiagnosticsOnly": true
         }
@@ -1766,82 +1690,82 @@
           "Qty": 1,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.9298,
-          "NoAskSumAtQty": 4.649,
-          "GrossEdgePerBasket": -0.649,
-          "NetEdgePerBasket": -0.6575,
-          "ExpectedProfit": -0.6575,
+          "WeightedAverageNoAskPerLeg": 0.9296,
+          "NoAskSumAtQty": 4.648,
+          "GrossEdgePerBasket": -0.648,
+          "NetEdgePerBasket": -0.6565,
+          "ExpectedProfit": -0.6565,
           "LimitingLeg": "561974",
-          "MaxExecutableQty": 549.43
+          "MaxExecutableQty": 128.4
         },
         {
           "Qty": 5,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.9298,
-          "NoAskSumAtQty": 4.649,
-          "GrossEdgePerBasket": -0.649,
-          "NetEdgePerBasket": -0.6575,
-          "ExpectedProfit": -3.2875,
+          "WeightedAverageNoAskPerLeg": 0.9296,
+          "NoAskSumAtQty": 4.648,
+          "GrossEdgePerBasket": -0.648,
+          "NetEdgePerBasket": -0.6565,
+          "ExpectedProfit": -3.2825,
           "LimitingLeg": "561974",
-          "MaxExecutableQty": 549.43
+          "MaxExecutableQty": 128.4
         },
         {
           "Qty": 10,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.9298,
-          "NoAskSumAtQty": 4.649,
-          "GrossEdgePerBasket": -0.649,
-          "NetEdgePerBasket": -0.6575,
-          "ExpectedProfit": -6.5750,
+          "WeightedAverageNoAskPerLeg": 0.9296,
+          "NoAskSumAtQty": 4.648,
+          "GrossEdgePerBasket": -0.648,
+          "NetEdgePerBasket": -0.6565,
+          "ExpectedProfit": -6.5650,
           "LimitingLeg": "561974",
-          "MaxExecutableQty": 549.43
+          "MaxExecutableQty": 128.4
         },
         {
           "Qty": 25,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.9298,
-          "NoAskSumAtQty": 4.649,
-          "GrossEdgePerBasket": -0.649,
-          "NetEdgePerBasket": -0.6575,
-          "ExpectedProfit": -16.4375,
+          "WeightedAverageNoAskPerLeg": 0.9296,
+          "NoAskSumAtQty": 4.648,
+          "GrossEdgePerBasket": -0.648,
+          "NetEdgePerBasket": -0.6565,
+          "ExpectedProfit": -16.4125,
           "LimitingLeg": "561974",
-          "MaxExecutableQty": 549.43
+          "MaxExecutableQty": 128.4
         },
         {
           "Qty": 50,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.9298,
-          "NoAskSumAtQty": 4.649,
-          "GrossEdgePerBasket": -0.649,
-          "NetEdgePerBasket": -0.6575,
-          "ExpectedProfit": -32.8750,
+          "WeightedAverageNoAskPerLeg": 0.9296,
+          "NoAskSumAtQty": 4.648,
+          "GrossEdgePerBasket": -0.648,
+          "NetEdgePerBasket": -0.6565,
+          "ExpectedProfit": -32.8250,
           "LimitingLeg": "561974",
-          "MaxExecutableQty": 549.43
+          "MaxExecutableQty": 128.4
         },
         {
-          "Qty": 549.43,
+          "Qty": 128.4,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
-          "WeightedAverageNoAskPerLeg": 0.9298,
-          "NoAskSumAtQty": 4.649,
-          "GrossEdgePerBasket": -0.649,
-          "NetEdgePerBasket": -0.6575,
-          "ExpectedProfit": -361.250225,
+          "WeightedAverageNoAskPerLeg": 0.9296,
+          "NoAskSumAtQty": 4.648,
+          "GrossEdgePerBasket": -0.648,
+          "NetEdgePerBasket": -0.6565,
+          "ExpectedProfit": -84.29460,
           "LimitingLeg": "561974",
-          "MaxExecutableQty": 549.43
+          "MaxExecutableQty": 128.4
         }
       ],
       "TopMissingReason": "None",
-      "EvaluatedAt": "2026-06-05T17:20:46.1848836Z",
-      "CostReductionNeeded": 0.6575,
+      "EvaluatedAt": "2026-06-05T22:12:49.2981684Z",
+      "CostReductionNeeded": 0.6565,
       "NearExecutable": false,
       "RecommendedAction": "DisableUntilBetterPricing",
       "DiagnosticsOnlyPositiveProfiles": [],
-      "ExperimentalProfileNetEdge": -0.6525,
+      "ExperimentalProfileNetEdge": -0.6515,
       "ExecutionStatus": 0
     },
     {
@@ -1913,7 +1837,7 @@
           "NetEdgePerBasket": -0.7915,
           "ExpectedProfit": -0.7915,
           "LimitingLeg": "561229",
-          "MaxExecutableQty": 16299.86
+          "MaxExecutableQty": 15567.37
         },
         {
           "Qty": 5,
@@ -1925,7 +1849,7 @@
           "NetEdgePerBasket": -0.7915,
           "ExpectedProfit": -3.9575,
           "LimitingLeg": "561229",
-          "MaxExecutableQty": 16299.86
+          "MaxExecutableQty": 15567.37
         },
         {
           "Qty": 10,
@@ -1937,7 +1861,7 @@
           "NetEdgePerBasket": -0.7915,
           "ExpectedProfit": -7.9150,
           "LimitingLeg": "561229",
-          "MaxExecutableQty": 16299.86
+          "MaxExecutableQty": 15567.37
         },
         {
           "Qty": 25,
@@ -1949,7 +1873,7 @@
           "NetEdgePerBasket": -0.7915,
           "ExpectedProfit": -19.7875,
           "LimitingLeg": "561229",
-          "MaxExecutableQty": 16299.86
+          "MaxExecutableQty": 15567.37
         },
         {
           "Qty": 50,
@@ -1961,23 +1885,23 @@
           "NetEdgePerBasket": -0.7915,
           "ExpectedProfit": -39.5750,
           "LimitingLeg": "561229",
-          "MaxExecutableQty": 16299.86
+          "MaxExecutableQty": 15567.37
         },
         {
-          "Qty": 16299.86,
+          "Qty": 15567.37,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
           "WeightedAverageNoAskPerLeg": 0.9685714285714285714285714286,
           "NoAskSumAtQty": 6.780,
           "GrossEdgePerBasket": -0.780,
           "NetEdgePerBasket": -0.7915,
-          "ExpectedProfit": -12901.339190,
+          "ExpectedProfit": -12321.573355,
           "LimitingLeg": "561229",
-          "MaxExecutableQty": 16299.86
+          "MaxExecutableQty": 15567.37
         }
       ],
       "TopMissingReason": "None",
-      "EvaluatedAt": "2026-06-05T17:20:46.4486228Z",
+      "EvaluatedAt": "2026-06-05T22:12:49.5855541Z",
       "CostReductionNeeded": 0.7915,
       "NearExecutable": false,
       "RecommendedAction": "DisableUntilBetterPricing",
@@ -2054,7 +1978,7 @@
           "NetEdgePerBasket": -0.9405,
           "ExpectedProfit": -0.9405,
           "LimitingLeg": "559668",
-          "MaxExecutableQty": 55931.43
+          "MaxExecutableQty": 68482.52
         },
         {
           "Qty": 5,
@@ -2066,7 +1990,7 @@
           "NetEdgePerBasket": -0.9405,
           "ExpectedProfit": -4.7025,
           "LimitingLeg": "559668",
-          "MaxExecutableQty": 55931.43
+          "MaxExecutableQty": 68482.52
         },
         {
           "Qty": 10,
@@ -2078,7 +2002,7 @@
           "NetEdgePerBasket": -0.9405,
           "ExpectedProfit": -9.4050,
           "LimitingLeg": "559668",
-          "MaxExecutableQty": 55931.43
+          "MaxExecutableQty": 68482.52
         },
         {
           "Qty": 25,
@@ -2090,7 +2014,7 @@
           "NetEdgePerBasket": -0.9405,
           "ExpectedProfit": -23.5125,
           "LimitingLeg": "559668",
-          "MaxExecutableQty": 55931.43
+          "MaxExecutableQty": 68482.52
         },
         {
           "Qty": 50,
@@ -2102,23 +2026,23 @@
           "NetEdgePerBasket": -0.9405,
           "ExpectedProfit": -47.0250,
           "LimitingLeg": "559668",
-          "MaxExecutableQty": 55931.43
+          "MaxExecutableQty": 68482.52
         },
         {
-          "Qty": 55931.43,
+          "Qty": 68482.52,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
           "WeightedAverageNoAskPerLeg": 0.9917777777777777777777777778,
           "NoAskSumAtQty": 8.926,
           "GrossEdgePerBasket": -0.926,
           "NetEdgePerBasket": -0.9405,
-          "ExpectedProfit": -52603.509915,
+          "ExpectedProfit": -64407.810060,
           "LimitingLeg": "559668",
-          "MaxExecutableQty": 55931.43
+          "MaxExecutableQty": 68482.52
         }
       ],
       "TopMissingReason": "None",
-      "EvaluatedAt": "2026-06-05T17:20:46.0522237Z",
+      "EvaluatedAt": "2026-06-05T22:12:49.1645718Z",
       "CostReductionNeeded": 0.9405,
       "NearExecutable": false,
       "RecommendedAction": "DisableUntilBetterPricing",
@@ -2195,7 +2119,7 @@
           "NetEdgePerBasket": -0.9920,
           "ExpectedProfit": -0.9920,
           "LimitingLeg": "679049",
-          "MaxExecutableQty": 274589.08
+          "MaxExecutableQty": 274135.32
         },
         {
           "Qty": 5,
@@ -2207,7 +2131,7 @@
           "NetEdgePerBasket": -0.9920,
           "ExpectedProfit": -4.9600,
           "LimitingLeg": "679049",
-          "MaxExecutableQty": 274589.08
+          "MaxExecutableQty": 274135.32
         },
         {
           "Qty": 10,
@@ -2219,7 +2143,7 @@
           "NetEdgePerBasket": -0.9920,
           "ExpectedProfit": -9.9200,
           "LimitingLeg": "679049",
-          "MaxExecutableQty": 274589.08
+          "MaxExecutableQty": 274135.32
         },
         {
           "Qty": 25,
@@ -2231,7 +2155,7 @@
           "NetEdgePerBasket": -0.9920,
           "ExpectedProfit": -24.8000,
           "LimitingLeg": "679049",
-          "MaxExecutableQty": 274589.08
+          "MaxExecutableQty": 274135.32
         },
         {
           "Qty": 50,
@@ -2243,23 +2167,23 @@
           "NetEdgePerBasket": -0.9920,
           "ExpectedProfit": -49.6000,
           "LimitingLeg": "679049",
-          "MaxExecutableQty": 274589.08
+          "MaxExecutableQty": 274135.32
         },
         {
-          "Qty": 274589.08,
+          "Qty": 274135.32,
           "DepthAvailable": false,
           "DepthMode": "BestAskOnly",
           "WeightedAverageNoAskPerLeg": 0.994,
           "NoAskSumAtQty": 1.988,
           "GrossEdgePerBasket": -0.988,
           "NetEdgePerBasket": -0.9920,
-          "ExpectedProfit": -272392.367360,
+          "ExpectedProfit": -271942.237440,
           "LimitingLeg": "679049",
-          "MaxExecutableQty": 274589.08
+          "MaxExecutableQty": 274135.32
         }
       ],
       "TopMissingReason": "None",
-      "EvaluatedAt": "2026-06-05T17:20:46.8566438Z",
+      "EvaluatedAt": "2026-06-05T22:12:49.9093993Z",
       "CostReductionNeeded": 0.9920,
       "NearExecutable": false,
       "RecommendedAction": "DisableUntilBetterPricing",
@@ -2268,7 +2192,141 @@
       "ExecutionStatus": 0
     }
   ],
-  "ExperimentalCandidates": [],
+  "ExperimentalCandidates": [
+    {
+      "GroupKey": "winner:2026 nba finals|kind:generic",
+      "Legs": 2,
+      "GuaranteedPayout": 1,
+      "NoAskSum": 0.996,
+      "GrossEdge": 0.004,
+      "ActiveProfileNetEdge": 0.0000,
+      "ExecutableQty": 0,
+      "ExpectedProfit": 0.0000,
+      "DominantCost": "Fees",
+      "Classification": "RawPositiveNetNegative",
+      "BestProfile": "RawOnly",
+      "ProfileResults": [
+        {
+          "ProfileName": "Conservative",
+          "FeeModel": "FixedPerLeg",
+          "Fees": 0.002,
+          "Slippage": 0.0010,
+          "Safety": 0.001,
+          "NetEdge": 0.0000,
+          "ExpectedProfit": 0.0000,
+          "WouldBeExecutable": false,
+          "DiagnosticsOnly": false
+        },
+        {
+          "ProfileName": "PolymarketApprox",
+          "FeeModel": "NoneOrExternalized",
+          "Fees": 0,
+          "Slippage": 0.0010,
+          "Safety": 0.001,
+          "NetEdge": 0.0020,
+          "ExpectedProfit": 0.0020,
+          "WouldBeExecutable": true,
+          "DiagnosticsOnly": true
+        },
+        {
+          "ProfileName": "OrderbookOnly",
+          "FeeModel": "None",
+          "Fees": 0,
+          "Slippage": 0,
+          "Safety": 0.001,
+          "NetEdge": 0.003,
+          "ExpectedProfit": 0.003,
+          "WouldBeExecutable": true,
+          "DiagnosticsOnly": true
+        },
+        {
+          "ProfileName": "RawOnly",
+          "FeeModel": "None",
+          "Fees": 0,
+          "Slippage": 0,
+          "Safety": 0,
+          "NetEdge": 0.004,
+          "ExpectedProfit": 0.004,
+          "WouldBeExecutable": true,
+          "DiagnosticsOnly": true
+        }
+      ],
+      "QuantityScenarios": [
+        {
+          "Qty": 1,
+          "DepthAvailable": false,
+          "DepthMode": "BestAskOnly",
+          "WeightedAverageNoAskPerLeg": 0.498,
+          "NoAskSumAtQty": 0.996,
+          "GrossEdgePerBasket": 0.004,
+          "NetEdgePerBasket": 0.0000,
+          "ExpectedProfit": 0.0000,
+          "LimitingLeg": "553866",
+          "MaxExecutableQty": 5
+        },
+        {
+          "Qty": 5,
+          "DepthAvailable": false,
+          "DepthMode": "BestAskOnly",
+          "WeightedAverageNoAskPerLeg": 0.498,
+          "NoAskSumAtQty": 0.996,
+          "GrossEdgePerBasket": 0.004,
+          "NetEdgePerBasket": 0.0000,
+          "ExpectedProfit": 0.0000,
+          "LimitingLeg": "553866",
+          "MaxExecutableQty": 5
+        },
+        {
+          "Qty": 10,
+          "DepthAvailable": false,
+          "DepthMode": "BestAskOnly",
+          "WeightedAverageNoAskPerLeg": 0.498,
+          "NoAskSumAtQty": 0.996,
+          "GrossEdgePerBasket": 0.004,
+          "NetEdgePerBasket": 0.0000,
+          "ExpectedProfit": 0.0000,
+          "LimitingLeg": "553866",
+          "MaxExecutableQty": 5
+        },
+        {
+          "Qty": 25,
+          "DepthAvailable": false,
+          "DepthMode": "BestAskOnly",
+          "WeightedAverageNoAskPerLeg": 0.498,
+          "NoAskSumAtQty": 0.996,
+          "GrossEdgePerBasket": 0.004,
+          "NetEdgePerBasket": 0.0000,
+          "ExpectedProfit": 0.0000,
+          "LimitingLeg": "553866",
+          "MaxExecutableQty": 5
+        },
+        {
+          "Qty": 50,
+          "DepthAvailable": false,
+          "DepthMode": "BestAskOnly",
+          "WeightedAverageNoAskPerLeg": 0.498,
+          "NoAskSumAtQty": 0.996,
+          "GrossEdgePerBasket": 0.004,
+          "NetEdgePerBasket": 0.0000,
+          "ExpectedProfit": 0.0000,
+          "LimitingLeg": "553866",
+          "MaxExecutableQty": 5
+        }
+      ],
+      "TopMissingReason": "None",
+      "EvaluatedAt": "2026-06-05T22:12:50.2042235Z",
+      "CostReductionNeeded": 0,
+      "NearExecutable": true,
+      "RecommendedAction": "NearExecutableReviewCosts",
+      "DiagnosticsOnlyPositiveProfiles": [
+        "PolymarketApprox",
+        "OrderbookOnly",
+        "RawOnly"
+      ],
+      "ExperimentalProfileNetEdge": 0.0020,
+      "ExecutionStatus": 3
+    }
+  ],
   "StableExperimentalCandidates": [],
   "ActiveProfileExecutable": [],
   "DiagnosticsOnlyPositive": [],

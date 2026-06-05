@@ -1,7 +1,7 @@
 [
   {
-    "groupKey": "winner:2027 nfl league championship|kind:generic",
-    "title": "winner:2027 nfl league championship|kind:generic",
+    "groupKey": "winner:on 2026 06 14|kind:generic",
+    "title": "winner:on 2026 06 14|kind:generic",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
     "missingNoAsk": 0,
@@ -13,52 +13,18 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:2027 nfl league championship|kind:generic",
-      "title": "winner:2027 nfl league championship|kind:generic",
+      "groupKey": "winner:on 2026 06 14|kind:generic",
+      "title": "winner:on 2026 06 14|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "1357383",
-        "1357381"
+        "1897067",
+        "1897064"
       ],
       "conditionIds": [
-        "0x7f1d878b72e5de3691768ef8fdc0f811405717166e2161e7e490c347980d9b8e",
-        "0x69a24b337ef9c44ef2cda8ddc69bf32cba38dec05846c26071d6bba43e9f7834"
-      ],
-      "requiredOutcomeCount": 2,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-06-05"
-    }
-  },
-  {
-    "groupKey": "winner:2026 ottaviano mayoral election|kind:person",
-    "title": "winner:2026 ottaviano mayoral election|kind:person",
-    "detectedMarketsCount": 2,
-    "pricedLegs": 2,
-    "missingNoAsk": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "rawOnlyEdge": null,
-    "candidateQualityScore": 90,
-    "safetyClassification": "SafeForManualVerification",
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:2026 ottaviano mayoral election|kind:person",
-      "title": "winner:2026 ottaviano mayoral election|kind:person",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "2413056",
-        "2413057"
-      ],
-      "conditionIds": [
-        "0x25d2d5cd98960e185aa3c638f37e8d1e902598eff20a180da62533a470c78922",
-        "0x1976ea80593539a5da99090a4da15e2ed710044b5da08b795fb27d27f82f433b"
+        "0xc6f7e4a015ec643eb49c749da19553a2257add76278a252805a12dfa85103269",
+        "0x8f92746709a4fc82f4d454e162046ac3590e3a5a7564540806a6c5f8a87e6738"
       ],
       "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
@@ -70,8 +36,8 @@
   {
     "groupKey": "winner:on 2026 06 06|kind:generic",
     "title": "winner:on 2026 06 06|kind:generic",
-    "detectedMarketsCount": 3,
-    "pricedLegs": 3,
+    "detectedMarketsCount": 4,
+    "pricedLegs": 4,
     "missingNoAsk": 0,
     "estimatedGrossEdge": null,
     "estimatedNetEdgeConservative": null,
@@ -87,16 +53,18 @@
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "2316772",
-        "2435867",
-        "2373142"
+        "2222151",
+        "2316795",
+        "2373186",
+        "2373119"
       ],
       "conditionIds": [
-        "0x617a9299deb070739d3ddd0a1ce95f200d2fd99b09dd62f7b0e75f6ac7bdfdba",
-        "0xa24901885bd568b344231e4785ab6fc36d5e1b305551589d85b243266b26a698",
-        "0xe294f3ecb9eda697ded0e9601d9511a085fb73b3aff81152e90e08ef2c20260f"
+        "0x05ecd0137545dda91c9086f41b6d71eb534ac5a056c057a627843737fc8196b2",
+        "0xd9ff9330d663cea07def45a02443008077cc6e414913e70e6d5305c435f10c65",
+        "0x2563f5d00f5ea2520fabcfc194cc17ca5da58595247a4e02676b17ad6c94d798",
+        "0x98b243e8933d97f78bf215a46daea677a33762b073be5fb438bea1d6bb5a7170"
       ],
-      "requiredOutcomeCount": 3,
+      "requiredOutcomeCount": 4,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
@@ -104,8 +72,8 @@
     }
   },
   {
-    "groupKey": "winner:group f in 2026 fifa world cup|kind:generic",
-    "title": "winner:group f in 2026 fifa world cup|kind:generic",
+    "groupKey": "winner:on 2026 06 21|kind:generic",
+    "title": "winner:on 2026 06 21|kind:generic",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
     "missingNoAsk": 0,
@@ -117,52 +85,18 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:group f in 2026 fifa world cup|kind:generic",
-      "title": "winner:group f in 2026 fifa world cup|kind:generic",
+      "groupKey": "winner:on 2026 06 21|kind:generic",
+      "title": "winner:on 2026 06 21|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "839435",
-        "839434"
+        "1897177",
+        "1897168"
       ],
       "conditionIds": [
-        "0xde6e8331eaaf0b212f688a04f6c4ff5f895ab633a467cb3e9f3da48fce7c6801",
-        "0x9ad73ff7534b1051e2dad167a0b1617ae20f64f20770ae8bf89a59a7a7290669"
-      ],
-      "requiredOutcomeCount": 2,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-06-05"
-    }
-  },
-  {
-    "groupKey": "winner:nobel peace prize in 2026|kind:generic",
-    "title": "winner:nobel peace prize in 2026|kind:generic",
-    "detectedMarketsCount": 2,
-    "pricedLegs": 2,
-    "missingNoAsk": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "rawOnlyEdge": null,
-    "candidateQualityScore": 90,
-    "safetyClassification": "SafeForManualVerification",
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:nobel peace prize in 2026|kind:generic",
-      "title": "winner:nobel peace prize in 2026|kind:generic",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "637009",
-        "637021"
-      ],
-      "conditionIds": [
-        "0x36081a32ac369bad207447fa2bc5d6d663fb576e935178a4a297931ec571f5d1",
-        "0xbe70d1b2d9c50c2d91f5f309417735f4238682239593a6a0bb1340188befb6cd"
+        "0x08d56195e88cedb87eeff396bd35e8b67d031e586169b3bc937b3095b3cdfe43",
+        "0xebb200cb08bbe89c2523a345947d083a992e27cc479cf1b5568407751e026d2c"
       ],
       "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
