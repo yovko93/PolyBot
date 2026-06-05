@@ -32,6 +32,7 @@ public sealed record RuntimeHealthSnapshot(
     int SingleMarketNearMissesCount,
     int SingleMarketDataQualitySamplesCount,
     int SingleMarketExecutionsCount,
+    int PaperPhase,
     int PaperOpenPositions,
     decimal PaperTotalExposure,
     int PaperOpenCountLastHour,
@@ -39,6 +40,7 @@ public sealed record RuntimeHealthSnapshot(
     int PaperDuplicateSuppressions,
     long LiveTradingBlockedCount,
     int PaperExecutionsCount,
+    long SigningAttempts,
     int DuplicateGroupKeyWarnings,
     long QuietSuppressedTotal,
     long EmittedLogs,
@@ -57,13 +59,15 @@ public sealed record RuntimeHealthSnapshot(
     {
         var suppressed = string.Join(",", QuietSuppressedByCategory.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value}"));
         var emitted = string.Join(",", EmittedByCategory.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value}"));
-        return $"[RUNTIME_HEALTH] ProcessMb={ProcessMemoryMb} GcMb={GcTotalMemoryMb} WorkingSetMb={WorkingSetMb} Logs={RecentLogsCount} ScannerHistory={ScannerHistoryCount} CandidateSnapshots={CandidateSnapshotCount} RepairHistory={RepairHistoryCount} ExecutionAudit={ExecutionAuditCount} SignalRBuffer={SignalREventBufferCount} OrderbookCache={OrderbookCacheCount} MarketCache={MarketCacheCount} PatchPreviewItems={PatchPreviewItemsCount} SingleMarketOpportunities={SingleMarketOpportunitiesCount} SingleMarketNearMisses={SingleMarketNearMissesCount} SingleMarketDataQualitySamples={SingleMarketDataQualitySamplesCount} SingleMarketExecutions={SingleMarketExecutionsCount} PaperOpenPositions={PaperOpenPositions} PaperTotalExposure={PaperTotalExposure} PaperOpenCountLastHour={PaperOpenCountLastHour} PaperPretradeRejects={PaperPretradeRejects} PaperDuplicateSuppressions={PaperDuplicateSuppressions} LiveTradingBlocked={LiveTradingBlockedCount} PaperExecutions={PaperExecutionsCount} DuplicateGroupKeyWarnings={DuplicateGroupKeyWarnings} QuietSuppressed={QuietSuppressedTotal} EmittedLogs={EmittedLogs} LogGateCache={LogGateCacheSize} QuietSuppressedByCategory={{{suppressed}}} EmittedByCategory={{{emitted}}} BatchBookRequests={BatchBookRequests} BatchBookBadRequests={BatchBookBadRequests} BatchBookTimeouts={BatchBookTimeouts} BatchBookRetrySuccesses={BatchBookRetrySuccesses} BatchBookInvalidTokens={BatchBookInvalidTokens} BatchBookSuppressedErrors={BatchBookSuppressedErrors} Uptime={Uptime}";
+        return $"[RUNTIME_HEALTH] ProcessMb={ProcessMemoryMb} GcMb={GcTotalMemoryMb} WorkingSetMb={WorkingSetMb} Logs={RecentLogsCount} ScannerHistory={ScannerHistoryCount} CandidateSnapshots={CandidateSnapshotCount} RepairHistory={RepairHistoryCount} ExecutionAudit={ExecutionAuditCount} SignalRBuffer={SignalREventBufferCount} OrderbookCache={OrderbookCacheCount} MarketCache={MarketCacheCount} PatchPreviewItems={PatchPreviewItemsCount} SingleMarketOpportunities={SingleMarketOpportunitiesCount} SingleMarketNearMisses={SingleMarketNearMissesCount} SingleMarketDataQualitySamples={SingleMarketDataQualitySamplesCount} SingleMarketExecutions={SingleMarketExecutionsCount} PaperPhase={PaperPhase} PaperOpenPositions={PaperOpenPositions} PaperTotalExposure={PaperTotalExposure} PaperOpenCountLastHour={PaperOpenCountLastHour} PaperPretradeRejects={PaperPretradeRejects} PaperDuplicateSuppressions={PaperDuplicateSuppressions} LiveTradingBlocked={LiveTradingBlockedCount} PaperExecutions={PaperExecutionsCount} SigningAttempts={SigningAttempts} DuplicateGroupKeyWarnings={DuplicateGroupKeyWarnings} QuietSuppressed={QuietSuppressedTotal} EmittedLogs={EmittedLogs} LogGateCache={LogGateCacheSize} QuietSuppressedByCategory={{{suppressed}}} EmittedByCategory={{{emitted}}} BatchBookRequests={BatchBookRequests} BatchBookBadRequests={BatchBookBadRequests} BatchBookTimeouts={BatchBookTimeouts} BatchBookRetrySuccesses={BatchBookRetrySuccesses} BatchBookInvalidTokens={BatchBookInvalidTokens} BatchBookSuppressedErrors={BatchBookSuppressedErrors} Uptime={Uptime}";
     }
 
     public static bool ShouldLogAt(DateTime nowUtc, DateTime lastLoggedAtUtc, int everyMinutes)
         => lastLoggedAtUtc == DateTime.MinValue || nowUtc - lastLoggedAtUtc >= TimeSpan.FromMinutes(Math.Max(1, everyMinutes));
 
-    public static RuntimeHealthSnapshot From(BotRuntimeState state)
+    public static RuntimeHealthSnapshot From(BotRuntimeState state) => From(state, null);
+
+    public static RuntimeHealthSnapshot From(BotRuntimeState state, TradingBot.Options.TradingBotOptions? options)
     {
         var p = Process.GetCurrentProcess();
         var startedUtc = p.StartTime.Kind == DateTimeKind.Utc ? p.StartTime : p.StartTime.ToUniversalTime();
@@ -97,6 +101,7 @@ public sealed record RuntimeHealthSnapshot(
             SingleMarketNearMissesCount: state.SingleMarketSnapshot.TopNearMisses.Count,
             SingleMarketDataQualitySamplesCount: state.SingleMarketSnapshot.DataQualityRejectSamples.Count,
             SingleMarketExecutionsCount: state.SingleMarketExecutionsCount,
+            PaperPhase: options?.TradingMode.PaperPhase ?? 0,
             PaperOpenPositions: state.PaperOpenPositions,
             PaperTotalExposure: state.PaperTotalExposure,
             PaperOpenCountLastHour: state.PaperOpenCountLastHour,
@@ -104,6 +109,7 @@ public sealed record RuntimeHealthSnapshot(
             PaperDuplicateSuppressions: state.PaperDuplicateSuppressions,
             LiveTradingBlockedCount: state.LiveTradingBlockedCount,
             PaperExecutionsCount: state.PaperExecutionsCount,
+            SigningAttempts: TradingBot.Services.LiveTradingGuard.SigningAttempts,
             DuplicateGroupKeyWarnings: TradingBot.Services.GroupKeyDictionaryBuilder.DuplicateWarnings,
             QuietSuppressedTotal: state.QuietLogGateStats.QuietSuppressedTotal,
             EmittedLogs: state.QuietLogGateStats.EmittedLogs,

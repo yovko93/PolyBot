@@ -22,8 +22,14 @@ public sealed class LiveTradingBlockedException(string component, LiveTradingAct
 public static class LiveTradingGuard
 {
     private static long _blockedCount;
+    private static long _signingAttempts;
     public static long BlockedCount => Interlocked.Read(ref _blockedCount);
-    public static void ResetForTests() => Interlocked.Exchange(ref _blockedCount, 0);
+    public static long SigningAttempts => Interlocked.Read(ref _signingAttempts);
+    public static void ResetForTests()
+    {
+        Interlocked.Exchange(ref _blockedCount, 0);
+        Interlocked.Exchange(ref _signingAttempts, 0);
+    }
 
     public static void AssertNoLiveTrading(TradingBotOptions options, string component, LiveTradingAction action)
         => AssertNoLiveTrading(options.TradingMode.LiveTradingEnabled || options.EnableLiveExecution, component, action);
@@ -34,6 +40,7 @@ public static class LiveTradingGuard
     public static void AssertNoLiveTrading(bool liveTradingEnabled, string component, LiveTradingAction action)
     {
         if (liveTradingEnabled) return;
+        if (action == LiveTradingAction.OrderSigning) Interlocked.Increment(ref _signingAttempts);
         Interlocked.Increment(ref _blockedCount);
         Console.WriteLine($"[LIVE_TRADING_BLOCKED] Reason=LiveTradingDisabled Component={component} Action={action}");
         throw new LiveTradingBlockedException(component, action);

@@ -53,6 +53,7 @@ public class TradingBotOptions
     public TradingModeOptions TradingMode { get; set; } = new();
     public PaperRiskOptions PaperRisk { get; set; } = new();
     public VerifiedBasketArbOptions VerifiedBasketArb { get; set; } = new();
+    public PaperPhase2Options PaperPhase2 { get; set; } = new();
     public PaperPhaseValidationOptions PaperPhaseValidation { get; set; } = new();
     public bool EnableExperimentalProfilePaper { get; set; } = false;
     public string ExperimentalPaperProfile { get; set; } = "PolymarketApprox";
@@ -126,6 +127,11 @@ public class VerifiedBasketArbOptions
     public int MaxOpenVerifiedBasketPositions { get; set; } = 1;
     public decimal MaxTotalVerifiedBasketExposure { get; set; } = 25m;
     public int CooldownSecondsPerGroup { get; set; } = 1800;
+}
+
+public class PaperPhase2Options
+{
+    public bool Enabled { get; set; } = false;
 }
 
 public class PaperPhaseValidationOptions

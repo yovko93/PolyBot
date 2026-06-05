@@ -7,7 +7,7 @@ public static class RuntimeSoakStatusExporter
 {
     public static string Export(BotRuntimeState state, TradingBotOptions options, string contentRootPath)
     {
-        var health = RuntimeHealthSnapshot.From(state);
+        var health = RuntimeHealthSnapshot.From(state, options);
         var logs = state.Logs();
         var trend = RuntimeHealthTrendTracker.Current(options.RuntimeHealth);
         var payload = new

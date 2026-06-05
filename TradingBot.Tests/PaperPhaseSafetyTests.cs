@@ -148,10 +148,24 @@ public class PaperPhaseSafetyTests
         var state = new BotRuntimeState();
         state.SetStatus(state.Status with { LockedCapital = 25m, OpenPositions = 1 });
         state.RecordPaperPretradeReject("x");
-        var h = RuntimeHealthSnapshot.From(state);
+        LiveTradingGuard.ResetForTests();
+        var options = Options();
+        options.TradingMode.PaperPhase = 2;
+        var h = RuntimeHealthSnapshot.From(state, options);
+        var log = h.ToLogLine();
+
+        Assert.Equal(2, h.PaperPhase);
         Assert.Equal(1, h.PaperOpenPositions);
         Assert.Equal(25m, h.PaperTotalExposure);
         Assert.Equal(1, h.PaperPretradeRejects);
+        Assert.Contains("PaperPhase=2", log);
+        Assert.Contains("PaperOpenPositions=1", log);
+        Assert.Contains("PaperTotalExposure=25", log);
+        Assert.Contains("PaperOpenCountLastHour=", log);
+        Assert.Contains("PaperExecutions=", log);
+        Assert.Contains("PaperDuplicateSuppressions=", log);
+        Assert.Contains("LiveTradingBlocked=", log);
+        Assert.Contains("SigningAttempts=0", log);
     }
 
 
@@ -206,6 +220,41 @@ public class PaperPhaseSafetyTests
 
 
 
+
+    [Fact] public void PaperPhaseValidation_logs_new_paper_open_name_and_not_old_true_arb_name()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var options = Options();
+        options.PaperPhaseValidation = new PaperPhaseValidationOptions
+        {
+            Enabled = true,
+            InjectSyntheticOpportunity = true,
+            SyntheticOpportunityType = "SingleMarketBuyBoth",
+            RunOnce = true,
+            MaxSyntheticPaperOpens = 1,
+            RequireExplicitConfigFlag = true
+        };
+        var book = new PaperPositionBook(Path.Combine(dir, "paper-positions.csv"));
+        var paper = new PaperTradingEngine(new ExecutionPolicy { MaxNotionalPerTrade = 25m, MinNotionalPerTrade = 1m, MaxLockedCapital = 75m, MaxOpenPositions = 3, MaxExposurePerGroup = 75m }, positionBook: book, botOptions: options);
+        var original = Console.Out;
+        using var writer = new StringWriter();
+        Console.SetOut(writer);
+        try
+        {
+            var result = new PaperPhaseValidationHarness().TryRun(options, paper, book, new BotRuntimeState(), dir);
+            Assert.NotNull(result);
+            Assert.True(result!.Passed);
+        }
+        finally
+        {
+            Console.SetOut(original);
+        }
+
+        var logs = writer.ToString();
+        Assert.DoesNotContain("PAPER TRUE " + "ARB EXECUTED", logs);
+        Assert.Contains("[PAPER_SINGLE_MARKET_ARBITRAGE_OPENED]", logs);
+    }
+
     [Fact] public void PaperPhaseValidation_default_config_binds_false_at_real_section_path()
     {
         var configuration = new ConfigurationBuilder()
@@ -235,6 +284,43 @@ public class PaperPhaseSafetyTests
         Assert.False(options.TradingMode.LiveTradingEnabled);
         Assert.True(options.TradingMode.PaperTradingEnabled);
         Assert.Equal(1, options.TradingMode.PaperPhase);
+    }
+
+
+    [Fact] public void PaperPhase2_preset_keeps_live_disabled_and_safe_paper_limits()
+    {
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(Path.Combine(RepoRoot(), "TradingBot"))
+            .AddJsonFile("appsettings.json", optional: false)
+            .AddJsonFile("appsettings.PaperPhase2.json", optional: false)
+            .Build();
+
+        var options = BindTradingBotOptions(configuration);
+
+        Assert.False(options.PaperPhase2.Enabled);
+        Assert.False(options.TradingMode.LiveTradingEnabled);
+        Assert.True(options.TradingMode.PaperTradingEnabled);
+        Assert.Equal(2, options.TradingMode.PaperPhase);
+        Assert.Equal(5, options.PaperRisk.MaxPaperPositionsTotal);
+        Assert.Equal(2, options.PaperRisk.MaxPaperPositionsPerStrategy);
+        Assert.Equal(2, options.PaperRisk.MaxPaperOpenPerHour);
+        Assert.Equal(50m, options.PaperRisk.MaxPaperNotionalPerTrade);
+        Assert.Equal(200m, options.PaperRisk.MaxPaperTotalExposure);
+        Assert.False(options.PaperRisk.AllowExperimentalPaper);
+        Assert.False(options.PaperRisk.AllowRepairSuggestedGroups);
+        Assert.Equal(3, options.SingleMarketArb.RequiredConsecutiveEdgeScans);
+        Assert.Equal(3, options.SingleMarketArb.RequiredConsecutiveExecutionReadyScans);
+        Assert.Equal(0.005m, options.SingleMarketArb.MinEdgePerShare);
+        Assert.Equal(0.50m, options.SingleMarketArb.MinExpectedProfit);
+        Assert.Equal(10m, options.SingleMarketArb.MinNotional);
+        Assert.Equal(50m, options.SingleMarketArb.MaxNotionalPerTrade);
+        Assert.Equal(2, options.SingleMarketArb.MaxOpenSingleMarketPositions);
+        Assert.Equal(100m, options.SingleMarketArb.MaxTotalSingleMarketExposure);
+        Assert.Equal(1800, options.SingleMarketArb.CooldownSecondsPerMarket);
+        Assert.Equal(50m, options.VerifiedBasketArb.MaxNotionalPerTrade);
+        Assert.Equal(2, options.VerifiedBasketArb.MaxOpenVerifiedBasketPositions);
+        Assert.Equal(100m, options.VerifiedBasketArb.MaxTotalVerifiedBasketExposure);
+        Assert.Equal(1800, options.VerifiedBasketArb.CooldownSecondsPerGroup);
     }
 
     [Fact] public void PaperPhaseValidation_command_line_override_path_binds_enabled()
