@@ -32,6 +32,7 @@ public sealed record RuntimeHealthSnapshot(
     int SingleMarketNearMissesCount,
     int SingleMarketDataQualitySamplesCount,
     int SingleMarketExecutionsCount,
+    int PaperPhase,
     int PaperOpenPositions,
     decimal PaperTotalExposure,
     int PaperOpenCountLastHour,
@@ -57,7 +58,7 @@ public sealed record RuntimeHealthSnapshot(
     {
         var suppressed = string.Join(",", QuietSuppressedByCategory.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value}"));
         var emitted = string.Join(",", EmittedByCategory.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value}"));
-        return $"[RUNTIME_HEALTH] ProcessMb={ProcessMemoryMb} GcMb={GcTotalMemoryMb} WorkingSetMb={WorkingSetMb} Logs={RecentLogsCount} ScannerHistory={ScannerHistoryCount} CandidateSnapshots={CandidateSnapshotCount} RepairHistory={RepairHistoryCount} ExecutionAudit={ExecutionAuditCount} SignalRBuffer={SignalREventBufferCount} OrderbookCache={OrderbookCacheCount} MarketCache={MarketCacheCount} PatchPreviewItems={PatchPreviewItemsCount} SingleMarketOpportunities={SingleMarketOpportunitiesCount} SingleMarketNearMisses={SingleMarketNearMissesCount} SingleMarketDataQualitySamples={SingleMarketDataQualitySamplesCount} SingleMarketExecutions={SingleMarketExecutionsCount} PaperOpenPositions={PaperOpenPositions} PaperTotalExposure={PaperTotalExposure} PaperOpenCountLastHour={PaperOpenCountLastHour} PaperPretradeRejects={PaperPretradeRejects} PaperDuplicateSuppressions={PaperDuplicateSuppressions} LiveTradingBlocked={LiveTradingBlockedCount} PaperExecutions={PaperExecutionsCount} DuplicateGroupKeyWarnings={DuplicateGroupKeyWarnings} QuietSuppressed={QuietSuppressedTotal} EmittedLogs={EmittedLogs} LogGateCache={LogGateCacheSize} QuietSuppressedByCategory={{{suppressed}}} EmittedByCategory={{{emitted}}} BatchBookRequests={BatchBookRequests} BatchBookBadRequests={BatchBookBadRequests} BatchBookTimeouts={BatchBookTimeouts} BatchBookRetrySuccesses={BatchBookRetrySuccesses} BatchBookInvalidTokens={BatchBookInvalidTokens} BatchBookSuppressedErrors={BatchBookSuppressedErrors} Uptime={Uptime}";
+        return $"[RUNTIME_HEALTH] ProcessMb={ProcessMemoryMb} GcMb={GcTotalMemoryMb} WorkingSetMb={WorkingSetMb} Logs={RecentLogsCount} ScannerHistory={ScannerHistoryCount} CandidateSnapshots={CandidateSnapshotCount} RepairHistory={RepairHistoryCount} ExecutionAudit={ExecutionAuditCount} SignalRBuffer={SignalREventBufferCount} OrderbookCache={OrderbookCacheCount} MarketCache={MarketCacheCount} PatchPreviewItems={PatchPreviewItemsCount} SingleMarketOpportunities={SingleMarketOpportunitiesCount} SingleMarketNearMisses={SingleMarketNearMissesCount} SingleMarketDataQualitySamples={SingleMarketDataQualitySamplesCount} SingleMarketExecutions={SingleMarketExecutionsCount} PaperPhase={PaperPhase} PaperOpenPositions={PaperOpenPositions} PaperTotalExposure={PaperTotalExposure} PaperOpenCountLastHour={PaperOpenCountLastHour} PaperPretradeRejects={PaperPretradeRejects} PaperDuplicateSuppressions={PaperDuplicateSuppressions} LiveTradingBlocked={LiveTradingBlockedCount} PaperExecutions={PaperExecutionsCount} DuplicateGroupKeyWarnings={DuplicateGroupKeyWarnings} QuietSuppressed={QuietSuppressedTotal} EmittedLogs={EmittedLogs} LogGateCache={LogGateCacheSize} QuietSuppressedByCategory={{{suppressed}}} EmittedByCategory={{{emitted}}} BatchBookRequests={BatchBookRequests} BatchBookBadRequests={BatchBookBadRequests} BatchBookTimeouts={BatchBookTimeouts} BatchBookRetrySuccesses={BatchBookRetrySuccesses} BatchBookInvalidTokens={BatchBookInvalidTokens} BatchBookSuppressedErrors={BatchBookSuppressedErrors} Uptime={Uptime}";
     }
 
     public static bool ShouldLogAt(DateTime nowUtc, DateTime lastLoggedAtUtc, int everyMinutes)
@@ -97,6 +98,7 @@ public sealed record RuntimeHealthSnapshot(
             SingleMarketNearMissesCount: state.SingleMarketSnapshot.TopNearMisses.Count,
             SingleMarketDataQualitySamplesCount: state.SingleMarketSnapshot.DataQualityRejectSamples.Count,
             SingleMarketExecutionsCount: state.SingleMarketExecutionsCount,
+            PaperPhase: state.PaperPhase,
             PaperOpenPositions: state.PaperOpenPositions,
             PaperTotalExposure: state.PaperTotalExposure,
             PaperOpenCountLastHour: state.PaperOpenCountLastHour,

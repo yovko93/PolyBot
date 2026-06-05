@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 using TradingBot.Api;
 using TradingBot.Engines;
 using TradingBot.Models;
@@ -10,8 +11,8 @@ public sealed record PaperPhaseValidationResult(
     DateTime TimestampUtc,
     bool Enabled,
     bool Passed,
-    string Stage,
-    string Reason,
+    string FailureStage,
+    string FailureReason,
     int PaperOpened,
     int DuplicateSuppressed,
     int LiveOrders,
@@ -27,6 +28,15 @@ public sealed record PaperPhaseValidationResult(
     int PaperOpenPositions,
     string? PositionStatus);
 
+public sealed record PaperPhaseValidationConfigDiagnostics(
+    string SectionPath,
+    bool Enabled,
+    bool InjectSyntheticOpportunity,
+    string Environment,
+    string ContentRoot,
+    string LoadedConfigFiles,
+    string CommandLineArgs);
+
 public sealed class PaperPhaseValidationHarness
 {
     private readonly object _gate = new();
@@ -41,6 +51,12 @@ public sealed class PaperPhaseValidationHarness
     {
         if (!options.PaperPhaseValidation.Enabled)
             return null;
+        if (!options.PaperPhaseValidation.InjectSyntheticOpportunity)
+        {
+            var disabled = BuildDisabledResult(options, "InjectSyntheticOpportunityFalse");
+            Export(contentRootPath, disabled);
+            return disabled;
+        }
 
         lock (_gate)
         {
@@ -75,17 +91,15 @@ public sealed class PaperPhaseValidationHarness
         }
 
         if (options.PaperPhaseValidation.RequireExplicitConfigFlag && (!options.PaperPhaseValidation.Enabled || !options.PaperPhaseValidation.InjectSyntheticOpportunity))
-            return Fail("Config", "ExplicitValidationFlagsRequired");
-        if (!options.PaperPhaseValidation.InjectSyntheticOpportunity)
-            return Fail("Config", "InjectSyntheticOpportunityDisabled");
+            return Fail("ConfigBinding", "ExplicitValidationFlagsRequired");
         if (!options.PaperPhaseValidation.SyntheticOpportunityType.Equals("SingleMarketBuyBoth", StringComparison.OrdinalIgnoreCase))
-            return Fail("Config", "UnsupportedSyntheticOpportunityType");
+            return Fail("SyntheticOpportunityCreation", "UnsupportedSyntheticOpportunityType");
         if (options.TradingMode.LiveTradingEnabled || options.EnableLiveExecution)
             return Fail("Safety", "LiveTradingEnabled");
         if (!options.TradingMode.PaperTradingEnabled || !options.EnablePaperTrading || !options.PaperOnly)
             return Fail("Safety", "PaperTradingNotEnabled");
         if (options.PaperPhaseValidation.MaxSyntheticPaperOpens < 1)
-            return Fail("Config", "MaxSyntheticPaperOpensBelowOne");
+            return Fail("ConfigBinding", "MaxSyntheticPaperOpensBelowOne");
 
         var marketId = "__paper_phase_validation_single_market__";
         var question = "Paper Phase Validation Synthetic Market";
@@ -114,7 +128,7 @@ public sealed class PaperPhaseValidationHarness
 
         var openPosition = positionBook.GetOpenPositions().FirstOrDefault(p => p.GroupKey.Equals($"single-market:{marketId}", StringComparison.OrdinalIgnoreCase));
         if (openPosition is null)
-            return Fail("Accounting", "OpenPositionMissing");
+            return Fail("PaperOpen", "OpenPositionMissing");
 
         var duplicateSuppressedBefore = paper.BlockedCountsByReason.TryGetValue("DuplicateOpenPosition", out var beforeDup) ? beforeDup : 0;
         var duplicateOpened = paper.RecordArbitrage(opportunity);
@@ -131,7 +145,7 @@ public sealed class PaperPhaseValidationHarness
             && paper.RealizedPnl == 0m
             && openPosition.Status == PaperPositionStatus.Open;
         if (!accountConsistent)
-            return Fail("Accounting", "PaperAccountInvariantFailed");
+            return Fail("AccountingValidation", "PaperAccountInvariantFailed");
 
         state.ReplacePositions(positionBook.OpenPositions.Concat(positionBook.ClosedPositions).Take(200).Select(pz => new PaperPositionDto(pz.PositionId, pz.OpenedAtUtc, pz.ClosedAtUtc, pz.Strategy, pz.GroupKey, pz.Legs.Select(l => $"{l.Outcome}:{l.Question}").ToList(), pz.Quantity, pz.TotalCost, pz.CostPerBasket, pz.GuaranteedPayout, pz.Quantity * pz.Legs.Count, pz.GrossEdgeAtOpen, pz.NetEdgeAtOpen, pz.ExpectedProfit, pz.LockedCapital, pz.ActiveProfile, pz.Source, pz.CurrentNoAskSum, pz.CurrentExitValue, pz.UnrealizedPnl, pz.MtmStatus, pz.MissingExitPrices, pz.RealizedPayout, pz.RealizedProfit, pz.OpenedFromSimulatedFills, pz.FillSimulationId, pz.Status.ToString().ToUpperInvariant(), state.NextSeq())));
         state.AddSingleMarketExecution(new SingleMarketPaperExecutionDto(Guid.NewGuid().ToString("N"), DateTime.UtcNow, marketId, question, "SingleMarketBuyBoth", openPosition.Quantity, yesPrice, noPrice, openPosition.TotalCost, openPosition.EdgePerShare, openPosition.ExpectedProfit, paper.Balance, paper.LockedCapital, paper.Equity, "Opened", true));
@@ -186,6 +200,74 @@ public sealed class PaperPhaseValidationHarness
     {
         var exports = Path.Combine(contentRootPath, "exports");
         Directory.CreateDirectory(exports);
-        File.WriteAllText(Path.Combine(exports, "paper-phase-validation-latest.json"), JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(Path.Combine(exports, "paper-phase-validation-latest.json"), JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
     }
+
+    public const string SectionPath = $"{TradingBotOptions.SectionName}:PaperPhaseValidation";
+
+    public static PaperPhaseValidationConfigDiagnostics BuildConfigDiagnostics(
+        TradingBotOptions options,
+        string environmentName,
+        string contentRootPath,
+        IEnumerable<object>? configurationSources = null,
+        IEnumerable<string>? commandLineArgs = null)
+    {
+        var cfg = options.PaperPhaseValidation;
+        return new PaperPhaseValidationConfigDiagnostics(
+            SectionPath,
+            cfg.Enabled,
+            cfg.InjectSyntheticOpportunity,
+            string.IsNullOrWhiteSpace(environmentName) ? "Unknown" : environmentName,
+            string.IsNullOrWhiteSpace(contentRootPath) ? "Unknown" : contentRootPath,
+            FormatLoadedConfigFiles(configurationSources),
+            FormatCommandLineArgs(commandLineArgs));
+    }
+
+    public static void LogStartupConfig(
+        TradingBotOptions options,
+        string environmentName = "Unknown",
+        string contentRootPath = "Unknown",
+        IEnumerable<object>? configurationSources = null,
+        IEnumerable<string>? commandLineArgs = null,
+        bool failOnValidationConfigError = true)
+    {
+        var cfg = options.PaperPhaseValidation;
+        var diagnostics = BuildConfigDiagnostics(options, environmentName, contentRootPath, configurationSources, commandLineArgs);
+        Console.WriteLine($"[PAPER_PHASE_VALIDATION_CONFIG_SOURCE] SectionPath={diagnostics.SectionPath} Enabled={diagnostics.Enabled.ToString().ToLowerInvariant()} InjectSyntheticOpportunity={diagnostics.InjectSyntheticOpportunity.ToString().ToLowerInvariant()} Environment={diagnostics.Environment} ContentRoot={diagnostics.ContentRoot} LoadedConfigFiles={diagnostics.LoadedConfigFiles} CommandLineArgs={diagnostics.CommandLineArgs}");
+        Console.WriteLine($"[PAPER_PHASE_VALIDATION_CONFIG] Enabled={cfg.Enabled.ToString().ToLowerInvariant()} InjectSyntheticOpportunity={cfg.InjectSyntheticOpportunity.ToString().ToLowerInvariant()} RunOnce={cfg.RunOnce.ToString().ToLowerInvariant()} MaxSyntheticPaperOpens={cfg.MaxSyntheticPaperOpens} RequireExplicitConfigFlag={cfg.RequireExplicitConfigFlag.ToString().ToLowerInvariant()}");
+        if (string.Equals(environmentName, "Validation", StringComparison.OrdinalIgnoreCase) && !cfg.Enabled)
+        {
+            Console.WriteLine($"[PAPER_PHASE_VALIDATION_CONFIG_ERROR] Environment={environmentName} Reason=ValidationEnvironmentButFeatureDisabled SectionPath={SectionPath}");
+            if (failOnValidationConfigError)
+                throw new InvalidOperationException($"Paper phase validation environment is active but {SectionPath}:Enabled is false.");
+        }
+        if (!cfg.Enabled) Console.WriteLine("[PAPER_PHASE_VALIDATION_DISABLED] Reason=ConfigDisabled");
+        else if (!cfg.InjectSyntheticOpportunity) Console.WriteLine("[PAPER_PHASE_VALIDATION_DISABLED] Reason=InjectSyntheticOpportunityFalse");
+    }
+
+    private static string FormatLoadedConfigFiles(IEnumerable<object>? configurationSources)
+    {
+        if (configurationSources is null) return "Unknown";
+        var labels = configurationSources.Select(ConfigSourceLabel).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        return labels.Length == 0 ? "None" : string.Join(",", labels);
+    }
+
+    private static string ConfigSourceLabel(object source)
+    {
+        if (source is string label) return label;
+        var typeName = source.GetType().Name;
+        var path = source.GetType().GetProperty("Path")?.GetValue(source)?.ToString();
+        if (!string.IsNullOrWhiteSpace(path)) return path!;
+        return typeName;
+    }
+
+    private static string FormatCommandLineArgs(IEnumerable<string>? commandLineArgs)
+    {
+        if (commandLineArgs is null) return "None";
+        var args = commandLineArgs.ToArray();
+        return args.Length == 0 ? "None" : string.Join(" ", args.Select(a => a.Replace(" ", "_", StringComparison.Ordinal)));
+    }
+
+    private static PaperPhaseValidationResult BuildDisabledResult(TradingBotOptions options, string reason)
+        => new(DateTime.UtcNow, options.PaperPhaseValidation.Enabled, false, "ConfigBinding", reason, 0, 0, 0, 0, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0, null);
 }

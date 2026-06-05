@@ -83,6 +83,7 @@ public class BotRuntimeState
     public int SingleMarketExecutionsCount => _singleMarketExecutions.Count;
     public int PaperOpenPositions => Status.OpenPositions;
     public decimal PaperTotalExposure => Status.LockedCapital;
+    public int PaperPhase { get; private set; } = 1;
     public int PaperOpenCountLastHour { get; private set; }
     public int PaperPretradeRejects => Volatile.Read(ref _paperPretradeRejects);
     public int PaperDuplicateSuppressions => Volatile.Read(ref _paperDuplicateSuppressions);
@@ -91,6 +92,7 @@ public class BotRuntimeState
     public IReadOnlyDictionary<string, int> PaperPretradeRejectsByReason { get { lock (_paperCountersGate) return new Dictionary<string, int>(_paperPretradeRejectsByReason, StringComparer.OrdinalIgnoreCase); } }
     public long NextSeq()=>Interlocked.Increment(ref _seq);
     public void SetStatus(BotStatusDto s){lock(_gate) Status=s;}
+    public void SetPaperPhase(int phase) => PaperPhase = Math.Max(0, phase);
     public void SetScannerStats(ScannerStatsDto s){lock(_gate) ScannerStats=s; _scannerStatsHistory.Enqueue(s); Trim(_scannerStatsHistory, Math.Min(_runtime.MaxScannerStatsHistory, _runtime.MaxScannerHistory));}
     public void SetRisk(RiskStateDto r){lock(_gate) Risk=r;}
     public void SetOpportunityDiagnostics(TradingBot.Models.OpportunityDiagnosticsSnapshot? d){lock(_gate) OpportunityDiagnostics=d;}
@@ -168,6 +170,7 @@ public class BotRuntimeState
         ["singleMarketNearMisses"] = SingleMarketSnapshot.TopNearMisses.Count,
         ["singleMarketDataQualitySamples"] = SingleMarketSnapshot.DataQualityRejectSamples.Count,
         ["singleMarketExecutions"] = SingleMarketExecutionsCount,
+        ["paperPhase"] = PaperPhase,
         ["paperOpenPositions"] = PaperOpenPositions,
         ["paperOpenCountLastHour"] = PaperOpenCountLastHour,
         ["paperPretradeRejects"] = PaperPretradeRejects,

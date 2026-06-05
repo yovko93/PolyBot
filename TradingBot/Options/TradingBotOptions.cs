@@ -54,6 +54,7 @@ public class TradingBotOptions
     public PaperRiskOptions PaperRisk { get; set; } = new();
     public VerifiedBasketArbOptions VerifiedBasketArb { get; set; } = new();
     public PaperPhaseValidationOptions PaperPhaseValidation { get; set; } = new();
+    public PaperPhase2Options PaperPhase2 { get; set; } = new();
     public bool EnableExperimentalProfilePaper { get; set; } = false;
     public string ExperimentalPaperProfile { get; set; } = "PolymarketApprox";
     public bool RequireStableExperimentalSignals { get; set; } = true;
@@ -126,6 +127,15 @@ public class VerifiedBasketArbOptions
     public int MaxOpenVerifiedBasketPositions { get; set; } = 1;
     public decimal MaxTotalVerifiedBasketExposure { get; set; } = 25m;
     public int CooldownSecondsPerGroup { get; set; } = 1800;
+}
+
+public class PaperPhase2Options
+{
+    public bool Enabled { get; set; } = false;
+    public TradingModeOptions TradingMode { get; set; } = new() { LiveTradingEnabled = false, PaperTradingEnabled = true, PaperPhase = 2 };
+    public PaperRiskOptions PaperRisk { get; set; } = new() { MaxPaperPositionsTotal = 5, MaxPaperPositionsPerStrategy = 2, MaxPaperOpenPerHour = 2, MaxPaperNotionalPerTrade = 50m, MaxPaperTotalExposure = 200m, RequireFillSimulation = true, RequireStableEdge = true, RequireExecutionReadinessStable = true, RequireDataQualityPass = true, RequireDuplicateSuppression = true, AllowSingleMarketPaper = true, AllowVerifiedBasketPaper = true, AllowExperimentalPaper = false, AllowRepairSuggestedGroups = false };
+    public SingleMarketArbOptions SingleMarketArb { get; set; } = new() { RequiredConsecutiveEdgeScans = 3, RequiredConsecutiveExecutionReadyScans = 3, MinEdgePerShare = 0.005m, MinExpectedProfit = 0.50m, MinNotional = 10m, MaxNotionalPerTrade = 50m, MaxOpenSingleMarketPositions = 2, MaxTotalSingleMarketExposure = 100m, MaxPositionsPerCycle = 1, CooldownSecondsPerMarket = 1800 };
+    public VerifiedBasketArbOptions VerifiedBasketArb { get; set; } = new() { RequiredConsecutiveEdgeScans = 3, RequiredConsecutiveExecutionReadyScans = 3, MinNetEdgePerBasket = 0.005m, MinExpectedProfit = 0.50m, MaxNotionalPerTrade = 50m, MaxOpenVerifiedBasketPositions = 2, MaxTotalVerifiedBasketExposure = 100m, CooldownSecondsPerGroup = 1800 };
 }
 
 public class PaperPhaseValidationOptions
@@ -335,6 +345,9 @@ public class MultiOutcomeLoggingOptions
     public int MaxRepairSuggestionLogsPerHour { get; set; } = 10;
     public int MaxDataQualityAuditLogsPerHour { get; set; } = 20;
     public int MaxRepeatedSameMarketDataQualityLogsPerHour { get; set; } = 1;
+    public int MaxVerifiedPretradeBlockedAuditPerHour { get; set; } = 10;
+    public int MaxVerifiedArbDetectedAuditPerHour { get; set; } = 10;
+    public bool SuppressRepeatedVerifiedPretradeBlockedAudit { get; set; } = true;
     public bool LogAllowlistRepairOnChangeOnly { get; set; } = true;
     public int LogAllowlistRepairEveryNCycles { get; set; } = 100;
     public bool LogSingleMarketFullCycleOnlyOnCompletion { get; set; } = true;
