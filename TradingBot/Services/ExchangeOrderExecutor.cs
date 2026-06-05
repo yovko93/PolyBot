@@ -12,6 +12,8 @@ public sealed class DisabledExchangeOrderExecutor : IExchangeOrderExecutor
 {
     public Task SubmitAsync(OrderIntent intent, ExecutionOptions options, CancellationToken ct = default)
     {
+        LiveTradingGuard.AssertNoLiveTrading(options, nameof(DisabledExchangeOrderExecutor), LiveTradingAction.RealApiOrderSubmit);
+
         if (options.PaperOnly)
         {
             Console.WriteLine("[LIVE_EXECUTION_BLOCKED] Reason=PaperOnly");

@@ -43,6 +43,11 @@ public class BotRuntimeState
     private int _patchPreviewItemsCount;
     private QuietLogGateStats _quietLogGateStats = new(0, 0, new Dictionary<string, long>(), new Dictionary<string, long>(), 0, 0);
     private OrderBookServiceStats _orderBookServiceStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0);
+    private int _paperPretradeRejects;
+    private int _paperDuplicateSuppressions;
+    private int _paperExecutionsCount;
+    private readonly object _paperCountersGate = new();
+    private readonly Dictionary<string, int> _paperPretradeRejectsByReason = new(StringComparer.OrdinalIgnoreCase);
 
     private static void Trim<T>(ConcurrentQueue<T> q,int max){ var capped = Math.Max(0, max); while(q.Count>capped) q.TryDequeue(out _); }
     private void TrimAll()
@@ -76,6 +81,14 @@ public class BotRuntimeState
     public OrderBookServiceStats OrderBookServiceStats => _orderBookServiceStats;
     public int SingleMarketOpportunitiesCount => _singleMarketOpportunities.Count;
     public int SingleMarketExecutionsCount => _singleMarketExecutions.Count;
+    public int PaperOpenPositions => Status.OpenPositions;
+    public decimal PaperTotalExposure => Status.LockedCapital;
+    public int PaperOpenCountLastHour { get; private set; }
+    public int PaperPretradeRejects => Volatile.Read(ref _paperPretradeRejects);
+    public int PaperDuplicateSuppressions => Volatile.Read(ref _paperDuplicateSuppressions);
+    public long LiveTradingBlockedCount => TradingBot.Services.LiveTradingGuard.BlockedCount;
+    public int PaperExecutionsCount => SingleMarketExecutionsCount + Volatile.Read(ref _paperExecutionsCount);
+    public IReadOnlyDictionary<string, int> PaperPretradeRejectsByReason { get { lock (_paperCountersGate) return new Dictionary<string, int>(_paperPretradeRejectsByReason, StringComparer.OrdinalIgnoreCase); } }
     public long NextSeq()=>Interlocked.Increment(ref _seq);
     public void SetStatus(BotStatusDto s){lock(_gate) Status=s;}
     public void SetScannerStats(ScannerStatsDto s){lock(_gate) ScannerStats=s; _scannerStatsHistory.Enqueue(s); Trim(_scannerStatsHistory, Math.Min(_runtime.MaxScannerStatsHistory, _runtime.MaxScannerHistory));}
@@ -115,6 +128,15 @@ public class BotRuntimeState
     public void AddUnresolvedDiagnostics(IEnumerable<object> items){foreach(var item in items.Take(_runtime.MaxUnresolvedDiagnostics)) _unresolvedDiagnostics.Enqueue(item); Trim(_unresolvedDiagnostics,_runtime.MaxUnresolvedDiagnostics);}
     public void SetQuietLogGateStats(QuietLogGateStats stats) => _quietLogGateStats = stats;
     public void SetOrderBookServiceStats(OrderBookServiceStats stats) => _orderBookServiceStats = stats;
+    public void RecordPaperPretradeReject(string reason)
+    {
+        Interlocked.Increment(ref _paperPretradeRejects);
+        lock (_paperCountersGate) _paperPretradeRejectsByReason[reason] = _paperPretradeRejectsByReason.TryGetValue(reason, out var c) ? c + 1 : 1;
+        if (reason.Equals("DuplicateOpenPosition", StringComparison.OrdinalIgnoreCase)) RecordPaperDuplicateSuppression();
+    }
+    public void RecordPaperDuplicateSuppression() => Interlocked.Increment(ref _paperDuplicateSuppressions);
+    public void SetPaperOpenCountLastHour(int count) => PaperOpenCountLastHour = count;
+    public void RecordPaperExecution() => Interlocked.Increment(ref _paperExecutionsCount);
 
     public void SetRuntimeCounts(int? repairHistoryCount = null, int? dryRunOrderPlansCount = null, int? fillSimulationsCount = null, int? executionAuditCount = null, int? orderbookCacheCount = null, int? marketCacheCount = null, int? exportQueueCount = null, int? patchPreviewItemsCount = null)
     {
@@ -145,7 +167,12 @@ public class BotRuntimeState
         ["singleMarketOpportunities"] = SingleMarketOpportunitiesCount,
         ["singleMarketNearMisses"] = SingleMarketSnapshot.TopNearMisses.Count,
         ["singleMarketDataQualitySamples"] = SingleMarketSnapshot.DataQualityRejectSamples.Count,
-        ["singleMarketExecutions"] = SingleMarketExecutionsCount
+        ["singleMarketExecutions"] = SingleMarketExecutionsCount,
+        ["paperOpenPositions"] = PaperOpenPositions,
+        ["paperOpenCountLastHour"] = PaperOpenCountLastHour,
+        ["paperPretradeRejects"] = PaperPretradeRejects,
+        ["paperDuplicateSuppressions"] = PaperDuplicateSuppressions,
+        ["paperExecutionsCount"] = PaperExecutionsCount
     };
     public void ClearNonEssentialRuntimeState()
     {
