@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 using TradingBot.Api;
 using TradingBot.Engines;
 using TradingBot.Models;
@@ -26,6 +27,15 @@ public sealed record PaperPhaseValidationResult(
     decimal PaperExposure,
     int PaperOpenPositions,
     string? PositionStatus);
+
+public sealed record PaperPhaseValidationConfigDiagnostics(
+    string SectionPath,
+    bool Enabled,
+    bool InjectSyntheticOpportunity,
+    string Environment,
+    string ContentRoot,
+    string LoadedConfigFiles,
+    string CommandLineArgs);
 
 public sealed class PaperPhaseValidationHarness
 {
@@ -193,12 +203,69 @@ public sealed class PaperPhaseValidationHarness
         File.WriteAllText(Path.Combine(exports, "paper-phase-validation-latest.json"), JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
     }
 
-    public static void LogStartupConfig(TradingBotOptions options)
+    public const string SectionPath = $"{TradingBotOptions.SectionName}:PaperPhaseValidation";
+
+    public static PaperPhaseValidationConfigDiagnostics BuildConfigDiagnostics(
+        TradingBotOptions options,
+        string environmentName,
+        string contentRootPath,
+        IEnumerable<object>? configurationSources = null,
+        IEnumerable<string>? commandLineArgs = null)
     {
         var cfg = options.PaperPhaseValidation;
+        return new PaperPhaseValidationConfigDiagnostics(
+            SectionPath,
+            cfg.Enabled,
+            cfg.InjectSyntheticOpportunity,
+            string.IsNullOrWhiteSpace(environmentName) ? "Unknown" : environmentName,
+            string.IsNullOrWhiteSpace(contentRootPath) ? "Unknown" : contentRootPath,
+            FormatLoadedConfigFiles(configurationSources),
+            FormatCommandLineArgs(commandLineArgs));
+    }
+
+    public static void LogStartupConfig(
+        TradingBotOptions options,
+        string environmentName = "Unknown",
+        string contentRootPath = "Unknown",
+        IEnumerable<object>? configurationSources = null,
+        IEnumerable<string>? commandLineArgs = null,
+        bool failOnValidationConfigError = true)
+    {
+        var cfg = options.PaperPhaseValidation;
+        var diagnostics = BuildConfigDiagnostics(options, environmentName, contentRootPath, configurationSources, commandLineArgs);
+        Console.WriteLine($"[PAPER_PHASE_VALIDATION_CONFIG_SOURCE] SectionPath={diagnostics.SectionPath} Enabled={diagnostics.Enabled.ToString().ToLowerInvariant()} InjectSyntheticOpportunity={diagnostics.InjectSyntheticOpportunity.ToString().ToLowerInvariant()} Environment={diagnostics.Environment} ContentRoot={diagnostics.ContentRoot} LoadedConfigFiles={diagnostics.LoadedConfigFiles} CommandLineArgs={diagnostics.CommandLineArgs}");
         Console.WriteLine($"[PAPER_PHASE_VALIDATION_CONFIG] Enabled={cfg.Enabled.ToString().ToLowerInvariant()} InjectSyntheticOpportunity={cfg.InjectSyntheticOpportunity.ToString().ToLowerInvariant()} RunOnce={cfg.RunOnce.ToString().ToLowerInvariant()} MaxSyntheticPaperOpens={cfg.MaxSyntheticPaperOpens} RequireExplicitConfigFlag={cfg.RequireExplicitConfigFlag.ToString().ToLowerInvariant()}");
+        if (string.Equals(environmentName, "Validation", StringComparison.OrdinalIgnoreCase) && !cfg.Enabled)
+        {
+            Console.WriteLine($"[PAPER_PHASE_VALIDATION_CONFIG_ERROR] Environment={environmentName} Reason=ValidationEnvironmentButFeatureDisabled SectionPath={SectionPath}");
+            if (failOnValidationConfigError)
+                throw new InvalidOperationException($"Paper phase validation environment is active but {SectionPath}:Enabled is false.");
+        }
         if (!cfg.Enabled) Console.WriteLine("[PAPER_PHASE_VALIDATION_DISABLED] Reason=ConfigDisabled");
         else if (!cfg.InjectSyntheticOpportunity) Console.WriteLine("[PAPER_PHASE_VALIDATION_DISABLED] Reason=InjectSyntheticOpportunityFalse");
+    }
+
+    private static string FormatLoadedConfigFiles(IEnumerable<object>? configurationSources)
+    {
+        if (configurationSources is null) return "Unknown";
+        var labels = configurationSources.Select(ConfigSourceLabel).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        return labels.Length == 0 ? "None" : string.Join(",", labels);
+    }
+
+    private static string ConfigSourceLabel(object source)
+    {
+        if (source is string label) return label;
+        var typeName = source.GetType().Name;
+        var path = source.GetType().GetProperty("Path")?.GetValue(source)?.ToString();
+        if (!string.IsNullOrWhiteSpace(path)) return path!;
+        return typeName;
+    }
+
+    private static string FormatCommandLineArgs(IEnumerable<string>? commandLineArgs)
+    {
+        if (commandLineArgs is null) return "None";
+        var args = commandLineArgs.ToArray();
+        return args.Length == 0 ? "None" : string.Join(" ", args.Select(a => a.Replace(" ", "_", StringComparison.Ordinal)));
     }
 
     private static PaperPhaseValidationResult BuildDisabledResult(TradingBotOptions options, string reason)
