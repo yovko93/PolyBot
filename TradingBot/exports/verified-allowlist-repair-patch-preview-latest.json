@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-06-05T22:12:50.3988785Z",
-  "snapshotId": "candidate-export-8dec34f6225f2ae-48e31f4536fa",
+  "timestamp": "2026-06-06T19:58:39.1205523Z",
+  "snapshotId": "candidate-export-8dec405f4c368bf-3e81ffc0e3b4",
   "sourceConfigPath": "config/verified-multi-outcome-groups.json",
   "mode": "ManualPreviewOnly",
   "willOverwriteRealConfig": false,
@@ -9,7 +9,7 @@
     "patchableHighConfidence": 0,
     "patchableMediumConfidence": 0,
     "lowConfidenceReviewOnly": 2,
-    "disabledSuggested": 1,
+    "disabledSuggested": 0,
     "expectedHealthyAfterApply": 8,
     "quarantined": 0,
     "noOp": 0,
@@ -18,7 +18,7 @@
   "patches": [
     {
       "groupKey": "winner:2026 women s us open|kind:generic",
-      "currentAction": "DisableMissingMarkets",
+      "currentAction": "NeedsManualReview",
       "confidence": "Low",
       "patchType": "ReviewOnly",
       "currentGroup": {
@@ -69,7 +69,7 @@
         "Low confidence. Review before disabling or refreshing."
       ],
       "manualInstructions": "No trusted automatic config change. Review diagnostics manually; do not copy an executable group from this preview.",
-      "expectedResultAfterApply": "Group remains in suggested config but disabled until markets can be manually repaired."
+      "expectedResultAfterApply": "No automatic template is trusted; operator reviews candidate exports and current config."
     },
     {
       "groupKey": "winner:1st round of 2026 colombian presidential election|kind:person",

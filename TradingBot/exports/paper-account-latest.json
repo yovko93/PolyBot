@@ -1,9 +1,10 @@
 {
-  "Cash": 1000,
+  "Cash": 1001.20,
   "Locked": 0,
-  "Equity": 1000,
-  "RealizedPnl": 0,
+  "Equity": 1001.20,
+  "RealizedPnl": 1.20,
   "OpenPositions": 0,
+  "ClosedPositions": 1,
   "TotalExposure": 0,
   "PositionsByStrategy": {},
   "HourlyOpenCount": 0,

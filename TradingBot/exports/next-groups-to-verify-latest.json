@@ -1,7 +1,47 @@
 [
   {
-    "groupKey": "winner:on 2026 06 14|kind:generic",
-    "title": "winner:on 2026 06 14|kind:generic",
+    "groupKey": "winner:2026 f1 catalunya grand prix|kind:generic",
+    "title": "winner:2026 f1 catalunya grand prix|kind:generic",
+    "detectedMarketsCount": 5,
+    "pricedLegs": 5,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 110,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:2026 f1 catalunya grand prix|kind:generic",
+      "title": "winner:2026 f1 catalunya grand prix|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "2276317",
+        "2276324",
+        "2276309",
+        "2276311",
+        "2276328"
+      ],
+      "conditionIds": [
+        "0x747d3cf9fc0e0dbe9f8ed7e981584b50139e7aef344ccd8780800f1b47c411d4",
+        "0xbfe885dcdaf8b19a3ea3c3f27f1cf933334a4cf132eef51d4539266c03962e42",
+        "0x55d133d5b0a2c16cbf065478c1a86cc681d6b43bc3409fa17c98840bb08d9d06",
+        "0x06058bc1c84c1befa076511fc07ad4a062429bb0473fc6cfc9dabdc5397d888b",
+        "0xbf01f2f1c15ca60b318fa3206b194a6a94e3d88f3071c9e1b604abaa07f42d2a"
+      ],
+      "requiredOutcomeCount": 5,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-06-06"
+    }
+  },
+  {
+    "groupKey": "winner:2026 memorial tournament presented by workday|kind:generic",
+    "title": "winner:2026 memorial tournament presented by workday|kind:generic",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
     "missingNoAsk": 0,
@@ -13,67 +53,29 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:on 2026 06 14|kind:generic",
-      "title": "winner:on 2026 06 14|kind:generic",
+      "groupKey": "winner:2026 memorial tournament presented by workday|kind:generic",
+      "title": "winner:2026 memorial tournament presented by workday|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "1897067",
-        "1897064"
+        "2411390",
+        "2411411"
       ],
       "conditionIds": [
-        "0xc6f7e4a015ec643eb49c749da19553a2257add76278a252805a12dfa85103269",
-        "0x8f92746709a4fc82f4d454e162046ac3590e3a5a7564540806a6c5f8a87e6738"
+        "0x4128abd4676f3aed1ff1c4cc183feb819feb6fffbdaa466cdb9d479dc023f964",
+        "0xd43db59db9904770f7fc878ad79f15d5dd0c12259da933256f22ce034849ab55"
       ],
       "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-06-05"
+      "verifiedAt": "2026-06-06"
     }
   },
   {
-    "groupKey": "winner:on 2026 06 06|kind:generic",
-    "title": "winner:on 2026 06 06|kind:generic",
-    "detectedMarketsCount": 4,
-    "pricedLegs": 4,
-    "missingNoAsk": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "rawOnlyEdge": null,
-    "candidateQualityScore": 90,
-    "safetyClassification": "SafeForManualVerification",
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:on 2026 06 06|kind:generic",
-      "title": "winner:on 2026 06 06|kind:generic",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "2222151",
-        "2316795",
-        "2373186",
-        "2373119"
-      ],
-      "conditionIds": [
-        "0x05ecd0137545dda91c9086f41b6d71eb534ac5a056c057a627843737fc8196b2",
-        "0xd9ff9330d663cea07def45a02443008077cc6e414913e70e6d5305c435f10c65",
-        "0x2563f5d00f5ea2520fabcfc194cc17ca5da58595247a4e02676b17ad6c94d798",
-        "0x98b243e8933d97f78bf215a46daea677a33762b073be5fb438bea1d6bb5a7170"
-      ],
-      "requiredOutcomeCount": 4,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-06-05"
-    }
-  },
-  {
-    "groupKey": "winner:on 2026 06 21|kind:generic",
-    "title": "winner:on 2026 06 21|kind:generic",
+    "groupKey": "winner:fair play award for 2026 fifa world cup|kind:generic",
+    "title": "winner:fair play award for 2026 fifa world cup|kind:generic",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
     "missingNoAsk": 0,
@@ -85,24 +87,264 @@
     "recommendedAction": "SafeCandidateForManualVerification",
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:on 2026 06 21|kind:generic",
-      "title": "winner:on 2026 06 21|kind:generic",
+      "groupKey": "winner:fair play award for 2026 fifa world cup|kind:generic",
+      "title": "winner:fair play award for 2026 fifa world cup|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "1897177",
-        "1897168"
+        "2432101",
+        "2432104"
       ],
       "conditionIds": [
-        "0x08d56195e88cedb87eeff396bd35e8b67d031e586169b3bc937b3095b3cdfe43",
-        "0xebb200cb08bbe89c2523a345947d083a992e27cc479cf1b5568407751e026d2c"
+        "0xfde8151df9f9e2be9318a38fd9959b57a1fa9744e95a9ceee52f8b7aa9aff319",
+        "0x9e4753fffad204253a7ebfa64e7998c5242d0aa6b84f122939d893052c779c5b"
       ],
       "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-06-05"
+      "verifiedAt": "2026-06-06"
+    }
+  },
+  {
+    "groupKey": "winner:on 2026 06 18|kind:generic",
+    "title": "winner:on 2026 06 18|kind:generic",
+    "detectedMarketsCount": 2,
+    "pricedLegs": 2,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:on 2026 06 18|kind:generic",
+      "title": "winner:on 2026 06 18|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "1897115",
+        "1897109"
+      ],
+      "conditionIds": [
+        "0x6f05c7bc5ad978f8f9916f05d30a7f752e02b81508c56d82ed7c9245bca163b0",
+        "0x870bb248c96c52dcf35390a66542471c5bba2896942d6bc97ade41a418646ba8"
+      ],
+      "requiredOutcomeCount": 2,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-06-06"
+    }
+  },
+  {
+    "groupKey": "winner:2026 al cy young award|kind:generic",
+    "title": "winner:2026 al cy young award|kind:generic",
+    "detectedMarketsCount": 2,
+    "pricedLegs": 2,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:2026 al cy young award|kind:generic",
+      "title": "winner:2026 al cy young award|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "1395041",
+        "1395058"
+      ],
+      "conditionIds": [
+        "0x62a30708b1960bd54ac2891b0ef65dcc3675375fd8f6b3a0641d7e2607fd392b",
+        "0x720cf4c6448d32730d7e80c39231ab1da2eed6aeb723f2f0991c96e1c4fa8ef9"
+      ],
+      "requiredOutcomeCount": 2,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-06-06"
+    }
+  },
+  {
+    "groupKey": "winner:best costume design of a play at 2026 tony awards|kind:generic",
+    "title": "winner:best costume design of a play at 2026 tony awards|kind:generic",
+    "detectedMarketsCount": 2,
+    "pricedLegs": 2,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:best costume design of a play at 2026 tony awards|kind:generic",
+      "title": "winner:best costume design of a play at 2026 tony awards|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "2421309",
+        "2421312"
+      ],
+      "conditionIds": [
+        "0xb87808c4715d490676725d7cc59aa905626463c413fd2d181f9d8d5ffbc9aa54",
+        "0x739d0b475586e7926b48857d6493f8a2a5326f8770cbcc24283690085c3b7638"
+      ],
+      "requiredOutcomeCount": 2,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-06-06"
+    }
+  },
+  {
+    "groupKey": "winner:on 2026 06 23|kind:generic",
+    "title": "winner:on 2026 06 23|kind:generic",
+    "detectedMarketsCount": 2,
+    "pricedLegs": 2,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:on 2026 06 23|kind:generic",
+      "title": "winner:on 2026 06 23|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "1897240",
+        "1897231"
+      ],
+      "conditionIds": [
+        "0x66b7ad48448f8846395b8df8edb5f20f99bed8e79928b1b9d2cf3a19d70dbdf8",
+        "0x887f26cf6ab07f7aebdf203280c1f1cddbe1cd494f420316b94a2647238f48d1"
+      ],
+      "requiredOutcomeCount": 2,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-06-06"
+    }
+  },
+  {
+    "groupKey": "winner:2026 wnba rookie of year award|kind:generic",
+    "title": "winner:2026 wnba rookie of year award|kind:generic",
+    "detectedMarketsCount": 3,
+    "pricedLegs": 3,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:2026 wnba rookie of year award|kind:generic",
+      "title": "winner:2026 wnba rookie of year award|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "2047168",
+        "2047172",
+        "2047166"
+      ],
+      "conditionIds": [
+        "0x5dd646880893d9dadac377f2036575bbe4102620a950c5071dfac3ea0a780ebf",
+        "0x402c6234737e1fd43b8758656587af0cc9961f77751da31e80bb823fcb3bb5fc",
+        "0x043cc0bb2f6c445bd5637830e5017c0711df5b4ea0b94e4e53a296ff5dff55da"
+      ],
+      "requiredOutcomeCount": 3,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-06-06"
+    }
+  },
+  {
+    "groupKey": "winner:2026 nl rookie of year award|kind:generic",
+    "title": "winner:2026 nl rookie of year award|kind:generic",
+    "detectedMarketsCount": 2,
+    "pricedLegs": 2,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:2026 nl rookie of year award|kind:generic",
+      "title": "winner:2026 nl rookie of year award|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "1721031",
+        "1721034"
+      ],
+      "conditionIds": [
+        "0x68c7e3aafd5f70550455e4025f14793ed2e3631686dfb6e1111f9400cc7e2a6f",
+        "0x9e03b82afb7654f4a2c6db3cc4bf6f1f74b53547ea3600001dac127decb34a23"
+      ],
+      "requiredOutcomeCount": 2,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-06-06"
+    }
+  },
+  {
+    "groupKey": "winner:2026 wnba finals|kind:generic",
+    "title": "winner:2026 wnba finals|kind:generic",
+    "detectedMarketsCount": 2,
+    "pricedLegs": 2,
+    "missingNoAsk": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "rawOnlyEdge": null,
+    "candidateQualityScore": 90,
+    "safetyClassification": "SafeForManualVerification",
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:2026 wnba finals|kind:generic",
+      "title": "winner:2026 wnba finals|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "1892494",
+        "1892500"
+      ],
+      "conditionIds": [
+        "0x88283e9a1b66aafc68263662b4e4258bc79af79cf779d9e04924d4f050cd185c",
+        "0x033dd3480d06974a5176c618cb4ac58638cebb484d966ef0d2b03352328fd004"
+      ],
+      "requiredOutcomeCount": 2,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-06-06"
     }
   }
 ]

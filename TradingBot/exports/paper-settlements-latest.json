@@ -1,0 +1,14 @@
+[
+  {
+    "SettlementId": "52b3700bfd974a158562dc6635a0f692",
+    "PositionId": "SingleMarketBuyBoth___paper_settlement_validation_single_market___YES___paper_settlement_validation_single_market___NO",
+    "RequestedAtUtc": "2026-06-06T19:53:05.7301924Z",
+    "SettledAtUtc": "2026-06-06T19:53:05.7301924Z",
+    "Mode": "ManualPayout",
+    "Cost": 10.80,
+    "RealizedPayout": 12.0,
+    "RealizedPnl": 1.20,
+    "Status": "Closed",
+    "RejectReason": null
+  }
+]

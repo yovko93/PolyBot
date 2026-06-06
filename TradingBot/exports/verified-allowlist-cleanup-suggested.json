@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAtUtc": "2026-06-05T22:12:50.4479428Z",
+    "generatedAtUtc": "2026-06-06T19:58:39.1424062Z",
     "note": "suggested only"
   },
   "groups": [
@@ -98,10 +98,10 @@
       "GroupKey": "winner:2026 women s us open|kind:generic",
       "Title": "winner:2026 women s us open|kind:generic",
       "CurrentEnabled": true,
-      "HealthCategory": "BrokenConfig",
-      "RecommendedAction": "DisableMissingMarkets",
+      "HealthCategory": "NeedsRefresh",
+      "RecommendedAction": "NeedsManualReview",
       "RepairConfidence": "Low",
-      "SuggestedAction": "DisableMissingMarkets",
+      "SuggestedAction": "NeedsManualReview",
       "SuggestedEnabled": false,
       "SuggestedTemplate": null,
       "SuggestedPrunedTemplate": null,
@@ -198,6 +198,8 @@
       "SuggestedRefreshedTemplate": null,
       "Diff": null,
       "Notes": [
+        "Stable candidate match: winner:2026 peruvian presidential election|kind:person score=0.925.",
+        "Candidate match missing for 1 repair snapshot(s); hysteresis prevents immediate downgrade.",
         "ManualLock: Manual review required due to repair diff oscillation on marketId 947269"
       ],
       "CopyInstructions": "Copy suggestedTemplate into config/verified-multi-outcome-groups.json only after manual review. This export does not modify live config."

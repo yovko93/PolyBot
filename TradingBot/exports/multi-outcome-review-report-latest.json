@@ -1,228 +1,7 @@
 [
   {
-    "groupKey": "winner:nobel peace prize in 2026|kind:generic",
-    "title": "winner:nobel peace prize in 2026|kind:generic",
-    "kind": "generic",
-    "detectedMarketsCount": 6,
-    "pricedLegs": 6,
-    "missingPrices": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "estimatedNetEdgeRawOnly": null,
-    "candidateQualityScore": 110,
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "rejectionReason": "AutoCandidateUnverified",
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "637016",
-        "conditionId": "0x32146c285b1d126556a309e3eae227f614076c93c0b080bae4ed6aaf6b1e9e5f",
-        "question": "Will Recep Tayyip Erdo\u011Fan win the Nobel Peace Prize in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-10T00:00:00Z"
-      },
-      {
-        "marketId": "637018",
-        "conditionId": "0x0d58510591b53c9837c30c1f5a202232da376460634aee9da71a6bfeb15350bb",
-        "question": "Will Ahmed al-Sharaa win the Nobel Peace Prize in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-10T00:00:00Z"
-      },
-      {
-        "marketId": "637002",
-        "conditionId": "0x962e5b226a77266ab429029ee04665e8fcfeb10b91af593786ceab871d2e945f",
-        "question": "Will Donald Trump win the Nobel Peace Prize in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-10T00:00:00Z"
-      },
-      {
-        "marketId": "637019",
-        "conditionId": "0xda9e24f8b6b8f71f02a79fe9d27348f6cbf2ff670cbef4afc58ae52fb4c8b1cb",
-        "question": "Will Charlie Kirk win the Nobel Peace Prize in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-10T00:00:00Z"
-      },
-      {
-        "marketId": "637017",
-        "conditionId": "0x7f347ed733252dc7afbd91e28104e23651b81ef6d2ef6805c7915c22e89a69b5",
-        "question": "Will Xi Jinping win the Nobel Peace Prize in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-10T00:00:00Z"
-      },
-      {
-        "marketId": "637007",
-        "conditionId": "0x97115010af13666600dc8776dce48290f5c4c23d387a86a97f6b4b38561dd5af",
-        "question": "Will Elon Musk win the Nobel Peace Prize in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-10T00:00:00Z"
-      }
-    ],
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:nobel peace prize in 2026|kind:generic",
-      "title": "winner:nobel peace prize in 2026|kind:generic",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "637016",
-        "637018",
-        "637002",
-        "637019",
-        "637017",
-        "637007"
-      ],
-      "conditionIds": [
-        "0x32146c285b1d126556a309e3eae227f614076c93c0b080bae4ed6aaf6b1e9e5f",
-        "0x0d58510591b53c9837c30c1f5a202232da376460634aee9da71a6bfeb15350bb",
-        "0x962e5b226a77266ab429029ee04665e8fcfeb10b91af593786ceab871d2e945f",
-        "0xda9e24f8b6b8f71f02a79fe9d27348f6cbf2ff670cbef4afc58ae52fb4c8b1cb",
-        "0x7f347ed733252dc7afbd91e28104e23651b81ef6d2ef6805c7915c22e89a69b5",
-        "0x97115010af13666600dc8776dce48290f5c4c23d387a86a97f6b4b38561dd5af"
-      ],
-      "requiredOutcomeCount": 6,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-06-05"
-    },
-    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
-    "alreadyAllowlisted": false
-  },
-  {
-    "groupKey": "winner:2026 world series|kind:generic",
-    "title": "winner:2026 world series|kind:generic",
-    "kind": "generic",
-    "detectedMarketsCount": 7,
-    "pricedLegs": 7,
-    "missingPrices": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "estimatedNetEdgeRawOnly": null,
-    "candidateQualityScore": 110,
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "rejectionReason": "AutoCandidateUnverified",
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "1235550",
-        "conditionId": "0xae8cf6ba7bd936d12c4c77b77b800dc378a76f02d0276fbc1dc1932f01f8eb9e",
-        "question": "Will the Baltimore Orioles win the 2026 World Series?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-31T23:55:00Z"
-      },
-      {
-        "marketId": "1235555",
-        "conditionId": "0xb6fbcf89aba1425be426b04cc001cdee86672e181ef4d665a39ed980300e4f45",
-        "question": "Will the Detroit Tigers win the 2026 World Series?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-31T23:55:00Z"
-      },
-      {
-        "marketId": "1235557",
-        "conditionId": "0x6470402973d292487fba2f61fd46967707b8327b9eab38a759da5ca5dc9ccec4",
-        "question": "Will the Houston Astros win the 2026 World Series?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-31T23:55:00Z"
-      },
-      {
-        "marketId": "1235573",
-        "conditionId": "0x99ff023a3b1149189fd0993f5a06b05b59e91d370df456c54db69bbd8875bf65",
-        "question": "Will the San Diego Padres win the 2026 World Series?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-31T23:55:00Z"
-      },
-      {
-        "marketId": "1235563",
-        "conditionId": "0x98b595f40feccf49ded360d1eb15b9bb81041cc6006da00441a743dcef74f0e7",
-        "question": "Will the New York Mets win the 2026 World Series?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-31T23:55:00Z"
-      },
-      {
-        "marketId": "1235551",
-        "conditionId": "0x3e38887e936b8fedd5373852777e7a3e90805affd8139971ebeb4b4956f000f5",
-        "question": "Will the Boston Red Sox win the 2026 World Series?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-31T23:55:00Z"
-      },
-      {
-        "marketId": "1235571",
-        "conditionId": "0x598654e5e8ad06b44107cb541773c459580dfc208fc74e4694d1ada41d679c1d",
-        "question": "Will the Pittsburgh Pirates win the 2026 World Series?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-10-31T23:55:00Z"
-      }
-    ],
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:2026 world series|kind:generic",
-      "title": "winner:2026 world series|kind:generic",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "1235550",
-        "1235555",
-        "1235557",
-        "1235573",
-        "1235563",
-        "1235551",
-        "1235571"
-      ],
-      "conditionIds": [
-        "0xae8cf6ba7bd936d12c4c77b77b800dc378a76f02d0276fbc1dc1932f01f8eb9e",
-        "0xb6fbcf89aba1425be426b04cc001cdee86672e181ef4d665a39ed980300e4f45",
-        "0x6470402973d292487fba2f61fd46967707b8327b9eab38a759da5ca5dc9ccec4",
-        "0x99ff023a3b1149189fd0993f5a06b05b59e91d370df456c54db69bbd8875bf65",
-        "0x98b595f40feccf49ded360d1eb15b9bb81041cc6006da00441a743dcef74f0e7",
-        "0x3e38887e936b8fedd5373852777e7a3e90805affd8139971ebeb4b4956f000f5",
-        "0x598654e5e8ad06b44107cb541773c459580dfc208fc74e4694d1ada41d679c1d"
-      ],
-      "requiredOutcomeCount": 7,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-06-05"
-    },
-    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
-    "alreadyAllowlisted": false
-  },
-  {
-    "groupKey": "winner:2026 mls cup|kind:generic",
-    "title": "winner:2026 mls cup|kind:generic",
+    "groupKey": "winner:fair play award for 2026 fifa world cup|kind:generic",
+    "title": "winner:fair play award for 2026 fifa world cup|kind:generic",
     "kind": "generic",
     "detectedMarketsCount": 5,
     "pricedLegs": 5,
@@ -239,311 +18,84 @@
     ],
     "markets": [
       {
-        "marketId": "1349161",
-        "conditionId": "0xc83ebc94c95d2c127a1948e60d5dd517d53c998c23731334c2d17eccfda872e4",
-        "question": "Will New York Red Bulls win the 2026 MLS Cup?",
+        "marketId": "2432092",
+        "conditionId": "0xcc34cff6600950535c82ece9300fb10ca9bb30dc813243d6e59896cef7282dfb",
+        "question": "Will DR Congo win the Fair Play Award for the 2026 FIFA World Cup?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-12-19T00:00:00Z"
+        "endDate": "2026-07-20T03:59:00Z"
       },
       {
-        "marketId": "1349162",
-        "conditionId": "0x4a08c641f9dea7e6b8366cc6cef5758e955552051aef4bdc7d5f50c7ae1066b0",
-        "question": "Will Orlando City SC win the 2026 MLS Cup?",
+        "marketId": "2432095",
+        "conditionId": "0x9117d47d7c897f548c9aaa62b35abaca6244c8d294bbd7d13e5e454881973445",
+        "question": "Will England win the Fair Play Award for the 2026 FIFA World Cup?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-12-19T00:00:00Z"
+        "endDate": "2026-07-20T03:59:00Z"
       },
       {
-        "marketId": "1349165",
-        "conditionId": "0xe825cca503fe83bc4ef4b97db242f42c1006b4eeb834ebc76c6eee4fb525f0d7",
-        "question": "Will Real Salt Lake win the 2026 MLS Cup?",
+        "marketId": "2432084",
+        "conditionId": "0x3781c696b5fd4240aedbdc7bfab76346688879bf78e103977d5fbc8989276e62",
+        "question": "Will Bosnia \u0026 Herzegovina win the Fair Play Award for the 2026 FIFA World Cup?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-12-19T00:00:00Z"
+        "endDate": "2026-07-20T03:59:00Z"
       },
       {
-        "marketId": "1349145",
-        "conditionId": "0xdd40580b22ac93932fdae14c22d6c59a05e02ebf2313ce3eebe60ebf16ad425e",
-        "question": "Will Charlotte FC win the 2026 MLS Cup?",
+        "marketId": "2432096",
+        "conditionId": "0x43330a5c839f2fef2f572f310381d9dbe2be6b917c54f345c24e90776ba28f87",
+        "question": "Will France win the Fair Play Award for the 2026 FIFA World Cup?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-12-19T00:00:00Z"
+        "endDate": "2026-07-20T03:59:00Z"
       },
       {
-        "marketId": "1349155",
-        "conditionId": "0x0c71de9a9203b356c56f6e100a7cd166d5a38cfd0ec726adce6f4e2746b70040",
-        "question": "Will Minnesota United FC win the 2026 MLS Cup?",
+        "marketId": "2432118",
+        "conditionId": "0xeb8b60590e57b39b8ca190b21834e505e05df97b606b18719fc50fc94bae4f11",
+        "question": "Will South Korea win the Fair Play Award for the 2026 FIFA World Cup?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-12-19T00:00:00Z"
+        "endDate": "2026-07-20T03:59:00Z"
       }
     ],
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:2026 mls cup|kind:generic",
-      "title": "winner:2026 mls cup|kind:generic",
+      "groupKey": "winner:fair play award for 2026 fifa world cup|kind:generic",
+      "title": "winner:fair play award for 2026 fifa world cup|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "1349161",
-        "1349162",
-        "1349165",
-        "1349145",
-        "1349155"
+        "2432092",
+        "2432095",
+        "2432084",
+        "2432096",
+        "2432118"
       ],
       "conditionIds": [
-        "0xc83ebc94c95d2c127a1948e60d5dd517d53c998c23731334c2d17eccfda872e4",
-        "0x4a08c641f9dea7e6b8366cc6cef5758e955552051aef4bdc7d5f50c7ae1066b0",
-        "0xe825cca503fe83bc4ef4b97db242f42c1006b4eeb834ebc76c6eee4fb525f0d7",
-        "0xdd40580b22ac93932fdae14c22d6c59a05e02ebf2313ce3eebe60ebf16ad425e",
-        "0x0c71de9a9203b356c56f6e100a7cd166d5a38cfd0ec726adce6f4e2746b70040"
+        "0xcc34cff6600950535c82ece9300fb10ca9bb30dc813243d6e59896cef7282dfb",
+        "0x9117d47d7c897f548c9aaa62b35abaca6244c8d294bbd7d13e5e454881973445",
+        "0x3781c696b5fd4240aedbdc7bfab76346688879bf78e103977d5fbc8989276e62",
+        "0x43330a5c839f2fef2f572f310381d9dbe2be6b917c54f345c24e90776ba28f87",
+        "0xeb8b60590e57b39b8ca190b21834e505e05df97b606b18719fc50fc94bae4f11"
       ],
       "requiredOutcomeCount": 5,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-06-05"
+      "verifiedAt": "2026-06-06"
     },
     "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
     "alreadyAllowlisted": false
   },
   {
-    "groupKey": "winner:2027 nfl league championship|kind:generic",
-    "title": "winner:2027 nfl league championship|kind:generic",
-    "kind": "generic",
-    "detectedMarketsCount": 8,
-    "pricedLegs": 8,
-    "missingPrices": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "estimatedNetEdgeRawOnly": null,
-    "candidateQualityScore": 110,
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "rejectionReason": "AutoCandidateUnverified",
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "1357390",
-        "conditionId": "0x811e51a7acf39eeb9757f87d71624c0dbc2e12992c58419dddb8c6b4cb339df8",
-        "question": "Will the Miami Dolphins win the 2027 NFL league championship?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2027-03-31T23:55:00Z"
-      },
-      {
-        "marketId": "1357397",
-        "conditionId": "0xc2721eaeeb211954175eb98c848d6237d8e14fd6943bc438c2ac65b8a5164b8e",
-        "question": "Will the Pittsburgh Steelers win the 2027 NFL league championship?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2027-03-31T23:55:00Z"
-      },
-      {
-        "marketId": "1357379",
-        "conditionId": "0x93158447b78290c1abb5ccf3e025dd03290865972b3fc9c8d2803aa64ae1cbfd",
-        "question": "Will the Dallas Cowboys win the 2027 NFL league championship?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2027-03-31T23:55:00Z"
-      },
-      {
-        "marketId": "1357393",
-        "conditionId": "0x850c5df4f71fbe41414e71df71213453a97615742a6194e42600015e2c255800",
-        "question": "Will the New Orleans Saints win the 2027 NFL league championship?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2027-03-31T23:55:00Z"
-      },
-      {
-        "marketId": "1357371",
-        "conditionId": "0x966db8fe4ecd031b6e83a02e681a86f7f235eab8e66c0dbbeb35e8c3518e168f",
-        "question": "Will the Arizona Cardinals win the 2027 NFL league championship?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2027-03-31T23:55:00Z"
-      },
-      {
-        "marketId": "1357375",
-        "conditionId": "0x1dd5f687b0f7aaa76ac2d2f2ea328ed825902e835a44cb4fa22f6c89848c26fb",
-        "question": "Will the Carolina Panthers win the 2027 NFL league championship?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2027-03-31T23:55:00Z"
-      },
-      {
-        "marketId": "1357376",
-        "conditionId": "0x87f0b061076a7309abeb719136246303ce17fe40b4e9c65aca4149bbdbdd3236",
-        "question": "Will the Chicago Bears win the 2027 NFL league championship?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2027-03-31T23:55:00Z"
-      },
-      {
-        "marketId": "1357385",
-        "conditionId": "0xdd6df6bc49de64cf38b2059cea20d00b86ef0c01b4c146e8930471d20f599cef",
-        "question": "Will the Jacksonville Jaguars win the 2027 NFL league championship?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2027-03-31T23:55:00Z"
-      }
-    ],
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:2027 nfl league championship|kind:generic",
-      "title": "winner:2027 nfl league championship|kind:generic",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "1357390",
-        "1357397",
-        "1357379",
-        "1357393",
-        "1357371",
-        "1357375",
-        "1357376",
-        "1357385"
-      ],
-      "conditionIds": [
-        "0x811e51a7acf39eeb9757f87d71624c0dbc2e12992c58419dddb8c6b4cb339df8",
-        "0xc2721eaeeb211954175eb98c848d6237d8e14fd6943bc438c2ac65b8a5164b8e",
-        "0x93158447b78290c1abb5ccf3e025dd03290865972b3fc9c8d2803aa64ae1cbfd",
-        "0x850c5df4f71fbe41414e71df71213453a97615742a6194e42600015e2c255800",
-        "0x966db8fe4ecd031b6e83a02e681a86f7f235eab8e66c0dbbeb35e8c3518e168f",
-        "0x1dd5f687b0f7aaa76ac2d2f2ea328ed825902e835a44cb4fa22f6c89848c26fb",
-        "0x87f0b061076a7309abeb719136246303ce17fe40b4e9c65aca4149bbdbdd3236",
-        "0xdd6df6bc49de64cf38b2059cea20d00b86ef0c01b4c146e8930471d20f599cef"
-      ],
-      "requiredOutcomeCount": 8,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-06-05"
-    },
-    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
-    "alreadyAllowlisted": false
-  },
-  {
-    "groupKey": "winner:2028 us presidential election|kind:person",
-    "title": "winner:2028 us presidential election|kind:person",
-    "kind": "person",
-    "detectedMarketsCount": 3,
-    "pricedLegs": 3,
-    "missingPrices": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "estimatedNetEdgeRawOnly": null,
-    "candidateQualityScore": 90,
-    "recommendedAction": "AlreadyVerified",
-    "rejectionReason": "AutoCandidatePartialOverlap",
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "561231",
-        "conditionId": "0xf232b565995e4b3a3e7fa6cef775eeff1cecd20ad7c013cb9fc8dadabfe279a9",
-        "question": "Will Alexandria Ocasio-Cortez win the 2028 US Presidential Election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561260",
-        "conditionId": "0x32903694997a5c09afee30904970f9fab2a5fb4ec45f572f194341185574f1a4",
-        "question": "Will Thomas Massie win the 2028 US Presidential Election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "561243",
-        "conditionId": "0xce9a5fa30fe74e323b4a8f15afbb0b7a41a537aa880779ddf7dee22223b2f34a",
-        "question": "Will Donald Trump win the 2028 US Presidential Election?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      }
-    ],
-    "suggestedAllowlistTemplate": null,
-    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
-    "alreadyAllowlisted": true
-  },
-  {
-    "groupKey": "winner:2028 democratic presidential nomination|kind:person",
-    "title": "winner:2028 democratic presidential nomination|kind:person",
-    "kind": "person",
-    "detectedMarketsCount": 3,
-    "pricedLegs": 3,
-    "missingPrices": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "estimatedNetEdgeRawOnly": null,
-    "candidateQualityScore": 90,
-    "recommendedAction": "AlreadyVerified",
-    "rejectionReason": "AutoCandidatePartialOverlap",
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "559655",
-        "conditionId": "0xd65891729ce093cc12236856837eba1a0872fc7998fd4294c21346f7db68079c",
-        "question": "Will Josh Shapiro win the 2028 Democratic presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "559691",
-        "conditionId": "0xc720fcfa9e29346a976902f87e0f0f3bdc31d43af501b4fdef4f1780a30dd359",
-        "question": "Will Chris Murphy win the 2028 Democratic presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      },
-      {
-        "marketId": "559673",
-        "conditionId": "0xca1d1139b0c3a29983407f499476ae642482788e841a277eb86faeeb9fa4a85c",
-        "question": "Will John Fetterman win the 2028 Democratic presidential nomination?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2028-11-07T00:00:00Z"
-      }
-    ],
-    "suggestedAllowlistTemplate": null,
-    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
-    "alreadyAllowlisted": true
-  },
-  {
-    "groupKey": "winner:2026 nba finals mvp|kind:generic",
-    "title": "winner:2026 nba finals mvp|kind:generic",
+    "groupKey": "winner:2026 wnba finals|kind:generic",
+    "title": "winner:2026 wnba finals|kind:generic",
     "kind": "generic",
     "detectedMarketsCount": 4,
     "pricedLegs": 4,
@@ -560,76 +112,76 @@
     ],
     "markets": [
       {
-        "marketId": "1972810",
-        "conditionId": "0x77928f0ce3a8ed6b5c3cd17a75a8542538c04149e7bc626b8ccda6141bbae987",
-        "question": "Will Karl-Anthony Towns win the 2026 NBA Finals MVP?",
+        "marketId": "1892493",
+        "conditionId": "0xb07519f7498ab5b3bac160e1f1bfbda0df38ef9b7149f8ec679b0df00cfe0138",
+        "question": "Will Las Vegas Aces win the 2026 WNBA Finals?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-17T00:00:00Z"
+        "endDate": "2026-10-31T00:00:00Z"
       },
       {
-        "marketId": "1972829",
-        "conditionId": "0xeb89137fb872748f12edc73efd026f4b639fcad17b09e8bad06782ea3f45698a",
-        "question": "Will Dylan Harper win the 2026 NBA Finals MVP?",
+        "marketId": "1892487",
+        "conditionId": "0x4c9590ea909dcc59d896ac0742053dbb5727dc0bdd66380304b153022f512edb",
+        "question": "Will Atlanta Dream win the 2026 WNBA Finals?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-17T00:00:00Z"
+        "endDate": "2026-10-31T00:00:00Z"
       },
       {
-        "marketId": "1972794",
-        "conditionId": "0xa46a02960f13a95000964478c96889499da31302a5307d886eb1846ab0c8dfbf",
-        "question": "Will Victor Wembanyama win the 2026 NBA Finals MVP?",
+        "marketId": "1892492",
+        "conditionId": "0xd871693edd7db6bba9d33d00cfa7c982deb154df906b3e18e72f4c45fe67f813",
+        "question": "Will Indiana Fever win the 2026 WNBA Finals?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-17T00:00:00Z"
+        "endDate": "2026-10-31T00:00:00Z"
       },
       {
-        "marketId": "1972823",
-        "conditionId": "0x5b2874eb8557ec7615d1949b01b8bcb4def86d4945b97ae84e2963a20236a494",
-        "question": "Will Josh Hart win the 2026 NBA Finals MVP?",
+        "marketId": "1892499",
+        "conditionId": "0x202ecda81d699b5221edf67e1985fb43a9354fd69039ac75021d2d08baf79e97",
+        "question": "Will Seattle Storm win the 2026 WNBA Finals?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-17T00:00:00Z"
+        "endDate": "2026-10-31T00:00:00Z"
       }
     ],
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:2026 nba finals mvp|kind:generic",
-      "title": "winner:2026 nba finals mvp|kind:generic",
+      "groupKey": "winner:2026 wnba finals|kind:generic",
+      "title": "winner:2026 wnba finals|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "1972810",
-        "1972829",
-        "1972794",
-        "1972823"
+        "1892493",
+        "1892487",
+        "1892492",
+        "1892499"
       ],
       "conditionIds": [
-        "0x77928f0ce3a8ed6b5c3cd17a75a8542538c04149e7bc626b8ccda6141bbae987",
-        "0xeb89137fb872748f12edc73efd026f4b639fcad17b09e8bad06782ea3f45698a",
-        "0xa46a02960f13a95000964478c96889499da31302a5307d886eb1846ab0c8dfbf",
-        "0x5b2874eb8557ec7615d1949b01b8bcb4def86d4945b97ae84e2963a20236a494"
+        "0xb07519f7498ab5b3bac160e1f1bfbda0df38ef9b7149f8ec679b0df00cfe0138",
+        "0x4c9590ea909dcc59d896ac0742053dbb5727dc0bdd66380304b153022f512edb",
+        "0xd871693edd7db6bba9d33d00cfa7c982deb154df906b3e18e72f4c45fe67f813",
+        "0x202ecda81d699b5221edf67e1985fb43a9354fd69039ac75021d2d08baf79e97"
       ],
       "requiredOutcomeCount": 4,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-06-05"
+      "verifiedAt": "2026-06-06"
     },
     "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
     "alreadyAllowlisted": false
   },
   {
-    "groupKey": "winner:iem cologne major 2026|kind:generic",
-    "title": "winner:iem cologne major 2026|kind:generic",
-    "kind": "generic",
-    "detectedMarketsCount": 4,
-    "pricedLegs": 4,
+    "groupKey": "winner:second most seats in new zealand house of representatives in 2026 new zealand legislative election|kind:person",
+    "title": "winner:second most seats in new zealand house of representatives in 2026 new zealand legislative election|kind:person",
+    "kind": "person",
+    "detectedMarketsCount": 2,
+    "pricedLegs": 2,
     "missingPrices": 0,
     "estimatedGrossEdge": null,
     "estimatedNetEdgeConservative": null,
@@ -643,73 +195,51 @@
     ],
     "markets": [
       {
-        "marketId": "1892304",
-        "conditionId": "0x12c1bfb92391c9a763cff1ab29ff3c09690a1830e717db5547cf8dcd7460460c",
-        "question": "Will Legacy win IEM Cologne Major 2026?",
+        "marketId": "2118148",
+        "conditionId": "0x12781ea8e77487ed32ed6cef5026d5199b5618d1c58220e98af81eee539797a4",
+        "question": "Will New Zealand First Party win the second-most seats in the New Zealand House of Representatives in the 2026 New Zealand legislative election?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-21T00:00:00Z"
+        "endDate": "2026-11-07T00:00:00Z"
       },
       {
-        "marketId": "1892307",
-        "conditionId": "0xf3767c9260d825c337a4fbc3542b797d65dc6fa3b34a953c9207701f379982ae",
-        "question": "Will PARIVISION win IEM Cologne Major 2026?",
+        "marketId": "2118149",
+        "conditionId": "0x8936b7748124d3d7fdf291ffde0558dffff1725ca5306416462e277624e5a911",
+        "question": "Will Te P\u0101ti M\u0101ori win the second-most seats in the New Zealand House of Representatives in the 2026 New Zealand legislative election?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-21T00:00:00Z"
-      },
-      {
-        "marketId": "1892298",
-        "conditionId": "0xe31c9b200a40505aa8da2a7e89229c4a928e2216858b41dde7965959e65ae17e",
-        "question": "Will Astralis win IEM Cologne Major 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-21T00:00:00Z"
-      },
-      {
-        "marketId": "1892297",
-        "conditionId": "0x10cfe107f46a1f4465e41501bebf20edda4f16ef47b702a4f45cacce90e01d16",
-        "question": "Will Team Spirit win IEM Cologne Major 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-21T00:00:00Z"
+        "endDate": "2026-11-07T00:00:00Z"
       }
     ],
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:iem cologne major 2026|kind:generic",
-      "title": "winner:iem cologne major 2026|kind:generic",
+      "groupKey": "winner:second most seats in new zealand house of representatives in 2026 new zealand legislative election|kind:person",
+      "title": "winner:second most seats in new zealand house of representatives in 2026 new zealand legislative election|kind:person",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "1892304",
-        "1892307",
-        "1892298",
-        "1892297"
+        "2118148",
+        "2118149"
       ],
       "conditionIds": [
-        "0x12c1bfb92391c9a763cff1ab29ff3c09690a1830e717db5547cf8dcd7460460c",
-        "0xf3767c9260d825c337a4fbc3542b797d65dc6fa3b34a953c9207701f379982ae",
-        "0xe31c9b200a40505aa8da2a7e89229c4a928e2216858b41dde7965959e65ae17e",
-        "0x10cfe107f46a1f4465e41501bebf20edda4f16ef47b702a4f45cacce90e01d16"
+        "0x12781ea8e77487ed32ed6cef5026d5199b5618d1c58220e98af81eee539797a4",
+        "0x8936b7748124d3d7fdf291ffde0558dffff1725ca5306416462e277624e5a911"
       ],
-      "requiredOutcomeCount": 4,
+      "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-06-05"
+      "verifiedAt": "2026-06-06"
     },
     "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
     "alreadyAllowlisted": false
   },
   {
-    "groupKey": "winner:2026 f1 monaco grand prix|kind:generic",
-    "title": "winner:2026 f1 monaco grand prix|kind:generic",
+    "groupKey": "winner:on 2026 06 07|kind:generic",
+    "title": "winner:on 2026 06 07|kind:generic",
     "kind": "generic",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
@@ -726,51 +256,123 @@
     ],
     "markets": [
       {
-        "marketId": "2209908",
-        "conditionId": "0xe8fbed5148ea09f199fac28c06084175b08223c150bd2c0d20d95ab98e3634d1",
-        "question": "Will Isack Hadjar win the 2026 F1 Monaco Grand Prix?",
+        "marketId": "2230417",
+        "conditionId": "0xe5cd23076f086aa73e44c920b9400b03b921a885671b5106e1728f14f7f7b8ba",
+        "question": "Will Colombia win on 2026-06-07?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-14T13:00:00Z"
+        "endDate": "2026-06-07T23:00:00Z"
       },
       {
-        "marketId": "2209906",
-        "conditionId": "0xf9deae61d56b06ab1d24559339d0c074a4a9cda57667bc386168dd48803d1d24",
-        "question": "Will George Russell win the 2026 F1 Monaco Grand Prix?",
+        "marketId": "2230385",
+        "conditionId": "0x03b4cd52fe6d6f463b0e9dac658580f13727c1faa02ea6ad1c5bd78ae95e3f3f",
+        "question": "Will Ecuador win on 2026-06-07?",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-14T13:00:00Z"
+        "endDate": "2026-06-07T20:00:00Z"
       }
     ],
     "suggestedAllowlistTemplate": {
       "enabled": true,
-      "groupKey": "winner:2026 f1 monaco grand prix|kind:generic",
-      "title": "winner:2026 f1 monaco grand prix|kind:generic",
+      "groupKey": "winner:on 2026 06 07|kind:generic",
+      "title": "winner:on 2026 06 07|kind:generic",
       "verificationStatus": "Verified",
       "groupType": "MutuallyExclusiveWinner",
       "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
       "marketIds": [
-        "2209908",
-        "2209906"
+        "2230417",
+        "2230385"
       ],
       "conditionIds": [
-        "0xe8fbed5148ea09f199fac28c06084175b08223c150bd2c0d20d95ab98e3634d1",
-        "0xf9deae61d56b06ab1d24559339d0c074a4a9cda57667bc386168dd48803d1d24"
+        "0xe5cd23076f086aa73e44c920b9400b03b921a885671b5106e1728f14f7f7b8ba",
+        "0x03b4cd52fe6d6f463b0e9dac658580f13727c1faa02ea6ad1c5bd78ae95e3f3f"
       ],
       "requiredOutcomeCount": 2,
       "requireExactOutcomeCount": false,
       "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
       "verifiedBy": "manual",
-      "verifiedAt": "2026-06-05"
+      "verifiedAt": "2026-06-06"
     },
     "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
     "alreadyAllowlisted": false
   },
   {
-    "groupKey": "winner:on 2026 06 14|kind:generic",
-    "title": "winner:on 2026 06 14|kind:generic",
+    "groupKey": "winner:2026 memorial tournament presented by workday|kind:generic",
+    "title": "winner:2026 memorial tournament presented by workday|kind:generic",
+    "kind": "generic",
+    "detectedMarketsCount": 3,
+    "pricedLegs": 3,
+    "missingPrices": 0,
+    "estimatedGrossEdge": null,
+    "estimatedNetEdgeConservative": null,
+    "estimatedNetEdgeRawOnly": null,
+    "candidateQualityScore": 90,
+    "recommendedAction": "SafeCandidateForManualVerification",
+    "rejectionReason": "AutoCandidateUnverified",
+    "warnings": [
+      "Not manually verified",
+      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
+    ],
+    "markets": [
+      {
+        "marketId": "2411415",
+        "conditionId": "0x0d9c8cdcf445e4315f8559e98f608fe7fd0df5b4a568eca83bf9472bcea06689",
+        "question": "Will Cameron Young win the 2026 the Memorial Tournament presented by Workday?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-07T00:00:00Z"
+      },
+      {
+        "marketId": "2411225",
+        "conditionId": "0x6950cf63848797dc64b0d2f4a8982c5571675d4785f1aa7616dca4b70bfee390",
+        "question": "Will Russell Henley win the 2026 the Memorial Tournament presented by Workday?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-07T00:00:00Z"
+      },
+      {
+        "marketId": "2411402",
+        "conditionId": "0x8d5624a5eb6cc99be03a0c30326966b0f680dfdf94e8ccbcbddcf75eb918eed8",
+        "question": "Will Justin Thomas win the 2026 the Memorial Tournament presented by Workday?",
+        "active": true,
+        "closed": false,
+        "archived": false,
+        "endDate": "2026-06-07T00:00:00Z"
+      }
+    ],
+    "suggestedAllowlistTemplate": {
+      "enabled": true,
+      "groupKey": "winner:2026 memorial tournament presented by workday|kind:generic",
+      "title": "winner:2026 memorial tournament presented by workday|kind:generic",
+      "verificationStatus": "Verified",
+      "groupType": "MutuallyExclusiveWinner",
+      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
+      "marketIds": [
+        "2411415",
+        "2411225",
+        "2411402"
+      ],
+      "conditionIds": [
+        "0x0d9c8cdcf445e4315f8559e98f608fe7fd0df5b4a568eca83bf9472bcea06689",
+        "0x6950cf63848797dc64b0d2f4a8982c5571675d4785f1aa7616dca4b70bfee390",
+        "0x8d5624a5eb6cc99be03a0c30326966b0f680dfdf94e8ccbcbddcf75eb918eed8"
+      ],
+      "requiredOutcomeCount": 3,
+      "requireExactOutcomeCount": false,
+      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
+      "verifiedBy": "manual",
+      "verifiedAt": "2026-06-06"
+    },
+    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
+    "alreadyAllowlisted": false
+  },
+  {
+    "groupKey": "colon-event:set 1 winner|kind:generic",
+    "title": "colon-event:set 1 winner|kind:generic",
     "kind": "generic",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
@@ -778,182 +380,40 @@
     "estimatedGrossEdge": null,
     "estimatedNetEdgeConservative": null,
     "estimatedNetEdgeRawOnly": null,
-    "candidateQualityScore": 90,
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "rejectionReason": "AutoCandidateUnverified",
+    "candidateQualityScore": -10,
+    "recommendedAction": "LikelyFalsePositive",
+    "rejectionReason": "IndependentMatches",
     "warnings": [
       "Not manually verified",
       "Execution disabled until allowlisted with explicit marketIds or conditionIds"
     ],
     "markets": [
       {
-        "marketId": "1897058",
-        "conditionId": "0x00cf3efc18a950cf442049aa0770903f0ab8606212499e0e4196bf74c102c456",
-        "question": "Will Germany win on 2026-06-14?",
+        "marketId": "2448502",
+        "conditionId": "0x7ba74ce2b678d74da6584098d34e91b58b5f7e0a0dec79ffca67245c9c5d252d",
+        "question": "Set 1 Winner: Walton vs Draxl",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-14T17:00:00Z"
+        "endDate": "2026-06-13T16:00:00Z"
       },
       {
-        "marketId": "2295044",
-        "conditionId": "0x8905714cd77814d15227ddb7966a2c52ce982fda2de1d694545188b00b7690db",
-        "question": "Will CD Universidad Cat\u00F3lica win on 2026-06-14?",
+        "marketId": "2448495",
+        "conditionId": "0x22ce36efefb3411e16a04da4ba5236f97719b4e83b358dd58d8c71bcdcdabe26",
+        "question": "Set 1 Winner: Aguilar vs Pellegrino",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-14T21:30:00Z"
+        "endDate": "2026-06-13T18:30:00Z"
       }
     ],
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:on 2026 06 14|kind:generic",
-      "title": "winner:on 2026 06 14|kind:generic",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "1897058",
-        "2295044"
-      ],
-      "conditionIds": [
-        "0x00cf3efc18a950cf442049aa0770903f0ab8606212499e0e4196bf74c102c456",
-        "0x8905714cd77814d15227ddb7966a2c52ce982fda2de1d694545188b00b7690db"
-      ],
-      "requiredOutcomeCount": 2,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-06-05"
-    },
+    "suggestedAllowlistTemplate": null,
     "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
     "alreadyAllowlisted": false
   },
   {
-    "groupKey": "winner:texas senate race in 2026|kind:party",
-    "title": "winner:texas senate race in 2026|kind:party",
-    "kind": "party",
-    "detectedMarketsCount": 2,
-    "pricedLegs": 2,
-    "missingPrices": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "estimatedNetEdgeRawOnly": null,
-    "candidateQualityScore": 90,
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "rejectionReason": "AutoCandidateUnverified",
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "630963",
-        "conditionId": "0x34918035a590555ba1fb1d6a019d766ab6e557d63e7f3140b63b4550eee7f417",
-        "question": "Will the Democrats win the Texas Senate race in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": null
-      },
-      {
-        "marketId": "630964",
-        "conditionId": "0x94521176f57d2ce81dde01e0b7699ca4279423042d37ed53908f0c8bfefe7e14",
-        "question": "Will the Republicans win the Texas Senate race in 2026?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": null
-      }
-    ],
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:texas senate race in 2026|kind:party",
-      "title": "winner:texas senate race in 2026|kind:party",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "630963",
-        "630964"
-      ],
-      "conditionIds": [
-        "0x34918035a590555ba1fb1d6a019d766ab6e557d63e7f3140b63b4550eee7f417",
-        "0x94521176f57d2ce81dde01e0b7699ca4279423042d37ed53908f0c8bfefe7e14"
-      ],
-      "requiredOutcomeCount": 2,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-06-05"
-    },
-    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
-    "alreadyAllowlisted": false
-  },
-  {
-    "groupKey": "winner:on 2026 06 06|kind:generic",
-    "title": "winner:on 2026 06 06|kind:generic",
-    "kind": "generic",
-    "detectedMarketsCount": 2,
-    "pricedLegs": 2,
-    "missingPrices": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "estimatedNetEdgeRawOnly": null,
-    "candidateQualityScore": 90,
-    "recommendedAction": "SafeCandidateForManualVerification",
-    "rejectionReason": "AutoCandidateUnverified",
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "2222121",
-        "conditionId": "0x2ca79cd266f8b5a39501c588fd651a0d7391f9123f7c3f8ac7c3b82245d2731c",
-        "question": "Will Qatar win on 2026-06-06?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-06T20:00:00Z"
-      },
-      {
-        "marketId": "2222181",
-        "conditionId": "0x387abee975d186ff98590f6e86c7bfe322b98db854712857e5e7846a68dd2e1a",
-        "question": "Will New Zealand win on 2026-06-06?",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-06T20:00:00Z"
-      }
-    ],
-    "suggestedAllowlistTemplate": {
-      "enabled": true,
-      "groupKey": "winner:on 2026 06 06|kind:generic",
-      "title": "winner:on 2026 06 06|kind:generic",
-      "verificationStatus": "Verified",
-      "groupType": "MutuallyExclusiveWinner",
-      "allowedStrategy": "BUY_ALL_NO_MUTUALLY_EXCLUSIVE",
-      "marketIds": [
-        "2222121",
-        "2222181"
-      ],
-      "conditionIds": [
-        "0x2ca79cd266f8b5a39501c588fd651a0d7391f9123f7c3f8ac7c3b82245d2731c",
-        "0x387abee975d186ff98590f6e86c7bfe322b98db854712857e5e7846a68dd2e1a"
-      ],
-      "requiredOutcomeCount": 2,
-      "requireExactOutcomeCount": false,
-      "settlementNotes": "Manually verify that all listed markets are mutually exclusive outcomes of the same event.",
-      "verifiedBy": "manual",
-      "verifiedAt": "2026-06-05"
-    },
-    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
-    "alreadyAllowlisted": false
-  },
-  {
-    "groupKey": "colon-event:lol|kind:generic",
-    "title": "colon-event:lol|kind:generic",
+    "groupKey": "colon-event:mlp st louis|kind:generic",
+    "title": "colon-event:mlp st louis|kind:generic",
     "kind": "generic",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
@@ -970,22 +430,22 @@
     ],
     "markets": [
       {
-        "marketId": "2402644",
-        "conditionId": "0x28e975cc5100efa68f35320d46dc6cc8e947b85dc416d07571a20dbc0e14d81b",
-        "question": "LoL: Dplus KIA vs HANJIN BRION - Game 1 Winner",
+        "marketId": "2424063",
+        "conditionId": "0x402a6e0944d97b262daa16b8f15adc8146377c7734e264d8e79b1edecea59a57",
+        "question": "MLP St. Louis: Los Angeles Mad Drops vs Las Vegas Night Owls",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-06T12:00:00Z"
+        "endDate": "2026-06-13T16:00:00Z"
       },
       {
-        "marketId": "2427411",
-        "conditionId": "0x39b1dfb88a9fd6a90b54945ef760261966e4b7d96f9c5b18afa7a08bd95c01c0",
-        "question": "LoL: JD Gaming vs Bilibili Gaming - Game 1 Winner",
+        "marketId": "2424068",
+        "conditionId": "0x280b74d7d871c8414bda59d48a7bebfac1b35f4b391842920f0d932c233c5223",
+        "question": "MLP St. Louis: Los Angeles Mad Drops vs SoCal Hard Eights",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-06T15:00:00Z"
+        "endDate": "2026-06-13T19:30:00Z"
       }
     ],
     "suggestedAllowlistTemplate": null,
@@ -993,67 +453,8 @@
     "alreadyAllowlisted": false
   },
   {
-    "groupKey": "colon-event:counter strike|kind:generic",
-    "title": "colon-event:counter strike|kind:generic",
-    "kind": "generic",
-    "detectedMarketsCount": 4,
-    "pricedLegs": 4,
-    "missingPrices": 0,
-    "estimatedGrossEdge": null,
-    "estimatedNetEdgeConservative": null,
-    "estimatedNetEdgeRawOnly": null,
-    "candidateQualityScore": -160,
-    "recommendedAction": "LikelyFalsePositive",
-    "rejectionReason": "IndependentMatches",
-    "warnings": [
-      "Not manually verified",
-      "Execution disabled until allowlisted with explicit marketIds or conditionIds"
-    ],
-    "markets": [
-      {
-        "marketId": "2446947",
-        "conditionId": "0x0b9f2a5bba454dedb4edeaf4ec094ca3c5a8faee821c5421644781e20dfecbce",
-        "question": "Counter-Strike: Legacy vs MIBR (BO1) - IEM Cologne Major Stage 2",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-06T19:30:00Z"
-      },
-      {
-        "marketId": "2433638",
-        "conditionId": "0xeaeb6d4c44646df006d177cdd1bddaf6b88cc04f15f6e2c2e43ab9ad16962c91",
-        "question": "Counter-Strike: G2 Ares vs against All authority (BO3) - European Pro League Series 7 Group C",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-06T14:00:00Z"
-      },
-      {
-        "marketId": "2433649",
-        "conditionId": "0x34f38b0e87c9bece30c2f1e4098636727781cb3a857b8daa6944a48d1806e3e6",
-        "question": "Counter-Strike: RUSTEC vs Young Ninjas (BO3) - European Pro League Series 7 Group C",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-06T16:30:00Z"
-      },
-      {
-        "marketId": "2446706",
-        "conditionId": "0xb4bc886997e322e23b4415f8678bf889252d318d1b5c4196fa248fd8c308dc24",
-        "question": "Counter-Strike: ex-RUBY vs 100 Thieves (BO3) - CCT Europe Series 3 Playoffs",
-        "active": true,
-        "closed": false,
-        "archived": false,
-        "endDate": "2026-06-06T19:00:00Z"
-      }
-    ],
-    "suggestedAllowlistTemplate": null,
-    "copyInstructions": "Copy suggestedAllowlistTemplate into config/verified-multi-outcome-groups.json as a new array item. Restart backend. Confirm VerifiedConfigured increases.",
-    "alreadyAllowlisted": false
-  },
-  {
-    "groupKey": "colon-event:haiti vs peru|kind:generic",
-    "title": "colon-event:haiti vs peru|kind:generic",
+    "groupKey": "colon-event:spread|kind:generic",
+    "title": "colon-event:spread|kind:generic",
     "kind": "generic",
     "detectedMarketsCount": 2,
     "pricedLegs": 2,
@@ -1061,7 +462,7 @@
     "estimatedGrossEdge": null,
     "estimatedNetEdgeConservative": null,
     "estimatedNetEdgeRawOnly": null,
-    "candidateQualityScore": -260,
+    "candidateQualityScore": -160,
     "recommendedAction": "DoNotVerify",
     "rejectionReason": "DangerousMarketPattern",
     "warnings": [
@@ -1070,22 +471,22 @@
     ],
     "markets": [
       {
-        "marketId": "2216808",
-        "conditionId": "0x3fd4795966ea3dd92afbe9672807a086b407f561a1e583f57467657c4430fdd2",
-        "question": "Haiti vs. Peru: Both Teams to Score",
+        "marketId": "2449516",
+        "conditionId": "0x9c3d2ec8f3bf4a8b21811d6aed3dfa450bd383ca0e262aa1913dd1e7a0512bcb",
+        "question": "Spread: Los Angeles Dodgers (-4.5)",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-06T00:00:00Z"
+        "endDate": "2026-06-07T02:10:00Z"
       },
       {
-        "marketId": "2216803",
-        "conditionId": "0x09bfdc1c2b0fc5dade2834035335080895fa1a5c016677d28d37b69c432f17ae",
-        "question": "Haiti vs. Peru: O/U 1.5",
+        "marketId": "2451476",
+        "conditionId": "0xa4b4039afa7b2c450d9efb582a173ca0e60b0fe4f53fc6e25ae68c90c49a54fb",
+        "question": "Spread: Knicks (-10.5)",
         "active": true,
         "closed": false,
         "archived": false,
-        "endDate": "2026-06-06T00:00:00Z"
+        "endDate": "2026-06-09T00:30:00Z"
       }
     ],
     "suggestedAllowlistTemplate": null,

@@ -1,0 +1,19 @@
+{
+  "timestampUtc": "2026-06-06T19:53:05.7716854Z",
+  "enabled": true,
+  "passed": true,
+  "failureStage": "Complete",
+  "failureReason": "Passed",
+  "opened": 1,
+  "closed": 1,
+  "cashBefore": 1000,
+  "cashAfter": 1001.20,
+  "lockedBefore": 0,
+  "lockedAfter": 0,
+  "equityBefore": 1000,
+  "equityAfter": 1001.20,
+  "realizedPnl": 1.20,
+  "liveOrders": 0,
+  "signingAttempts": 0,
+  "positionId": "SingleMarketBuyBoth___paper_settlement_validation_single_market___YES___paper_settlement_validation_single_market___NO"
+}
