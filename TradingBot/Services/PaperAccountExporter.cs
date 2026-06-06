@@ -10,6 +10,7 @@ public sealed record PaperAccountStatus(
     decimal Equity,
     decimal RealizedPnl,
     int OpenPositions,
+    int ClosedPositions,
     decimal TotalExposure,
     IReadOnlyDictionary<string, int> PositionsByStrategy,
     int HourlyOpenCount,
@@ -27,6 +28,7 @@ public static class PaperAccountExporter
             paper.Equity,
             paper.RealizedPnl,
             open.Count,
+            book.ClosedPositions.Count,
             open.Sum(p => p.TotalCost),
             open.GroupBy(p => p.Strategy, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase),
             open.Count(p => p.OpenedAtUtc >= DateTime.UtcNow.AddHours(-1)),
@@ -39,8 +41,9 @@ public static class PaperAccountExporter
         Directory.CreateDirectory(exportsRoot);
         var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
         File.WriteAllText(Path.Combine(exportsRoot, "paper-account-latest.json"), JsonSerializer.Serialize(BuildAccount(paper, book, blockedCounts), jsonOptions));
-        File.WriteAllText(Path.Combine(exportsRoot, "paper-positions-latest.json"), JsonSerializer.Serialize(book.GetOpenPositions().Select(ToDto), jsonOptions));
+        File.WriteAllText(Path.Combine(exportsRoot, "paper-positions-latest.json"), JsonSerializer.Serialize(book.OpenPositions.Concat(book.ClosedPositions).Select(ToDto), jsonOptions));
         File.WriteAllText(Path.Combine(exportsRoot, "paper-executions-latest.json"), JsonSerializer.Serialize(executions ?? Array.Empty<object>(), jsonOptions));
+        File.WriteAllText(Path.Combine(exportsRoot, "paper-settlements-latest.json"), JsonSerializer.Serialize(book.Settlements, jsonOptions));
     }
 
     public static object ToDto(PaperPosition p) => new
@@ -57,6 +60,9 @@ public static class PaperAccountExporter
         p.GuaranteedPayout,
         p.ExpectedProfit,
         p.LockedCapital,
+        p.RealizedPayout,
+        p.RealizedProfit,
+        p.ClosedAtUtc,
         p.OpenedFromSimulatedFills,
         p.FillSimulationId,
         legs = p.Legs

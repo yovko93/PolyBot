@@ -34,10 +34,18 @@ public sealed record RuntimeHealthSnapshot(
     int SingleMarketExecutionsCount,
     int PaperPhase,
     int PaperOpenPositions,
+    int PaperClosedPositions,
+    int PaperSettlements,
+    decimal PaperRealizedPnl,
+    decimal PaperLocked,
+    decimal PaperCash,
+    decimal PaperEquity,
     decimal PaperTotalExposure,
     int PaperOpenCountLastHour,
     int PaperPretradeRejects,
     int PaperDuplicateSuppressions,
+    int PaperSettlementRejects,
+    int PaperDuplicateSettlementSuppressions,
     long LiveTradingBlockedCount,
     int PaperExecutionsCount,
     long SigningAttempts,
@@ -59,7 +67,7 @@ public sealed record RuntimeHealthSnapshot(
     {
         var suppressed = string.Join(",", QuietSuppressedByCategory.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value}"));
         var emitted = string.Join(",", EmittedByCategory.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value}"));
-        return $"[RUNTIME_HEALTH] ProcessMb={ProcessMemoryMb} GcMb={GcTotalMemoryMb} WorkingSetMb={WorkingSetMb} Logs={RecentLogsCount} ScannerHistory={ScannerHistoryCount} CandidateSnapshots={CandidateSnapshotCount} RepairHistory={RepairHistoryCount} ExecutionAudit={ExecutionAuditCount} SignalRBuffer={SignalREventBufferCount} OrderbookCache={OrderbookCacheCount} MarketCache={MarketCacheCount} PatchPreviewItems={PatchPreviewItemsCount} SingleMarketOpportunities={SingleMarketOpportunitiesCount} SingleMarketNearMisses={SingleMarketNearMissesCount} SingleMarketDataQualitySamples={SingleMarketDataQualitySamplesCount} SingleMarketExecutions={SingleMarketExecutionsCount} PaperPhase={PaperPhase} PaperOpenPositions={PaperOpenPositions} PaperTotalExposure={PaperTotalExposure} PaperOpenCountLastHour={PaperOpenCountLastHour} PaperPretradeRejects={PaperPretradeRejects} PaperDuplicateSuppressions={PaperDuplicateSuppressions} LiveTradingBlocked={LiveTradingBlockedCount} PaperExecutions={PaperExecutionsCount} SigningAttempts={SigningAttempts} DuplicateGroupKeyWarnings={DuplicateGroupKeyWarnings} QuietSuppressed={QuietSuppressedTotal} EmittedLogs={EmittedLogs} LogGateCache={LogGateCacheSize} QuietSuppressedByCategory={{{suppressed}}} EmittedByCategory={{{emitted}}} BatchBookRequests={BatchBookRequests} BatchBookBadRequests={BatchBookBadRequests} BatchBookTimeouts={BatchBookTimeouts} BatchBookRetrySuccesses={BatchBookRetrySuccesses} BatchBookInvalidTokens={BatchBookInvalidTokens} BatchBookSuppressedErrors={BatchBookSuppressedErrors} Uptime={Uptime}";
+        return $"[RUNTIME_HEALTH] ProcessMb={ProcessMemoryMb} GcMb={GcTotalMemoryMb} WorkingSetMb={WorkingSetMb} Logs={RecentLogsCount} ScannerHistory={ScannerHistoryCount} CandidateSnapshots={CandidateSnapshotCount} RepairHistory={RepairHistoryCount} ExecutionAudit={ExecutionAuditCount} SignalRBuffer={SignalREventBufferCount} OrderbookCache={OrderbookCacheCount} MarketCache={MarketCacheCount} PatchPreviewItems={PatchPreviewItemsCount} SingleMarketOpportunities={SingleMarketOpportunitiesCount} SingleMarketNearMisses={SingleMarketNearMissesCount} SingleMarketDataQualitySamples={SingleMarketDataQualitySamplesCount} SingleMarketExecutions={SingleMarketExecutionsCount} PaperPhase={PaperPhase} PaperOpenPositions={PaperOpenPositions} PaperClosedPositions={PaperClosedPositions} PaperSettlements={PaperSettlements} PaperRealizedPnl={PaperRealizedPnl} PaperLocked={PaperLocked} PaperCash={PaperCash} PaperEquity={PaperEquity} PaperTotalExposure={PaperTotalExposure} PaperOpenCountLastHour={PaperOpenCountLastHour} PaperPretradeRejects={PaperPretradeRejects} PaperDuplicateSuppressions={PaperDuplicateSuppressions} PaperSettlementRejects={PaperSettlementRejects} PaperDuplicateSettlementSuppressions={PaperDuplicateSettlementSuppressions} LiveTradingBlocked={LiveTradingBlockedCount} PaperExecutions={PaperExecutionsCount} SigningAttempts={SigningAttempts} DuplicateGroupKeyWarnings={DuplicateGroupKeyWarnings} QuietSuppressed={QuietSuppressedTotal} EmittedLogs={EmittedLogs} LogGateCache={LogGateCacheSize} QuietSuppressedByCategory={{{suppressed}}} EmittedByCategory={{{emitted}}} BatchBookRequests={BatchBookRequests} BatchBookBadRequests={BatchBookBadRequests} BatchBookTimeouts={BatchBookTimeouts} BatchBookRetrySuccesses={BatchBookRetrySuccesses} BatchBookInvalidTokens={BatchBookInvalidTokens} BatchBookSuppressedErrors={BatchBookSuppressedErrors} Uptime={Uptime}";
     }
 
     public static bool ShouldLogAt(DateTime nowUtc, DateTime lastLoggedAtUtc, int everyMinutes)
@@ -103,10 +111,18 @@ public sealed record RuntimeHealthSnapshot(
             SingleMarketExecutionsCount: state.SingleMarketExecutionsCount,
             PaperPhase: options?.TradingMode.PaperPhase ?? 0,
             PaperOpenPositions: state.PaperOpenPositions,
+            PaperClosedPositions: state.PaperClosedPositions,
+            PaperSettlements: state.PaperSettlements,
+            PaperRealizedPnl: state.PaperRealizedPnl,
+            PaperLocked: state.PaperLocked,
+            PaperCash: state.PaperCash,
+            PaperEquity: state.PaperEquity,
             PaperTotalExposure: state.PaperTotalExposure,
             PaperOpenCountLastHour: state.PaperOpenCountLastHour,
             PaperPretradeRejects: state.PaperPretradeRejects,
             PaperDuplicateSuppressions: state.PaperDuplicateSuppressions,
+            PaperSettlementRejects: state.PaperSettlementRejects,
+            PaperDuplicateSettlementSuppressions: state.PaperDuplicateSettlementSuppressions,
             LiveTradingBlockedCount: state.LiveTradingBlockedCount,
             PaperExecutionsCount: state.PaperExecutionsCount,
             SigningAttempts: TradingBot.Services.LiveTradingGuard.SigningAttempts,
@@ -174,7 +190,7 @@ public static class RuntimeHealthTrendTracker
     public static string ToSoakStatusLogLine(RuntimeHealthSnapshot health, RuntimeHealthTrend trend, TradingBot.Options.TradingBotOptions? options = null)
     {
         var logVolumeStable = options is null || IsLogVolumeStable(health, options);
-        return $"[SOAK_STATUS] Uptime={health.Uptime} ProcessMb={health.ProcessMemoryMb} DeltaMb={trend.MemoryDeltaMbWindow:0.##} SlopeMbPerMin={trend.MemorySlopeMbPerMinute:0.##} Logs={health.RecentLogsCount} ExecutionAudit={health.ExecutionAuditCount} SignalR={health.SignalREventBufferCount} PaperOpened={health.PaperExecutionsCount} PaperExposure={health.PaperTotalExposure:0.####} LiveTradingBlocked={health.LiveTradingBlockedCount} QuietSuppressed={health.QuietSuppressedTotal} BatchBookRequests={health.BatchBookRequests} BatchBookBadRequests={health.BatchBookBadRequests} BatchBookTimeouts={health.BatchBookTimeouts} BatchBookRetrySuccesses={health.BatchBookRetrySuccesses} BatchBookInvalidTokens={health.BatchBookInvalidTokens} BatchBookSuppressedErrors={health.BatchBookSuppressedErrors} MemoryStable={trend.IsMemoryStable.ToString().ToLowerInvariant()} LogVolumeStable={logVolumeStable.ToString().ToLowerInvariant()}";
+        return $"[SOAK_STATUS] Uptime={health.Uptime} ProcessMb={health.ProcessMemoryMb} DeltaMb={trend.MemoryDeltaMbWindow:0.##} SlopeMbPerMin={trend.MemorySlopeMbPerMinute:0.##} Logs={health.RecentLogsCount} ExecutionAudit={health.ExecutionAuditCount} SignalR={health.SignalREventBufferCount} PaperOpened={health.PaperExecutionsCount} PaperClosed={health.PaperClosedPositions} PaperExposure={health.PaperTotalExposure:0.####} PaperRealizedPnl={health.PaperRealizedPnl:0.####} PaperLocked={health.PaperLocked:0.####} LiveTradingBlocked={health.LiveTradingBlockedCount} QuietSuppressed={health.QuietSuppressedTotal} BatchBookRequests={health.BatchBookRequests} BatchBookBadRequests={health.BatchBookBadRequests} BatchBookTimeouts={health.BatchBookTimeouts} BatchBookRetrySuccesses={health.BatchBookRetrySuccesses} BatchBookInvalidTokens={health.BatchBookInvalidTokens} BatchBookSuppressedErrors={health.BatchBookSuppressedErrors} MemoryStable={trend.IsMemoryStable.ToString().ToLowerInvariant()} LogVolumeStable={logVolumeStable.ToString().ToLowerInvariant()}";
     }
 
     public static bool IsLogVolumeStable(RuntimeHealthSnapshot health, TradingBot.Options.TradingBotOptions options)
