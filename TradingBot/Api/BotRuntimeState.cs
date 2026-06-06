@@ -47,6 +47,8 @@ public class BotRuntimeState
     private int _paperPretradeRejects;
     private int _paperDuplicateSuppressions;
     private int _paperExecutionsCount;
+    private int _paperOpenEvents;
+    private int _paperCloseEvents;
     private int _paperSettlementRejects;
     private int _paperDuplicateSettlementSuppressions;
     private readonly object _paperCountersGate = new();
@@ -97,8 +99,11 @@ public class BotRuntimeState
     public int PaperDuplicateSuppressions => Volatile.Read(ref _paperDuplicateSuppressions);
     public int PaperSettlementRejects => Volatile.Read(ref _paperSettlementRejects);
     public int PaperDuplicateSettlementSuppressions => Volatile.Read(ref _paperDuplicateSettlementSuppressions);
+    public int PaperOpenEvents => Volatile.Read(ref _paperOpenEvents);
+    public int PaperCloseEvents => Volatile.Read(ref _paperCloseEvents);
+    public int PaperLifecycleEvents => PaperOpenEvents + PaperCloseEvents;
     public long LiveTradingBlockedCount => TradingBot.Services.LiveTradingGuard.BlockedCount;
-    public int PaperExecutionsCount => SingleMarketExecutionsCount + Volatile.Read(ref _paperExecutionsCount);
+    public int PaperExecutionsCount => Math.Max(PaperOpenEvents, SingleMarketExecutionsCount) + Volatile.Read(ref _paperExecutionsCount);
     public IReadOnlyDictionary<string, int> PaperPretradeRejectsByReason { get { lock (_paperCountersGate) return new Dictionary<string, int>(_paperPretradeRejectsByReason, StringComparer.OrdinalIgnoreCase); } }
     public long NextSeq()=>Interlocked.Increment(ref _seq);
     public void SetStatus(BotStatusDto s){lock(_gate) Status=s;}
@@ -128,7 +133,17 @@ public class BotRuntimeState
     public void AddTrade(TradeLogEntryDto t){_trades.Enqueue(t); Trim(_trades,500);}
     public void ReplaceTrades(IEnumerable<TradeLogEntryDto> items){while(_trades.TryDequeue(out _)){} foreach(var i in items.Take(500)) _trades.Enqueue(i); Trim(_trades,500);}
     public void AddPosition(PaperPositionDto p){_positions.Enqueue(p); Trim(_positions,_runtime.MaxPaperPositions);}
-    public void ReplacePositions(IEnumerable<PaperPositionDto> items){while(_positions.TryDequeue(out _)){} foreach(var i in items.Take(_runtime.MaxPaperPositions)) _positions.Enqueue(i); Trim(_positions,_runtime.MaxPaperPositions);}
+    public void ReplacePositions(IEnumerable<PaperPositionDto> items)
+    {
+        while(_positions.TryDequeue(out _)){}
+        var materialized = items.Take(_runtime.MaxPaperPositions).ToArray();
+        foreach(var i in materialized) _positions.Enqueue(i);
+        Trim(_positions,_runtime.MaxPaperPositions);
+        var openEvents = materialized.Count(p => p.Status.Equals("OPEN", StringComparison.OrdinalIgnoreCase) || p.Status.Equals("CLOSED", StringComparison.OrdinalIgnoreCase) || p.Status.Equals("CANCELLED", StringComparison.OrdinalIgnoreCase));
+        var closeEvents = materialized.Count(p => p.Status.Equals("CLOSED", StringComparison.OrdinalIgnoreCase));
+        Interlocked.Exchange(ref _paperOpenEvents, openEvents);
+        Interlocked.Exchange(ref _paperCloseEvents, closeEvents);
+    }
     public void ReplacePaperSettlements(IEnumerable<PaperSettlementRecord> items){while(_paperSettlements.TryDequeue(out _)){} foreach(var i in items.Take(500)) _paperSettlements.Enqueue(i); Trim(_paperSettlements,500);}
     public void AddLog(TerminalLogEntryDto l){_logs.Enqueue(l); Trim(_logs,_runtime.MaxRecentLogs);}
     public void AddEquity(EquityPointDto e){_equity.Enqueue(e); Trim(_equity,500);}
@@ -186,6 +201,9 @@ public class BotRuntimeState
         ["paperPretradeRejects"] = PaperPretradeRejects,
         ["paperDuplicateSuppressions"] = PaperDuplicateSuppressions,
         ["paperExecutionsCount"] = PaperExecutionsCount,
+        ["paperLifecycleEvents"] = PaperLifecycleEvents,
+        ["paperOpenEvents"] = PaperOpenEvents,
+        ["paperCloseEvents"] = PaperCloseEvents,
         ["paperClosedPositions"] = PaperClosedPositions,
         ["paperSettlements"] = PaperSettlements,
         ["paperSettlementRejects"] = PaperSettlementRejects,

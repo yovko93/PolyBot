@@ -163,6 +163,9 @@ public class PaperPhaseSafetyTests
         Assert.Contains("PaperTotalExposure=25", log);
         Assert.Contains("PaperOpenCountLastHour=", log);
         Assert.Contains("PaperExecutions=", log);
+        Assert.Contains("PaperLifecycleEvents=", log);
+        Assert.Contains("PaperOpenEvents=", log);
+        Assert.Contains("PaperCloseEvents=", log);
         Assert.Contains("PaperDuplicateSuppressions=", log);
         Assert.Contains("LiveTradingBlocked=", log);
         Assert.Contains("SigningAttempts=0", log);
