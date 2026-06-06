@@ -45,7 +45,7 @@ export const getBotHealth = async (signal?: AbortSignal): Promise<boolean> => {
 
 export const getBotStatus = async (signal?: AbortSignal): Promise<BotStatus> => mapStatus(await request('/status', signal));
 export const getOpportunities = async (signal?: AbortSignal): Promise<Opportunity[]> => (await safeRequest<any[]>('/opportunities', [], signal)).filter(shouldDisplayOpportunity).map(mapOpportunity);
-export const getPositions = async (signal?: AbortSignal): Promise<PaperPosition[]> => (await safeRequest<any[]>('/positions', [], signal)).map(mapPosition);
+export const getPositions = async (signal?: AbortSignal): Promise<PaperPosition[]> => (await safeRequest<any[]>('/paper/positions', [], signal)).map(mapPosition);
 export const getTradeLogs = async (signal?: AbortSignal): Promise<TradeLogEntry[]> => keepLatest((await safeRequest<any[]>(`/trade-log?limit=${UIDataLimits.MaxTradeLogRows}`, [], signal)).map(mapTrade), UIDataLimits.MaxTradeLogRows);
 export const getScannerStats = async (signal?: AbortSignal): Promise<ScannerStats | null> => {
   const stats = await safeRequest<any | null>('/scanner-stats', null, signal);
@@ -66,6 +66,7 @@ export const getDryRunOrderPlans = async (signal?: AbortSignal): Promise<any[]> 
 export const getSingleMarketArbs = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/single-market-arbs', null, signal);
 export const getSingleMarketPaperExecutions = async (signal?: AbortSignal): Promise<any[]> => keepLatest(await safeRequest<any[]>('/single-market-paper-executions?limit=100', [], signal), 100);
 export const getPaperAccount = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/paper/account', null, signal);
+export const getPaperSettlements = async (signal?: AbortSignal): Promise<any[]> => safeRequest<any[]>('/paper/settlements', [], signal);
 export const getAllowlistRepairReport = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/verified-allowlist-repair-report?limit=50', null, signal);
 export const pauseScanner = async (): Promise<BotControlState> => mapControls(await request('/controls/pause', undefined, { method: 'POST' }));
 export const resumeScanner = async (): Promise<BotControlState> => mapControls(await request('/controls/resume', undefined, { method: 'POST' }));

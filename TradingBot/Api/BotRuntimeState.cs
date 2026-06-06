@@ -25,6 +25,7 @@ public class BotRuntimeState
     private readonly ConcurrentQueue<OpportunityDto> _opps = new();
     private readonly ConcurrentQueue<TradeLogEntryDto> _trades = new();
     private readonly ConcurrentQueue<PaperPositionDto> _positions = new();
+    private readonly ConcurrentQueue<PaperSettlementRecord> _paperSettlements = new();
     private readonly ConcurrentQueue<TerminalLogEntryDto> _logs = new();
     private readonly ConcurrentQueue<EquityPointDto> _equity = new();
     private readonly ConcurrentQueue<ScannerStatsDto> _scannerStatsHistory = new();
@@ -46,6 +47,8 @@ public class BotRuntimeState
     private int _paperPretradeRejects;
     private int _paperDuplicateSuppressions;
     private int _paperExecutionsCount;
+    private int _paperSettlementRejects;
+    private int _paperDuplicateSettlementSuppressions;
     private readonly object _paperCountersGate = new();
     private readonly Dictionary<string, int> _paperPretradeRejectsByReason = new(StringComparer.OrdinalIgnoreCase);
 
@@ -82,10 +85,18 @@ public class BotRuntimeState
     public int SingleMarketOpportunitiesCount => _singleMarketOpportunities.Count;
     public int SingleMarketExecutionsCount => _singleMarketExecutions.Count;
     public int PaperOpenPositions => Status.OpenPositions;
+    public int PaperClosedPositions => Positions().Count(p => string.Equals(p.Status, "CLOSED", StringComparison.OrdinalIgnoreCase));
+    public int PaperSettlements => _paperSettlements.Count;
+    public decimal PaperRealizedPnl => Status.RealizedPnl;
+    public decimal PaperLocked => Status.LockedCapital;
+    public decimal PaperCash => Status.Cash;
+    public decimal PaperEquity => Status.Equity;
     public decimal PaperTotalExposure => Status.LockedCapital;
     public int PaperOpenCountLastHour { get; private set; }
     public int PaperPretradeRejects => Volatile.Read(ref _paperPretradeRejects);
     public int PaperDuplicateSuppressions => Volatile.Read(ref _paperDuplicateSuppressions);
+    public int PaperSettlementRejects => Volatile.Read(ref _paperSettlementRejects);
+    public int PaperDuplicateSettlementSuppressions => Volatile.Read(ref _paperDuplicateSettlementSuppressions);
     public long LiveTradingBlockedCount => TradingBot.Services.LiveTradingGuard.BlockedCount;
     public int PaperExecutionsCount => SingleMarketExecutionsCount + Volatile.Read(ref _paperExecutionsCount);
     public IReadOnlyDictionary<string, int> PaperPretradeRejectsByReason { get { lock (_paperCountersGate) return new Dictionary<string, int>(_paperPretradeRejectsByReason, StringComparer.OrdinalIgnoreCase); } }
@@ -118,6 +129,7 @@ public class BotRuntimeState
     public void ReplaceTrades(IEnumerable<TradeLogEntryDto> items){while(_trades.TryDequeue(out _)){} foreach(var i in items.Take(500)) _trades.Enqueue(i); Trim(_trades,500);}
     public void AddPosition(PaperPositionDto p){_positions.Enqueue(p); Trim(_positions,_runtime.MaxPaperPositions);}
     public void ReplacePositions(IEnumerable<PaperPositionDto> items){while(_positions.TryDequeue(out _)){} foreach(var i in items.Take(_runtime.MaxPaperPositions)) _positions.Enqueue(i); Trim(_positions,_runtime.MaxPaperPositions);}
+    public void ReplacePaperSettlements(IEnumerable<PaperSettlementRecord> items){while(_paperSettlements.TryDequeue(out _)){} foreach(var i in items.Take(500)) _paperSettlements.Enqueue(i); Trim(_paperSettlements,500);}
     public void AddLog(TerminalLogEntryDto l){_logs.Enqueue(l); Trim(_logs,_runtime.MaxRecentLogs);}
     public void AddEquity(EquityPointDto e){_equity.Enqueue(e); Trim(_equity,500);}
     public void AddSingleMarketOpportunity(SingleMarketArbOpportunityDto o){_singleMarketOpportunities.Enqueue(o); Trim(_singleMarketOpportunities,_runtime.MaxSingleMarketOpportunities);}
@@ -137,6 +149,7 @@ public class BotRuntimeState
     public void RecordPaperDuplicateSuppression() => Interlocked.Increment(ref _paperDuplicateSuppressions);
     public void SetPaperOpenCountLastHour(int count) => PaperOpenCountLastHour = count;
     public void RecordPaperExecution() => Interlocked.Increment(ref _paperExecutionsCount);
+    public void SetPaperSettlementCounters(int rejects, int duplicateSuppressions) { Interlocked.Exchange(ref _paperSettlementRejects, rejects); Interlocked.Exchange(ref _paperDuplicateSettlementSuppressions, duplicateSuppressions); }
 
     public void SetRuntimeCounts(int? repairHistoryCount = null, int? dryRunOrderPlansCount = null, int? fillSimulationsCount = null, int? executionAuditCount = null, int? orderbookCacheCount = null, int? marketCacheCount = null, int? exportQueueCount = null, int? patchPreviewItemsCount = null)
     {
@@ -172,7 +185,11 @@ public class BotRuntimeState
         ["paperOpenCountLastHour"] = PaperOpenCountLastHour,
         ["paperPretradeRejects"] = PaperPretradeRejects,
         ["paperDuplicateSuppressions"] = PaperDuplicateSuppressions,
-        ["paperExecutionsCount"] = PaperExecutionsCount
+        ["paperExecutionsCount"] = PaperExecutionsCount,
+        ["paperClosedPositions"] = PaperClosedPositions,
+        ["paperSettlements"] = PaperSettlements,
+        ["paperSettlementRejects"] = PaperSettlementRejects,
+        ["paperDuplicateSettlementSuppressions"] = PaperDuplicateSettlementSuppressions
     };
     public void ClearNonEssentialRuntimeState()
     {
@@ -189,6 +206,7 @@ public class BotRuntimeState
     public OpportunityDto[] Opportunities()=>_opps.ToArray();
     public TradeLogEntryDto[] Trades()=>_trades.ToArray();
     public PaperPositionDto[] Positions()=>_positions.ToArray();
+    public PaperSettlementRecord[] PaperSettlementsRecords()=>_paperSettlements.ToArray();
     public TerminalLogEntryDto[] Logs()=>_logs.ToArray();
     public EquityPointDto[] Equity()=>_equity.ToArray();
     public SingleMarketArbOpportunityDto[] SingleMarketOpportunities()=>_singleMarketOpportunities.ToArray();

@@ -41,6 +41,8 @@ public class PaperTradingEngine
     public decimal ExpectedProfit { get; private set; } = 0m;
     public decimal RealizedPnl { get; private set; } = 0m;
     public decimal UnrealizedPnl { get; private set; } = 0m;
+    public int SettlementRejects { get; private set; }
+    public int DuplicateSettlementSuppressions { get; private set; }
 
     public decimal Equity => Balance + LockedCapital + UnrealizedPnl;
     public IReadOnlyDictionary<string, int> BlockedCountsByReason => _blockedCountsByReason;
@@ -543,46 +545,57 @@ public class PaperTradingEngine
         }
     }
 
-    public bool SettlePosition(string positionId, decimal realizedPayout)
+    public PaperSettlementResult SettlePositionDetailed(string positionId, decimal realizedPayout, string mode = "ManualPayout", bool liveTradingEnabled = false)
     {
         lock (_lock)
         {
+            if (liveTradingEnabled)
+            {
+                SettlementRejects++;
+                Console.WriteLine("[PAPER_SETTLEMENT_REJECTED] Reason=LiveTradingEnabled");
+                return new PaperSettlementResult(false, "LiveTradingEnabled", null, null);
+            }
+
             if (_positionBook == null)
             {
-                Console.WriteLine("[SETTLE SKIP] Position book is not configured.");
-                return false;
+                SettlementRejects++;
+                Console.WriteLine("[PAPER_SETTLEMENT_REJECTED] Reason=PositionBookMissing");
+                return new PaperSettlementResult(false, "PositionBookMissing", null, null);
             }
 
-            if (!_positionBook.ClosePosition(positionId, realizedPayout, out var closedPosition))
+            var candidate = _positionBook.OpenPositions.FirstOrDefault(p => p.PositionId.Equals(positionId, StringComparison.OrdinalIgnoreCase));
+            if (!liveTradingEnabled && candidate is not null && (candidate.Source.Equals("LIVE", StringComparison.OrdinalIgnoreCase) || candidate.Engine.Contains("Live", StringComparison.OrdinalIgnoreCase)))
             {
-                Console.WriteLine($"[SETTLE SKIP] Position not found. ID={positionId}");
-                return false;
+                SettlementRejects++;
+                Console.WriteLine("[PAPER_SETTLEMENT_REJECTED] Reason=LivePositionSettlementBlocked");
+                return new PaperSettlementResult(false, "LivePositionSettlementBlocked", candidate, null);
             }
 
-            if (closedPosition == null)
+            Console.WriteLine($"[PAPER_POSITION_SETTLEMENT_REQUESTED] PositionId={positionId} Mode={mode} RealizedPayout={realizedPayout:0.####}");
+            var result = _positionBook.ClosePosition(positionId, realizedPayout, mode);
+            if (!result.Accepted)
             {
-                Console.WriteLine($"[SETTLE SKIP] Closed position is null. ID={positionId}");
-                return false;
+                if (result.DuplicateSuppressed) DuplicateSettlementSuppressions++;
+                else SettlementRejects++;
+                return result;
             }
 
-            LockedCapital -= closedPosition?.TotalCost ?? 0;
-            ExpectedProfit -= closedPosition?.ExpectedProfit ?? 0;
+            var closedPosition = result.Position!;
+            LockedCapital = Math.Max(0m, LockedCapital - closedPosition.TotalCost);
+            ExpectedProfit = Math.Max(0m, ExpectedProfit - closedPosition.ExpectedProfit);
             Balance += realizedPayout;
+            RealizedPnl += closedPosition.RealizedProfit ?? (realizedPayout - closedPosition.TotalCost);
+            UnrealizedPnl = 0m;
 
-            Console.WriteLine(
-                $"[PAPER POSITION CLOSED] " +
-                $"ID={positionId}, " +
-                $"RealizedPayout={realizedPayout:0.####}, " +
-                $"RealizedProfit={closedPosition?.RealizedProfit:0.####}, " +
-                $"Cash={Balance:0.####}, " +
-                $"Locked={LockedCapital:0.####}, " +
-                $"ExpectedProfit={ExpectedProfit:0.####}, " +
-                $"Equity={Equity:0.####}"
-            );
+            Console.WriteLine($"[PAPER_POSITION_CLOSED] PositionId={positionId} Cost={closedPosition.TotalCost:0.####} RealizedPayout={realizedPayout:0.####} RealizedPnl={closedPosition.RealizedProfit:0.####}");
+            Console.WriteLine($"[PAPER_ACCOUNT] Cash={Balance:0.####} Locked={LockedCapital:0.####} OpenExposure={LockedCapital:0.####} RealizedPnl={RealizedPnl:0.####} Equity={Equity:0.####}");
 
-            return true;
+            return result;
         }
     }
+
+    public bool SettlePosition(string positionId, decimal realizedPayout)
+        => SettlePositionDetailed(positionId, realizedPayout).Accepted;
 
     public bool RegisterExternalBasketOpen(PaperPosition position, decimal totalCost, decimal expectedProfit)
     {

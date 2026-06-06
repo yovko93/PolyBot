@@ -82,15 +82,20 @@ app.MapGet("/api/bot/paper/account", (BotRuntimeState s) => Results.Ok(new
     equity = s.Status.Equity,
     realizedPnl = s.Status.RealizedPnl,
     openPositions = s.Status.OpenPositions,
+    closedPositions = s.PaperClosedPositions,
     totalExposure = s.Status.LockedCapital,
     positionsByStrategy = s.Positions().GroupBy(p => p.Strategy ?? "unknown", StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase),
     hourlyOpenCount = s.PaperOpenCountLastHour,
     lastOpenAt = s.Positions().Select(p => p.OpenedAt).DefaultIfEmpty().Max(),
     blockedCountsByReason = s.PaperPretradeRejectsByReason,
+    settlements = s.PaperSettlements,
+    settlementRejects = s.PaperSettlementRejects,
+    duplicateSettlementSuppressions = s.PaperDuplicateSettlementSuppressions,
     noLiveOrdersSubmitted = true
 }));
 app.MapGet("/api/bot/paper/positions", (BotRuntimeState s) => s.Positions());
 app.MapGet("/api/bot/paper/executions", (BotRuntimeState s) => s.SingleMarketExecutions().Cast<object>().Concat(s.Trades().Where(t => string.Equals(t.Status, "PAPER_EXECUTED", StringComparison.OrdinalIgnoreCase)).Cast<object>()).TakeLast(300).ToArray());
+app.MapGet("/api/bot/paper/settlements", (BotRuntimeState s) => s.PaperSettlementsRecords().TakeLast(300).ToArray());
 app.MapGet("/api/bot/verified-allowlist-health", (IHostEnvironment env) =>
 {
     var path = Path.Combine(env.ContentRootPath, "exports/verified-allowlist-health-latest.json");
@@ -353,6 +358,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var paper = new PaperTradingEngine(executionPolicy, executionJournal, executionDecisionService, positionBook, options);
     var paperValidationHarness = new PaperPhaseValidationHarness();
     paperValidationHarness.TryRun(options, paper, positionBook, state, contentRootPath);
+    var paperSettlementValidationHarness = new PaperSettlementValidationHarness();
+    paperSettlementValidationHarness.TryRun(options, paper, positionBook, state, contentRootPath);
     var monitor = new OpportunityMonitor(Path.Combine(AppContext.BaseDirectory, "data", "arb-opportunities.csv"), options.MinEdgePerShare, -0.02m, TimeSpan.FromMinutes(2), options.MinExpectedProfit, new DryRunLiveOrderBuilder(minEdgePerShare: -0.01m, maxPlanCost: 100000m, minSize: 1m, tickSize: 0.001m, orderType: LiveOrderType.FOK, policy: executionPolicy));
     var semaphore = new SemaphoreSlim(options.MaxConcurrentRequests);
     var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketFees, options.SingleMarketSlippage, monitor, sizing, options.SingleMarketArb, state, contentRootPath, verifiedExecution, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate);
@@ -1507,7 +1514,7 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
         return new OpportunityDto($"{r.Engine}-{r.Key}-{i}", r.TimestampUtc, i + 1, r.Strategy, r.GroupKey ?? "", r.Leg1, "BOTH", r.EdgePerShare, r.ExpectedProfit, r.CostOrProceeds, r.GuaranteedPayout, r.QuantityAvailable, r.IsExecutable, status, reason, state.NextSeq());
     }));
 
-    state.ReplacePositions(pb.OpenPositions.Concat(pb.ClosedPositions).Take(200).Select(pz => new PaperPositionDto(pz.PositionId, pz.OpenedAtUtc, pz.ClosedAtUtc, pz.Strategy, pz.GroupKey, pz.Legs.Select(l => $"{l.Outcome}:{l.Question}").ToList(), pz.Quantity, pz.TotalCost, pz.CostPerBasket, pz.GuaranteedPayout, pz.Quantity * pz.Legs.Count, pz.GrossEdgeAtOpen, pz.NetEdgeAtOpen, pz.ExpectedProfit, pz.LockedCapital, pz.ActiveProfile, pz.Source, pz.CurrentNoAskSum, pz.CurrentExitValue, pz.UnrealizedPnl, pz.MtmStatus, pz.MissingExitPrices, pz.RealizedPayout, pz.RealizedProfit, pz.OpenedFromSimulatedFills, pz.FillSimulationId, pz.Status.ToString().ToUpperInvariant(), state.NextSeq())));
+    state.ReplacePositions(pb.OpenPositions.Concat(pb.ClosedPositions).Take(200).Select(pz => PaperPositionDtoFactory.ToDto(pz, state.NextSeq())));
 
     state.ReplaceTrades(ReadTradeEntries(executionJournalPath, state, filtering));
 
@@ -1648,6 +1655,8 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
     state.SetRisk(new RiskStateDto(p.MaxNotionalPerTrade, p.MinNotionalPerTrade, p.MinEdgePerShare, p.MinExpectedProfit, p.MaxLockedCapital, paper.LockedCapital, p.MaxOpenPositions, pb.OpenPositions.Count, p.MaxExposurePerGroup, new Dictionary<string, decimal>(), p.AllowBasketArbs, p.AllowSingleMarketArbs, p.AllowCompleteSetSellArbs, p.AllowThresholdArbs, DateTime.UtcNow, state.NextSeq()));
     state.SetStatus(new BotStatusDto("PAPER", !state.Controls.IsPaused, "CONNECTED", paper.Balance, paper.LockedCapital, paper.Equity, paper.RealizedPnl, paper.ExpectedProfit, pb.OpenPositions.Count, top.Count, DateTime.UtcNow, DateTime.UtcNow));
     state.SetPaperOpenCountLastHour(paper.HourlyOpenCount);
+    state.ReplacePaperSettlements(pb.Settlements);
+    state.SetPaperSettlementCounters(paper.SettlementRejects, paper.DuplicateSettlementSuppressions);
     PaperAccountExporter.ExportLatest(Path.Combine(contentRootPath, "exports"), paper, pb, state.SingleMarketExecutions(), paper.BlockedCountsByReason);
     state.AddEquity(new EquityPointDto(DateTime.UtcNow, paper.Equity, state.NextSeq()));
 }

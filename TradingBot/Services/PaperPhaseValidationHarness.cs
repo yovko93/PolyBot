@@ -147,7 +147,7 @@ public sealed class PaperPhaseValidationHarness
         if (!accountConsistent)
             return Fail("AccountingValidation", "PaperAccountInvariantFailed");
 
-        state.ReplacePositions(positionBook.OpenPositions.Concat(positionBook.ClosedPositions).Take(200).Select(pz => new PaperPositionDto(pz.PositionId, pz.OpenedAtUtc, pz.ClosedAtUtc, pz.Strategy, pz.GroupKey, pz.Legs.Select(l => $"{l.Outcome}:{l.Question}").ToList(), pz.Quantity, pz.TotalCost, pz.CostPerBasket, pz.GuaranteedPayout, pz.Quantity * pz.Legs.Count, pz.GrossEdgeAtOpen, pz.NetEdgeAtOpen, pz.ExpectedProfit, pz.LockedCapital, pz.ActiveProfile, pz.Source, pz.CurrentNoAskSum, pz.CurrentExitValue, pz.UnrealizedPnl, pz.MtmStatus, pz.MissingExitPrices, pz.RealizedPayout, pz.RealizedProfit, pz.OpenedFromSimulatedFills, pz.FillSimulationId, pz.Status.ToString().ToUpperInvariant(), state.NextSeq())));
+        state.ReplacePositions(positionBook.OpenPositions.Concat(positionBook.ClosedPositions).Take(200).Select(pz => PaperPositionDtoFactory.ToDto(pz, state.NextSeq())));
         state.AddSingleMarketExecution(new SingleMarketPaperExecutionDto(Guid.NewGuid().ToString("N"), DateTime.UtcNow, marketId, question, "SingleMarketBuyBoth", openPosition.Quantity, yesPrice, noPrice, openPosition.TotalCost, openPosition.EdgePerShare, openPosition.ExpectedProfit, paper.Balance, paper.LockedCapital, paper.Equity, "Opened", true));
         state.RecordPaperPretradeReject("DuplicateOpenPosition");
         state.SetPaperOpenCountLastHour(paper.HourlyOpenCount);

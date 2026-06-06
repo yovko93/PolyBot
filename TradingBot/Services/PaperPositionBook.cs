@@ -10,6 +10,8 @@ public class PaperPositionBook
 
     private readonly Dictionary<string, PaperPosition> _openPositions = new();
     private readonly List<PaperPosition> _closedPositions = new();
+    private readonly List<PaperSettlementRecord> _settlements = new();
+    private readonly HashSet<string> _settledPositionIds = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly Dictionary<string, DateTime> _basketCooldownUntil = new();
     private readonly TimeSpan _basketCooldown = TimeSpan.FromMinutes(5);
@@ -40,6 +42,17 @@ public class PaperPositionBook
             lock (_lock)
             {
                 return _closedPositions.ToList();
+            }
+        }
+    }
+
+    public IReadOnlyCollection<PaperSettlementRecord> Settlements
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _settlements.ToList();
             }
         }
     }
@@ -262,34 +275,80 @@ public class PaperPositionBook
         }
     }
 
-    public bool ClosePosition(
+    public PaperSettlementResult ClosePosition(
         string positionId,
         decimal realizedPayout,
-        out PaperPosition? closedPosition)
+        string mode = "ManualPayout")
     {
         lock (_lock)
         {
-            if (!_openPositions.TryGetValue(positionId, out var position))
+            if (realizedPayout < 0m)
             {
-                closedPosition = null;
-                return false;
+                Console.WriteLine("[PAPER_SETTLEMENT_REJECTED] Reason=InvalidPayout");
+                return new PaperSettlementResult(false, "InvalidPayout", null, null);
             }
 
-            position.ClosedAtUtc = DateTime.UtcNow;
+            if (_settledPositionIds.Contains(positionId))
+            {
+                Console.WriteLine("[PAPER_SETTLEMENT_SUPPRESSED] Reason=DuplicateSettlement");
+                var already = _closedPositions.FirstOrDefault(p => p.PositionId.Equals(positionId, StringComparison.OrdinalIgnoreCase));
+                return new PaperSettlementResult(false, "DuplicateSettlement", already, null, true);
+            }
+
+            if (_closedPositions.Any(p => p.PositionId.Equals(positionId, StringComparison.OrdinalIgnoreCase)))
+            {
+                Console.WriteLine("[PAPER_SETTLEMENT_REJECTED] Reason=AlreadyClosed");
+                var alreadyClosed = _closedPositions.First(p => p.PositionId.Equals(positionId, StringComparison.OrdinalIgnoreCase));
+                return new PaperSettlementResult(false, "AlreadyClosed", alreadyClosed, null);
+            }
+
+            if (!_openPositions.TryGetValue(positionId, out var position))
+            {
+                Console.WriteLine("[PAPER_SETTLEMENT_REJECTED] Reason=PositionNotFound");
+                return new PaperSettlementResult(false, "PositionNotFound", null, null);
+            }
+
+            var now = DateTime.UtcNow;
+            position.ClosedAtUtc = now;
             position.RealizedPayout = realizedPayout;
             position.RealizedProfit = realizedPayout - position.TotalCost;
+            position.LockedCapital = 0m;
+            position.UnrealizedPnl = 0m;
             position.Status = PaperPositionStatus.Closed;
+            position.IsClosed = true;
 
             _openPositions.Remove(positionId);
             _closedPositions.Add(position);
+            _settledPositionIds.Add(positionId);
+
+            var settlement = new PaperSettlementRecord(
+                Guid.NewGuid().ToString("N"),
+                position.PositionId,
+                now,
+                now,
+                mode,
+                position.TotalCost,
+                realizedPayout,
+                position.RealizedProfit ?? 0m,
+                "Closed");
+            _settlements.Add(settlement);
 
             _basketCooldownUntil[position.PositionId] = DateTime.UtcNow.Add(_basketCooldown);
 
             AppendCsv(position);
 
-            closedPosition = position;
-            return true;
+            return new PaperSettlementResult(true, "Closed", position, settlement);
         }
+    }
+
+    public bool ClosePosition(
+        string positionId,
+        decimal realizedPayout,
+        out PaperPosition? closedPosition)
+    {
+        var result = ClosePosition(positionId, realizedPayout, "ManualPayout");
+        closedPosition = result.Position;
+        return result.Accepted;
     }
 
     public void PrintOpenPositions(int top = 10)

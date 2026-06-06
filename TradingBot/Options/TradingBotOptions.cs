@@ -55,6 +55,7 @@ public class TradingBotOptions
     public VerifiedBasketArbOptions VerifiedBasketArb { get; set; } = new();
     public PaperPhase2Options PaperPhase2 { get; set; } = new();
     public PaperPhaseValidationOptions PaperPhaseValidation { get; set; } = new();
+    public PaperSettlementValidationOptions PaperSettlementValidation { get; set; } = new();
     public bool EnableExperimentalProfilePaper { get; set; } = false;
     public string ExperimentalPaperProfile { get; set; } = "PolymarketApprox";
     public bool RequireStableExperimentalSignals { get; set; } = true;
@@ -141,6 +142,20 @@ public class PaperPhaseValidationOptions
     public string SyntheticOpportunityType { get; set; } = "SingleMarketBuyBoth";
     public bool RunOnce { get; set; } = true;
     public int MaxSyntheticPaperOpens { get; set; } = 1;
+    public bool RequireExplicitConfigFlag { get; set; } = true;
+}
+
+public class PaperSettlementValidationOptions
+{
+    public bool Enabled { get; set; } = false;
+    public bool RunOnce { get; set; } = true;
+    public bool RequireExistingOpenPosition { get; set; } = true;
+    public bool IfNoOpenPositionCreateSyntheticFirst { get; set; } = true;
+    public string SyntheticOpportunityType { get; set; } = "SingleMarketBuyBoth";
+    public string SettlementMode { get; set; } = "ManualPayout";
+    public decimal RealizedPayout { get; set; } = 12.00m;
+    public decimal ExpectedOpenCost { get; set; } = 10.80m;
+    public int MaxSyntheticSettlements { get; set; } = 1;
     public bool RequireExplicitConfigFlag { get; set; } = true;
 }
 
