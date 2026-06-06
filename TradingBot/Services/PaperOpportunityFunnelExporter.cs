@@ -50,12 +50,12 @@ public static class PaperOpportunityFunnelExporter
             .Take(10)
             .Select(x => (object)new { reason = x.Key, count = x.Value })
             .Concat(multiOutcomeReport.TopRejectedSamples.Take(10).Select(x => (object)new { source = "verifiedBasket", groupKey = x.GroupKey, reason = x.Reason }))
-            .Concat(state.SingleMarketSnapshot.DataQualityRejectSamples.Take(10).Select(x => (object)new { source = "singleMarketDataQuality", x.MarketId, x.Title, x.Reason, x.RawCost, x.EdgePerShare }))
+            .Concat(state.SingleMarketSnapshot.DataQualityRejectSamples.Take(10).Select(x => (object)new { source = "singleMarketDataQuality", x.MarketId, x.Title, x.Reason, x.RawSum, x.EdgePerShare }))
             .Take(25)
             .ToArray();
 
         var nearExecutable = state.SingleMarketSnapshot.TopNearMisses.Take(10)
-            .Select(x => (object)new { source = "singleMarket", x.MarketId, x.Question, x.EdgePerShare, x.EdgeGapToMin, x.RawCost })
+            .Select(x => (object)new { source = "singleMarket", x.MarketId, x.Title, x.EdgePerShare, x.RequiredImprovement, x.RawSum })
             .Concat(multiOutcomeReport.CandidateGroupsForReview
                 .OrderByDescending(x => x.EstimatedNetEdge ?? decimal.MinValue)
                 .Take(10)
