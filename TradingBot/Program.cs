@@ -1657,7 +1657,9 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
     state.SetPaperOpenCountLastHour(paper.HourlyOpenCount);
     state.ReplacePaperSettlements(pb.Settlements);
     state.SetPaperSettlementCounters(paper.SettlementRejects, paper.DuplicateSettlementSuppressions);
-    PaperAccountExporter.ExportLatest(Path.Combine(contentRootPath, "exports"), paper, pb, state.SingleMarketExecutions(), paper.BlockedCountsByReason);
+    var exportsRoot = Path.Combine(contentRootPath, "exports");
+    PaperAccountExporter.ExportLatest(exportsRoot, paper, pb, state.SingleMarketExecutions(), paper.BlockedCountsByReason);
+    PaperOpportunityFunnelExporter.ExportLatest(exportsRoot, PaperOpportunityFunnelExporter.Build(options, state, scanStats, multiOutcomeReport, marketsScanned));
     state.AddEquity(new EquityPointDto(DateTime.UtcNow, paper.Equity, state.NextSeq()));
 }
 

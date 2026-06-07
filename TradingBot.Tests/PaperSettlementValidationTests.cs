@@ -145,6 +145,10 @@ public class PaperSettlementValidationTests
         Assert.Equal(0m, health.PaperLocked);
         Assert.Equal(1001.2m, health.PaperCash);
         Assert.Equal(1001.2m, health.PaperEquity);
+        Assert.Equal(1, health.PaperOpenEvents);
+        Assert.Equal(1, health.PaperCloseEvents);
+        Assert.Equal(2, health.PaperLifecycleEvents);
+        Assert.Equal(1, health.PaperExecutionsCount);
     }
 
     [Fact]
