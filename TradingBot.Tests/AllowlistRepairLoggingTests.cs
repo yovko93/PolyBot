@@ -550,7 +550,7 @@ public class AllowlistRepairLoggingTests
     {
         var first = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint("AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 8 }, 10, 10);
         var small = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint("AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 15 }, 10, 10);
-        var materialReasonBucket = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint("AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 20 }, 10, 10);
+        var materialReasonBucket = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint("AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 26 }, 10, 10);
 
         Assert.Equal(first, small);
         Assert.NotEqual(first, materialReasonBucket);

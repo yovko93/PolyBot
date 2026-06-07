@@ -545,7 +545,9 @@ public class MultiOutcomeGroupArbEngine
         var reasonSummary = string.Join(",", report.RejectedByReason.Select(x => $"{x.Key}:{x.Value}"));
         if (logSummary)
         {
-            var fingerprint = TradingBot.Services.MultiOutcome.ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint(report.GroupsDetected, report.TopSkipReason, report.RejectedByReason, Math.Max(1, _logging.CandidateScanBucketSize), Math.Max(1, _logging.CandidateScanMaterialReasonDelta));
+            var rejectedOnlyBucketSize = _operationalQuietMode ? 25 : Math.Max(1, _logging.CandidateScanBucketSize);
+            var rejectedOnlyReasonBucketSize = _operationalQuietMode ? 25 : Math.Max(1, _logging.CandidateScanMaterialReasonDelta);
+            var fingerprint = TradingBot.Services.MultiOutcome.ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint(report.GroupsDetected, report.TopSkipReason, report.RejectedByReason, rejectedOnlyBucketSize, rejectedOnlyReasonBucketSize);
             var shouldLog = _quietLogGate?.ShouldLog(
                 new LogEventKey("multi-candidate", "MULTI_CANDIDATE_SCAN"),
                 new LogEventFingerprint(fingerprint, fingerprint),

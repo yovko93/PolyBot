@@ -62,6 +62,9 @@ public static class ScanLogSummaryService
         return scanId % every == 0;
     }
 
+    public static bool ShouldEmitScannerSummary(DateTime nowUtc, DateTime lastSummaryUtc, int everyMinutes)
+        => everyMinutes > 0 && (lastSummaryUtc == DateTime.MinValue || nowUtc - lastSummaryUtc >= TimeSpan.FromMinutes(everyMinutes));
+
     public static DiscoveryHealthSummary DiscoveryHealth(MarketDiscoverySummary summary, int expectedMinActive)
     {
         var healthy = summary.ActiveMarketsAvailable >= expectedMinActive && string.IsNullOrWhiteSpace(summary.LastDiscoveryError);
@@ -96,10 +99,10 @@ public static class ScanLogSummaryService
     public static string RejectedOnlyCandidateScanFingerprint(int candidateCount, string topReject, IReadOnlyDictionary<string, int> rejectedByReason, int candidateCountBucketSize, int reasonBucketSize)
     {
         // Rejected-only scans are operationally useful only when the dominant reject class changes,
-        // an executable appears, or a 20-wide candidate/reason bucket changes. Small discovery
-        // fluctuations such as 8 -> 9 -> 10 -> 13 -> 18 should stay quiet.
-        var candidateBucket = Math.Max(20, candidateCountBucketSize * 2);
-        var reasonBucket = Math.Max(20, reasonBucketSize * 2);
+        // an executable appears, or a coarse candidate/reason bucket changes. Quiet-mode callers
+        // pass 25 so normal churn such as 8 -> 14 -> 23 stays quiet.
+        var candidateBucket = Math.Max(25, candidateCountBucketSize);
+        var reasonBucket = Math.Max(25, reasonBucketSize);
         var reasonBuckets = string.Join(",", rejectedByReason
             .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
             .Select(x => $"{x.Key}:{(int)Math.Floor(x.Value / (decimal)reasonBucket)}"));

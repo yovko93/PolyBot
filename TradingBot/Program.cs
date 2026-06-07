@@ -346,6 +346,28 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var scannerStage = "Starting";
     var scannerComponent = "Scanner";
     void SetScannerStage(string stage, string component) { scannerStage = stage; scannerComponent = component; }
+    var lastScannerSummaryAt = scannerStartedAt;
+    var scannerSummaryBatches = 0L;
+    var scannerSummaryMarketsScanned = 0L;
+    var scannerSummaryDurationMs = 0L;
+    var scannerSummaryErrors = 0L;
+    var scannerSummaryExecutable = 0L;
+    var scannerSummaryPaperOpened = 0L;
+    bool ShouldLogScannerChannel(string eventName, string stableHash, LogImportance importance = LogImportance.Normal)
+    {
+        if (!options.Diagnostics.OperationalQuietMode || options.Logging.LogScannerStartEndInQuietMode) return true;
+        return quietLogGate.ShouldLog(
+            new LogEventKey("scanner.lifecycle", eventName),
+            new LogEventFingerprint(stableHash, stableHash),
+            importance,
+            new QuietLogPolicy(
+                OperationalQuietMode: true,
+                EveryNCycles: int.MaxValue,
+                EveryMinutes: Math.Max(1, options.Logging.LogScannerSummaryEveryMinutes),
+                SuppressRepeatedHash: true,
+                MaxSameEventPerHour: 0,
+                DebugEnabled: options.Diagnostics.DebuggerSafeMode));
+    }
     using var http = new HttpClient();
     http.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0");
     http.Timeout = TimeSpan.FromSeconds(options.ExternalApiTimeoutSeconds);
@@ -485,7 +507,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 continue;
             }
             if (!state.Controls.IsPaused && scannerState.State != ScannerRuntimeState.Running) scannerState.TryResume(Console.WriteLine);
-            uiLogger.LogInfo("scanner", "{\"event\":\"scan_start\",\"timestamp\":\"" + started.ToString("O") + "\"}");
+            var paperOpenBeforeScan = state.PaperExecutionsCount;
+            if (ShouldLogScannerChannel("scan_start", "scan_start"))
+                uiLogger.LogInfo("scanner", "{\"event\":\"scan_start\",\"timestamp\":\"" + started.ToString("O") + "\"}");
             if (state.Controls.IsPaused)
             {
                 if (state.Controls.Reason == "MEMORY_CRITICAL") scannerState.TryPauseByMemoryGuard(Console.WriteLine);
@@ -496,7 +520,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             memoryGuard.Check(state, options, () => { orderbookService.ClearAllCache(); orderbookService.TrimAllBoundedStores(); quietLogGate.TrimExpired(); }, contentRootPath);
             SetScannerStage("SignalRPublish", "PushUiUpdates");
             await PushUiUpdates(state, hub, uiLogger, options, verifiedExecution, contentRootPath);
-                uiLogger.LogInfo("scanner", "{\"event\":\"scan_skipped\",\"reason\":\"PAUSED\"}");
+                if (ShouldLogScannerChannel("scan_skipped", $"scan_skipped|{state.Controls.Reason}"))
+                    uiLogger.LogInfo("scanner", "{\"event\":\"scan_skipped\",\"reason\":\"PAUSED\"}");
                 await Task.Delay(options.ScanIntervalMs, stoppingToken);
                 continue;
             }
@@ -1152,7 +1177,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var rejectedCandidates = Math.Max(0, multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified);
                     var rejectedOnlyCandidateScan = multiOutcomeReport.GroupsDetected > 0 && rejectedCandidates == multiOutcomeReport.GroupsDetected && multiOutcomeReport.ExecutableGroups == 0 && activeExecutable == 0;
                     var candidateFingerprint = ScanLogSummaryService.CandidateScanFingerprint(multiOutcomeReport.GroupsDetected, multiOutcomeReport.TopSkipReason, multiOutcomeReport.RejectedByReason, candidateBucket, multiOutcomeReport.ExecutableGroups);
-                    var rejectedOnlyMaterialFingerprint = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint(multiOutcomeReport.GroupsDetected, multiOutcomeReport.TopSkipReason, multiOutcomeReport.RejectedByReason, Math.Max(1, options.Logging.CandidateScanBucketSize), Math.Max(1, options.Logging.CandidateScanMaterialReasonDelta));
+                    var rejectedOnlyBucketSize = options.Diagnostics.OperationalQuietMode ? 25 : Math.Max(1, options.Logging.CandidateScanBucketSize);
+                    var rejectedOnlyReasonBucketSize = options.Diagnostics.OperationalQuietMode ? 25 : Math.Max(1, options.Logging.CandidateScanMaterialReasonDelta);
+                    var rejectedOnlyMaterialFingerprint = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint(multiOutcomeReport.GroupsDetected, multiOutcomeReport.TopSkipReason, multiOutcomeReport.RejectedByReason, rejectedOnlyBucketSize, rejectedOnlyReasonBucketSize);
                     var throttleFingerprint = rejectedOnlyCandidateScan && options.Diagnostics.OperationalQuietMode ? rejectedOnlyMaterialFingerprint : candidateFingerprint;
                     var candidateImportance = (multiOutcomeReport.ExecutableGroups > 0 || activeExecutable > 0) ? LogImportance.Critical : LogImportance.Normal;
                     var shouldLogCandidate = ShouldQuietLog("multi-candidate", "MULTI_CANDIDATE_SCAN", throttleFingerprint, candidateImportance, throttleFingerprint, everyNCycles: options.Logging.LogCandidateScanEveryNCycles, maxPerHour: options.Logging.MaxMultiCandidateScanLogsPerHour);
@@ -1386,7 +1413,31 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             memoryGuard.Check(state, options, () => { orderbookService.ClearAllCache(); orderbookService.TrimAllBoundedStores(); quietLogGate.TrimExpired(); }, contentRootPath);
             SetScannerStage("SignalRPublish", "PushUiUpdates");
             await PushUiUpdates(state, hub, uiLogger, options, verifiedExecution, contentRootPath);
-            uiLogger.LogInfo("scanner", $"{{\"event\":\"scan_end\",\"durationMs\":{(long)(DateTime.UtcNow - started).TotalMilliseconds},\"marketsScanned\":{filtered.Count},\"detected\":{cycleTop.Count},\"executable\":{executableCount}}}");
+            var scanDurationMs = (long)(DateTime.UtcNow - started).TotalMilliseconds;
+            var paperOpenedThisScan = Math.Max(0, state.PaperExecutionsCount - paperOpenBeforeScan);
+            scannerSummaryBatches++;
+            scannerSummaryMarketsScanned += filtered.Count;
+            scannerSummaryDurationMs += scanDurationMs;
+            scannerSummaryExecutable += executableCount;
+            scannerSummaryPaperOpened += paperOpenedThisScan;
+            var scannerLifecycleImportance = executableCount > 0 || paperOpenedThisScan > 0 ? LogImportance.Critical : LogImportance.Normal;
+            if (ShouldLogScannerChannel("scan_end", $"scan_end|executable:{executableCount > 0}|paper:{paperOpenedThisScan > 0}", scannerLifecycleImportance))
+                uiLogger.LogInfo("scanner", $"{{\"event\":\"scan_end\",\"durationMs\":{scanDurationMs},\"marketsScanned\":{filtered.Count},\"detected\":{cycleTop.Count},\"executable\":{executableCount}}}");
+            var summaryNow = DateTime.UtcNow;
+            if (ScanLogSummaryService.ShouldEmitScannerSummary(summaryNow, lastScannerSummaryAt, options.Logging.LogScannerSummaryEveryMinutes))
+            {
+                var avgBatchMs = scannerSummaryBatches == 0 ? 0 : scannerSummaryDurationMs / scannerSummaryBatches;
+                var uptime = summaryNow - scannerStartedAt;
+                var uptimeText = uptime.ToString(@"dd\.hh\:mm\:ss");
+                Console.WriteLine($"[SCANNER_SUMMARY] Uptime={uptimeText} ScanId={scanId} Pool={scanPool.Count} Offset={rollingOffset} CyclesCompleted={cyclesCompletedSinceDiscovery} Batches={scannerSummaryBatches} MarketsScanned={scannerSummaryMarketsScanned} AvgBatchMs={avgBatchMs} Errors={scannerSummaryErrors} Executable={scannerSummaryExecutable} PaperOpened={scannerSummaryPaperOpened}");
+                lastScannerSummaryAt = summaryNow;
+                scannerSummaryBatches = 0;
+                scannerSummaryMarketsScanned = 0;
+                scannerSummaryDurationMs = 0;
+                scannerSummaryErrors = 0;
+                scannerSummaryExecutable = 0;
+                scannerSummaryPaperOpened = 0;
+            }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -1394,6 +1445,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         }
         catch (Exception ex)
         {
+            scannerSummaryErrors++;
             lastError = ex.Message;
             var errorContext = new ScannerExceptionContext(
                 scannerStage,

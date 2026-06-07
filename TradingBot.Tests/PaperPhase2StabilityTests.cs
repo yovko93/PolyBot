@@ -39,6 +39,103 @@ public class PaperPhase2StabilityTests
     }
 
     [Fact]
+    public void Scan_start_is_suppressed_in_operational_quiet_mode()
+    {
+        var gate = new QuietLogGate();
+        var policy = new QuietLogPolicy(OperationalQuietMode: true, EveryNCycles: int.MaxValue, EveryMinutes: 10, SuppressRepeatedHash: true, MaxSameEventPerHour: 0, DebugEnabled: false);
+        var key = new LogEventKey("scanner.lifecycle", "scan_start");
+        var fingerprint = new LogEventFingerprint("scan_start", "scan_start");
+
+        Assert.True(gate.ShouldLog(key, fingerprint, LogImportance.Normal, policy));
+        Assert.False(gate.ShouldLog(key, fingerprint, LogImportance.Normal, policy));
+    }
+
+    [Fact]
+    public void Scan_end_is_suppressed_in_operational_quiet_mode()
+    {
+        var gate = new QuietLogGate();
+        var policy = new QuietLogPolicy(OperationalQuietMode: true, EveryNCycles: int.MaxValue, EveryMinutes: 10, SuppressRepeatedHash: true, MaxSameEventPerHour: 0, DebugEnabled: false);
+        var key = new LogEventKey("scanner.lifecycle", "scan_end");
+        var fingerprint = new LogEventFingerprint("scan_end|executable:false|paper:false", "scan_end|executable:false|paper:false");
+
+        Assert.True(gate.ShouldLog(key, fingerprint, LogImportance.Normal, policy));
+        Assert.False(gate.ShouldLog(key, fingerprint, LogImportance.Normal, policy));
+    }
+
+    [Fact]
+    public void Scanner_errors_are_not_suppressed_in_operational_quiet_mode()
+    {
+        var gate = new QuietLogGate();
+        var policy = new QuietLogPolicy(OperationalQuietMode: true, EveryNCycles: int.MaxValue, EveryMinutes: 10, SuppressRepeatedHash: true, MaxSameEventPerHour: 0, DebugEnabled: false);
+        var key = new LogEventKey("scanner.error", "scan_error");
+        var fingerprint = new LogEventFingerprint("InvalidOperationException", "InvalidOperationException");
+
+        Assert.True(gate.ShouldLog(key, fingerprint, LogImportance.Critical, policy));
+        Assert.True(gate.ShouldLog(key, fingerprint, LogImportance.Critical, policy));
+    }
+
+    [Fact]
+    public void Scanner_summary_emits_every_configured_interval()
+    {
+        var now = DateTime.UtcNow;
+
+        Assert.True(ScanLogSummaryService.ShouldEmitScannerSummary(now, DateTime.MinValue, 10));
+        Assert.False(ScanLogSummaryService.ShouldEmitScannerSummary(now.AddMinutes(9), now, 10));
+        Assert.True(ScanLogSummaryService.ShouldEmitScannerSummary(now.AddMinutes(10), now, 10));
+    }
+
+    [Fact]
+    public void Rejected_only_multi_candidate_small_count_changes_are_suppressed_in_quiet_buckets()
+    {
+        var gate = new QuietLogGate();
+        var policy = new QuietLogPolicy(OperationalQuietMode: true, EveryNCycles: 100, EveryMinutes: 10, SuppressRepeatedHash: true, MaxSameEventPerHour: 0, DebugEnabled: false);
+        var first = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint(14, "AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 14 }, 25, 25);
+        var small = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint(23, "AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 23 }, 25, 25);
+
+        Assert.Equal(first, small);
+        Assert.True(gate.ShouldLog(new LogEventKey("multi-candidate", "MULTI_CANDIDATE_SCAN"), new LogEventFingerprint(first, first), LogImportance.Normal, policy));
+        Assert.False(gate.ShouldLog(new LogEventKey("multi-candidate", "MULTI_CANDIDATE_SCAN"), new LogEventFingerprint(small, small), LogImportance.Normal, policy));
+    }
+
+    [Fact]
+    public void Multi_candidate_scan_logs_when_executable_appears()
+    {
+        var gate = new QuietLogGate();
+        var policy = new QuietLogPolicy(OperationalQuietMode: true, EveryNCycles: 100, EveryMinutes: 10, SuppressRepeatedHash: true, MaxSameEventPerHour: 0, DebugEnabled: false);
+        var rejected = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint(14, "AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 14 }, 25, 25);
+        var executable = ScanLogSummaryService.CandidateScanFingerprint(14, "Executable", new Dictionary<string, int>(), 25, executableAutoCandidates: 1);
+
+        Assert.True(gate.ShouldLog(new LogEventKey("multi-candidate", "MULTI_CANDIDATE_SCAN"), new LogEventFingerprint(rejected, rejected), LogImportance.Normal, policy));
+        Assert.True(gate.ShouldLog(new LogEventKey("multi-candidate", "MULTI_CANDIDATE_SCAN"), new LogEventFingerprint(executable, executable), LogImportance.Critical, policy));
+    }
+
+    [Fact]
+    public void Multi_candidate_scan_logs_on_top_reject_category_change()
+    {
+        var gate = new QuietLogGate();
+        var policy = new QuietLogPolicy(OperationalQuietMode: true, EveryNCycles: 100, EveryMinutes: 10, SuppressRepeatedHash: true, MaxSameEventPerHour: 0, DebugEnabled: false);
+        var first = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint(14, "AutoCandidateUnverified", new Dictionary<string, int> { ["AutoCandidateUnverified"] = 14 }, 25, 25);
+        var changed = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint(14, "AutoCandidatePartialOverlap", new Dictionary<string, int> { ["AutoCandidatePartialOverlap"] = 14 }, 25, 25);
+
+        Assert.NotEqual(first, changed);
+        Assert.True(gate.ShouldLog(new LogEventKey("multi-candidate", "MULTI_CANDIDATE_SCAN"), new LogEventFingerprint(first, first), LogImportance.Normal, policy));
+        Assert.True(gate.ShouldLog(new LogEventKey("multi-candidate", "MULTI_CANDIDATE_SCAN"), new LogEventFingerprint(changed, changed), LogImportance.Normal, policy));
+    }
+
+    [Fact]
+    public void QuietLogGate_applies_to_scanner_channel()
+    {
+        var gate = new QuietLogGate();
+        var policy = new QuietLogPolicy(OperationalQuietMode: true, EveryNCycles: int.MaxValue, EveryMinutes: 10, SuppressRepeatedHash: true, MaxSameEventPerHour: 0, DebugEnabled: false);
+        var key = new LogEventKey("scanner.lifecycle", "scan_start");
+        var fingerprint = new LogEventFingerprint("scan_start", "scan_start");
+
+        Assert.True(gate.ShouldLog(key, fingerprint, LogImportance.Normal, policy));
+        Assert.False(gate.ShouldLog(key, fingerprint, LogImportance.Normal, policy));
+        Assert.True(gate.Snapshot().QuietSuppressedByCategory.ContainsKey("scanner.lifecycle"));
+    }
+
+    [Fact]
     public void Scanner_invalid_state_transition_logs_rejected_transition_without_throwing()
     {
         var machine = new ScannerStateMachine();
