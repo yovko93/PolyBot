@@ -44,13 +44,13 @@ public sealed class MemoryGuard
 
         if (processMb >= criticalThreshold)
         {
+            state.RecordMemoryCritical(now, memory.PauseScannerOnCriticalMemory);
             var action = memory.PauseScannerOnCriticalMemory || memory.ClearNonEssentialCachesOnCriticalMemory || memory.ClearCachesOnMemoryCritical
                 ? "PauseScannerAndClearCaches"
                 : "LogOnly";
             if (now - _lastCriticalLoggedAt > TimeSpan.FromSeconds(30))
             {
                 _lastCriticalLoggedAt = now;
-                state.RecordMemoryCritical(now, memory.PauseScannerOnCriticalMemory);
                 Console.WriteLine($"[MEMORY_CRITICAL] ProcessMb={processMb:0.##} Action={action}");
                 Console.WriteLine(BuildDiagnosticLine(state, processMb));
             }

@@ -255,8 +255,16 @@ Console.WriteLine($"[DIAGNOSTICS] OperationalQuietMode={options.Diagnostics.Oper
 Console.WriteLine($"[SOAK_READINESS] OperationalQuietMode={options.Diagnostics.OperationalQuietMode.ToString().ToLowerInvariant()} RuntimeHealth={options.RuntimeHealth.Enabled.ToString().ToLowerInvariant()} MemoryGuard=true BoundedCollections=true SignalRPayloadLimits={(options.SignalR.MaxPayloadItems > 0 && options.SignalR.MaxPayloadBytes > 0).ToString().ToLowerInvariant()} PaperOnly={options.PaperOnly.ToString().ToLowerInvariant()} LiveTrading={options.TradingMode.LiveTradingEnabled.ToString().ToLowerInvariant()} PaperTradingEnabled={options.TradingMode.PaperTradingEnabled.ToString().ToLowerInvariant()} PaperPhase={options.TradingMode.PaperPhase}");
 logger.LogInfo("startup", $"[CONFIG] MultiOutcome FeePerLeg={options.MultiOutcomeArbitrage.FeePerLeg} SlippagePerLeg={options.MultiOutcomeArbitrage.SlippageBufferPerLeg} SafetyPerGroup={options.MultiOutcomeArbitrage.SafetyBufferPerGroup} MinNetEdgePerBasket={options.MultiOutcomeArbitrage.MinMultiOutcomeEdge} MinExpectedProfit={options.MultiOutcomeArbitrage.MinExpectedProfit} EnableSensitivityDiagnostics={options.MultiOutcomeArbitrage.EnableSensitivityDiagnostics}");
 var executionCfg = app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value;
-logger.LogInfo("startup", $"[CONFIG] Execution PaperOnly={executionCfg.PaperOnly.ToString().ToLowerInvariant()} MaxNotionalPerBasket={executionCfg.MaxNotionalPerBasket} MaxOpenBasketPositions={executionCfg.MaxOpenBasketPositions} MaxExposurePerGroup={executionCfg.MaxExposurePerGroup} DuplicateCooldownMinutes={executionCfg.DuplicateCooldownMinutes}");
-logger.LogInfo("startup", $"[CONFIG] ExecutionRisk MaxNotionalPerBasket={executionCfg.MaxNotionalPerBasket} MaxNotionalPerTrade={executionCfg.MaxNotionalPerTrade} MinPlannedNotional={executionCfg.MinPlannedNotional} MinPlannedExpectedProfit={executionCfg.MinPlannedExpectedProfit} MinPlannedBasketQty={executionCfg.MinPlannedBasketQty}");
+var effectivePaperRisk = PaperEffectiveRisk.Apply(options, executionCfg);
+logger.LogInfo("startup", $"[PAPER_EFFECTIVE_RISK] PaperPhase={effectivePaperRisk.PaperPhase} Source={effectivePaperRisk.Source} MaxPaperNotionalPerTrade={effectivePaperRisk.MaxPaperNotionalPerTrade:0.####} MaxPaperTotalExposure={effectivePaperRisk.MaxPaperTotalExposure:0.####} MaxPaperOpenPerHour={effectivePaperRisk.MaxPaperOpenPerHour} MaxPaperPositionsTotal={effectivePaperRisk.MaxPaperPositionsTotal} MaxPaperPositionsPerStrategy={effectivePaperRisk.MaxPaperPositionsPerStrategy} SingleMarketMaxNotional={effectivePaperRisk.SingleMarketMaxNotional:0.####} VerifiedBasketMaxNotional={effectivePaperRisk.VerifiedBasketMaxNotional:0.####} LegacyExecutionRiskIgnored={effectivePaperRisk.LegacyExecutionRiskIgnored.ToString().ToLowerInvariant()}");
+logger.LogInfo("startup", $"[CONFIG] LegacyExecutionRisk PaperOnly={executionCfg.PaperOnly.ToString().ToLowerInvariant()} MaxNotionalPerBasket={executionCfg.MaxNotionalPerBasket} MaxOpenBasketPositions={executionCfg.MaxOpenBasketPositions} MaxExposurePerGroup={executionCfg.MaxExposurePerGroup} DuplicateCooldownMinutes={executionCfg.DuplicateCooldownMinutes} LegacyExecutionRiskIgnored={effectivePaperRisk.LegacyExecutionRiskIgnored.ToString().ToLowerInvariant()} EffectiveSyncedFromPaperRisk={effectivePaperRisk.SyncedFromPaperRisk.ToString().ToLowerInvariant()}");
+logger.LogInfo("startup", $"[CONFIG] ExecutionRiskDeprecated MaxNotionalPerBasket={executionCfg.MaxNotionalPerBasket} MaxNotionalPerTrade={executionCfg.MaxNotionalPerTrade} MinPlannedNotional={executionCfg.MinPlannedNotional} MinPlannedExpectedProfit={executionCfg.MinPlannedExpectedProfit} MinPlannedBasketQty={executionCfg.MinPlannedBasketQty} LegacyExecutionRiskIgnored={effectivePaperRisk.LegacyExecutionRiskIgnored.ToString().ToLowerInvariant()}");
+var paperConfigError = PaperEffectiveRisk.IsPaperPhase2RiskStillPhase1(options, executionCfg);
+if (paperConfigError)
+{
+    logger.LogError("startup", "[PAPER_CONFIG_ERROR] Reason=PaperPhase2ButExecutionRiskStillPhase1");
+    state.SetControls(state.Controls with { IsPaused = true, Reason = "PAPER_CONFIG_ERROR", UpdatedAtUtc = DateTime.UtcNow, Sequence = state.NextSeq() });
+}
 var activeProfileName = options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile;
 if (!options.MultiOutcomeArbitrage.CostProfiles.Profiles.TryGetValue(activeProfileName, out var activeProfileCfg)) activeProfileCfg = options.MultiOutcomeArbitrage.CostProfiles.Profiles["Conservative"];
 if (options.EnableLiveExecution && activeProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))
@@ -315,6 +323,12 @@ _ = Task.Run(async () =>
     }
 });
 
+if (paperConfigError)
+{
+    await apiTask;
+    return;
+}
+
 await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>(), app.Services.GetRequiredService<VerifiedBasketDryRunOrderBuilder>(), app.Services.GetRequiredService<DryRunFillSimulator>(), app.Services.GetRequiredService<AllowlistRepairService>(), app.Services.GetRequiredService<AllowlistRepairLockProvider>(), app.Services.GetRequiredService<MemoryGuard>(), quietLogGate, app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value, options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping);
 await apiTask;
 
@@ -340,13 +354,13 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var kalshiOptions = new KalshiOptions();
     var executionPolicy = new ExecutionPolicy
     {
-        MaxNotionalPerTrade = Math.Min(options.MaxNotionalPerTrade, options.PaperRisk.MaxPaperNotionalPerTrade),
+        MaxNotionalPerTrade = options.TradingMode.PaperPhase >= 2 ? options.PaperRisk.MaxPaperNotionalPerTrade : Math.Min(options.MaxNotionalPerTrade, options.PaperRisk.MaxPaperNotionalPerTrade),
         MinNotionalPerTrade = options.MinNotionalPerTrade,
         MinEdgePerShare = options.MinEdgePerShare,
         MinExpectedProfit = options.MinExpectedProfit,
         MaxLockedCapital = Math.Min(options.MaxLockedCapital, options.PaperRisk.MaxPaperTotalExposure),
         MaxOpenPositions = Math.Min(options.MaxOpenPositions, options.PaperRisk.MaxPaperPositionsTotal),
-        MaxExposurePerGroup = Math.Min(options.MaxExposurePerGroup, options.PaperRisk.MaxPaperTotalExposure),
+        MaxExposurePerGroup = options.PaperRisk.MaxPaperTotalExposure,
         AllowBasketArbs = true,
         AllowSingleMarketArbs = true,
         AllowCompleteSetSellArbs = true,

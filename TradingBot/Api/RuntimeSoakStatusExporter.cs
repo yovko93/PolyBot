@@ -46,6 +46,7 @@ public static class RuntimeSoakStatusExporter
             batchBookRetrySuccesses = health.BatchBookRetrySuccesses,
             batchBookInvalidTokens = health.BatchBookInvalidTokens,
             batchBookSuppressedErrors = health.BatchBookSuppressedErrors,
+            invalidTokenQuarantine = state.OrderBookServiceStats.QuarantinedTokens,
             memoryWarnings = Math.Max(state.MemoryWarnings, logs.Count(x => x.Message.Contains("[MEMORY_WARNING]", StringComparison.OrdinalIgnoreCase))),
             memoryCriticals = Math.Max(state.MemoryCriticals, logs.Count(x => x.Message.Contains("[MEMORY_CRITICAL]", StringComparison.OrdinalIgnoreCase))),
             lastMemoryCriticalAt = state.LastMemoryCriticalAt,

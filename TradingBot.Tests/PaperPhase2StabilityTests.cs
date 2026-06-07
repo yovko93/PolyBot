@@ -13,6 +13,70 @@ namespace TradingBot.Tests;
 
 public class PaperPhase2StabilityTests
 {
+
+    [Fact]
+    public void Same_startup_log_emitted_twice_is_stored_once()
+    {
+        var state = new BotRuntimeState();
+        var timestamp = DateTime.UtcNow;
+        var first = new TerminalLogEntryDto("1", timestamp, "info", "startup", "[CONFIG] Scanner Mode=Rolling", 1);
+        var second = first with { Id = "2", Sequence = 2 };
+
+        Assert.True(state.AddLog(first));
+        Assert.False(state.AddLog(second));
+        Assert.Single(state.Logs());
+    }
+
+    [Fact]
+    public void Critical_MEMORY_CRITICAL_is_never_suppressed()
+    {
+        var state = new BotRuntimeState();
+        var timestamp = DateTime.UtcNow;
+        var first = new TerminalLogEntryDto("1", timestamp, "warn", "console", "[MEMORY_CRITICAL] ProcessMb=1115", 1);
+        var second = first with { Id = "2", Sequence = 2 };
+
+        Assert.True(state.AddLog(first));
+        Assert.True(state.AddLog(second));
+        Assert.Equal(2, state.Logs().Length);
+    }
+
+    [Fact]
+    public void RuntimeHealth_periodic_logs_are_not_incorrectly_suppressed()
+    {
+        var state = new BotRuntimeState();
+        var timestamp = DateTime.UtcNow;
+        var first = new TerminalLogEntryDto("1", timestamp, "info", "console", "[RUNTIME_HEALTH] ProcessMb=500", 1);
+        var second = first with { Id = "2", Timestamp = timestamp.AddSeconds(31), Sequence = 2 };
+
+        Assert.True(state.AddLog(first));
+        Assert.True(state.AddLog(second));
+        Assert.Equal(2, state.Logs().Length);
+    }
+
+    [Fact]
+    public void PaperPhase2_effective_risk_syncs_legacy_execution_limits_to_paper_risk()
+    {
+        var options = new TradingBotOptions
+        {
+            TradingMode = new TradingModeOptions { PaperPhase = 2, LiveTradingEnabled = false },
+            PaperOnly = true,
+            EnableLiveExecution = false,
+            PaperRisk = new PaperRiskOptions { MaxPaperNotionalPerTrade = 50, MaxPaperTotalExposure = 200, MaxPaperOpenPerHour = 2, MaxPaperPositionsTotal = 5, MaxPaperPositionsPerStrategy = 2 },
+            SingleMarketArb = new SingleMarketArbOptions { MaxNotionalPerTrade = 25 },
+            VerifiedBasketArb = new VerifiedBasketArbOptions { MaxNotionalPerTrade = 25 }
+        };
+        var execution = new ExecutionOptions { MaxNotionalPerTrade = 25, MaxNotionalPerBasket = 25, MaxOpenBasketPositions = 1, MaxExposurePerGroup = 25 };
+
+        var summary = PaperEffectiveRisk.Apply(options, execution);
+
+        Assert.Equal("TradingBot:PaperRisk", summary.Source);
+        Assert.True(summary.LegacyExecutionRiskIgnored);
+        Assert.Equal(50, execution.MaxNotionalPerTrade);
+        Assert.Equal(50, execution.MaxNotionalPerBasket);
+        Assert.Equal(50, options.SingleMarketArb.MaxNotionalPerTrade);
+        Assert.Equal(50, options.VerifiedBasketArb.MaxNotionalPerTrade);
+        Assert.False(PaperEffectiveRisk.IsPaperPhase2RiskStillPhase1(options, execution));
+    }
     [Fact]
     public async Task Invalid_token_is_quarantined_after_confirmed_single_token_400()
     {

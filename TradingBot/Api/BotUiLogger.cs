@@ -20,7 +20,7 @@ public class BotUiLogger(BotRuntimeState state, IHubContext<BotHub> hub) : IBotU
     private void Write(string level, string source, string message)
     {
         var log = new TerminalLogEntryDto(Guid.NewGuid().ToString("N"), DateTime.UtcNow, level, source, message, state.NextSeq());
-        state.AddLog(log);
+        if (!state.AddLog(log)) return;
         state.AddSignalREvent("terminalLogAdded");
         _ = hub.Clients.All.SendAsync("terminalLogAdded", log);
     }
