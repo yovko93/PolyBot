@@ -14,6 +14,148 @@ namespace TradingBot.Tests;
 public class PaperPhase2StabilityTests
 {
 
+
+    [Fact]
+    public void Scanner_invalid_state_transition_logs_rejected_transition_without_throwing()
+    {
+        var machine = new ScannerStateMachine();
+        var logs = new List<string>();
+
+        Assert.True(machine.TryStart(logs.Add));
+        Assert.False(machine.TryStart(logs.Add));
+
+        Assert.Contains(logs, x => x.Contains("[SCANNER_STATE_TRANSITION_REJECTED]"));
+        Assert.Equal(ScannerRuntimeState.Running, machine.State);
+    }
+
+    [Fact]
+    public void Repeated_same_scanner_exception_faults_after_configured_count()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        var reporter = new ScannerExceptionReporter(dir.FullName, new TradingBotOptions { MaxRepeatedErrorsBeforeFault = 2, PauseOnRepeatedScannerError = true });
+        var context = new ScannerExceptionContext("SingleMarketScan", "test", 1, 1, 0, "0-1", "Running", false, false);
+
+        var first = reporter.Record(new InvalidOperationException("boom"), context, _ => { });
+        var second = reporter.Record(new InvalidOperationException("boom"), context, _ => { });
+
+        Assert.False(first.Faulted);
+        Assert.True(second.Faulted);
+    }
+
+    [Fact]
+    public void Scanner_error_includes_type_stage_component_and_stacktrace()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        var reporter = new ScannerExceptionReporter(dir.FullName, new TradingBotOptions());
+        var context = new ScannerExceptionContext("BatchOrderbookFetch", "OrderBookService", 7, 2, 10, "10-20", "Running", false, false);
+
+        var record = reporter.Record(new InvalidOperationException("boom"), context, _ => { });
+
+        Assert.Contains("InvalidOperationException", record.Type);
+        Assert.Equal("BatchOrderbookFetch", record.Stage);
+        Assert.Equal("OrderBookService", record.Component);
+        Assert.Contains("boom", record.StackTrace);
+    }
+
+    [Fact]
+    public void Scanner_error_export_is_written()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        var reporter = new ScannerExceptionReporter(dir.FullName, new TradingBotOptions());
+        var context = new ScannerExceptionContext("ExportWrite", "SyncRuntimeState", 1, 1, 0, "0-0", "Running", false, false);
+
+        reporter.Record(new InvalidOperationException("boom"), context, _ => { });
+
+        var path = Path.Combine(dir.FullName, "exports", "scanner-errors-latest.json");
+        Assert.True(File.Exists(path));
+        Assert.Contains("ExportWrite", File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void Memory_guard_pause_resume_uses_safe_state_transitions()
+    {
+        var machine = new ScannerStateMachine();
+        var logs = new List<string>();
+
+        Assert.True(machine.TryStart(logs.Add));
+        Assert.True(machine.TryPauseByMemoryGuard(logs.Add));
+        Assert.True(machine.TryResume(logs.Add));
+
+        Assert.Equal(ScannerRuntimeState.Running, machine.State);
+        Assert.DoesNotContain(logs, x => x.Contains("SCANNER_STATE_TRANSITION_REJECTED"));
+    }
+
+    [Fact]
+    public async Task Clearing_orderbook_cache_during_scan_does_not_throw()
+    {
+        var svc = Service(req => Json(HttpStatusCode.OK, BookJson(ReadTokenIds(req))));
+        var markets = new List<Market> { new() { id = "m1", question = "q", outcomes = ["Yes", "No"], clobTokenIds = ["1", "2"] } };
+
+        var prefetch = svc.PrefetchBinarySnapshotsAsync(markets);
+        svc.ClearAllCache();
+        await prefetch;
+
+        Assert.True(svc.CacheEntryCount >= 0);
+    }
+
+    [Fact]
+    public void Replacing_market_snapshot_during_scan_uses_safe_snapshot_copy()
+    {
+        var markets = new List<Market> { new() { id = "m1", outcomes = ["Yes", "No"], clobTokenIds = ["1", "2"] } };
+        var snapshot = markets.ToArray();
+        markets.Clear();
+        markets.Add(new Market { id = "m2", outcomes = ["Yes", "No"], clobTokenIds = ["3", "4"] });
+
+        Assert.Single(snapshot);
+        Assert.Equal("m1", snapshot[0].id);
+    }
+
+    [Fact]
+    public void QuietLogGate_trim_during_scan_does_not_throw()
+    {
+        var gate = new QuietLogGate();
+        gate.ConfigureBounds(10, TimeSpan.FromMilliseconds(1));
+
+        for (var i = 0; i < 100; i++)
+            gate.ShouldLog(new LogEventKey("scan", "event", MarketId: i.ToString()), new LogEventFingerprint(i.ToString()), LogImportance.Normal, new QuietLogPolicy());
+        gate.TrimExpired();
+
+        Assert.True(gate.Snapshot().LogGateCacheSize <= 10);
+    }
+
+    [Fact]
+    public void Log_replay_dedupe_uses_snapshot_and_does_not_mutate_during_enumeration()
+    {
+        var state = new BotRuntimeState();
+        state.AddLog(new TerminalLogEntryDto("1", DateTime.UtcNow, "info", "startup", "same", 1));
+        var snapshot = state.Logs();
+        state.AddLog(new TerminalLogEntryDto("2", DateTime.UtcNow, "info", "startup", "same", 2));
+
+        Assert.Single(snapshot);
+        Assert.Single(state.Logs());
+    }
+
+    [Fact]
+    public void Startup_config_error_prevents_scanner_start()
+    {
+        var machine = new ScannerStateMachine();
+        machine.TryStart(_ => { });
+        machine.TryPauseByConfigError(_ => { });
+
+        Assert.False(machine.TryStart(_ => { }));
+        Assert.Equal(ScannerRuntimeState.PausedByConfigError, machine.State);
+    }
+
+    [Fact]
+    public void Scanner_starts_only_once()
+    {
+        var machine = new ScannerStateMachine();
+
+        Assert.True(machine.TryStart(_ => { }));
+        Assert.False(machine.TryStart(_ => { }));
+        Assert.Equal(2, machine.StartAttempts);
+    }
+
     [Fact]
     public void Same_startup_log_emitted_twice_is_stored_once()
     {

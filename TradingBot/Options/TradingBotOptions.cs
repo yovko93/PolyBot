@@ -26,6 +26,10 @@ public class TradingBotOptions
     [Range(0.0, double.MaxValue)] public decimal MinVolume24h { get; set; } = 0m;
     public bool LogNoOpportunityCycles { get; set; } = false;
     public bool LogEmptyOpportunityCycles { get; set; } = false;
+    public int MaxRepeatedErrorsBeforeFault { get; set; } = 5;
+    public int ScanErrorBackoffSeconds { get; set; } = 30;
+    public int ScanErrorMaxBackoffSeconds { get; set; } = 300;
+    public bool PauseOnRepeatedScannerError { get; set; } = true;
     public bool LogExecutableRankingOnlyWhenNotEmpty { get; set; } = true;
     public bool LogDiscoveryPages { get; set; } = false;
     public bool LogDiscoverySummary { get; set; } = true;

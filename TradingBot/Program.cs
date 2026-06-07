@@ -325,6 +325,9 @@ _ = Task.Run(async () =>
 
 if (paperConfigError)
 {
+    var configErrorState = new ScannerStateMachine();
+    configErrorState.TryStart(Console.WriteLine);
+    configErrorState.TryPauseByConfigError(Console.WriteLine);
     await apiTask;
     return;
 }
@@ -337,6 +340,12 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var scannerInstanceId = Guid.NewGuid().ToString("N");
     var scannerStartedAt = DateTime.UtcNow;
     Console.WriteLine($"[SCANNER] Background scanner started InstanceId={scannerInstanceId}");
+    var scannerState = new ScannerStateMachine();
+    scannerState.TryStart(Console.WriteLine);
+    var scannerErrors = new ScannerExceptionReporter(contentRootPath, options);
+    var scannerStage = "Starting";
+    var scannerComponent = "Scanner";
+    void SetScannerStage(string stage, string component) { scannerStage = stage; scannerComponent = component; }
     using var http = new HttpClient();
     http.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0");
     http.Timeout = TimeSpan.FromSeconds(options.ExternalApiTimeoutSeconds);
@@ -460,23 +469,32 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     {
         var started = DateTime.UtcNow;
         string? lastError = null;
+        long singleMarketFullCycleId = 0;
+        var batchStartIndex = 0;
+        var batchEndIndex = 0;
         try
         {
+            SetScannerStage("MemoryGuard", "MemoryGuard");
             memoryGuard.Check(state, options, () => { orderbookService.ClearAllCache(); orderbookService.TrimAllBoundedStores(); quietLogGate.TrimExpired(); }, contentRootPath);
             state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);
             if (memoryGuard.ShouldSkipScannerCycle())
             {
+                scannerState.TryPauseByMemoryGuard(Console.WriteLine);
                 state.SetStatus(state.Status with { ScannerActive = false, LastScanTime = DateTime.UtcNow });
                 await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
                 continue;
             }
+            if (!state.Controls.IsPaused && scannerState.State != ScannerRuntimeState.Running) scannerState.TryResume(Console.WriteLine);
             uiLogger.LogInfo("scanner", "{\"event\":\"scan_start\",\"timestamp\":\"" + started.ToString("O") + "\"}");
             if (state.Controls.IsPaused)
             {
+                if (state.Controls.Reason == "MEMORY_CRITICAL") scannerState.TryPauseByMemoryGuard(Console.WriteLine);
+                if (state.Controls.Reason == "PAPER_CONFIG_ERROR") scannerState.TryPauseByConfigError(Console.WriteLine);
                 state.SetStatus(state.Status with { ScannerActive = false, LastScanTime = DateTime.UtcNow });
                 if (options.Caches.ClearOrderbookCacheAfterScan) orderbookService.ClearExpiredCache();
             state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);
             memoryGuard.Check(state, options, () => { orderbookService.ClearAllCache(); orderbookService.TrimAllBoundedStores(); quietLogGate.TrimExpired(); }, contentRootPath);
+            SetScannerStage("SignalRPublish", "PushUiUpdates");
             await PushUiUpdates(state, hub, uiLogger, options, verifiedExecution, contentRootPath);
                 uiLogger.LogInfo("scanner", "{\"event\":\"scan_skipped\",\"reason\":\"PAUSED\"}");
                 await Task.Delay(options.ScanIntervalMs, stoppingToken);
@@ -485,6 +503,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             monitor.BeginCycle();
             if (lastDiscoveryAt == default || DateTime.UtcNow - lastDiscoveryAt >= TimeSpan.FromMinutes(options.FullDiscoveryIntervalMinutes) || discoveredMarkets.Count == 0)
             {
+                SetScannerStage("Discovery", "MarketDataService");
                 discoveryStartedAt = DateTime.UtcNow;
                 var discovery = await marketService.GetMarketsAsync(options, stoppingToken);
                 discoveredMarkets = discovery.Markets.Where(m => m?.outcomes?.Count == 2 && m.clobTokenIds?.Count >= 2).Take(Math.Max(1, options.RuntimeMemory.MaxMarketCacheEntries)).ToList();
@@ -510,23 +529,26 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             var currentRollingOffsetBefore = rollingOffset;
             var filtered = BuildRollingBatch(scanPool, ref rollingOffset, batchSize, options);
             var currentRollingOffsetAfter = rollingOffset;
-            var batchStartIndex = filtered.Count == 0 ? 0 : currentRollingOffsetBefore;
-            var batchEndIndex = filtered.Count == 0 ? 0 : ((currentRollingOffsetBefore + filtered.Count - 1) % Math.Max(1, scanPool.Count));
+            batchStartIndex = filtered.Count == 0 ? 0 : currentRollingOffsetBefore;
+            batchEndIndex = filtered.Count == 0 ? 0 : ((currentRollingOffsetBefore + filtered.Count - 1) % Math.Max(1, scanPool.Count));
             var fullCoverageCompletedThisBatch = scanPool.Count > 0 && filtered.Count > 0 && (currentRollingOffsetAfter == 0 || currentRollingOffsetAfter < currentRollingOffsetBefore);
             if (fullCoverageCompletedThisBatch) fullCoverageCompletedCount++;
             cyclesCompletedSinceDiscovery++;
             totalMarketsScannedSinceStart += filtered.Count;
             scanId++;
-            var singleMarketFullCycleId = scanPool.Count == 0 ? scanId : (fullCoverageCompletedThisBatch ? fullCoverageCompletedCount : fullCoverageCompletedCount + 1);
+            singleMarketFullCycleId = scanPool.Count == 0 ? scanId : (fullCoverageCompletedThisBatch ? fullCoverageCompletedCount : fullCoverageCompletedCount + 1);
             var singleMarketFullCycleComplete = scanPool.Count > 0 && (options.Mode == "AllAtOnce" || currentRollingOffsetAfter == 0 || filtered.Count >= scanPool.Count || fullCoverageCompletedThisBatch);
             var orderbookSemaphore = new SemaphoreSlim(options.MaxConcurrentOrderbookRequests);
+            SetScannerStage("BatchOrderbookFetch", "OrderBookService");
             await orderbookService.PrefetchBinarySnapshotsAsync(filtered);
+            SetScannerStage("SingleMarketScan", "SingleMarketOrderBookArbEngine");
             var scanStats = await singleMarketArb.ScanAsync(filtered!, paper, orderbookSemaphore, singleMarketFullCycleId, singleMarketFullCycleComplete, suppressBatchDataQualitySummary: options.Diagnostics.OperationalQuietMode || !options.SingleMarketArb.LogBatchSummaries, ct: stoppingToken);
             var singleMarketFullSummary = singleMarketFullCycle.AddBatch(singleMarketFullCycleId, state.SingleMarketSnapshot.Summary, state.SingleMarketSnapshot.DataQualityRejectSamples);
             if (options.Diagnostics.OperationalQuietMode && singleMarketFullCycle.ShouldLog(singleMarketFullSummary, options.Logging, singleMarketFullCycleComplete, options.SingleMarketArb.LogCycleProgress))
                 Console.WriteLine(SingleMarketFullCycleSummaryAggregator.ToLogLine(singleMarketFullSummary));
 
             MultiOutcomeGroupArbEngine.MultiOutcomeScanReport multiOutcomeReport = new(0,0,0,0,0,0,0,0m,0m,0m,"","NotEvaluated",new Dictionary<string,int>(),Array.Empty<MultiOutcomeGroupArbEngine.RejectedSample>(),Array.Empty<MultiOutcomeGroupArbEngine.CandidateGroupReview>());
+            SetScannerStage("MultiCandidateScan", "MultiOutcomeGroupArbEngine");
             if (options.MultiOutcomeArbitrage.Enabled)
             {
                 var multiEngine = new MultiOutcomeGroupArbEngine(
@@ -878,6 +900,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     AllowlistRepairPatchPreview patchPreview;
                     try
                     {
+                        SetScannerStage("AllowlistRepair", "AllowlistRepairService");
                         options.AllowlistRepair.DiscoveryPartialDiagnosticsOnly = !lastDiscoverySummary.DiscoveryHealthy && lastDiscoverySummary.ActiveMarketsAvailable < options.MarketDiscovery.MinHealthyActiveMarkets;
                         var repairExports = allowlistRepairService.Export(repairReportPath, repairSuggestedPath, allowlistedGroups, resolved, verifiedPricingExport, boundedCandidates, options.AllowlistRepair, contentRootPath, options.Logging);
                         repairReport = repairExports.Report;
@@ -1270,9 +1293,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             t.classification,
                             t.recommendedConfigAction,
                             suggestionReason = t.classification == "NeedsPruning" ? "MissingNoAsk legs excluded" : t.reason,
-                            suggestedAllowlistTemplate = verifiedPricingExport.Select(x => System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(x)).RootElement)
-                                .Where(e => e.TryGetProperty("groupKey", out var gk) && gk.GetString() == t.groupKey)
-                                .Select(e => e.TryGetProperty("suggestedPrunedAllowlistTemplate", out var tpl) ? tpl : default)
+                            suggestedAllowlistTemplate = verifiedPricingExport
+                                .Select(x => System.Text.Json.Nodes.JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(x)) as System.Text.Json.Nodes.JsonObject)
+                                .Where(e => e is not null && e.TryGetPropertyValue("groupKey", out var gk) && gk?.GetValue<string>() == t.groupKey)
+                                .Select(e => e!.TryGetPropertyValue("suggestedPrunedAllowlistTemplate", out var tpl) ? tpl : null)
                                 .FirstOrDefault()
                         }).ToArray(),
                         keepEnabledGroups = triageRows.Where(x => x.recommendedConfigAction is "KeepEnabled" or "KeepForMonitoring").Select(x => x.groupKey).ToArray(),
@@ -1345,10 +1369,12 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 Console.WriteLine($"[SCAN] Id={scanId} Pool={scanPool.Count} Batch={batchSize} Range={batchStartIndex}-{batchEndIndex} NextOffset={currentRollingOffsetAfter} Coverage={coveragePercent:0.0}% Markets={filtered.Count} Tokens={filtered.Count*2} Books={scanStats.BookOk} BookCacheMisses={obStats.BookCacheMisses} BookCacheMissSample={missSample} Snapshots={filtered.Count} Candidates={scanStats.Candidates} Positive={scanStats.PositiveEdgeFound} Executable={scanStats.Executed} BestEdge={(scanStats.Candidates>0 && scanStats.BestEdgeSeen.HasValue ? scanStats.BestEdgeSeen.Value.ToString("0.####") : "N/A")} NearMiss={scanStats.NearMisses?.Count ?? 0} TopSkip={topSkipReason} FirstMarket={filtered.FirstOrDefault()?.id ?? "-"} LastMarket={filtered.LastOrDefault()?.id ?? "-"} DistinctMarketIds={distinctMarketIdsInBatch} DurationMs={(long)(DateTime.UtcNow - started).TotalMilliseconds}");
             }
             monitor.FlushCsv();
+            SetScannerStage("ExportWrite", "SyncRuntimeState");
             SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, filtered.Count, started, null, scanStats, filtering, lastDiscoverySummary, rollingOffset, options.ScanBatchSize, discoveredMarkets.Count, discoveryStartedAt, discoveryCompletedAt, emptyCycles, options.MarketScanLimit, effectiveMarketLimit, options.MaxMarketsToDiscover, options, poolLimitReason, multiOutcomeReport, contentRootPath);
             if (options.Caches.ClearOrderbookCacheAfterScan) orderbookService.ClearExpiredCache();
             state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);
             memoryGuard.Check(state, options, () => { orderbookService.ClearAllCache(); orderbookService.TrimAllBoundedStores(); quietLogGate.TrimExpired(); }, contentRootPath);
+            SetScannerStage("SignalRPublish", "PushUiUpdates");
             await PushUiUpdates(state, hub, uiLogger, options, verifiedExecution, contentRootPath);
             uiLogger.LogInfo("scanner", $"{{\"event\":\"scan_end\",\"durationMs\":{(long)(DateTime.UtcNow - started).TotalMilliseconds},\"marketsScanned\":{filtered.Count},\"detected\":{cycleTop.Count},\"executable\":{executableCount}}}");
         }
@@ -1359,10 +1385,33 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         catch (Exception ex)
         {
             lastError = ex.Message;
-            uiLogger.LogError("scanner", $"{{\"event\":\"scan_error\",\"message\":\"{ex.Message.Replace("\"", "'")}\"}}");
+            var errorContext = new ScannerExceptionContext(
+                scannerStage,
+                scannerComponent,
+                scanId,
+                singleMarketFullCycleId,
+                rollingOffset,
+                $"{batchStartIndex}-{batchEndIndex}",
+                scannerState.State.ToString(),
+                memoryGuard.IsScannerPausedByMemory,
+                stoppingToken.IsCancellationRequested);
+            var scannerError = scannerErrors.Record(ex, errorContext, Console.WriteLine);
+            uiLogger.LogError("scanner", $"{{\"event\":\"scan_error\",\"type\":\"{scannerError.Type}\",\"stage\":\"{scannerError.Stage}\",\"component\":\"{scannerError.Component}\",\"message\":\"{ex.Message.Replace("\"", "'")}\"}}");
+            if (scannerError.Faulted)
+            {
+                scannerState.TryFault(Console.WriteLine);
+                state.SetControls(state.Controls with { IsPaused = true, Reason = "SCANNER_FAULTED", UpdatedAtUtc = DateTime.UtcNow, Sequence = state.NextSeq() });
+                state.SetStatus(state.Status with { ScannerActive = false, LastScanTime = DateTime.UtcNow });
+                Console.WriteLine($"[SCANNER_FAULTED] Reason=RepeatedSameException Type={scannerError.Type} Count={scannerError.SameExceptionCount} Action=Paused");
+            }
+            SetScannerStage("ExportWrite", "SyncRuntimeState");
             SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, 0, started, lastError, new SingleMarketScanStats(0,0,0,0,0,0,0,0), filtering, lastDiscoverySummary, rollingOffset, options.ScanBatchSize, discoveredMarkets.Count, discoveryStartedAt, discoveryCompletedAt, emptyCycles, options.MarketScanLimit, 0, options.MaxMarketsToDiscover, options, "Error", new MultiOutcomeGroupArbEngine.MultiOutcomeScanReport(0,0,0,0,0,0,0,0m,0m,0m,string.Empty,"Error",new Dictionary<string,int>(),Array.Empty<MultiOutcomeGroupArbEngine.RejectedSample>(),Array.Empty<MultiOutcomeGroupArbEngine.CandidateGroupReview>()), contentRootPath);
+            var backoff = scannerErrors.NextBackoff(scannerError.Faulted);
+            await Task.Delay(backoff, stoppingToken);
+            if (scannerError.Faulted) continue;
         }
 
+        scannerErrors.ResetBackoff();
         await Task.Delay(options.ScanIntervalMs, stoppingToken);
     }
 }
