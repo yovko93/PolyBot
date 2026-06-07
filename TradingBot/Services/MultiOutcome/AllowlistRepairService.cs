@@ -1197,6 +1197,9 @@ public sealed class VerifiedAllowlistGroupHealthClassifier
 
         if (!resolvedOk)
         {
+            if (options.DiscoveryPartialDiagnosticsOnly)
+                return Result(cfg, AllowlistRepairHealthCategory.NeedsRefresh, AllowlistRepairRecommendedAction.NeedsManualReview, "Low", "DiscoveryPartial: active market discovery is below expected minimum; repair suggestions are diagnostics-only until full discovery recovers.", missingMarketIds, missingNoAskIds);
+
             var match = FindStableMatch(cfg, resolved, candidates, options);
             if (match.Match is not null)
             {

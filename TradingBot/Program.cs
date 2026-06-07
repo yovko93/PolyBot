@@ -243,6 +243,7 @@ var state = app.Services.GetRequiredService<BotRuntimeState>();
 var quietLogGate = app.Services.GetRequiredService<QuietLogGate>();
 var logger = app.Services.GetRequiredService<IBotUiLogger>();
 options = app.Services.GetRequiredService<IOptions<TradingBotOptions>>().Value;
+quietLogGate.ConfigureBounds(options.RuntimeMemory.MaxQuietLogGateEntries, TimeSpan.FromMinutes(options.RuntimeMemory.QuietLogGateTtlMinutes));
 
 Console.SetOut(new MultiTextWriter(originalOut, msg => logger.LogInfo("console", msg)));
 logger.LogSuccess("startup", $"Bot API listening on {listenUrl}");
@@ -285,7 +286,7 @@ _ = Task.Run(async () =>
             if (RuntimeHealthSnapshot.ShouldLogAt(DateTime.UtcNow, lastSoakStatusLoggedAt, options.RuntimeHealth.LogSoakStatusEveryMinutes))
             {
                 lastSoakStatusLoggedAt = DateTime.UtcNow;
-                Console.WriteLine(RuntimeHealthTrendTracker.ToSoakStatusLogLine(health, trend, options));
+                Console.WriteLine(RuntimeHealthTrendTracker.ToSoakStatusLogLine(health, trend, options, state));
             }
         }
 
@@ -328,8 +329,11 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
 
     var marketService = new MarketDataService(http);
     var orderbookService = new OrderBookService(http) { DisableSingleBookHttpFallback = true, LogPrefetchDetails = options.LogPrefetchDetails, LogBookCacheMissDetails = options.Logging.LogBookCacheMissDetails, BookCacheMissSampleSize = options.Logging.BookCacheMissSampleSize };
-    orderbookService.ConfigureCache(TimeSpan.FromSeconds(Math.Max(1, options.Caches.OrderbookCacheTtlSeconds)), options.Caches.MaxOrderbookCacheEntries);
+    orderbookService.ConfigureCache(TimeSpan.FromMinutes(Math.Max(1, options.RuntimeMemory.OrderbookCacheTtlMinutes)), Math.Min(options.Caches.MaxOrderbookCacheEntries, options.RuntimeMemory.MaxOrderbookCacheEntries));
     orderbookService.ConfigureBatchOptions(options.OrderBook, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate);
+    orderbookService.MaxInvalidTokenCacheEntries = Math.Max(1, options.RuntimeMemory.MaxInvalidTokenCacheEntries);
+    orderbookService.MaxBatchBookErrorSamples = Math.Max(1, options.RuntimeMemory.MaxBatchBookErrorSamples);
+    orderbookService.BatchBookErrorSampleTtl = TimeSpan.FromMinutes(Math.Max(1, options.RuntimeMemory.BatchBookErrorSampleTtlMinutes));
     var crossOptions = new CrossExchangeOptions();
     options.GetType();
     var feeOptions = new ExchangeFeesOptions();
@@ -444,7 +448,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         string? lastError = null;
         try
         {
-            memoryGuard.Check(state, options, () => orderbookService.ClearAllCache(), contentRootPath);
+            memoryGuard.Check(state, options, () => { orderbookService.ClearAllCache(); orderbookService.TrimAllBoundedStores(); quietLogGate.TrimExpired(); }, contentRootPath);
             state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);
             if (memoryGuard.ShouldSkipScannerCycle())
             {
@@ -458,7 +462,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 state.SetStatus(state.Status with { ScannerActive = false, LastScanTime = DateTime.UtcNow });
                 if (options.Caches.ClearOrderbookCacheAfterScan) orderbookService.ClearExpiredCache();
             state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);
-            memoryGuard.Check(state, options, () => orderbookService.ClearAllCache(), contentRootPath);
+            memoryGuard.Check(state, options, () => { orderbookService.ClearAllCache(); orderbookService.TrimAllBoundedStores(); quietLogGate.TrimExpired(); }, contentRootPath);
             await PushUiUpdates(state, hub, uiLogger, options, verifiedExecution, contentRootPath);
                 uiLogger.LogInfo("scanner", "{\"event\":\"scan_skipped\",\"reason\":\"PAUSED\"}");
                 await Task.Delay(options.ScanIntervalMs, stoppingToken);
@@ -469,14 +473,17 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             {
                 discoveryStartedAt = DateTime.UtcNow;
                 var discovery = await marketService.GetMarketsAsync(options, stoppingToken);
-                discoveredMarkets = discovery.Markets.Where(m => m?.outcomes?.Count == 2 && m.clobTokenIds?.Count >= 2).ToList();
+                discoveredMarkets = discovery.Markets.Where(m => m?.outcomes?.Count == 2 && m.clobTokenIds?.Count >= 2).Take(Math.Max(1, options.RuntimeMemory.MaxMarketCacheEntries)).ToList();
                 lastDiscoverySummary = discovery.Summary;
                 lastDiscoveryAt = DateTime.UtcNow;
                 discoveryCompletedAt = lastDiscoveryAt;
                 cyclesCompletedSinceDiscovery = 0;
                 if (options.LogPrefetchSummary)
                     Console.WriteLine($"[DISCOVERY] marketsDiscovered={lastDiscoverySummary.MarketsDiscovered}, pagesFetched={lastDiscoverySummary.PagesFetched}, duplicatesRemoved={lastDiscoverySummary.DuplicatesRemoved}, inactiveSkipped={lastDiscoverySummary.InactiveSkipped}, activeMarketsAvailable={lastDiscoverySummary.ActiveMarketsAvailable}, rawLoadedTotal={lastDiscoverySummary.RawLoadedTotal}, uniqueMarketsTotal={lastDiscoverySummary.UniqueMarketsTotal}, skippedClosed={lastDiscoverySummary.SkippedClosed}, skippedArchived={lastDiscoverySummary.SkippedArchived}, skippedMissingTokenIds={lastDiscoverySummary.SkippedMissingTokenIds}, skippedInvalidShape={lastDiscoverySummary.SkippedInvalidShape}");
-                Console.WriteLine(ScanLogSummaryService.DiscoveryHealth(lastDiscoverySummary, options.MarketDiscovery.MinHealthyActiveMarkets).ToLogLine());
+                var discoveryHealth = ScanLogSummaryService.DiscoveryHealth(lastDiscoverySummary, options.MarketDiscovery.MinHealthyActiveMarkets);
+                Console.WriteLine(discoveryHealth.ToLogLine());
+                if (discoveryHealth.Degraded)
+                    Console.WriteLine($"[DISCOVERY_DEGRADED_MODE] Reason=ActiveBelowExpectedMin Active={lastDiscoverySummary.ActiveMarketsAvailable} ExpectedMinActive={options.MarketDiscovery.MinHealthyActiveMarkets}");
             }
 
             var configuredPoolLimit = options.UseAllDiscoveredMarkets ? options.MaxMarketsInPool : (options.MaxMarketsInPool > 0 ? options.MaxMarketsInPool : options.MarketScanLimit);
@@ -857,6 +864,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     AllowlistRepairPatchPreview patchPreview;
                     try
                     {
+                        options.AllowlistRepair.DiscoveryPartialDiagnosticsOnly = !lastDiscoverySummary.DiscoveryHealthy && lastDiscoverySummary.ActiveMarketsAvailable < options.MarketDiscovery.MinHealthyActiveMarkets;
                         var repairExports = allowlistRepairService.Export(repairReportPath, repairSuggestedPath, allowlistedGroups, resolved, verifiedPricingExport, boundedCandidates, options.AllowlistRepair, contentRootPath, options.Logging);
                         repairReport = repairExports.Report;
                         patchPreview = allowlistRepairService.ExportPatchPreview(patchPreviewPath, patchedPreviewPath, patchedPreviewMetadataPath, repairReport, allowlistedGroups, contentRootPath).PatchPreview;
@@ -1326,7 +1334,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, filtered.Count, started, null, scanStats, filtering, lastDiscoverySummary, rollingOffset, options.ScanBatchSize, discoveredMarkets.Count, discoveryStartedAt, discoveryCompletedAt, emptyCycles, options.MarketScanLimit, effectiveMarketLimit, options.MaxMarketsToDiscover, options, poolLimitReason, multiOutcomeReport, contentRootPath);
             if (options.Caches.ClearOrderbookCacheAfterScan) orderbookService.ClearExpiredCache();
             state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);
-            memoryGuard.Check(state, options, () => orderbookService.ClearAllCache(), contentRootPath);
+            memoryGuard.Check(state, options, () => { orderbookService.ClearAllCache(); orderbookService.TrimAllBoundedStores(); quietLogGate.TrimExpired(); }, contentRootPath);
             await PushUiUpdates(state, hub, uiLogger, options, verifiedExecution, contentRootPath);
             uiLogger.LogInfo("scanner", $"{{\"event\":\"scan_end\",\"durationMs\":{(long)(DateTime.UtcNow - started).TotalMilliseconds},\"marketsScanned\":{filtered.Count},\"detected\":{cycleTop.Count},\"executable\":{executableCount}}}");
         }
@@ -1659,7 +1667,7 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
     state.SetPaperSettlementCounters(paper.SettlementRejects, paper.DuplicateSettlementSuppressions);
     var exportsRoot = Path.Combine(contentRootPath, "exports");
     PaperAccountExporter.ExportLatest(exportsRoot, paper, pb, state.SingleMarketExecutions(), paper.BlockedCountsByReason);
-    PaperOpportunityFunnelExporter.ExportLatest(exportsRoot, PaperOpportunityFunnelExporter.Build(options, state, scanStats, multiOutcomeReport, marketsScanned));
+    PaperOpportunityFunnelExporter.ExportLatest(exportsRoot, PaperOpportunityFunnelExporter.Build(options, state, scanStats, multiOutcomeReport, marketsScanned, !discovery.DiscoveryHealthy && discovery.ActiveMarketsAvailable < options.MarketDiscovery.MinHealthyActiveMarkets));
     state.AddEquity(new EquityPointDto(DateTime.UtcNow, paper.Equity, state.NextSeq()));
 }
 

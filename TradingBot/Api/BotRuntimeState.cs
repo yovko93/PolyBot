@@ -53,6 +53,10 @@ public class BotRuntimeState
     private int _paperDuplicateSettlementSuppressions;
     private readonly object _paperCountersGate = new();
     private readonly Dictionary<string, int> _paperPretradeRejectsByReason = new(StringComparer.OrdinalIgnoreCase);
+    private int _memoryWarnings;
+    private int _memoryCriticals;
+    private DateTime? _lastMemoryCriticalAt;
+    private bool _scannerPausedByMemoryGuard;
 
     private static void Trim<T>(ConcurrentQueue<T> q,int max){ var capped = Math.Max(0, max); while(q.Count>capped) q.TryDequeue(out _); }
     private void TrimAll()
@@ -104,6 +108,10 @@ public class BotRuntimeState
     public int PaperLifecycleEvents => PaperOpenEvents + PaperCloseEvents;
     public long LiveTradingBlockedCount => TradingBot.Services.LiveTradingGuard.BlockedCount;
     public int PaperExecutionsCount => Math.Max(PaperOpenEvents, SingleMarketExecutionsCount) + Volatile.Read(ref _paperExecutionsCount);
+    public int MemoryWarnings => Volatile.Read(ref _memoryWarnings);
+    public int MemoryCriticals => Volatile.Read(ref _memoryCriticals);
+    public DateTime? LastMemoryCriticalAt => _lastMemoryCriticalAt;
+    public bool ScannerPausedByMemoryGuard => _scannerPausedByMemoryGuard;
     public IReadOnlyDictionary<string, int> PaperPretradeRejectsByReason { get { lock (_paperCountersGate) return new Dictionary<string, int>(_paperPretradeRejectsByReason, StringComparer.OrdinalIgnoreCase); } }
     public long NextSeq()=>Interlocked.Increment(ref _seq);
     public void SetStatus(BotStatusDto s){lock(_gate) Status=s;}
@@ -155,6 +163,14 @@ public class BotRuntimeState
     public void AddUnresolvedDiagnostics(IEnumerable<object> items){foreach(var item in items.Take(_runtime.MaxUnresolvedDiagnostics)) _unresolvedDiagnostics.Enqueue(item); Trim(_unresolvedDiagnostics,_runtime.MaxUnresolvedDiagnostics);}
     public void SetQuietLogGateStats(QuietLogGateStats stats) => _quietLogGateStats = stats;
     public void SetOrderBookServiceStats(OrderBookServiceStats stats) => _orderBookServiceStats = stats;
+    public void RecordMemoryWarning() => Interlocked.Increment(ref _memoryWarnings);
+    public void RecordMemoryCritical(DateTime whenUtc, bool scannerPaused)
+    {
+        Interlocked.Increment(ref _memoryCriticals);
+        _lastMemoryCriticalAt = whenUtc;
+        _scannerPausedByMemoryGuard = scannerPaused;
+    }
+    public void SetScannerPausedByMemoryGuard(bool paused) => _scannerPausedByMemoryGuard = paused;
     public void RecordPaperPretradeReject(string reason)
     {
         Interlocked.Increment(ref _paperPretradeRejects);
@@ -207,7 +223,10 @@ public class BotRuntimeState
         ["paperClosedPositions"] = PaperClosedPositions,
         ["paperSettlements"] = PaperSettlements,
         ["paperSettlementRejects"] = PaperSettlementRejects,
-        ["paperDuplicateSettlementSuppressions"] = PaperDuplicateSettlementSuppressions
+        ["paperDuplicateSettlementSuppressions"] = PaperDuplicateSettlementSuppressions,
+        ["memoryWarnings"] = MemoryWarnings,
+        ["memoryCriticals"] = MemoryCriticals,
+        ["scannerPausedByMemoryGuard"] = ScannerPausedByMemoryGuard ? 1 : 0
     };
     public void ClearNonEssentialRuntimeState()
     {

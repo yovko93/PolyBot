@@ -14,5 +14,7 @@ public record OrderBookServiceStats(
     long BatchTimeouts = 0,
     long BatchRetrySuccesses = 0,
     long BatchInvalidTokens = 0,
-    long BatchSuppressedErrors = 0
+    long BatchSuppressedErrors = 0,
+    int QuarantinedTokens = 0,
+    int BatchBookErrorSampleCount = 0
 );

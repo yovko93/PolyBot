@@ -8,6 +8,7 @@ namespace TradingBot.Services;
 
 public sealed record PaperOpportunityFunnelSnapshot(
     DateTime Timestamp,
+    TimeSpan Uptime,
     int PaperPhase,
     int ScannedMarkets,
     int SingleMarketCandidates,
@@ -19,6 +20,9 @@ public sealed record PaperOpportunityFunnelSnapshot(
     int FillSimulationRejected,
     int DiagnosticsOnlyProfile,
     int ExperimentalPaperDisabled,
+    bool DiscoveryPartial,
+    int OrderbookUnavailable,
+    int InvalidTokenQuarantined,
     int RiskCapRejected,
     int DuplicateSuppressed,
     int PaperOpened,
@@ -34,7 +38,8 @@ public static class PaperOpportunityFunnelExporter
         BotRuntimeState state,
         SingleMarketScanStats singleMarketStats,
         MultiOutcomeGroupArbEngine.MultiOutcomeScanReport multiOutcomeReport,
-        int scannedMarkets)
+        int scannedMarkets,
+        bool discoveryPartial = false)
     {
         var single = state.SingleMarketSnapshot.Summary;
         var rejectCounts = Merge(single.RejectedByReason, multiOutcomeReport.RejectedByReason);
@@ -65,6 +70,7 @@ public static class PaperOpportunityFunnelExporter
 
         return new PaperOpportunityFunnelSnapshot(
             Timestamp: DateTime.UtcNow,
+            Uptime: RuntimeHealthSnapshot.From(state, options).Uptime,
             PaperPhase: options.TradingMode.PaperPhase,
             ScannedMarkets: scannedMarkets,
             SingleMarketCandidates: singleMarketStats.Candidates,
@@ -76,6 +82,9 @@ public static class PaperOpportunityFunnelExporter
             FillSimulationRejected: fillSimulationRejected,
             DiagnosticsOnlyProfile: diagnosticsOnlyProfile,
             ExperimentalPaperDisabled: experimentalPaperDisabled,
+            DiscoveryPartial: discoveryPartial,
+            OrderbookUnavailable: CountReasons(rejectCounts, "OrderbookUnavailable", "BookCacheMiss", "MissingOrderbook", "NoAsk", "MissingNoAsk"),
+            InvalidTokenQuarantined: state.OrderBookServiceStats.QuarantinedTokens,
             RiskCapRejected: riskCapRejected,
             DuplicateSuppressed: state.PaperDuplicateSuppressions,
             PaperOpened: state.PaperExecutionsCount,

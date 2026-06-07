@@ -58,6 +58,23 @@ public sealed class QuietLogGate
     private long _quietSuppressedTotal;
     private long _emittedLogs;
     private long _cappedSuppressions;
+    private int _maxEntries = 5000;
+    private TimeSpan _ttl = TimeSpan.FromMinutes(120);
+
+    public void ConfigureBounds(int maxEntries, TimeSpan ttl)
+    {
+        lock (_gate)
+        {
+            _maxEntries = Math.Max(1, maxEntries);
+            _ttl = ttl <= TimeSpan.Zero ? TimeSpan.FromMinutes(120) : ttl;
+            TrimLocked(DateTime.UtcNow);
+        }
+    }
+
+    public void TrimExpired()
+    {
+        lock (_gate) TrimLocked(DateTime.UtcNow);
+    }
 
     public bool ShouldLog(LogEventKey key, LogEventFingerprint fingerprint, LogImportance importance, QuietLogPolicy policy)
     {
@@ -86,6 +103,7 @@ public sealed class QuietLogGate
 
         lock (_gate)
         {
+            TrimLocked(now);
             if (!_states.TryGetValue(stateKey, out var state))
             {
                 state = new QuietLogState();
@@ -93,6 +111,7 @@ public sealed class QuietLogGate
             }
 
             state.Cycles++;
+            state.LastTouchedAtUtc = now;
             var first = state.Cycles == 1;
             var changed = !string.Equals(state.LastComparisonHash, comparisonHash, StringComparison.OrdinalIgnoreCase);
             var stableChanged = !string.Equals(state.LastStableHash, fingerprint.StableHash, StringComparison.OrdinalIgnoreCase);
@@ -139,6 +158,7 @@ public sealed class QuietLogGate
     {
         lock (_gate)
         {
+            TrimLocked(DateTime.UtcNow);
             return new QuietLogGateStats(
                 _quietSuppressedTotal,
                 _emittedLogs,
@@ -146,6 +166,26 @@ public sealed class QuietLogGate
                 new Dictionary<string, long>(_emittedByCategory, StringComparer.OrdinalIgnoreCase),
                 _states.Count + _hourly.Count,
                 _cappedSuppressions);
+        }
+    }
+
+
+    private void TrimLocked(DateTime now)
+    {
+        var cutoff = now - _ttl;
+        foreach (var key in _states.Where(x => x.Value.LastTouchedAtUtc < cutoff).Select(x => x.Key).ToList())
+            _states.Remove(key);
+        foreach (var key in _hourly.Where(x => x.Value.WindowStartUtc < cutoff).Select(x => x.Key).ToList())
+            _hourly.Remove(key);
+        while (_states.Count + _hourly.Count > _maxEntries && _states.Count > 0)
+        {
+            var oldest = _states.OrderBy(x => x.Value.LastTouchedAtUtc).First().Key;
+            _states.Remove(oldest);
+        }
+        while (_states.Count + _hourly.Count > _maxEntries && _hourly.Count > 0)
+        {
+            var oldest = _hourly.OrderBy(x => x.Value.WindowStartUtc).First().Key;
+            _hourly.Remove(oldest);
         }
     }
 
@@ -175,6 +215,7 @@ public sealed class QuietLogGate
     private sealed class QuietLogState
     {
         public int Cycles { get; set; }
+        public DateTime LastTouchedAtUtc { get; set; } = DateTime.UtcNow;
         public string LastStableHash { get; set; } = string.Empty;
         public string LastComparisonHash { get; set; } = string.Empty;
         public DateTime LastEmittedAtUtc { get; set; } = DateTime.MinValue;
