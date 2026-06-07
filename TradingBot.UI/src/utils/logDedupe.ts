@@ -23,16 +23,37 @@ export const isCriticalLog = (log: LogLike): boolean => {
   return level === 'error' || message.includes('[MEMORY_CRITICAL]') || message.includes('[PAPER_CONFIG_ERROR]');
 };
 
+const normalizeLogCategory = (log: LogLike): string => {
+  const message = log.message ?? '';
+  if (message.startsWith('[CONFIG]')
+    || message.startsWith('[DIAGNOSTICS]')
+    || message.startsWith('[SOAK_READINESS]')
+    || message.startsWith('[COST_PROFILE')
+    || message.startsWith('[PAPER_MODE')
+    || message.startsWith('[PAPER_EFFECTIVE_RISK]')
+    || message.includes('Bot API listening')
+    || message.includes('ExecutionMode=')) return 'startup-config';
+  return log.source ?? '';
+};
+
 export const logDedupeKey = (log: LogLike): string => {
+  if (log.id) return `id:${log.id}`;
   const timestampMs = Date.parse(log.timestamp ?? '') || Date.now();
   const bucket = Math.floor(timestampMs / LOG_DEDUPE_TTL_MS);
-  return `${bucket}|${log.source ?? ''}|${hashString(log.message ?? '')}`;
+  return `${bucket}|${normalizeLogCategory(log)}|${hashString(log.message ?? '')}`;
+};
+
+export const logContentDedupeKey = (log: LogLike): string => {
+  const timestampMs = Date.parse(log.timestamp ?? '') || Date.now();
+  const bucket = Math.floor(timestampMs / LOG_DEDUPE_TTL_MS);
+  return `${bucket}|${normalizeLogCategory(log)}|${hashString(log.message ?? '')}`;
 };
 
 export const addLogDeduped = <T extends LogLike>(current: T[], next: T, max: number): T[] => {
   if (!isCriticalLog(next)) {
-    const key = logDedupeKey(next);
-    if (current.some((item) => !isCriticalLog(item) && logDedupeKey(item) === key)) return current;
+    const idKey = next.id ? logDedupeKey(next) : undefined;
+    const contentKey = logContentDedupeKey(next);
+    if (current.some((item) => !isCriticalLog(item) && ((idKey && logDedupeKey(item) === idKey) || logContentDedupeKey(item) === contentKey))) return current;
   }
   return [next, ...current].slice(0, max);
 };
@@ -42,9 +63,11 @@ export const dedupeLogSnapshot = <T extends LogLike>(logs: T[], max: number): T[
   const deduped: T[] = [];
   for (const log of logs) {
     if (!isCriticalLog(log)) {
-      const key = logDedupeKey(log);
-      if (seen.has(key)) continue;
-      seen.add(key);
+      const idKey = log.id ? logDedupeKey(log) : undefined;
+      const contentKey = logContentDedupeKey(log);
+      if ((idKey && seen.has(idKey)) || seen.has(contentKey)) continue;
+      if (idKey) seen.add(idKey);
+      seen.add(contentKey);
     }
     deduped.push(log);
     if (deduped.length >= max) break;

@@ -1359,7 +1359,17 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 if (options.LogEmptyExecutableRanking && (options.LogEmptyOpportunityCycles || options.LogNoOpportunityCycles))
                     Console.WriteLine($"[SCAN] Markets={filtered.Count} Books={scanStats.BookOk} Candidates={scanStats.Candidates} Positive={scanStats.PositiveEdgeFound} Executable=0 BestEdge={(scanStats.Candidates>0 && scanStats.BestEdgeSeen.HasValue ? scanStats.BestEdgeSeen.Value.ToString("0.####") : "N/A")} NearMiss={scanStats.NearMisses?.Count ?? 0} DurationMs={(long)(DateTime.UtcNow - started).TotalMilliseconds}");
             }
-            if (options.LogCompactScanSummary && options.LogEveryScanCycle)
+            var shouldLogBatchScan = options.LogCompactScanSummary && ScanLogSummaryService.ShouldLogBatchScan(
+                options.Diagnostics.OperationalQuietMode,
+                options.LogEveryScanCycle,
+                options.Logging.LogBatchScanInQuietMode,
+                (int)Math.Min(int.MaxValue, scanId),
+                options.Logging.LogScanProgressEveryNBatches,
+                singleMarketFullCycleComplete,
+                fullCoverageCompletedThisBatch,
+                executableCount > 0 || state.PaperExecutionsCount > 0,
+                false);
+            if (shouldLogBatchScan)
             {
                 var coveragePercent = scanPool.Count == 0 ? 0 : Math.Min(100m, (decimal)Math.Min(scanPool.Count, cyclesCompletedSinceDiscovery * Math.Max(1, batchSize)) / scanPool.Count * 100m);
                 var estimatedCyclesToFullCoverage = batchSize == 0 ? 0 : (int)Math.Ceiling(scanPool.Count / (double)batchSize);

@@ -256,7 +256,7 @@ public class BotRuntimeState
         var now = DateTime.UtcNow;
         var cutoff = now - RecentLogDedupeTtl;
         var bucketTicks = log.Timestamp.ToUniversalTime().Ticks / RecentLogDedupeTtl.Ticks;
-        var key = $"{bucketTicks}|{log.Source}|{StableHash(log.Message)}";
+        var key = $"{bucketTicks}|{NormalizeLogCategory(log)}|{StableHash(log.Message)}";
         lock (_gate)
         {
             foreach (var stale in _recentLogDedupe.Where(x => x.Value < cutoff).Select(x => x.Key).ToArray())
@@ -265,6 +265,21 @@ public class BotRuntimeState
             _recentLogDedupe[key] = now;
             return false;
         }
+    }
+
+    private static string NormalizeLogCategory(TerminalLogEntryDto log)
+    {
+        var message = log.Message ?? string.Empty;
+        if (message.StartsWith("[CONFIG]", StringComparison.OrdinalIgnoreCase)
+            || message.StartsWith("[DIAGNOSTICS]", StringComparison.OrdinalIgnoreCase)
+            || message.StartsWith("[SOAK_READINESS]", StringComparison.OrdinalIgnoreCase)
+            || message.StartsWith("[COST_PROFILE", StringComparison.OrdinalIgnoreCase)
+            || message.StartsWith("[PAPER_MODE", StringComparison.OrdinalIgnoreCase)
+            || message.StartsWith("[PAPER_EFFECTIVE_RISK]", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("Bot API listening", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("ExecutionMode=", StringComparison.OrdinalIgnoreCase))
+            return "startup-config";
+        return log.Source ?? string.Empty;
     }
 
     private static bool IsCriticalLog(TerminalLogEntryDto log)

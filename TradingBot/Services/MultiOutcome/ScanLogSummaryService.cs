@@ -52,6 +52,16 @@ public sealed record AllowlistConfigValidationSummary(int Total, int UniqueGroup
 
 public static class ScanLogSummaryService
 {
+    public static bool ShouldLogBatchScan(bool operationalQuietMode, bool logEveryScanCycle, bool logBatchScanInQuietMode, int scanId, int everyNBatches, bool fullCycleComplete, bool materialStateChange, bool hasExecutableOrPaperEvent, bool hasError)
+    {
+        if (!logEveryScanCycle) return false;
+        if (hasError || hasExecutableOrPaperEvent || materialStateChange) return true;
+        if (!operationalQuietMode || logBatchScanInQuietMode) return true;
+        if (scanId <= 1 || fullCycleComplete) return true;
+        var every = Math.Max(1, everyNBatches);
+        return scanId % every == 0;
+    }
+
     public static DiscoveryHealthSummary DiscoveryHealth(MarketDiscoverySummary summary, int expectedMinActive)
     {
         var healthy = summary.ActiveMarketsAvailable >= expectedMinActive && string.IsNullOrWhiteSpace(summary.LastDiscoveryError);

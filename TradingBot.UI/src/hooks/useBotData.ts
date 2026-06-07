@@ -18,7 +18,7 @@ export function useBotData() {
   const seenEvents = useRef(new Set<string>());
 
   useEffect(() => {
-    const ac = new AbortController(); let cleanup = () => {};
+    const ac = new AbortController(); let cleanup = () => {}; let disposed = false;
     const go = async () => {
       try {
         const healthy = await getBotHealth(ac.signal);
@@ -27,7 +27,7 @@ export function useBotData() {
         setStatus(s); setSingleMarketArbs(sma); setSingleMarketPaperExecutions(smx); setPaperAccount(pa); setPaperSettlements(ps); setMultiOutcomeDiagnostics(md); setVerifiedBasketScreener(vbs); setExecutionAudit(keepLatest(ea, UIDataLimits.MaxAuditRows)); setDryRunOrderPlans(keepLatest(drp, UIDataLimits.MaxDiagnosticsRows)); setAllowlistRepairReport(trimRepairReport(arr)); setOpps(keepLatest(o, UIDataLimits.MaxOpportunities)); setPositions(p); setTrades(keepLatest(t, UIDataLimits.MaxTradeLogRows)); setScanner(sc); setRisk(r); setLogs(dedupeLogSnapshot(keepLatest(l, UIDataLimits.MaxRecentLogs), UIDataLimits.MaxRecentLogs)); setEquity(keepLatest(eq, UIDataLimits.MaxChartPoints)); setControls(c); setConnectionStatus(healthy ? 'CONNECTED' : 'DEGRADED'); setSource('SNAPSHOT'); setLastUpdated(new Date().toISOString());
       } catch (e: any) { setLastRestError(String(e)); setConnectionStatus('DISCONNECTED'); }
 
-      cleanup = await subscribeToBotEvents({
+      const subscriptionCleanup = await subscribeToBotEvents({
         onStatus: (d) => { setLastEvent('botStatusUpdated'); setStatus(d); setLastUpdated(new Date().toISOString()); },
         onOpportunities: (d) => { setLastEvent('opportunitiesUpdated'); setOpps(keepLatest(d, UIDataLimits.MaxOpportunities)); setLastUpdated(new Date().toISOString()); },
         onOpportunityDetected: (d) => { setLastEvent('opportunityDetected'); setOpps((x: any[]) => keepLatest([d, ...x.filter(y => y.id !== d.id)], UIDataLimits.MaxOpportunities)); setLastUpdated(new Date().toISOString()); },
@@ -44,10 +44,12 @@ export function useBotData() {
         onSingleMarketPaperExecutions: (d) => setSingleMarketPaperExecutions(d),
         onPaperAccount: (d) => setPaperAccount(d)
       });
+      if (disposed) subscriptionCleanup();
+      else cleanup = subscriptionCleanup;
     };
 
     void go();
-    return () => { ac.abort(); cleanup(); };
+    return () => { disposed = true; ac.abort(); cleanup(); };
   }, []);
 
   const trimRepairReport = (report: any) => report && Array.isArray(report.groups) ? { ...report, groups: keepLatest(report.groups, UIDataLimits.MaxRepairRows), repairSuggestions: keepLatest(report.repairSuggestions ?? [], UIDataLimits.MaxRepairRows) } : report;

@@ -15,6 +15,29 @@ public class PaperPhase2StabilityTests
 {
 
 
+
+    [Fact]
+    public void Same_startup_config_line_from_console_and_startup_sources_is_stored_once()
+    {
+        var state = new BotRuntimeState();
+        var timestamp = DateTime.UtcNow;
+        var startup = new TerminalLogEntryDto("1", timestamp, "info", "startup", "[CONFIG] Scanner Mode=AllPaginatedRolling", 1);
+        var console = new TerminalLogEntryDto("2", timestamp, "info", "console", "[CONFIG] Scanner Mode=AllPaginatedRolling", 2);
+
+        Assert.True(state.AddLog(startup));
+        Assert.False(state.AddLog(console));
+        Assert.Single(state.Logs());
+    }
+
+    [Fact]
+    public void Quiet_mode_batch_scan_logs_are_throttled()
+    {
+        Assert.True(ScanLogSummaryService.ShouldLogBatchScan(true, true, false, scanId: 1, everyNBatches: 25, fullCycleComplete: false, materialStateChange: false, hasExecutableOrPaperEvent: false, hasError: false));
+        Assert.False(ScanLogSummaryService.ShouldLogBatchScan(true, true, false, scanId: 2, everyNBatches: 25, fullCycleComplete: false, materialStateChange: false, hasExecutableOrPaperEvent: false, hasError: false));
+        Assert.True(ScanLogSummaryService.ShouldLogBatchScan(true, true, false, scanId: 25, everyNBatches: 25, fullCycleComplete: false, materialStateChange: false, hasExecutableOrPaperEvent: false, hasError: false));
+        Assert.True(ScanLogSummaryService.ShouldLogBatchScan(true, true, false, scanId: 2, everyNBatches: 25, fullCycleComplete: false, materialStateChange: false, hasExecutableOrPaperEvent: true, hasError: false));
+    }
+
     [Fact]
     public void Scanner_invalid_state_transition_logs_rejected_transition_without_throwing()
     {
