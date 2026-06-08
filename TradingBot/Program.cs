@@ -351,6 +351,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var scannerSummaryMarketsScanned = 0L;
     var scannerSummaryDurationMs = 0L;
     var scannerSummaryErrors = 0L;
+    var scannerSummaryPositive = 0L;
     var scannerSummaryExecutable = 0L;
     var scannerSummaryPaperOpened = 0L;
     bool ShouldLogScannerChannel(string eventName, string stableHash, LogImportance importance = LogImportance.Normal)
@@ -980,7 +981,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var repairLogEveryNCycles = options.Logging.SuppressRepeatedRepairSnapshotLogs && !options.Diagnostics.DebuggerSafeMode ? 0 : options.Logging.LogAllowlistRepairEveryNCycles;
                     var repairSuggestionEveryNCycles = options.Logging.SuppressRepeatedRepairSnapshotLogs && !options.Diagnostics.DebuggerSafeMode ? 0 : options.Logging.LogRepairSuggestionsEveryNCycles;
                     var repairSnapshotFingerprint = options.Logging.SuppressRepeatedRepairSnapshotLogs
-                        ? repairReport.SnapshotId
+                        ? $"{repairReport.Snapshot.CandidateGroupsCount}|{repairReport.Snapshot.VerifiedGroupsCount}|{repairReport.Snapshot.Source}"
                         : $"{repairReport.SnapshotId}|{repairReport.Snapshot.CandidateGroupsCount}|{repairReport.Snapshot.VerifiedGroupsCount}|{repairReport.Snapshot.Source}";
                     if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_SNAPSHOT", repairSnapshotFingerprint, LogImportance.Normal, everyNCycles: repairLogEveryNCycles))
                         Console.WriteLine($"[ALLOWLIST_REPAIR_SNAPSHOT] Id={repairReport.SnapshotId} CandidateGroups={repairReport.Snapshot.CandidateGroupsCount} VerifiedGroups={repairReport.Snapshot.VerifiedGroupsCount} Source={repairReport.Snapshot.Source}");
@@ -1079,7 +1080,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         }
                         if (isRepairAction && (repair.ConsecutiveMatchMisses > 0 || repair.RecommendedAction == "NeedsManualReview" || repair.RecommendedAction == "DisableMissingMarkets"))
                         {
-                            var noMatchFingerprint = $"{repair.RepairSnapshotId}|{repair.GroupKey}|{repair.RecommendedAction}|{repair.Reason}|{repair.ConsecutiveMatchMisses}";
+                            var noMatchFingerprint = options.Diagnostics.OperationalQuietMode
+                                ? $"{repair.GroupKey}|{repair.RecommendedAction}|{repair.Reason}|{repair.ConsecutiveMatchMisses}"
+                                : $"{repair.RepairSnapshotId}|{repair.GroupKey}|{repair.RecommendedAction}|{repair.Reason}|{repair.ConsecutiveMatchMisses}";
                             if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_NO_MATCH", noMatchFingerprint, LogImportance.Normal, groupKey: repair.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: options.Logging.MaxRepairSuggestionLogsPerHour))
                                 Console.WriteLine($"[ALLOWLIST_REPAIR_NO_MATCH] Group={repair.GroupKey} ConsecutiveMisses={repair.ConsecutiveMatchMisses} RequiredForDowngrade={options.AllowlistRepair.MatchFailureDowngradeCycles}");
                         }
@@ -1383,7 +1386,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             else
             {
                 emptyCycles++;
-                if (options.LogEmptyExecutableRanking && (options.LogEmptyOpportunityCycles || options.LogNoOpportunityCycles))
+                if (!options.Diagnostics.OperationalQuietMode && options.LogEmptyExecutableRanking && (options.LogEmptyOpportunityCycles || options.LogNoOpportunityCycles))
                     Console.WriteLine($"[SCAN] Markets={filtered.Count} Books={scanStats.BookOk} Candidates={scanStats.Candidates} Positive={scanStats.PositiveEdgeFound} Executable=0 BestEdge={(scanStats.Candidates>0 && scanStats.BestEdgeSeen.HasValue ? scanStats.BestEdgeSeen.Value.ToString("0.####") : "N/A")} NearMiss={scanStats.NearMisses?.Count ?? 0} DurationMs={(long)(DateTime.UtcNow - started).TotalMilliseconds}");
             }
             var shouldLogBatchScan = options.LogCompactScanSummary && ScanLogSummaryService.ShouldLogBatchScan(
@@ -1394,7 +1397,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 options.Logging.LogScanProgressEveryNBatches,
                 singleMarketFullCycleComplete,
                 fullCoverageCompletedThisBatch,
-                executableCount > 0 || state.PaperExecutionsCount > 0,
+                executableCount > 0,
                 false);
             if (shouldLogBatchScan)
             {
@@ -1418,23 +1421,25 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             scannerSummaryBatches++;
             scannerSummaryMarketsScanned += filtered.Count;
             scannerSummaryDurationMs += scanDurationMs;
+            scannerSummaryPositive += scanStats.PositiveEdgeFound;
             scannerSummaryExecutable += executableCount;
             scannerSummaryPaperOpened += paperOpenedThisScan;
             var scannerLifecycleImportance = executableCount > 0 || paperOpenedThisScan > 0 ? LogImportance.Critical : LogImportance.Normal;
             if (ShouldLogScannerChannel("scan_end", $"scan_end|executable:{executableCount > 0}|paper:{paperOpenedThisScan > 0}", scannerLifecycleImportance))
                 uiLogger.LogInfo("scanner", $"{{\"event\":\"scan_end\",\"durationMs\":{scanDurationMs},\"marketsScanned\":{filtered.Count},\"detected\":{cycleTop.Count},\"executable\":{executableCount}}}");
             var summaryNow = DateTime.UtcNow;
-            if (ScanLogSummaryService.ShouldEmitScannerSummary(summaryNow, lastScannerSummaryAt, options.Logging.LogScannerSummaryEveryMinutes))
+            if (ScanLogSummaryService.ShouldEmitScannerSummary(summaryNow, lastScannerSummaryAt, options.Logging.LogScannerSummaryEveryMinutes, fullCoverageCompletedThisBatch, false, paperOpenedThisScan > 0))
             {
                 var avgBatchMs = scannerSummaryBatches == 0 ? 0 : scannerSummaryDurationMs / scannerSummaryBatches;
                 var uptime = summaryNow - scannerStartedAt;
                 var uptimeText = uptime.ToString(@"dd\.hh\:mm\:ss");
-                Console.WriteLine($"[SCANNER_SUMMARY] Uptime={uptimeText} ScanId={scanId} Pool={scanPool.Count} Offset={rollingOffset} CyclesCompleted={cyclesCompletedSinceDiscovery} Batches={scannerSummaryBatches} MarketsScanned={scannerSummaryMarketsScanned} AvgBatchMs={avgBatchMs} Errors={scannerSummaryErrors} Executable={scannerSummaryExecutable} PaperOpened={scannerSummaryPaperOpened}");
+                Console.WriteLine($"[SCANNER_SUMMARY] Uptime={uptimeText} ScanId={scanId} Pool={scanPool.Count} Offset={rollingOffset} CyclesCompleted={cyclesCompletedSinceDiscovery} Batches={scannerSummaryBatches} MarketsScanned={scannerSummaryMarketsScanned} AvgBatchMs={avgBatchMs} Errors={scannerSummaryErrors} Positive={scannerSummaryPositive} Executable={scannerSummaryExecutable} PaperOpened={scannerSummaryPaperOpened}");
                 lastScannerSummaryAt = summaryNow;
                 scannerSummaryBatches = 0;
                 scannerSummaryMarketsScanned = 0;
                 scannerSummaryDurationMs = 0;
                 scannerSummaryErrors = 0;
+                scannerSummaryPositive = 0;
                 scannerSummaryExecutable = 0;
                 scannerSummaryPaperOpened = 0;
             }
@@ -1446,6 +1451,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         catch (Exception ex)
         {
             scannerSummaryErrors++;
+            var errorSummaryNow = DateTime.UtcNow;
+            var errorUptimeText = (errorSummaryNow - scannerStartedAt).ToString(@"dd\.hh\:mm\:ss");
+            Console.WriteLine($"[SCANNER_SUMMARY] Reason=Error Uptime={errorUptimeText} ScanId={scanId} Pool={discoveredMarkets.Count} Offset={rollingOffset} CyclesCompleted={cyclesCompletedSinceDiscovery} Batches={scannerSummaryBatches} MarketsScanned={scannerSummaryMarketsScanned} AvgBatchMs={(scannerSummaryBatches == 0 ? 0 : scannerSummaryDurationMs / scannerSummaryBatches)} Errors={scannerSummaryErrors} Positive={scannerSummaryPositive} Executable={scannerSummaryExecutable} PaperOpened={scannerSummaryPaperOpened}");
+            lastScannerSummaryAt = errorSummaryNow;
             lastError = ex.Message;
             var errorContext = new ScannerExceptionContext(
                 scannerStage,

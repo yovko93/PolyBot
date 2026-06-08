@@ -57,13 +57,16 @@ public static class ScanLogSummaryService
         if (!logEveryScanCycle) return false;
         if (hasError || hasExecutableOrPaperEvent || materialStateChange) return true;
         if (!operationalQuietMode || logBatchScanInQuietMode) return true;
-        if (scanId <= 1 || fullCycleComplete) return true;
-        var every = Math.Max(1, everyNBatches);
-        return scanId % every == 0;
+        // In quiet mode, [SCAN] is a first-batch/material-event diagnostic only. Full-cycle and
+        // periodic progress are emitted as compact [SCANNER_SUMMARY] lines instead.
+        return scanId <= 1;
     }
 
-    public static bool ShouldEmitScannerSummary(DateTime nowUtc, DateTime lastSummaryUtc, int everyMinutes)
-        => everyMinutes > 0 && (lastSummaryUtc == DateTime.MinValue || nowUtc - lastSummaryUtc >= TimeSpan.FromMinutes(everyMinutes));
+    public static bool ShouldEmitScannerSummary(DateTime nowUtc, DateTime lastSummaryUtc, int everyMinutes, bool fullCycleComplete = false, bool hasError = false, bool hasPaperOpen = false)
+        => fullCycleComplete
+            || hasError
+            || hasPaperOpen
+            || (everyMinutes > 0 && (lastSummaryUtc == DateTime.MinValue || nowUtc - lastSummaryUtc >= TimeSpan.FromMinutes(everyMinutes)));
 
     public static DiscoveryHealthSummary DiscoveryHealth(MarketDiscoverySummary summary, int expectedMinActive)
     {
@@ -147,7 +150,7 @@ public static class ScanLogSummaryService
     {
         var bucketSize = significantEdgeDelta <= 0m ? 0.005m : significantEdgeDelta;
         var edgeBucket = bestActiveNet.HasValue ? ((long)Math.Round(bestActiveNet.Value / bucketSize, MidpointRounding.AwayFromZero)).ToString() : "none";
-        return $"{VerifiedUnresolvedCategoryFingerprint(counts, groupSetFingerprint)}|activeExecutable:{Math.Max(0, activeExecutable)}|paperOpened:{Math.Max(0, paperOpened)}|bestActiveNetBucket:{edgeBucket}";
+        return $"unresolvedTotal:{counts.Total}|broken:{counts.BrokenConfig}|refresh:{counts.NeedsRefresh}|review:{counts.ReviewOnly}|monitor:{counts.MonitoringOnly}|other:{counts.Other}|groups:{groupSetFingerprint}|activeExecutable:{Math.Max(0, activeExecutable)}|paperOpened:{Math.Max(0, paperOpened)}|bestActiveNetBucket:{edgeBucket}";
     }
 
     public static string ProfileComparisonFingerprint(IReadOnlyList<VerifiedBasketScreener.ScreenResult> rows, decimal netDelta)

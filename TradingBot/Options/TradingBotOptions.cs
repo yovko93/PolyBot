@@ -308,7 +308,7 @@ public class MultiOutcomeLoggingOptions
     public bool LogVerifiedRankingOnChangeOnly { get; set; } = true;
     public bool LogScanConfigEachCycle { get; set; } = false;
     public bool LogBatchScanInQuietMode { get; set; } = false;
-    public int LogScanProgressEveryNBatches { get; set; } = 25;
+    public int LogScanProgressEveryNBatches { get; set; } = 100;
     public bool LogScannerStartEndInQuietMode { get; set; } = false;
     public int LogScannerSummaryEveryMinutes { get; set; } = 10;
     public bool LogVerifiedBasketDetailsOnChangeOnly { get; set; } = true;

@@ -34,7 +34,7 @@ public class PaperPhase2StabilityTests
     {
         Assert.True(ScanLogSummaryService.ShouldLogBatchScan(true, true, false, scanId: 1, everyNBatches: 25, fullCycleComplete: false, materialStateChange: false, hasExecutableOrPaperEvent: false, hasError: false));
         Assert.False(ScanLogSummaryService.ShouldLogBatchScan(true, true, false, scanId: 2, everyNBatches: 25, fullCycleComplete: false, materialStateChange: false, hasExecutableOrPaperEvent: false, hasError: false));
-        Assert.True(ScanLogSummaryService.ShouldLogBatchScan(true, true, false, scanId: 25, everyNBatches: 25, fullCycleComplete: false, materialStateChange: false, hasExecutableOrPaperEvent: false, hasError: false));
+        Assert.False(ScanLogSummaryService.ShouldLogBatchScan(true, true, false, scanId: 25, everyNBatches: 100, fullCycleComplete: false, materialStateChange: false, hasExecutableOrPaperEvent: false, hasError: false));
         Assert.True(ScanLogSummaryService.ShouldLogBatchScan(true, true, false, scanId: 2, everyNBatches: 25, fullCycleComplete: false, materialStateChange: false, hasExecutableOrPaperEvent: true, hasError: false));
     }
 
@@ -82,6 +82,21 @@ public class PaperPhase2StabilityTests
         Assert.True(ScanLogSummaryService.ShouldEmitScannerSummary(now, DateTime.MinValue, 10));
         Assert.False(ScanLogSummaryService.ShouldEmitScannerSummary(now.AddMinutes(9), now, 10));
         Assert.True(ScanLogSummaryService.ShouldEmitScannerSummary(now.AddMinutes(10), now, 10));
+    }
+
+    [Fact]
+    public void Scan_batch_log_is_suppressed_in_operational_quiet_mode()
+    {
+        Assert.False(ScanLogSummaryService.ShouldLogBatchScan(true, true, false, scanId: 35, everyNBatches: 100, fullCycleComplete: false, materialStateChange: false, hasExecutableOrPaperEvent: false, hasError: false));
+    }
+
+    [Fact]
+    public void Scan_full_cycle_summary_still_emits()
+    {
+        var now = DateTime.UtcNow;
+
+        Assert.False(ScanLogSummaryService.ShouldLogBatchScan(true, true, false, scanId: 35, everyNBatches: 100, fullCycleComplete: true, materialStateChange: false, hasExecutableOrPaperEvent: false, hasError: false));
+        Assert.True(ScanLogSummaryService.ShouldEmitScannerSummary(now, now, 10, fullCycleComplete: true));
     }
 
     [Fact]
@@ -133,6 +148,58 @@ public class PaperPhase2StabilityTests
         Assert.True(gate.ShouldLog(key, fingerprint, LogImportance.Normal, policy));
         Assert.False(gate.ShouldLog(key, fingerprint, LogImportance.Normal, policy));
         Assert.True(gate.Snapshot().QuietSuppressedByCategory.ContainsKey("scanner.lifecycle"));
+    }
+
+
+    [Fact]
+    public void Multi_verified_scan_unchanged_state_is_suppressed()
+    {
+        var gate = new QuietLogGate();
+        var policy = new QuietLogPolicy(OperationalQuietMode: true, EveryNCycles: 100, EveryMinutes: 10, SuppressRepeatedHash: true, MaxSameEventPerHour: 0, DebugEnabled: false);
+        var counts = new VerifiedUnresolvedCategoryCounts(Total: 3, BrokenConfig: 0, NeedsRefresh: 3, ReviewOnly: 0, MonitoringOnly: 0, Other: 0, SamplesShown: 1, Suppressed: 2);
+        var fingerprint = ScanLogSummaryService.MultiVerifiedScanQuietFingerprint(counts, "g1,g2,g3", activeExecutable: 0, paperOpened: 0, bestActiveNet: 0m);
+
+        Assert.True(gate.ShouldLog(new LogEventKey("multi-verified", "MULTI_VERIFIED_SCAN"), new LogEventFingerprint(fingerprint, fingerprint), LogImportance.Normal, policy));
+        Assert.False(gate.ShouldLog(new LogEventKey("multi-verified", "MULTI_VERIFIED_SCAN"), new LogEventFingerprint(fingerprint, fingerprint), LogImportance.Normal, policy));
+    }
+
+    [Fact]
+    public void Allowlist_repair_no_match_duplicate_hash_is_suppressed()
+    {
+        var gate = new QuietLogGate();
+        var policy = new QuietLogPolicy(OperationalQuietMode: true, EveryNCycles: 0, EveryMinutes: 0, SuppressRepeatedHash: true, MaxSameEventPerHour: 0, DebugEnabled: false);
+        var fingerprint = "group|NeedsManualReview|MissingMarkets|1";
+
+        Assert.True(gate.ShouldLog(new LogEventKey("allowlist-repair", "ALLOWLIST_REPAIR_NO_MATCH", GroupKey: "group"), new LogEventFingerprint(fingerprint, fingerprint), LogImportance.Normal, policy));
+        Assert.False(gate.ShouldLog(new LogEventKey("allowlist-repair", "ALLOWLIST_REPAIR_NO_MATCH", GroupKey: "group"), new LogEventFingerprint(fingerprint, fingerprint), LogImportance.Normal, policy));
+    }
+
+    [Fact]
+    public void Profile_comparison_unchanged_details_are_suppressed()
+    {
+        var gate = new QuietLogGate();
+        var policy = new QuietLogPolicy(OperationalQuietMode: true, EveryNCycles: 0, EveryMinutes: 0, SuppressRepeatedHash: true, MaxSameEventPerHour: 0, DebugEnabled: false);
+        var fingerprint = "group|class|active:1";
+
+        Assert.True(gate.ShouldLog(new LogEventKey("profile-comparison", "PROFILE_COMPARISON", GroupKey: "group"), new LogEventFingerprint(fingerprint, fingerprint), LogImportance.Normal, policy));
+        Assert.False(gate.ShouldLog(new LogEventKey("profile-comparison", "PROFILE_COMPARISON", GroupKey: "group"), new LogEventFingerprint(fingerprint, fingerprint), LogImportance.Normal, policy));
+    }
+
+    [Fact]
+    public void Ui_recent_logs_do_not_append_suppressed_scanner_lifecycle_events()
+    {
+        var gate = new QuietLogGate();
+        var state = new BotRuntimeState();
+        var policy = new QuietLogPolicy(OperationalQuietMode: true, EveryNCycles: int.MaxValue, EveryMinutes: 10, SuppressRepeatedHash: true, MaxSameEventPerHour: 0, DebugEnabled: false);
+        var key = new LogEventKey("scanner.lifecycle", "scan_start");
+        var fingerprint = new LogEventFingerprint("scan_start", "scan_start");
+
+        if (gate.ShouldLog(key, fingerprint, LogImportance.Normal, policy))
+            state.AddLog(new TerminalLogEntryDto("1", DateTime.UtcNow, "info", "scanner", "{\"event\":\"scan_start\"}", 1));
+        if (gate.ShouldLog(key, fingerprint, LogImportance.Normal, policy))
+            state.AddLog(new TerminalLogEntryDto("2", DateTime.UtcNow, "info", "scanner", "{\"event\":\"scan_start\"}", 2));
+
+        Assert.Single(state.Logs());
     }
 
     [Fact]
