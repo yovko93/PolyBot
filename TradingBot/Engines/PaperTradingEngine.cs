@@ -82,6 +82,8 @@ public class PaperTradingEngine
         _paperOpenTimesUtc.Add(now);
         var seconds = kind == PaperStrategyKind.SingleMarket ? _botOptions.SingleMarketArb.CooldownSecondsPerMarket : _botOptions.VerifiedBasketArb.CooldownSecondsPerGroup;
         _cooldownUntilByKey[marketOrGroup] = now.AddSeconds(Math.Max(0, seconds));
+        foreach (var expired in _cooldownUntilByKey.Where(x => x.Value <= now).Select(x => x.Key).ToArray())
+            _cooldownUntilByKey.Remove(expired);
     }
 
     private bool IsCooldownActive(string key)

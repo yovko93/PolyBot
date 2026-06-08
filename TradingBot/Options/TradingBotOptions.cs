@@ -26,6 +26,10 @@ public class TradingBotOptions
     [Range(0.0, double.MaxValue)] public decimal MinVolume24h { get; set; } = 0m;
     public bool LogNoOpportunityCycles { get; set; } = false;
     public bool LogEmptyOpportunityCycles { get; set; } = false;
+    public int MaxRepeatedErrorsBeforeFault { get; set; } = 5;
+    public int ScanErrorBackoffSeconds { get; set; } = 30;
+    public int ScanErrorMaxBackoffSeconds { get; set; } = 300;
+    public bool PauseOnRepeatedScannerError { get; set; } = true;
     public bool LogExecutableRankingOnlyWhenNotEmpty { get; set; } = true;
     public bool LogDiscoveryPages { get; set; } = false;
     public bool LogDiscoverySummary { get; set; } = true;
@@ -165,6 +169,10 @@ public class OrderBookOptions
     public bool SplitBatchOnBadRequest { get; set; } = true;
     public bool LogInvalidBatchPayloadSamples { get; set; } = true;
     public int MaxInvalidPayloadSamplesToLog { get; set; } = 5;
+    public int InvalidTokenQuarantineMinutes { get; set; } = 360;
+    public int MaxInvalidTokensPerCycle { get; set; } = 50;
+    public bool DropMarketsWithQuarantinedTokens { get; set; } = true;
+    public bool SkipQuarantinedTokensBeforeBatch { get; set; } = true;
 }
 public class MarketDiscoveryOptions
 {
@@ -299,6 +307,13 @@ public class MultiOutcomeLoggingOptions
     public bool LogVerifiedBasketRankingOnChangeOnly { get; set; } = true;
     public bool LogVerifiedRankingOnChangeOnly { get; set; } = true;
     public bool LogScanConfigEachCycle { get; set; } = false;
+    public bool LogBatchScanInQuietMode { get; set; } = false;
+    public int LogScanProgressEveryNBatches { get; set; } = 100;
+    public bool LogScannerStartEndInQuietMode { get; set; } = false;
+    public int LogScannerSummaryEveryMinutes { get; set; } = 10;
+    public bool LogScannerSummaryOnEveryFullCycle { get; set; } = false;
+    public bool LogScannerSummaryOnError { get; set; } = true;
+    public bool LogScannerSummaryOnPaperOpen { get; set; } = true;
     public bool LogVerifiedBasketDetailsOnChangeOnly { get; set; } = true;
     public int LogVerifiedBasketDetailsEveryNCycles { get; set; } = 50;
     public int LogProfileComparisonEveryNCycles { get; set; } = 100;
@@ -400,6 +415,7 @@ public class AllowlistRepairOptions
     public bool PreferStableCachedMatches { get; set; } = true;
     public bool UseLatestCandidateExportForRepair { get; set; } = true;
     public bool DiagnosticsOnlyDuringSoak { get; set; } = false;
+    public bool DiscoveryPartialDiagnosticsOnly { get; set; } = false;
     public int RequiredStableRepairSnapshots { get; set; } = 3;
     public bool QuarantineOnActionChange { get; set; } = true;
     public List<AllowlistRepairLockedGroupOptions> LockedGroups { get; set; } = new();
@@ -497,6 +513,7 @@ public class RuntimeHealthOptions
     public bool LogOnStartup { get; set; } = true;
     public int LogEveryMinutes { get; set; } = 2;
     public int SoakTrendWindowMinutes { get; set; } = 20;
+    public int WarmupMinutes { get; set; } = 20;
     public double StableMemorySlopeMbPerMinute { get; set; } = 5;
     public double StableMemoryMaxDeltaMb { get; set; } = 150;
     public int LogSoakStatusEveryMinutes { get; set; } = 10;
@@ -505,12 +522,26 @@ public class RuntimeHealthOptions
 public class RuntimeMemoryOptions
 {
     public int MaxProcessMemoryMb { get; set; } = 1200;
-    public int WarningProcessMemoryMb { get; set; } = 900;
+    public int WarningProcessMemoryMb { get; set; } = 1000;
     public int CriticalProcessMemoryMb { get; set; } = 1100;
+    public int ResumeBelowProcessMemoryMb { get; set; } = 850;
+    public int CriticalPauseSeconds { get; set; } = 60;
     public bool PauseScannerOnCriticalMemory { get; set; } = true;
     public bool ClearNonEssentialCachesOnCriticalMemory { get; set; } = true;
     public bool ForceGcOnCriticalMemory { get; set; } = true;
     public bool WriteMemorySnapshotOnCritical { get; set; } = true;
+
+    public int MaxQuietLogGateEntries { get; set; } = 5000;
+    public int QuietLogGateTtlMinutes { get; set; } = 120;
+    public int MaxInvalidTokenCacheEntries { get; set; } = 5000;
+    public int InvalidTokenTtlMinutes { get; set; } = 360;
+    public int MaxBatchBookErrorSamples { get; set; } = 100;
+    public int BatchBookErrorSampleTtlMinutes { get; set; } = 60;
+    public int MaxOrderbookCacheEntries { get; set; } = 3000;
+    public int OrderbookCacheTtlMinutes { get; set; } = 15;
+    public int MaxMarketCacheEntries { get; set; } = 10000;
+    public string MarketCacheRefreshMode { get; set; } = "ReplaceSnapshot";
+    public bool ClearCachesOnMemoryCritical { get; set; } = true;
 }
 
 public class CacheOptions

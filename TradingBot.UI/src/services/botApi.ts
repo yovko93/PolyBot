@@ -134,8 +134,9 @@ export const subscribeToBotEvents = async (handlers: BotEventHandlers): Promise<
   };
   const stopPolling = () => { if (polling) { clearInterval(polling); polling = null; activePollingIntervals = Math.max(0, activePollingIntervals - 1); memoryDiag.activePollingIntervals = activePollingIntervals; } };
 
-  hub.onState((s) => { handlers.onConnectionState(s); if (s === 'CONNECTED') { stopPolling(); } else { ensurePolling(); } });
+  const unsubscribeState = hub.onState((s) => { handlers.onConnectionState(s); if (s === 'CONNECTED') { stopPolling(); } else { ensurePolling(); } });
   const unsubs = [
+    unsubscribeState,
     hub.on('botStatusUpdated', (d) => handlers.onStatus(mapStatus(d))),
     hub.on('opportunitiesUpdated', (d) => handlers.onOpportunities(keepLatest(((d as any[]) ?? []).filter(shouldDisplayOpportunity).map(mapOpportunity), UIDataLimits.MaxOpportunities))),
     hub.on('opportunityDetected', (d) => { if (shouldDisplayOpportunity(d)) handlers.onOpportunityDetected(mapOpportunity(d)); }),

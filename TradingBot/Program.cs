@@ -243,6 +243,7 @@ var state = app.Services.GetRequiredService<BotRuntimeState>();
 var quietLogGate = app.Services.GetRequiredService<QuietLogGate>();
 var logger = app.Services.GetRequiredService<IBotUiLogger>();
 options = app.Services.GetRequiredService<IOptions<TradingBotOptions>>().Value;
+quietLogGate.ConfigureBounds(options.RuntimeMemory.MaxQuietLogGateEntries, TimeSpan.FromMinutes(options.RuntimeMemory.QuietLogGateTtlMinutes));
 
 Console.SetOut(new MultiTextWriter(originalOut, msg => logger.LogInfo("console", msg)));
 logger.LogSuccess("startup", $"Bot API listening on {listenUrl}");
@@ -254,8 +255,16 @@ Console.WriteLine($"[DIAGNOSTICS] OperationalQuietMode={options.Diagnostics.Oper
 Console.WriteLine($"[SOAK_READINESS] OperationalQuietMode={options.Diagnostics.OperationalQuietMode.ToString().ToLowerInvariant()} RuntimeHealth={options.RuntimeHealth.Enabled.ToString().ToLowerInvariant()} MemoryGuard=true BoundedCollections=true SignalRPayloadLimits={(options.SignalR.MaxPayloadItems > 0 && options.SignalR.MaxPayloadBytes > 0).ToString().ToLowerInvariant()} PaperOnly={options.PaperOnly.ToString().ToLowerInvariant()} LiveTrading={options.TradingMode.LiveTradingEnabled.ToString().ToLowerInvariant()} PaperTradingEnabled={options.TradingMode.PaperTradingEnabled.ToString().ToLowerInvariant()} PaperPhase={options.TradingMode.PaperPhase}");
 logger.LogInfo("startup", $"[CONFIG] MultiOutcome FeePerLeg={options.MultiOutcomeArbitrage.FeePerLeg} SlippagePerLeg={options.MultiOutcomeArbitrage.SlippageBufferPerLeg} SafetyPerGroup={options.MultiOutcomeArbitrage.SafetyBufferPerGroup} MinNetEdgePerBasket={options.MultiOutcomeArbitrage.MinMultiOutcomeEdge} MinExpectedProfit={options.MultiOutcomeArbitrage.MinExpectedProfit} EnableSensitivityDiagnostics={options.MultiOutcomeArbitrage.EnableSensitivityDiagnostics}");
 var executionCfg = app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value;
-logger.LogInfo("startup", $"[CONFIG] Execution PaperOnly={executionCfg.PaperOnly.ToString().ToLowerInvariant()} MaxNotionalPerBasket={executionCfg.MaxNotionalPerBasket} MaxOpenBasketPositions={executionCfg.MaxOpenBasketPositions} MaxExposurePerGroup={executionCfg.MaxExposurePerGroup} DuplicateCooldownMinutes={executionCfg.DuplicateCooldownMinutes}");
-logger.LogInfo("startup", $"[CONFIG] ExecutionRisk MaxNotionalPerBasket={executionCfg.MaxNotionalPerBasket} MaxNotionalPerTrade={executionCfg.MaxNotionalPerTrade} MinPlannedNotional={executionCfg.MinPlannedNotional} MinPlannedExpectedProfit={executionCfg.MinPlannedExpectedProfit} MinPlannedBasketQty={executionCfg.MinPlannedBasketQty}");
+var effectivePaperRisk = PaperEffectiveRisk.Apply(options, executionCfg);
+logger.LogInfo("startup", $"[PAPER_EFFECTIVE_RISK] PaperPhase={effectivePaperRisk.PaperPhase} Source={effectivePaperRisk.Source} MaxPaperNotionalPerTrade={effectivePaperRisk.MaxPaperNotionalPerTrade:0.####} MaxPaperTotalExposure={effectivePaperRisk.MaxPaperTotalExposure:0.####} MaxPaperOpenPerHour={effectivePaperRisk.MaxPaperOpenPerHour} MaxPaperPositionsTotal={effectivePaperRisk.MaxPaperPositionsTotal} MaxPaperPositionsPerStrategy={effectivePaperRisk.MaxPaperPositionsPerStrategy} SingleMarketMaxNotional={effectivePaperRisk.SingleMarketMaxNotional:0.####} VerifiedBasketMaxNotional={effectivePaperRisk.VerifiedBasketMaxNotional:0.####} LegacyExecutionRiskIgnored={effectivePaperRisk.LegacyExecutionRiskIgnored.ToString().ToLowerInvariant()}");
+logger.LogInfo("startup", $"[CONFIG] LegacyExecutionRisk PaperOnly={executionCfg.PaperOnly.ToString().ToLowerInvariant()} MaxNotionalPerBasket={executionCfg.MaxNotionalPerBasket} MaxOpenBasketPositions={executionCfg.MaxOpenBasketPositions} MaxExposurePerGroup={executionCfg.MaxExposurePerGroup} DuplicateCooldownMinutes={executionCfg.DuplicateCooldownMinutes} LegacyExecutionRiskIgnored={effectivePaperRisk.LegacyExecutionRiskIgnored.ToString().ToLowerInvariant()} EffectiveSyncedFromPaperRisk={effectivePaperRisk.SyncedFromPaperRisk.ToString().ToLowerInvariant()}");
+logger.LogInfo("startup", $"[CONFIG] ExecutionRiskDeprecated MaxNotionalPerBasket={executionCfg.MaxNotionalPerBasket} MaxNotionalPerTrade={executionCfg.MaxNotionalPerTrade} MinPlannedNotional={executionCfg.MinPlannedNotional} MinPlannedExpectedProfit={executionCfg.MinPlannedExpectedProfit} MinPlannedBasketQty={executionCfg.MinPlannedBasketQty} LegacyExecutionRiskIgnored={effectivePaperRisk.LegacyExecutionRiskIgnored.ToString().ToLowerInvariant()}");
+var paperConfigError = PaperEffectiveRisk.IsPaperPhase2RiskStillPhase1(options, executionCfg);
+if (paperConfigError)
+{
+    logger.LogError("startup", "[PAPER_CONFIG_ERROR] Reason=PaperPhase2ButExecutionRiskStillPhase1");
+    state.SetControls(state.Controls with { IsPaused = true, Reason = "PAPER_CONFIG_ERROR", UpdatedAtUtc = DateTime.UtcNow, Sequence = state.NextSeq() });
+}
 var activeProfileName = options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile;
 if (!options.MultiOutcomeArbitrage.CostProfiles.Profiles.TryGetValue(activeProfileName, out var activeProfileCfg)) activeProfileCfg = options.MultiOutcomeArbitrage.CostProfiles.Profiles["Conservative"];
 if (options.EnableLiveExecution && activeProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))
@@ -285,7 +294,7 @@ _ = Task.Run(async () =>
             if (RuntimeHealthSnapshot.ShouldLogAt(DateTime.UtcNow, lastSoakStatusLoggedAt, options.RuntimeHealth.LogSoakStatusEveryMinutes))
             {
                 lastSoakStatusLoggedAt = DateTime.UtcNow;
-                Console.WriteLine(RuntimeHealthTrendTracker.ToSoakStatusLogLine(health, trend, options));
+                Console.WriteLine(RuntimeHealthTrendTracker.ToSoakStatusLogLine(health, trend, options, state));
             }
         }
 
@@ -314,6 +323,15 @@ _ = Task.Run(async () =>
     }
 });
 
+if (paperConfigError)
+{
+    var configErrorState = new ScannerStateMachine();
+    configErrorState.TryStart(Console.WriteLine);
+    configErrorState.TryPauseByConfigError(Console.WriteLine);
+    await apiTask;
+    return;
+}
+
 await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>(), app.Services.GetRequiredService<VerifiedBasketDryRunOrderBuilder>(), app.Services.GetRequiredService<DryRunFillSimulator>(), app.Services.GetRequiredService<AllowlistRepairService>(), app.Services.GetRequiredService<AllowlistRepairLockProvider>(), app.Services.GetRequiredService<MemoryGuard>(), quietLogGate, app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value, options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping);
 await apiTask;
 
@@ -322,27 +340,59 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var scannerInstanceId = Guid.NewGuid().ToString("N");
     var scannerStartedAt = DateTime.UtcNow;
     Console.WriteLine($"[SCANNER] Background scanner started InstanceId={scannerInstanceId}");
+    var scannerState = new ScannerStateMachine();
+    scannerState.TryStart(Console.WriteLine);
+    var scannerErrors = new ScannerExceptionReporter(contentRootPath, options);
+    var scannerStage = "Starting";
+    var scannerComponent = "Scanner";
+    void SetScannerStage(string stage, string component) { scannerStage = stage; scannerComponent = component; }
+    var lastScannerSummaryAt = scannerStartedAt;
+    var scannerSummaryBatches = 0L;
+    var scannerSummaryMarketsScanned = 0L;
+    var scannerSummaryDurationMs = 0L;
+    var scannerSummaryErrors = 0L;
+    var scannerSummaryPositive = 0L;
+    var scannerSummaryExecutable = 0L;
+    var scannerSummaryPaperOpened = 0L;
+    bool ShouldLogScannerChannel(string eventName, string stableHash, LogImportance importance = LogImportance.Normal)
+    {
+        if (!options.Diagnostics.OperationalQuietMode || options.Logging.LogScannerStartEndInQuietMode) return true;
+        return quietLogGate.ShouldLog(
+            new LogEventKey("scanner.lifecycle", eventName),
+            new LogEventFingerprint(stableHash, stableHash),
+            importance,
+            new QuietLogPolicy(
+                OperationalQuietMode: true,
+                EveryNCycles: int.MaxValue,
+                EveryMinutes: Math.Max(1, options.Logging.LogScannerSummaryEveryMinutes),
+                SuppressRepeatedHash: true,
+                MaxSameEventPerHour: 0,
+                DebugEnabled: options.Diagnostics.DebuggerSafeMode));
+    }
     using var http = new HttpClient();
     http.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0");
     http.Timeout = TimeSpan.FromSeconds(options.ExternalApiTimeoutSeconds);
 
     var marketService = new MarketDataService(http);
     var orderbookService = new OrderBookService(http) { DisableSingleBookHttpFallback = true, LogPrefetchDetails = options.LogPrefetchDetails, LogBookCacheMissDetails = options.Logging.LogBookCacheMissDetails, BookCacheMissSampleSize = options.Logging.BookCacheMissSampleSize };
-    orderbookService.ConfigureCache(TimeSpan.FromSeconds(Math.Max(1, options.Caches.OrderbookCacheTtlSeconds)), options.Caches.MaxOrderbookCacheEntries);
+    orderbookService.ConfigureCache(TimeSpan.FromMinutes(Math.Max(1, options.RuntimeMemory.OrderbookCacheTtlMinutes)), Math.Min(options.Caches.MaxOrderbookCacheEntries, options.RuntimeMemory.MaxOrderbookCacheEntries));
     orderbookService.ConfigureBatchOptions(options.OrderBook, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate);
+    orderbookService.MaxInvalidTokenCacheEntries = Math.Max(1, options.RuntimeMemory.MaxInvalidTokenCacheEntries);
+    orderbookService.MaxBatchBookErrorSamples = Math.Max(1, options.RuntimeMemory.MaxBatchBookErrorSamples);
+    orderbookService.BatchBookErrorSampleTtl = TimeSpan.FromMinutes(Math.Max(1, options.RuntimeMemory.BatchBookErrorSampleTtlMinutes));
     var crossOptions = new CrossExchangeOptions();
     options.GetType();
     var feeOptions = new ExchangeFeesOptions();
     var kalshiOptions = new KalshiOptions();
     var executionPolicy = new ExecutionPolicy
     {
-        MaxNotionalPerTrade = Math.Min(options.MaxNotionalPerTrade, options.PaperRisk.MaxPaperNotionalPerTrade),
+        MaxNotionalPerTrade = options.TradingMode.PaperPhase >= 2 ? options.PaperRisk.MaxPaperNotionalPerTrade : Math.Min(options.MaxNotionalPerTrade, options.PaperRisk.MaxPaperNotionalPerTrade),
         MinNotionalPerTrade = options.MinNotionalPerTrade,
         MinEdgePerShare = options.MinEdgePerShare,
         MinExpectedProfit = options.MinExpectedProfit,
         MaxLockedCapital = Math.Min(options.MaxLockedCapital, options.PaperRisk.MaxPaperTotalExposure),
         MaxOpenPositions = Math.Min(options.MaxOpenPositions, options.PaperRisk.MaxPaperPositionsTotal),
-        MaxExposurePerGroup = Math.Min(options.MaxExposurePerGroup, options.PaperRisk.MaxPaperTotalExposure),
+        MaxExposurePerGroup = options.PaperRisk.MaxPaperTotalExposure,
         AllowBasketArbs = true,
         AllowSingleMarketArbs = true,
         AllowCompleteSetSellArbs = true,
@@ -442,41 +492,57 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     {
         var started = DateTime.UtcNow;
         string? lastError = null;
+        long singleMarketFullCycleId = 0;
+        var batchStartIndex = 0;
+        var batchEndIndex = 0;
         try
         {
-            memoryGuard.Check(state, options, () => orderbookService.ClearAllCache(), contentRootPath);
+            SetScannerStage("MemoryGuard", "MemoryGuard");
+            memoryGuard.Check(state, options, () => { orderbookService.ClearAllCache(); orderbookService.TrimAllBoundedStores(); quietLogGate.TrimExpired(); }, contentRootPath);
             state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);
             if (memoryGuard.ShouldSkipScannerCycle())
             {
+                scannerState.TryPauseByMemoryGuard(Console.WriteLine);
                 state.SetStatus(state.Status with { ScannerActive = false, LastScanTime = DateTime.UtcNow });
                 await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
                 continue;
             }
-            uiLogger.LogInfo("scanner", "{\"event\":\"scan_start\",\"timestamp\":\"" + started.ToString("O") + "\"}");
+            if (!state.Controls.IsPaused && scannerState.State != ScannerRuntimeState.Running) scannerState.TryResume(Console.WriteLine);
+            var paperOpenBeforeScan = state.PaperExecutionsCount;
+            if (ShouldLogScannerChannel("scan_start", "scan_start"))
+                uiLogger.LogInfo("scanner", "{\"event\":\"scan_start\",\"timestamp\":\"" + started.ToString("O") + "\"}");
             if (state.Controls.IsPaused)
             {
+                if (state.Controls.Reason == "MEMORY_CRITICAL") scannerState.TryPauseByMemoryGuard(Console.WriteLine);
+                if (state.Controls.Reason == "PAPER_CONFIG_ERROR") scannerState.TryPauseByConfigError(Console.WriteLine);
                 state.SetStatus(state.Status with { ScannerActive = false, LastScanTime = DateTime.UtcNow });
                 if (options.Caches.ClearOrderbookCacheAfterScan) orderbookService.ClearExpiredCache();
             state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);
-            memoryGuard.Check(state, options, () => orderbookService.ClearAllCache(), contentRootPath);
+            memoryGuard.Check(state, options, () => { orderbookService.ClearAllCache(); orderbookService.TrimAllBoundedStores(); quietLogGate.TrimExpired(); }, contentRootPath);
+            SetScannerStage("SignalRPublish", "PushUiUpdates");
             await PushUiUpdates(state, hub, uiLogger, options, verifiedExecution, contentRootPath);
-                uiLogger.LogInfo("scanner", "{\"event\":\"scan_skipped\",\"reason\":\"PAUSED\"}");
+                if (ShouldLogScannerChannel("scan_skipped", $"scan_skipped|{state.Controls.Reason}"))
+                    uiLogger.LogInfo("scanner", "{\"event\":\"scan_skipped\",\"reason\":\"PAUSED\"}");
                 await Task.Delay(options.ScanIntervalMs, stoppingToken);
                 continue;
             }
             monitor.BeginCycle();
             if (lastDiscoveryAt == default || DateTime.UtcNow - lastDiscoveryAt >= TimeSpan.FromMinutes(options.FullDiscoveryIntervalMinutes) || discoveredMarkets.Count == 0)
             {
+                SetScannerStage("Discovery", "MarketDataService");
                 discoveryStartedAt = DateTime.UtcNow;
                 var discovery = await marketService.GetMarketsAsync(options, stoppingToken);
-                discoveredMarkets = discovery.Markets.Where(m => m?.outcomes?.Count == 2 && m.clobTokenIds?.Count >= 2).ToList();
+                discoveredMarkets = discovery.Markets.Where(m => m?.outcomes?.Count == 2 && m.clobTokenIds?.Count >= 2).Take(Math.Max(1, options.RuntimeMemory.MaxMarketCacheEntries)).ToList();
                 lastDiscoverySummary = discovery.Summary;
                 lastDiscoveryAt = DateTime.UtcNow;
                 discoveryCompletedAt = lastDiscoveryAt;
                 cyclesCompletedSinceDiscovery = 0;
                 if (options.LogPrefetchSummary)
                     Console.WriteLine($"[DISCOVERY] marketsDiscovered={lastDiscoverySummary.MarketsDiscovered}, pagesFetched={lastDiscoverySummary.PagesFetched}, duplicatesRemoved={lastDiscoverySummary.DuplicatesRemoved}, inactiveSkipped={lastDiscoverySummary.InactiveSkipped}, activeMarketsAvailable={lastDiscoverySummary.ActiveMarketsAvailable}, rawLoadedTotal={lastDiscoverySummary.RawLoadedTotal}, uniqueMarketsTotal={lastDiscoverySummary.UniqueMarketsTotal}, skippedClosed={lastDiscoverySummary.SkippedClosed}, skippedArchived={lastDiscoverySummary.SkippedArchived}, skippedMissingTokenIds={lastDiscoverySummary.SkippedMissingTokenIds}, skippedInvalidShape={lastDiscoverySummary.SkippedInvalidShape}");
-                Console.WriteLine(ScanLogSummaryService.DiscoveryHealth(lastDiscoverySummary, options.MarketDiscovery.MinHealthyActiveMarkets).ToLogLine());
+                var discoveryHealth = ScanLogSummaryService.DiscoveryHealth(lastDiscoverySummary, options.MarketDiscovery.MinHealthyActiveMarkets);
+                Console.WriteLine(discoveryHealth.ToLogLine());
+                if (discoveryHealth.Degraded)
+                    Console.WriteLine($"[DISCOVERY_DEGRADED_MODE] Reason=ActiveBelowExpectedMin Active={lastDiscoverySummary.ActiveMarketsAvailable} ExpectedMinActive={options.MarketDiscovery.MinHealthyActiveMarkets}");
             }
 
             var configuredPoolLimit = options.UseAllDiscoveredMarkets ? options.MaxMarketsInPool : (options.MaxMarketsInPool > 0 ? options.MaxMarketsInPool : options.MarketScanLimit);
@@ -489,23 +555,26 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             var currentRollingOffsetBefore = rollingOffset;
             var filtered = BuildRollingBatch(scanPool, ref rollingOffset, batchSize, options);
             var currentRollingOffsetAfter = rollingOffset;
-            var batchStartIndex = filtered.Count == 0 ? 0 : currentRollingOffsetBefore;
-            var batchEndIndex = filtered.Count == 0 ? 0 : ((currentRollingOffsetBefore + filtered.Count - 1) % Math.Max(1, scanPool.Count));
+            batchStartIndex = filtered.Count == 0 ? 0 : currentRollingOffsetBefore;
+            batchEndIndex = filtered.Count == 0 ? 0 : ((currentRollingOffsetBefore + filtered.Count - 1) % Math.Max(1, scanPool.Count));
             var fullCoverageCompletedThisBatch = scanPool.Count > 0 && filtered.Count > 0 && (currentRollingOffsetAfter == 0 || currentRollingOffsetAfter < currentRollingOffsetBefore);
             if (fullCoverageCompletedThisBatch) fullCoverageCompletedCount++;
             cyclesCompletedSinceDiscovery++;
             totalMarketsScannedSinceStart += filtered.Count;
             scanId++;
-            var singleMarketFullCycleId = scanPool.Count == 0 ? scanId : (fullCoverageCompletedThisBatch ? fullCoverageCompletedCount : fullCoverageCompletedCount + 1);
+            singleMarketFullCycleId = scanPool.Count == 0 ? scanId : (fullCoverageCompletedThisBatch ? fullCoverageCompletedCount : fullCoverageCompletedCount + 1);
             var singleMarketFullCycleComplete = scanPool.Count > 0 && (options.Mode == "AllAtOnce" || currentRollingOffsetAfter == 0 || filtered.Count >= scanPool.Count || fullCoverageCompletedThisBatch);
             var orderbookSemaphore = new SemaphoreSlim(options.MaxConcurrentOrderbookRequests);
+            SetScannerStage("BatchOrderbookFetch", "OrderBookService");
             await orderbookService.PrefetchBinarySnapshotsAsync(filtered);
+            SetScannerStage("SingleMarketScan", "SingleMarketOrderBookArbEngine");
             var scanStats = await singleMarketArb.ScanAsync(filtered!, paper, orderbookSemaphore, singleMarketFullCycleId, singleMarketFullCycleComplete, suppressBatchDataQualitySummary: options.Diagnostics.OperationalQuietMode || !options.SingleMarketArb.LogBatchSummaries, ct: stoppingToken);
             var singleMarketFullSummary = singleMarketFullCycle.AddBatch(singleMarketFullCycleId, state.SingleMarketSnapshot.Summary, state.SingleMarketSnapshot.DataQualityRejectSamples);
             if (options.Diagnostics.OperationalQuietMode && singleMarketFullCycle.ShouldLog(singleMarketFullSummary, options.Logging, singleMarketFullCycleComplete, options.SingleMarketArb.LogCycleProgress))
                 Console.WriteLine(SingleMarketFullCycleSummaryAggregator.ToLogLine(singleMarketFullSummary));
 
             MultiOutcomeGroupArbEngine.MultiOutcomeScanReport multiOutcomeReport = new(0,0,0,0,0,0,0,0m,0m,0m,"","NotEvaluated",new Dictionary<string,int>(),Array.Empty<MultiOutcomeGroupArbEngine.RejectedSample>(),Array.Empty<MultiOutcomeGroupArbEngine.CandidateGroupReview>());
+            SetScannerStage("MultiCandidateScan", "MultiOutcomeGroupArbEngine");
             if (options.MultiOutcomeArbitrage.Enabled)
             {
                 var multiEngine = new MultiOutcomeGroupArbEngine(
@@ -857,6 +926,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     AllowlistRepairPatchPreview patchPreview;
                     try
                     {
+                        SetScannerStage("AllowlistRepair", "AllowlistRepairService");
+                        options.AllowlistRepair.DiscoveryPartialDiagnosticsOnly = !lastDiscoverySummary.DiscoveryHealthy && lastDiscoverySummary.ActiveMarketsAvailable < options.MarketDiscovery.MinHealthyActiveMarkets;
                         var repairExports = allowlistRepairService.Export(repairReportPath, repairSuggestedPath, allowlistedGroups, resolved, verifiedPricingExport, boundedCandidates, options.AllowlistRepair, contentRootPath, options.Logging);
                         repairReport = repairExports.Report;
                         patchPreview = allowlistRepairService.ExportPatchPreview(patchPreviewPath, patchedPreviewPath, patchedPreviewMetadataPath, repairReport, allowlistedGroups, contentRootPath).PatchPreview;
@@ -909,8 +980,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var cleanupPath = Path.Combine(contentRootPath, "exports/verified-allowlist-cleanup-suggested.json"); File.WriteAllText(cleanupPath, System.Text.Json.JsonSerializer.Serialize(cleanup, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
                     var repairLogEveryNCycles = options.Logging.SuppressRepeatedRepairSnapshotLogs && !options.Diagnostics.DebuggerSafeMode ? 0 : options.Logging.LogAllowlistRepairEveryNCycles;
                     var repairSuggestionEveryNCycles = options.Logging.SuppressRepeatedRepairSnapshotLogs && !options.Diagnostics.DebuggerSafeMode ? 0 : options.Logging.LogRepairSuggestionsEveryNCycles;
+                    var repairSuggestionMaxPerHour = options.Diagnostics.OperationalQuietMode ? Math.Min(3, Math.Max(1, options.Logging.MaxRepairSuggestionLogsPerHour)) : options.Logging.MaxRepairSuggestionLogsPerHour;
                     var repairSnapshotFingerprint = options.Logging.SuppressRepeatedRepairSnapshotLogs
-                        ? repairReport.SnapshotId
+                        ? $"{repairReport.Snapshot.CandidateGroupsCount}|{repairReport.Snapshot.VerifiedGroupsCount}|{repairReport.Snapshot.Source}"
                         : $"{repairReport.SnapshotId}|{repairReport.Snapshot.CandidateGroupsCount}|{repairReport.Snapshot.VerifiedGroupsCount}|{repairReport.Snapshot.Source}";
                     if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_SNAPSHOT", repairSnapshotFingerprint, LogImportance.Normal, everyNCycles: repairLogEveryNCycles))
                         Console.WriteLine($"[ALLOWLIST_REPAIR_SNAPSHOT] Id={repairReport.SnapshotId} CandidateGroups={repairReport.Snapshot.CandidateGroupsCount} VerifiedGroups={repairReport.Snapshot.VerifiedGroupsCount} Source={repairReport.Snapshot.Source}");
@@ -941,7 +1013,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         var removed = patch.Diff?["removedMarketIds"] is System.Text.Json.Nodes.JsonArray rm ? string.Join(",", rm.Select(x => x?.GetValue<string>()).Where(x => !string.IsNullOrWhiteSpace(x))) : string.Empty;
                         var added = patch.Diff?["addedMarketIds"] is System.Text.Json.Nodes.JsonArray am ? string.Join(",", am.Select(x => x?.GetValue<string>()).Where(x => !string.IsNullOrWhiteSpace(x))) : string.Empty;
                         var patchFingerprint = $"{patch.GroupKey}|{patch.PatchType}|{patch.Confidence}|{removed}|{added}";
-                        if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_PATCH", patchFingerprint, LogImportance.Normal, groupKey: patch.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: options.Logging.MaxRepairSuggestionLogsPerHour))
+                        if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_PATCH", patchFingerprint, LogImportance.Normal, groupKey: patch.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
                             Console.WriteLine($"[ALLOWLIST_REPAIR_PATCH] Group={patch.GroupKey} Type={patch.PatchType} Confidence={patch.Confidence} Added=[{added}] Removed=[{removed}]");
                         if (patch.PatchType == "PruneGroup")
                         {
@@ -968,7 +1040,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 lockProvider.IsHardLocked(repair.GroupKey),
                                 repair.HealthCategory.Equals("Quarantined", StringComparison.OrdinalIgnoreCase) || repair.RepairConfidence.Equals("Unsafe", StringComparison.OrdinalIgnoreCase));
                             var repairFingerprint = options.Logging.SuppressRepeatedRepairSnapshotLogs ? suggestionStableHash : $"{repair.RepairSnapshotId}|{suggestionStableHash}|{suggestedLegs}|{repair.ActionVersion}";
-                            if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_SUGGESTION", $"{repair.RepairSnapshotId}|{repairFingerprint}", LogImportance.Normal, repairFingerprint, repair.GroupKey, everyNCycles: repairSuggestionEveryNCycles, maxPerHour: options.Logging.MaxRepairSuggestionLogsPerHour))
+                            if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_SUGGESTION", $"{repair.RepairSnapshotId}|{repairFingerprint}", LogImportance.Normal, repairFingerprint, repair.GroupKey, everyNCycles: repairSuggestionEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
                                 Console.WriteLine($"[ALLOWLIST_REPAIR_SUGGESTION] Group={repair.GroupKey} Snapshot={repair.RepairSnapshotId} Action={repair.RecommendedAction} MissingNoAsk={repair.MissingNoAsk} SuggestedLegs={suggestedLegs} Confidence={repair.RepairConfidence}");
                         }
                         if (repair.ActionVersion > 1 && !string.Equals(repair.PreviousAction, repair.CurrentAction, StringComparison.OrdinalIgnoreCase))
@@ -976,10 +1048,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             var directionFingerprint = ScanLogSummaryService.RepairActionDirectionFingerprint(repair.GroupKey, repair.PreviousAction, repair.CurrentAction);
                             if (ScanLogSummaryService.IsWomenUsOpenRepairFlipFlop(repair.GroupKey, repair.PreviousAction, repair.CurrentAction, repair.ReasonForChange) && options.Diagnostics.OperationalQuietMode)
                             {
-                                if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_UNSTABLE_SUPPRESSED", directionFingerprint, LogImportance.Normal, groupKey: repair.GroupKey, everyNCycles: options.Logging.LogAllowlistRepairEveryNCycles, maxPerHour: options.Logging.MaxRepairSuggestionLogsPerHour))
+                                if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_UNSTABLE_SUPPRESSED", directionFingerprint, LogImportance.Normal, groupKey: repair.GroupKey, everyNCycles: options.Logging.LogAllowlistRepairEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
                                     Console.WriteLine($"[ALLOWLIST_REPAIR_UNSTABLE_SUPPRESSED] Group={repair.GroupKey} Reason=ActionFlipFlopDuringSoak");
                             }
-                            else if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_ACTION_CHANGED", directionFingerprint, LogImportance.Normal, groupKey: repair.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: options.Logging.MaxRepairSuggestionLogsPerHour))
+                            else if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_ACTION_CHANGED", directionFingerprint, LogImportance.Normal, groupKey: repair.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
                             {
                                 Console.WriteLine($"[ALLOWLIST_REPAIR_ACTION_CHANGED] Group={repair.GroupKey} From={repair.PreviousAction} To={repair.CurrentAction} Reason={repair.ReasonForChange} ConsecutiveSnapshotMisses={repair.ConsecutiveMatchMisses}");
                             }
@@ -997,20 +1069,22 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             else if (lockProvider.IsHardLocked(repair.GroupKey))
                             {
                                 var ignoredFingerprint = $"{repair.GroupKey}|{m.CandidateGroupKey}|{m.Score}|LockedGroup";
-                                if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_LOCKED_MATCH_IGNORED", ignoredFingerprint, LogImportance.Normal, groupKey: repair.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: options.Logging.MaxRepairSuggestionLogsPerHour))
+                                if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_LOCKED_MATCH_IGNORED", ignoredFingerprint, LogImportance.Normal, groupKey: repair.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
                                     Console.WriteLine($"[ALLOWLIST_REPAIR_LOCKED_MATCH_IGNORED] Group={repair.GroupKey} Candidate={m.CandidateGroupKey} Score={m.Score:0.##} Reason=LockedGroup");
                             }
                             else
                             {
                                 var matchFingerprint = $"{repair.GroupKey}|{m.CandidateGroupKey}|{m.Score}|{m.Confidence}|{string.Join(',', m.AddedMarketIds)}|{string.Join(',', m.RemovedMarketIds)}";
-                                if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_MATCH", matchFingerprint, LogImportance.Normal, groupKey: repair.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: options.Logging.MaxRepairSuggestionLogsPerHour))
+                                if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_MATCH", matchFingerprint, LogImportance.Normal, groupKey: repair.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
                                     Console.WriteLine($"[ALLOWLIST_REPAIR_MATCH] Group={repair.GroupKey} Candidate={m.CandidateGroupKey} Score={m.Score:0.##} Confidence={m.Confidence} Added={m.AddedMarketIds.Count} Removed={m.RemovedMarketIds.Count}");
                             }
                         }
                         if (isRepairAction && (repair.ConsecutiveMatchMisses > 0 || repair.RecommendedAction == "NeedsManualReview" || repair.RecommendedAction == "DisableMissingMarkets"))
                         {
-                            var noMatchFingerprint = $"{repair.RepairSnapshotId}|{repair.GroupKey}|{repair.RecommendedAction}|{repair.Reason}|{repair.ConsecutiveMatchMisses}";
-                            if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_NO_MATCH", noMatchFingerprint, LogImportance.Normal, groupKey: repair.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: options.Logging.MaxRepairSuggestionLogsPerHour))
+                            var noMatchFingerprint = options.Diagnostics.OperationalQuietMode
+                                ? $"{repair.GroupKey}|{repair.RecommendedAction}|{repair.Reason}|{repair.ConsecutiveMatchMisses}"
+                                : $"{repair.RepairSnapshotId}|{repair.GroupKey}|{repair.RecommendedAction}|{repair.Reason}|{repair.ConsecutiveMatchMisses}";
+                            if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_NO_MATCH", noMatchFingerprint, LogImportance.Normal, groupKey: repair.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
                                 Console.WriteLine($"[ALLOWLIST_REPAIR_NO_MATCH] Group={repair.GroupKey} ConsecutiveMisses={repair.ConsecutiveMatchMisses} RequiredForDowngrade={options.AllowlistRepair.MatchFailureDowngradeCycles}");
                         }
                     }
@@ -1107,7 +1181,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var rejectedCandidates = Math.Max(0, multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified);
                     var rejectedOnlyCandidateScan = multiOutcomeReport.GroupsDetected > 0 && rejectedCandidates == multiOutcomeReport.GroupsDetected && multiOutcomeReport.ExecutableGroups == 0 && activeExecutable == 0;
                     var candidateFingerprint = ScanLogSummaryService.CandidateScanFingerprint(multiOutcomeReport.GroupsDetected, multiOutcomeReport.TopSkipReason, multiOutcomeReport.RejectedByReason, candidateBucket, multiOutcomeReport.ExecutableGroups);
-                    var rejectedOnlyMaterialFingerprint = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint(multiOutcomeReport.GroupsDetected, multiOutcomeReport.TopSkipReason, multiOutcomeReport.RejectedByReason, Math.Max(1, options.Logging.CandidateScanBucketSize), Math.Max(1, options.Logging.CandidateScanMaterialReasonDelta));
+                    var rejectedOnlyBucketSize = options.Diagnostics.OperationalQuietMode ? 25 : Math.Max(1, options.Logging.CandidateScanBucketSize);
+                    var rejectedOnlyReasonBucketSize = options.Diagnostics.OperationalQuietMode ? 25 : Math.Max(1, options.Logging.CandidateScanMaterialReasonDelta);
+                    var rejectedOnlyMaterialFingerprint = ScanLogSummaryService.RejectedOnlyCandidateScanFingerprint(multiOutcomeReport.GroupsDetected, multiOutcomeReport.TopSkipReason, multiOutcomeReport.RejectedByReason, rejectedOnlyBucketSize, rejectedOnlyReasonBucketSize);
                     var throttleFingerprint = rejectedOnlyCandidateScan && options.Diagnostics.OperationalQuietMode ? rejectedOnlyMaterialFingerprint : candidateFingerprint;
                     var candidateImportance = (multiOutcomeReport.ExecutableGroups > 0 || activeExecutable > 0) ? LogImportance.Critical : LogImportance.Normal;
                     var shouldLogCandidate = ShouldQuietLog("multi-candidate", "MULTI_CANDIDATE_SCAN", throttleFingerprint, candidateImportance, throttleFingerprint, everyNCycles: options.Logging.LogCandidateScanEveryNCycles, maxPerHour: options.Logging.MaxMultiCandidateScanLogsPerHour);
@@ -1248,9 +1324,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             t.classification,
                             t.recommendedConfigAction,
                             suggestionReason = t.classification == "NeedsPruning" ? "MissingNoAsk legs excluded" : t.reason,
-                            suggestedAllowlistTemplate = verifiedPricingExport.Select(x => System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(x)).RootElement)
-                                .Where(e => e.TryGetProperty("groupKey", out var gk) && gk.GetString() == t.groupKey)
-                                .Select(e => e.TryGetProperty("suggestedPrunedAllowlistTemplate", out var tpl) ? tpl : default)
+                            suggestedAllowlistTemplate = verifiedPricingExport
+                                .Select(x => System.Text.Json.Nodes.JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(x)) as System.Text.Json.Nodes.JsonObject)
+                                .Where(e => e is not null && e.TryGetPropertyValue("groupKey", out var gk) && gk?.GetValue<string>() == t.groupKey)
+                                .Select(e => e!.TryGetPropertyValue("suggestedPrunedAllowlistTemplate", out var tpl) ? tpl : null)
                                 .FirstOrDefault()
                         }).ToArray(),
                         keepEnabledGroups = triageRows.Where(x => x.recommendedConfigAction is "KeepEnabled" or "KeepForMonitoring").Select(x => x.groupKey).ToArray(),
@@ -1310,10 +1387,20 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             else
             {
                 emptyCycles++;
-                if (options.LogEmptyExecutableRanking && (options.LogEmptyOpportunityCycles || options.LogNoOpportunityCycles))
+                if (!options.Diagnostics.OperationalQuietMode && options.LogEmptyExecutableRanking && (options.LogEmptyOpportunityCycles || options.LogNoOpportunityCycles))
                     Console.WriteLine($"[SCAN] Markets={filtered.Count} Books={scanStats.BookOk} Candidates={scanStats.Candidates} Positive={scanStats.PositiveEdgeFound} Executable=0 BestEdge={(scanStats.Candidates>0 && scanStats.BestEdgeSeen.HasValue ? scanStats.BestEdgeSeen.Value.ToString("0.####") : "N/A")} NearMiss={scanStats.NearMisses?.Count ?? 0} DurationMs={(long)(DateTime.UtcNow - started).TotalMilliseconds}");
             }
-            if (options.LogCompactScanSummary && options.LogEveryScanCycle)
+            var shouldLogBatchScan = options.LogCompactScanSummary && ScanLogSummaryService.ShouldLogBatchScan(
+                options.Diagnostics.OperationalQuietMode,
+                options.LogEveryScanCycle,
+                options.Logging.LogBatchScanInQuietMode,
+                (int)Math.Min(int.MaxValue, scanId),
+                options.Logging.LogScanProgressEveryNBatches,
+                singleMarketFullCycleComplete,
+                fullCoverageCompletedThisBatch,
+                executableCount > 0,
+                false);
+            if (shouldLogBatchScan)
             {
                 var coveragePercent = scanPool.Count == 0 ? 0 : Math.Min(100m, (decimal)Math.Min(scanPool.Count, cyclesCompletedSinceDiscovery * Math.Max(1, batchSize)) / scanPool.Count * 100m);
                 var estimatedCyclesToFullCoverage = batchSize == 0 ? 0 : (int)Math.Ceiling(scanPool.Count / (double)batchSize);
@@ -1323,12 +1410,40 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 Console.WriteLine($"[SCAN] Id={scanId} Pool={scanPool.Count} Batch={batchSize} Range={batchStartIndex}-{batchEndIndex} NextOffset={currentRollingOffsetAfter} Coverage={coveragePercent:0.0}% Markets={filtered.Count} Tokens={filtered.Count*2} Books={scanStats.BookOk} BookCacheMisses={obStats.BookCacheMisses} BookCacheMissSample={missSample} Snapshots={filtered.Count} Candidates={scanStats.Candidates} Positive={scanStats.PositiveEdgeFound} Executable={scanStats.Executed} BestEdge={(scanStats.Candidates>0 && scanStats.BestEdgeSeen.HasValue ? scanStats.BestEdgeSeen.Value.ToString("0.####") : "N/A")} NearMiss={scanStats.NearMisses?.Count ?? 0} TopSkip={topSkipReason} FirstMarket={filtered.FirstOrDefault()?.id ?? "-"} LastMarket={filtered.LastOrDefault()?.id ?? "-"} DistinctMarketIds={distinctMarketIdsInBatch} DurationMs={(long)(DateTime.UtcNow - started).TotalMilliseconds}");
             }
             monitor.FlushCsv();
+            SetScannerStage("ExportWrite", "SyncRuntimeState");
             SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, filtered.Count, started, null, scanStats, filtering, lastDiscoverySummary, rollingOffset, options.ScanBatchSize, discoveredMarkets.Count, discoveryStartedAt, discoveryCompletedAt, emptyCycles, options.MarketScanLimit, effectiveMarketLimit, options.MaxMarketsToDiscover, options, poolLimitReason, multiOutcomeReport, contentRootPath);
             if (options.Caches.ClearOrderbookCacheAfterScan) orderbookService.ClearExpiredCache();
             state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);
-            memoryGuard.Check(state, options, () => orderbookService.ClearAllCache(), contentRootPath);
+            memoryGuard.Check(state, options, () => { orderbookService.ClearAllCache(); orderbookService.TrimAllBoundedStores(); quietLogGate.TrimExpired(); }, contentRootPath);
+            SetScannerStage("SignalRPublish", "PushUiUpdates");
             await PushUiUpdates(state, hub, uiLogger, options, verifiedExecution, contentRootPath);
-            uiLogger.LogInfo("scanner", $"{{\"event\":\"scan_end\",\"durationMs\":{(long)(DateTime.UtcNow - started).TotalMilliseconds},\"marketsScanned\":{filtered.Count},\"detected\":{cycleTop.Count},\"executable\":{executableCount}}}");
+            var scanDurationMs = (long)(DateTime.UtcNow - started).TotalMilliseconds;
+            var paperOpenedThisScan = Math.Max(0, state.PaperExecutionsCount - paperOpenBeforeScan);
+            scannerSummaryBatches++;
+            scannerSummaryMarketsScanned += filtered.Count;
+            scannerSummaryDurationMs += scanDurationMs;
+            scannerSummaryPositive += scanStats.PositiveEdgeFound;
+            scannerSummaryExecutable += executableCount;
+            scannerSummaryPaperOpened += paperOpenedThisScan;
+            var scannerLifecycleImportance = executableCount > 0 || paperOpenedThisScan > 0 ? LogImportance.Critical : LogImportance.Normal;
+            if (ShouldLogScannerChannel("scan_end", $"scan_end|executable:{executableCount > 0}|paper:{paperOpenedThisScan > 0}", scannerLifecycleImportance))
+                uiLogger.LogInfo("scanner", $"{{\"event\":\"scan_end\",\"durationMs\":{scanDurationMs},\"marketsScanned\":{filtered.Count},\"detected\":{cycleTop.Count},\"executable\":{executableCount}}}");
+            var summaryNow = DateTime.UtcNow;
+            if (ScanLogSummaryService.ShouldEmitScannerSummary(summaryNow, lastScannerSummaryAt, options.Logging.LogScannerSummaryEveryMinutes, fullCoverageCompletedThisBatch, false, paperOpenedThisScan > 0, options.Logging.LogScannerSummaryOnEveryFullCycle, options.Logging.LogScannerSummaryOnError, options.Logging.LogScannerSummaryOnPaperOpen))
+            {
+                var avgBatchMs = scannerSummaryBatches == 0 ? 0 : scannerSummaryDurationMs / scannerSummaryBatches;
+                var uptime = summaryNow - scannerStartedAt;
+                var uptimeText = uptime.ToString(@"dd\.hh\:mm\:ss");
+                Console.WriteLine($"[SCANNER_SUMMARY] Uptime={uptimeText} ScanId={scanId} Pool={scanPool.Count} Offset={rollingOffset} CyclesCompleted={cyclesCompletedSinceDiscovery} Batches={scannerSummaryBatches} MarketsScanned={scannerSummaryMarketsScanned} AvgBatchMs={avgBatchMs} Errors={scannerSummaryErrors} Positive={scannerSummaryPositive} Executable={scannerSummaryExecutable} PaperOpened={scannerSummaryPaperOpened}");
+                lastScannerSummaryAt = summaryNow;
+                scannerSummaryBatches = 0;
+                scannerSummaryMarketsScanned = 0;
+                scannerSummaryDurationMs = 0;
+                scannerSummaryErrors = 0;
+                scannerSummaryPositive = 0;
+                scannerSummaryExecutable = 0;
+                scannerSummaryPaperOpened = 0;
+            }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -1336,11 +1451,42 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         }
         catch (Exception ex)
         {
+            scannerSummaryErrors++;
+            var errorSummaryNow = DateTime.UtcNow;
+            if (options.Logging.LogScannerSummaryOnError)
+            {
+                var errorUptimeText = (errorSummaryNow - scannerStartedAt).ToString(@"dd\.hh\:mm\:ss");
+                Console.WriteLine($"[SCANNER_SUMMARY] Reason=Error Uptime={errorUptimeText} ScanId={scanId} Pool={discoveredMarkets.Count} Offset={rollingOffset} CyclesCompleted={cyclesCompletedSinceDiscovery} Batches={scannerSummaryBatches} MarketsScanned={scannerSummaryMarketsScanned} AvgBatchMs={(scannerSummaryBatches == 0 ? 0 : scannerSummaryDurationMs / scannerSummaryBatches)} Errors={scannerSummaryErrors} Positive={scannerSummaryPositive} Executable={scannerSummaryExecutable} PaperOpened={scannerSummaryPaperOpened}");
+                lastScannerSummaryAt = errorSummaryNow;
+            }
             lastError = ex.Message;
-            uiLogger.LogError("scanner", $"{{\"event\":\"scan_error\",\"message\":\"{ex.Message.Replace("\"", "'")}\"}}");
+            var errorContext = new ScannerExceptionContext(
+                scannerStage,
+                scannerComponent,
+                scanId,
+                singleMarketFullCycleId,
+                rollingOffset,
+                $"{batchStartIndex}-{batchEndIndex}",
+                scannerState.State.ToString(),
+                memoryGuard.IsScannerPausedByMemory,
+                stoppingToken.IsCancellationRequested);
+            var scannerError = scannerErrors.Record(ex, errorContext, Console.WriteLine);
+            uiLogger.LogError("scanner", $"{{\"event\":\"scan_error\",\"type\":\"{scannerError.Type}\",\"stage\":\"{scannerError.Stage}\",\"component\":\"{scannerError.Component}\",\"message\":\"{ex.Message.Replace("\"", "'")}\"}}");
+            if (scannerError.Faulted)
+            {
+                scannerState.TryFault(Console.WriteLine);
+                state.SetControls(state.Controls with { IsPaused = true, Reason = "SCANNER_FAULTED", UpdatedAtUtc = DateTime.UtcNow, Sequence = state.NextSeq() });
+                state.SetStatus(state.Status with { ScannerActive = false, LastScanTime = DateTime.UtcNow });
+                Console.WriteLine($"[SCANNER_FAULTED] Reason=RepeatedSameException Type={scannerError.Type} Count={scannerError.SameExceptionCount} Action=Paused");
+            }
+            SetScannerStage("ExportWrite", "SyncRuntimeState");
             SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, 0, started, lastError, new SingleMarketScanStats(0,0,0,0,0,0,0,0), filtering, lastDiscoverySummary, rollingOffset, options.ScanBatchSize, discoveredMarkets.Count, discoveryStartedAt, discoveryCompletedAt, emptyCycles, options.MarketScanLimit, 0, options.MaxMarketsToDiscover, options, "Error", new MultiOutcomeGroupArbEngine.MultiOutcomeScanReport(0,0,0,0,0,0,0,0m,0m,0m,string.Empty,"Error",new Dictionary<string,int>(),Array.Empty<MultiOutcomeGroupArbEngine.RejectedSample>(),Array.Empty<MultiOutcomeGroupArbEngine.CandidateGroupReview>()), contentRootPath);
+            var backoff = scannerErrors.NextBackoff(scannerError.Faulted);
+            await Task.Delay(backoff, stoppingToken);
+            if (scannerError.Faulted) continue;
         }
 
+        scannerErrors.ResetBackoff();
         await Task.Delay(options.ScanIntervalMs, stoppingToken);
     }
 }
@@ -1659,7 +1805,7 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
     state.SetPaperSettlementCounters(paper.SettlementRejects, paper.DuplicateSettlementSuppressions);
     var exportsRoot = Path.Combine(contentRootPath, "exports");
     PaperAccountExporter.ExportLatest(exportsRoot, paper, pb, state.SingleMarketExecutions(), paper.BlockedCountsByReason);
-    PaperOpportunityFunnelExporter.ExportLatest(exportsRoot, PaperOpportunityFunnelExporter.Build(options, state, scanStats, multiOutcomeReport, marketsScanned));
+    PaperOpportunityFunnelExporter.ExportLatest(exportsRoot, PaperOpportunityFunnelExporter.Build(options, state, scanStats, multiOutcomeReport, marketsScanned, !discovery.DiscoveryHealthy && discovery.ActiveMarketsAvailable < options.MarketDiscovery.MinHealthyActiveMarkets));
     state.AddEquity(new EquityPointDto(DateTime.UtcNow, paper.Equity, state.NextSeq()));
 }
 

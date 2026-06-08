@@ -52,6 +52,22 @@ public sealed record AllowlistConfigValidationSummary(int Total, int UniqueGroup
 
 public static class ScanLogSummaryService
 {
+    public static bool ShouldLogBatchScan(bool operationalQuietMode, bool logEveryScanCycle, bool logBatchScanInQuietMode, int scanId, int everyNBatches, bool fullCycleComplete, bool materialStateChange, bool hasExecutableOrPaperEvent, bool hasError)
+    {
+        if (!logEveryScanCycle) return false;
+        if (hasError || hasExecutableOrPaperEvent) return true;
+        if (!operationalQuietMode || logBatchScanInQuietMode) return true;
+        // In quiet mode, [SCAN] is first-batch only; full-cycle and periodic progress are emitted
+        // through [SCANNER_SUMMARY] so wrap batches do not spam console/UI recent logs.
+        return scanId <= 1;
+    }
+
+    public static bool ShouldEmitScannerSummary(DateTime nowUtc, DateTime lastSummaryUtc, int everyMinutes, bool fullCycleComplete = false, bool hasError = false, bool hasPaperOpen = false, bool emitOnFullCycle = true, bool emitOnError = true, bool emitOnPaperOpen = true)
+        => (emitOnFullCycle && fullCycleComplete)
+            || (emitOnError && hasError)
+            || (emitOnPaperOpen && hasPaperOpen)
+            || (everyMinutes > 0 && (lastSummaryUtc == DateTime.MinValue || nowUtc - lastSummaryUtc >= TimeSpan.FromMinutes(everyMinutes)));
+
     public static DiscoveryHealthSummary DiscoveryHealth(MarketDiscoverySummary summary, int expectedMinActive)
     {
         var healthy = summary.ActiveMarketsAvailable >= expectedMinActive && string.IsNullOrWhiteSpace(summary.LastDiscoveryError);
@@ -86,10 +102,10 @@ public static class ScanLogSummaryService
     public static string RejectedOnlyCandidateScanFingerprint(int candidateCount, string topReject, IReadOnlyDictionary<string, int> rejectedByReason, int candidateCountBucketSize, int reasonBucketSize)
     {
         // Rejected-only scans are operationally useful only when the dominant reject class changes,
-        // an executable appears, or a 20-wide candidate/reason bucket changes. Small discovery
-        // fluctuations such as 8 -> 9 -> 10 -> 13 -> 18 should stay quiet.
-        var candidateBucket = Math.Max(20, candidateCountBucketSize * 2);
-        var reasonBucket = Math.Max(20, reasonBucketSize * 2);
+        // an executable appears, or a coarse candidate/reason bucket changes. Quiet-mode callers
+        // pass 25 so normal churn such as 8 -> 14 -> 23 stays quiet.
+        var candidateBucket = Math.Max(25, candidateCountBucketSize);
+        var reasonBucket = Math.Max(25, reasonBucketSize);
         var reasonBuckets = string.Join(",", rejectedByReason
             .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
             .Select(x => $"{x.Key}:{(int)Math.Floor(x.Value / (decimal)reasonBucket)}"));
@@ -134,7 +150,7 @@ public static class ScanLogSummaryService
     {
         var bucketSize = significantEdgeDelta <= 0m ? 0.005m : significantEdgeDelta;
         var edgeBucket = bestActiveNet.HasValue ? ((long)Math.Round(bestActiveNet.Value / bucketSize, MidpointRounding.AwayFromZero)).ToString() : "none";
-        return $"{VerifiedUnresolvedCategoryFingerprint(counts, groupSetFingerprint)}|activeExecutable:{Math.Max(0, activeExecutable)}|paperOpened:{Math.Max(0, paperOpened)}|bestActiveNetBucket:{edgeBucket}";
+        return $"unresolvedTotal:{counts.Total}|broken:{counts.BrokenConfig}|refresh:{counts.NeedsRefresh}|review:{counts.ReviewOnly}|monitor:{counts.MonitoringOnly}|other:{counts.Other}|groups:{groupSetFingerprint}|activeExecutable:{Math.Max(0, activeExecutable)}|paperOpened:{Math.Max(0, paperOpened)}|bestActiveNetBucket:{edgeBucket}";
     }
 
     public static string ProfileComparisonFingerprint(IReadOnlyList<VerifiedBasketScreener.ScreenResult> rows, decimal netDelta)

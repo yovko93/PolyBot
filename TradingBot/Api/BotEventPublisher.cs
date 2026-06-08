@@ -20,7 +20,7 @@ public class BotEventPublisher(BotRuntimeState state, IHubContext<BotHub> hub)
     public void CaptureConsole(string message, string level = "info", string source = "bot")
     {
         var entry = new TerminalLogEntryDto(Guid.NewGuid().ToString("N"), DateTime.UtcNow, level, source, message, state.NextSeq());
-        state.AddLog(entry);
+        if (!state.AddLog(entry)) return;
         state.AddSignalREvent("terminalLogAdded");
         _ = hub.Clients.All.SendAsync("terminalLogAdded", entry);
     }

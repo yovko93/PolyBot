@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
 using TradingBot.Options;
 using TradingBot.Models;
 using TradingBot.Services;
@@ -27,6 +29,8 @@ public class BotRuntimeState
     private readonly ConcurrentQueue<PaperPositionDto> _positions = new();
     private readonly ConcurrentQueue<PaperSettlementRecord> _paperSettlements = new();
     private readonly ConcurrentQueue<TerminalLogEntryDto> _logs = new();
+    private readonly Dictionary<string, DateTime> _recentLogDedupe = new(StringComparer.Ordinal);
+    private static readonly TimeSpan RecentLogDedupeTtl = TimeSpan.FromSeconds(30);
     private readonly ConcurrentQueue<EquityPointDto> _equity = new();
     private readonly ConcurrentQueue<ScannerStatsDto> _scannerStatsHistory = new();
     private readonly ConcurrentQueue<string> _candidateSnapshots = new();
@@ -53,6 +57,10 @@ public class BotRuntimeState
     private int _paperDuplicateSettlementSuppressions;
     private readonly object _paperCountersGate = new();
     private readonly Dictionary<string, int> _paperPretradeRejectsByReason = new(StringComparer.OrdinalIgnoreCase);
+    private int _memoryWarnings;
+    private int _memoryCriticals;
+    private DateTime? _lastMemoryCriticalAt;
+    private bool _scannerPausedByMemoryGuard;
 
     private static void Trim<T>(ConcurrentQueue<T> q,int max){ var capped = Math.Max(0, max); while(q.Count>capped) q.TryDequeue(out _); }
     private void TrimAll()
@@ -104,6 +112,10 @@ public class BotRuntimeState
     public int PaperLifecycleEvents => PaperOpenEvents + PaperCloseEvents;
     public long LiveTradingBlockedCount => TradingBot.Services.LiveTradingGuard.BlockedCount;
     public int PaperExecutionsCount => Math.Max(PaperOpenEvents, SingleMarketExecutionsCount) + Volatile.Read(ref _paperExecutionsCount);
+    public int MemoryWarnings => Volatile.Read(ref _memoryWarnings);
+    public int MemoryCriticals => Volatile.Read(ref _memoryCriticals);
+    public DateTime? LastMemoryCriticalAt => _lastMemoryCriticalAt;
+    public bool ScannerPausedByMemoryGuard => _scannerPausedByMemoryGuard;
     public IReadOnlyDictionary<string, int> PaperPretradeRejectsByReason { get { lock (_paperCountersGate) return new Dictionary<string, int>(_paperPretradeRejectsByReason, StringComparer.OrdinalIgnoreCase); } }
     public long NextSeq()=>Interlocked.Increment(ref _seq);
     public void SetStatus(BotStatusDto s){lock(_gate) Status=s;}
@@ -145,7 +157,13 @@ public class BotRuntimeState
         Interlocked.Exchange(ref _paperCloseEvents, closeEvents);
     }
     public void ReplacePaperSettlements(IEnumerable<PaperSettlementRecord> items){while(_paperSettlements.TryDequeue(out _)){} foreach(var i in items.Take(500)) _paperSettlements.Enqueue(i); Trim(_paperSettlements,500);}
-    public void AddLog(TerminalLogEntryDto l){_logs.Enqueue(l); Trim(_logs,_runtime.MaxRecentLogs);}
+    public bool AddLog(TerminalLogEntryDto l)
+    {
+        if (!IsCriticalLog(l) && IsDuplicateRecentLog(l)) return false;
+        _logs.Enqueue(l);
+        Trim(_logs,_runtime.MaxRecentLogs);
+        return true;
+    }
     public void AddEquity(EquityPointDto e){_equity.Enqueue(e); Trim(_equity,500);}
     public void AddSingleMarketOpportunity(SingleMarketArbOpportunityDto o){_singleMarketOpportunities.Enqueue(o); Trim(_singleMarketOpportunities,_runtime.MaxSingleMarketOpportunities);}
     public void AddSingleMarketExecution(SingleMarketPaperExecutionDto e){_singleMarketExecutions.Enqueue(e); Trim(_singleMarketExecutions,_runtime.MaxSingleMarketExecutions);}
@@ -155,6 +173,14 @@ public class BotRuntimeState
     public void AddUnresolvedDiagnostics(IEnumerable<object> items){foreach(var item in items.Take(_runtime.MaxUnresolvedDiagnostics)) _unresolvedDiagnostics.Enqueue(item); Trim(_unresolvedDiagnostics,_runtime.MaxUnresolvedDiagnostics);}
     public void SetQuietLogGateStats(QuietLogGateStats stats) => _quietLogGateStats = stats;
     public void SetOrderBookServiceStats(OrderBookServiceStats stats) => _orderBookServiceStats = stats;
+    public void RecordMemoryWarning() => Interlocked.Increment(ref _memoryWarnings);
+    public void RecordMemoryCritical(DateTime whenUtc, bool scannerPaused)
+    {
+        Interlocked.Increment(ref _memoryCriticals);
+        _lastMemoryCriticalAt = whenUtc;
+        _scannerPausedByMemoryGuard = scannerPaused;
+    }
+    public void SetScannerPausedByMemoryGuard(bool paused) => _scannerPausedByMemoryGuard = paused;
     public void RecordPaperPretradeReject(string reason)
     {
         Interlocked.Increment(ref _paperPretradeRejects);
@@ -207,7 +233,10 @@ public class BotRuntimeState
         ["paperClosedPositions"] = PaperClosedPositions,
         ["paperSettlements"] = PaperSettlements,
         ["paperSettlementRejects"] = PaperSettlementRejects,
-        ["paperDuplicateSettlementSuppressions"] = PaperDuplicateSettlementSuppressions
+        ["paperDuplicateSettlementSuppressions"] = PaperDuplicateSettlementSuppressions,
+        ["memoryWarnings"] = MemoryWarnings,
+        ["memoryCriticals"] = MemoryCriticals,
+        ["scannerPausedByMemoryGuard"] = ScannerPausedByMemoryGuard ? 1 : 0
     };
     public void ClearNonEssentialRuntimeState()
     {
@@ -221,6 +250,46 @@ public class BotRuntimeState
         SetSingleMarketSnapshot(SingleMarketSnapshot with { PositiveCandidates = Array.Empty<SingleMarketArbOpportunityDto>(), TopNearMisses = Array.Empty<SingleMarketNearMissDto>(), DataQualityRejectSamples = Array.Empty<SingleMarketDataQualityRejectSampleDto>(), PaperExecutions = Array.Empty<SingleMarketPaperExecutionDto>() });
         TrimAll();
     }
+
+    private bool IsDuplicateRecentLog(TerminalLogEntryDto log)
+    {
+        var now = DateTime.UtcNow;
+        var cutoff = now - RecentLogDedupeTtl;
+        var bucketTicks = log.Timestamp.ToUniversalTime().Ticks / RecentLogDedupeTtl.Ticks;
+        var key = $"{bucketTicks}|{NormalizeLogCategory(log)}|{StableHash(log.Message)}";
+        lock (_gate)
+        {
+            foreach (var stale in _recentLogDedupe.Where(x => x.Value < cutoff).Select(x => x.Key).ToArray())
+                _recentLogDedupe.Remove(stale);
+            if (_recentLogDedupe.ContainsKey(key)) return true;
+            _recentLogDedupe[key] = now;
+            return false;
+        }
+    }
+
+    private static string NormalizeLogCategory(TerminalLogEntryDto log)
+    {
+        var message = log.Message ?? string.Empty;
+        if (message.StartsWith("[CONFIG]", StringComparison.OrdinalIgnoreCase)
+            || message.StartsWith("[DIAGNOSTICS]", StringComparison.OrdinalIgnoreCase)
+            || message.StartsWith("[SOAK_READINESS]", StringComparison.OrdinalIgnoreCase)
+            || message.StartsWith("[COST_PROFILE", StringComparison.OrdinalIgnoreCase)
+            || message.StartsWith("[PAPER_MODE", StringComparison.OrdinalIgnoreCase)
+            || message.StartsWith("[PAPER_EFFECTIVE_RISK]", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("Bot API listening", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("ExecutionMode=", StringComparison.OrdinalIgnoreCase))
+            return "startup-config";
+        return log.Source ?? string.Empty;
+    }
+
+    private static bool IsCriticalLog(TerminalLogEntryDto log)
+        => log.Level.Equals("error", StringComparison.OrdinalIgnoreCase)
+            || log.Message.Contains("[MEMORY_CRITICAL]", StringComparison.OrdinalIgnoreCase)
+            || log.Message.Contains("[PAPER_CONFIG_ERROR]", StringComparison.OrdinalIgnoreCase);
+
+    private static string StableHash(string value)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value ?? string.Empty))).ToLowerInvariant();
+
     public OpportunityDto[] Opportunities()=>_opps.ToArray();
     public TradeLogEntryDto[] Trades()=>_trades.ToArray();
     public PaperPositionDto[] Positions()=>_positions.ToArray();
