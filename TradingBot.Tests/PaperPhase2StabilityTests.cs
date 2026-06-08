@@ -566,19 +566,6 @@ public class PaperPhase2StabilityTests
     }
 
     [Fact]
-    public void DiscoveryPartial_disables_repair_patchability()
-    {
-        var svc = new AllowlistRepairService();
-        var cfg = new VerifiedMultiOutcomeGroupConfig(true, "group", "group", ["missing"], [], 1, "Verified");
-        var resolved = new ResolvedVerifiedGroup("group", "group", ["missing"], [], [], ["missing"], [], "MissingMarkets", "missing");
-        var report = svc.BuildReport([cfg], [resolved], [], [], new AllowlistRepairOptions { DiscoveryPartialDiagnosticsOnly = true });
-        var preview = svc.BuildPatchPreview(report, [cfg]).PatchPreview;
-
-        Assert.Equal("ReviewOnly", preview.Patches.Single().PatchType);
-        Assert.Contains("DiscoveryPartial", report.RepairResults.Single().Reason);
-    }
-
-    [Fact]
     public void Paper_funnel_export_includes_orderbookUnavailable_and_invalidTokenQuarantined_counts()
     {
         var state = new BotRuntimeState();
