@@ -10,6 +10,8 @@ public static class RuntimeSoakStatusExporter
         var health = RuntimeHealthSnapshot.From(state, options);
         var logs = state.Logs();
         var trend = RuntimeHealthTrendTracker.Current(options.RuntimeHealth);
+        var warmupMinutes = Math.Max(0, options.RuntimeHealth.WarmupMinutes);
+        var warmupComplete = warmupMinutes <= 0 || health.Uptime >= TimeSpan.FromMinutes(warmupMinutes);
         var payload = new
         {
             timestamp = DateTime.UtcNow,
@@ -20,7 +22,9 @@ public static class RuntimeSoakStatusExporter
             maxProcessMemoryMbWindow = trend.MaxProcessMemoryMbWindow,
             memoryDeltaMbWindow = trend.MemoryDeltaMbWindow,
             memorySlopeMbPerMinute = trend.MemorySlopeMbPerMinute,
-            isMemoryStable = trend.IsMemoryStable && state.MemoryCriticals == 0,
+            warmupMinutes,
+            warmupComplete,
+            isMemoryStable = warmupComplete && trend.IsMemoryStable && state.MemoryCriticals == 0,
             logsCount = health.RecentLogsCount,
             executionAuditCount = health.ExecutionAuditCount,
             signalRBufferCount = health.SignalREventBufferCount,

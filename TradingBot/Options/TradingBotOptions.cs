@@ -311,6 +311,9 @@ public class MultiOutcomeLoggingOptions
     public int LogScanProgressEveryNBatches { get; set; } = 100;
     public bool LogScannerStartEndInQuietMode { get; set; } = false;
     public int LogScannerSummaryEveryMinutes { get; set; } = 10;
+    public bool LogScannerSummaryOnEveryFullCycle { get; set; } = false;
+    public bool LogScannerSummaryOnError { get; set; } = true;
+    public bool LogScannerSummaryOnPaperOpen { get; set; } = true;
     public bool LogVerifiedBasketDetailsOnChangeOnly { get; set; } = true;
     public int LogVerifiedBasketDetailsEveryNCycles { get; set; } = 50;
     public int LogProfileComparisonEveryNCycles { get; set; } = 100;
@@ -510,6 +513,7 @@ public class RuntimeHealthOptions
     public bool LogOnStartup { get; set; } = true;
     public int LogEveryMinutes { get; set; } = 2;
     public int SoakTrendWindowMinutes { get; set; } = 20;
+    public int WarmupMinutes { get; set; } = 20;
     public double StableMemorySlopeMbPerMinute { get; set; } = 5;
     public double StableMemoryMaxDeltaMb { get; set; } = 150;
     public int LogSoakStatusEveryMinutes { get; set; } = 10;

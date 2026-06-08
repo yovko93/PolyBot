@@ -35,6 +35,7 @@ public class MemoryBoundsTests
         Assert.Contains("\"minProcessMemoryMbWindow\"", json);
         Assert.Contains("\"memorySlopeMbPerMinute\"", json);
         Assert.Contains("\"isMemoryStable\"", json);
+        Assert.Contains("\"warmupComplete\"", json);
     }
 
     [Fact]

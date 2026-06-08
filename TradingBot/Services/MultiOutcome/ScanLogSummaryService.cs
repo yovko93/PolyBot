@@ -55,17 +55,17 @@ public static class ScanLogSummaryService
     public static bool ShouldLogBatchScan(bool operationalQuietMode, bool logEveryScanCycle, bool logBatchScanInQuietMode, int scanId, int everyNBatches, bool fullCycleComplete, bool materialStateChange, bool hasExecutableOrPaperEvent, bool hasError)
     {
         if (!logEveryScanCycle) return false;
-        if (hasError || hasExecutableOrPaperEvent || materialStateChange) return true;
+        if (hasError || hasExecutableOrPaperEvent) return true;
         if (!operationalQuietMode || logBatchScanInQuietMode) return true;
-        // In quiet mode, [SCAN] is a first-batch/material-event diagnostic only. Full-cycle and
-        // periodic progress are emitted as compact [SCANNER_SUMMARY] lines instead.
+        // In quiet mode, [SCAN] is first-batch only; full-cycle and periodic progress are emitted
+        // through [SCANNER_SUMMARY] so wrap batches do not spam console/UI recent logs.
         return scanId <= 1;
     }
 
-    public static bool ShouldEmitScannerSummary(DateTime nowUtc, DateTime lastSummaryUtc, int everyMinutes, bool fullCycleComplete = false, bool hasError = false, bool hasPaperOpen = false)
-        => fullCycleComplete
-            || hasError
-            || hasPaperOpen
+    public static bool ShouldEmitScannerSummary(DateTime nowUtc, DateTime lastSummaryUtc, int everyMinutes, bool fullCycleComplete = false, bool hasError = false, bool hasPaperOpen = false, bool emitOnFullCycle = true, bool emitOnError = true, bool emitOnPaperOpen = true)
+        => (emitOnFullCycle && fullCycleComplete)
+            || (emitOnError && hasError)
+            || (emitOnPaperOpen && hasPaperOpen)
             || (everyMinutes > 0 && (lastSummaryUtc == DateTime.MinValue || nowUtc - lastSummaryUtc >= TimeSpan.FromMinutes(everyMinutes)));
 
     public static DiscoveryHealthSummary DiscoveryHealth(MarketDiscoverySummary summary, int expectedMinActive)

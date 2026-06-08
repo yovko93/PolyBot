@@ -100,6 +100,20 @@ public class PaperPhase2StabilityTests
     }
 
     [Fact]
+    public void Scan_full_cycle_wrap_batch_is_suppressed_in_operational_quiet_mode()
+    {
+        Assert.False(ScanLogSummaryService.ShouldLogBatchScan(true, true, false, scanId: 67, everyNBatches: 100, fullCycleComplete: true, materialStateChange: true, hasExecutableOrPaperEvent: false, hasError: false));
+    }
+
+    [Fact]
+    public void Scanner_summary_does_not_emit_every_full_cycle_when_disabled()
+    {
+        var now = DateTime.UtcNow;
+
+        Assert.False(ScanLogSummaryService.ShouldEmitScannerSummary(now, now, 10, fullCycleComplete: true, emitOnFullCycle: false));
+    }
+
+    [Fact]
     public void Rejected_only_multi_candidate_small_count_changes_are_suppressed_in_quiet_buckets()
     {
         var gate = new QuietLogGate();
@@ -526,6 +540,29 @@ public class PaperPhase2StabilityTests
 
         Assert.Contains("MemoryCriticals=1", line);
         Assert.Contains("MemoryStable=false", line);
+    }
+
+    [Fact]
+    public void Soak_status_includes_warmup_complete()
+    {
+        var state = new BotRuntimeState();
+        var options = new TradingBotOptions { RuntimeHealth = { WarmupMinutes = 20 } };
+        var line = RuntimeHealthTrendTracker.ToSoakStatusLogLine(RuntimeHealthSnapshot.From(state), new RuntimeHealthTrend(1, 2, 1, 0, true, 2), options, state);
+
+        Assert.Contains("WarmupMinutes=20", line);
+        Assert.Contains("WarmupComplete=", line);
+    }
+
+    [Fact]
+    public void MemoryStable_false_during_warmup_is_not_memory_critical_failure()
+    {
+        var state = new BotRuntimeState();
+        var options = new TradingBotOptions { RuntimeHealth = { WarmupMinutes = 20 } };
+        var line = RuntimeHealthTrendTracker.ToSoakStatusLogLine(RuntimeHealthSnapshot.From(state), new RuntimeHealthTrend(1, 200, 199, 19, false, 2), options, state);
+
+        Assert.Contains("WarmupComplete=false", line);
+        Assert.Contains("MemoryStable=false", line);
+        Assert.Contains("MemoryCriticals=0", line);
     }
 
     [Fact]
