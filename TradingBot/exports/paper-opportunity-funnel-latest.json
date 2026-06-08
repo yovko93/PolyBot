@@ -1,0 +1,289 @@
+{
+  "timestamp": "2026-06-08T22:13:07.9764697Z",
+  "uptime": "14:46:54.4091044",
+  "paperPhase": 2,
+  "scannedMarkets": 250,
+  "singleMarketCandidates": 202,
+  "verifiedBasketCandidates": 0,
+  "belowMinEdge": 404,
+  "dataQualityRejected": 48,
+  "waitingForStableEdge": 0,
+  "waitingForExecutionReadiness": 0,
+  "fillSimulationRejected": 0,
+  "diagnosticsOnlyProfile": 0,
+  "experimentalPaperDisabled": 0,
+  "discoveryPartial": false,
+  "orderbookUnavailable": 29,
+  "invalidTokenQuarantined": 16,
+  "riskCapRejected": 0,
+  "duplicateSuppressed": 0,
+  "paperOpened": 0,
+  "topRejectedSamples": [
+    {
+      "reason": "BelowMinEdge",
+      "count": 202
+    },
+    {
+      "reason": "TokenOutcomeMappingUnverified",
+      "count": 19
+    },
+    {
+      "reason": "SuspiciousYesNoAskSum",
+      "count": 16
+    },
+    {
+      "reason": "MissingNoAsk",
+      "count": 13
+    },
+    {
+      "reason": "AutoCandidateUnverified",
+      "count": 6
+    },
+    {
+      "source": "verifiedBasket",
+      "groupKey": "winner:on 2026 06 09|kind:generic",
+      "reason": "AutoCandidateUnverified"
+    },
+    {
+      "source": "verifiedBasket",
+      "groupKey": "winner:2027 nfl league championship|kind:generic",
+      "reason": "AutoCandidateUnverified"
+    },
+    {
+      "source": "verifiedBasket",
+      "groupKey": "colon-event:spread|kind:generic",
+      "reason": "AutoCandidateUnverified"
+    },
+    {
+      "source": "verifiedBasket",
+      "groupKey": "winner:valorant masters london 2026|kind:generic",
+      "reason": "AutoCandidateUnverified"
+    },
+    {
+      "source": "verifiedBasket",
+      "groupKey": "colon-event:libema open|kind:generic",
+      "reason": "AutoCandidateUnverified"
+    },
+    {
+      "source": "verifiedBasket",
+      "groupKey": "winner:2026 f1 catalunya grand prix|kind:generic",
+      "reason": "AutoCandidateUnverified"
+    },
+    {
+      "source": "singleMarketDataQuality",
+      "marketId": "2326301",
+      "title": "Will Micron Q3 adjusted gross margin be above 85%?",
+      "reason": "SuspiciousYesNoAskSum",
+      "rawSum": 1.06,
+      "edgePerShare": -0.062
+    },
+    {
+      "source": "singleMarketDataQuality",
+      "marketId": "2454756",
+      "title": "Stuttgart Open (Doubles): Reymond/Sanchez vs Altmaier/Jebens",
+      "reason": "TokenOutcomeMappingUnverified",
+      "rawSum": 1.44,
+      "edgePerShare": -0.442
+    },
+    {
+      "source": "singleMarketDataQuality",
+      "marketId": "2457700",
+      "title": "Ilkley: Mimi Xu vs Elizabeth Mandlik",
+      "reason": "TokenOutcomeMappingUnverified",
+      "rawSum": 1.01,
+      "edgePerShare": -0.012
+    },
+    {
+      "source": "singleMarketDataQuality",
+      "marketId": "2459949",
+      "title": "Will the highest temperature in Chengdu be 23\u00B0C or below on June 9?",
+      "reason": "MissingNoAsk",
+      "rawSum": 0.004,
+      "edgePerShare": 0.994
+    },
+    {
+      "source": "singleMarketDataQuality",
+      "marketId": "2419239",
+      "title": "Will Jaxson Dart attend any game at the 2026 NBA Finals?",
+      "reason": "SuspiciousYesNoAskSum",
+      "rawSum": 1.122,
+      "edgePerShare": -0.124
+    },
+    {
+      "source": "singleMarketDataQuality",
+      "marketId": "2460017",
+      "title": "Will the highest temperature in Busan be 23\u00B0C on June 9?",
+      "reason": "SuspiciousYesNoAskSum",
+      "rawSum": 1.08,
+      "edgePerShare": -0.082
+    },
+    {
+      "source": "singleMarketDataQuality",
+      "marketId": "2467729",
+      "title": "Will Ethereum dip to $1,400 on June 8?",
+      "reason": "MissingNoAsk",
+      "rawSum": 0.002,
+      "edgePerShare": 0.996
+    },
+    {
+      "source": "singleMarketDataQuality",
+      "marketId": "2289164",
+      "title": "UFC 329: Max Holloway vs. Conor McGregor (Welterweight, Main Card)",
+      "reason": "TokenOutcomeMappingUnverified",
+      "rawSum": 1.01,
+      "edgePerShare": -0.012
+    },
+    {
+      "source": "singleMarketDataQuality",
+      "marketId": "800771",
+      "title": "Will Mark Warner be the Democratic nominee for Senate in Virginia?",
+      "reason": "SuspiciousYesNoAskSum",
+      "rawSum": 1.233,
+      "edgePerShare": -0.235
+    },
+    {
+      "source": "singleMarketDataQuality",
+      "marketId": "2356569",
+      "title": "UFC Freedom 250: Michael Chandler vs. Mauricio Ruffy (Lightweight, Main Card)",
+      "reason": "TokenOutcomeMappingUnverified",
+      "rawSum": 1.01,
+      "edgePerShare": -0.012
+    }
+  ],
+  "topNearExecutableSamples": [
+    {
+      "source": "singleMarket",
+      "marketId": "1349159",
+      "title": "Will New England Revolution win the 2026 MLS Cup?",
+      "edgePerShare": -0.003,
+      "requiredImprovement": 0.008,
+      "rawSum": 1.001
+    },
+    {
+      "source": "singleMarket",
+      "marketId": "1365858",
+      "title": "Will Eduardo Bolsonaro finish in second place in the first round of the 2026 Brazilian presidential election?",
+      "edgePerShare": -0.003,
+      "requiredImprovement": 0.008,
+      "rawSum": 1.001
+    },
+    {
+      "source": "singleMarket",
+      "marketId": "561973",
+      "title": "Will Donald Trump win the 2028 Republican presidential nomination?",
+      "edgePerShare": -0.003,
+      "requiredImprovement": 0.008,
+      "rawSum": 1.001
+    },
+    {
+      "source": "singleMarket",
+      "marketId": "1961531",
+      "title": "Will the next diplomatic US-Iran meeting be in the United States?",
+      "edgePerShare": -0.003,
+      "requiredImprovement": 0.008,
+      "rawSum": 1.001
+    },
+    {
+      "source": "singleMarket",
+      "marketId": "839422",
+      "title": "Will Australia win Group D in the 2026 FIFA World Cup?",
+      "edgePerShare": -0.003,
+      "requiredImprovement": 0.008,
+      "rawSum": 1.001
+    },
+    {
+      "source": "singleMarket",
+      "marketId": "2343657",
+      "title": "Will Elon Musk post 400-419 tweets in July 2026?",
+      "edgePerShare": -0.003,
+      "requiredImprovement": 0.008,
+      "rawSum": 1.001
+    },
+    {
+      "source": "singleMarket",
+      "marketId": "2460023",
+      "title": "Will the highest temperature in Busan be 29\u00B0C on June 9?",
+      "edgePerShare": -0.003,
+      "requiredImprovement": 0.008,
+      "rawSum": 1.001
+    },
+    {
+      "source": "singleMarket",
+      "marketId": "1720876",
+      "title": "Will SpaceX raise between $50B and $60B in its IPO?",
+      "edgePerShare": -0.003,
+      "requiredImprovement": 0.008,
+      "rawSum": 1.001
+    },
+    {
+      "source": "singleMarket",
+      "marketId": "631128",
+      "title": "Will Mistral have the top AI model at the end of June 2026?",
+      "edgePerShare": -0.003,
+      "requiredImprovement": 0.008,
+      "rawSum": 1.001
+    },
+    {
+      "source": "singleMarket",
+      "marketId": "1357382",
+      "title": "Will the Green Bay Packers win the 2027 NFL league championship?",
+      "edgePerShare": -0.003,
+      "requiredImprovement": 0.008,
+      "rawSum": 1.001
+    },
+    {
+      "source": "verifiedBasket",
+      "groupKey": "winner:on 2026 06 09|kind:generic",
+      "status": "Candidate",
+      "reason": "AutoCandidateUnverified",
+      "edge": null,
+      "cost": null,
+      "guaranteedPayout": null
+    },
+    {
+      "source": "verifiedBasket",
+      "groupKey": "winner:2027 nfl league championship|kind:generic",
+      "status": "Candidate",
+      "reason": "AutoCandidateUnverified",
+      "edge": null,
+      "cost": null,
+      "guaranteedPayout": null
+    },
+    {
+      "source": "verifiedBasket",
+      "groupKey": "colon-event:spread|kind:generic",
+      "status": "Candidate",
+      "reason": "AutoCandidateUnverified",
+      "edge": null,
+      "cost": null,
+      "guaranteedPayout": null
+    },
+    {
+      "source": "verifiedBasket",
+      "groupKey": "winner:valorant masters london 2026|kind:generic",
+      "status": "Candidate",
+      "reason": "AutoCandidateUnverified",
+      "edge": null,
+      "cost": null,
+      "guaranteedPayout": null
+    },
+    {
+      "source": "verifiedBasket",
+      "groupKey": "colon-event:libema open|kind:generic",
+      "status": "Candidate",
+      "reason": "AutoCandidateUnverified",
+      "edge": null,
+      "cost": null,
+      "guaranteedPayout": null
+    },
+    {
+      "source": "verifiedBasket",
+      "groupKey": "winner:2026 f1 catalunya grand prix|kind:generic",
+      "status": "Candidate",
+      "reason": "AutoCandidateUnverified",
+      "edge": null,
+      "cost": null,
+      "guaranteedPayout": null
+    }
+  ]
+}
