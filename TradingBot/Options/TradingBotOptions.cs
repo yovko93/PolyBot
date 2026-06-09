@@ -169,10 +169,15 @@ public class OrderBookOptions
     public bool SplitBatchOnBadRequest { get; set; } = true;
     public bool LogInvalidBatchPayloadSamples { get; set; } = true;
     public int MaxInvalidPayloadSamplesToLog { get; set; } = 5;
-    public int InvalidTokenQuarantineMinutes { get; set; } = 360;
+    public int InvalidTokenQuarantineMinutes { get; set; } = 720;
     public int MaxInvalidTokensPerCycle { get; set; } = 50;
     public bool DropMarketsWithQuarantinedTokens { get; set; } = true;
     public bool SkipQuarantinedTokensBeforeBatch { get; set; } = true;
+    public bool PersistInvalidTokenQuarantineDuringRun { get; set; } = true;
+    public bool ExportInvalidTokenQuarantine { get; set; } = true;
+    public double MaxBadRequestRateForStable { get; set; } = 0.005;
+    public int MaxBadRequestsPerHourForStable { get; set; } = 20;
+    public int MaxRepeatedInvalidTokenAfterQuarantine { get; set; } = 0;
 }
 public class MarketDiscoveryOptions
 {

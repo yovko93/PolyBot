@@ -1054,7 +1054,7 @@ public sealed class AllowlistRepairService
     private static AllowlistRepairSummary BuildSummary(IReadOnlyList<AllowlistRepairGroup> rows, int configured)
     {
         var healthy = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.Healthy));
-        var monitoring = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.MonitoringOnly));
+        var monitoring = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.MonitoringOnly) || x.HealthCategory == nameof(AllowlistRepairHealthCategory.PricingUnavailable));
         var prune = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.NeedsPricingPrune));
         var refresh = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.NeedsRefresh));
         var brokenConfig = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.BrokenConfig));
@@ -1184,10 +1184,20 @@ public sealed class VerifiedAllowlistGroupHealthClassifier
         var noAskResolved = AllowlistRepairService.GetInt(pricing, "noAskResolvedCount");
         var missingNoAsk = AllowlistRepairService.GetInt(pricing, "missingNoAskCount");
         var missingNoAskIds = AllowlistRepairService.ReadMarketIds(pricing, "missingPriceLegs");
+        var reasonBreakdown = pricing?["missingNoAskReasonBreakdown"] as JsonObject;
+        var orderbookFetchFailed = reasonBreakdown is not null && reasonBreakdown.TryGetPropertyValue("OrderbookFetchFailed", out var obNode) && obNode is not null && obNode.GetValueKind() == JsonValueKind.Number ? obNode.GetValue<int>() : 0;
+        var invalidToken = reasonBreakdown is not null && reasonBreakdown.TryGetPropertyValue("InvalidToken", out var itNode) && itNode is not null && itNode.GetValueKind() == JsonValueKind.Number ? itNode.GetValue<int>() : 0;
+        var quarantinedToken = reasonBreakdown is not null && reasonBreakdown.TryGetPropertyValue("QuarantinedToken", out var qtNode) && qtNode is not null && qtNode.GetValueKind() == JsonValueKind.Number ? qtNode.GetValue<int>() : 0;
         var resolvedOk = resolved?.ValidationStatus == "VerifiedGroupResolved";
 
         if (!cfg.Enabled)
             return Result(cfg, AllowlistRepairHealthCategory.Disabled, AllowlistRepairRecommendedAction.KeepMonitoring, "High", "Group disabled in current allowlist.", missingMarketIds, missingNoAskIds);
+
+        if (resolvedOk && missingNoAsk > 0 && orderbookFetchFailed == missingNoAsk)
+            return Result(cfg, AllowlistRepairHealthCategory.PricingUnavailable, AllowlistRepairRecommendedAction.KeepMonitoring, "Medium", "Resolved but orderbook fetch failed for missing NO asks; monitor data availability only.", missingMarketIds, missingNoAskIds);
+
+        if (resolvedOk && missingNoAsk > 0 && (invalidToken + quarantinedToken) == missingNoAsk)
+            return Result(cfg, AllowlistRepairHealthCategory.PricingUnavailable, AllowlistRepairRecommendedAction.KeepMonitoring, "Medium", "Resolved but one or more NO token ids are stale or quarantined; monitor until discovery refreshes tokens.", missingMarketIds, missingNoAskIds);
 
         if (resolvedOk && missingNoAsk > 0 && noAskResolved >= 2)
             return Result(cfg, AllowlistRepairHealthCategory.NeedsPricingPrune, AllowlistRepairRecommendedAction.PruneMissingNoAskLegs, missingNoAsk == 1 ? "High" : "Medium", "Resolved but one or more NO asks are unavailable.", missingMarketIds, missingNoAskIds, BuildPrunedTemplate(cfg, pricing, noAskResolved));

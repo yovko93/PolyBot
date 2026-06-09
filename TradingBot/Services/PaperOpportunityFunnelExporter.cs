@@ -22,6 +22,17 @@ public sealed record PaperOpportunityFunnelSnapshot(
     int ExperimentalPaperDisabled,
     bool DiscoveryPartial,
     int OrderbookUnavailable,
+    long BatchBookBadRequests,
+    long BatchBookInvalidTokens,
+    int InvalidTokenQuarantine,
+    int OrderbookFetchFailed,
+    int OrderbookUnavailableMarkets,
+    int VerifiedGroupsPricingUnavailable,
+    int VerifiedGroupsInvalidToken,
+    IReadOnlyDictionary<string, int> VerifiedGroupsMissingNoAskByReason,
+    int SingleMarketOrderbookUnavailable,
+    long SkippedQuarantinedTokens,
+    long SkippedQuarantinedMarkets,
     int InvalidTokenQuarantined,
     int RiskCapRejected,
     int DuplicateSuppressed,
@@ -48,6 +59,9 @@ public static class PaperOpportunityFunnelExporter
             + state.PaperPretradeRejectsByReason.Where(x => IsAny(x.Key, "MaxPaper", "MaxOpen", "MaxExposure", "MaxNotional", "Risk", "InsufficientPaperCash")).Sum(x => x.Value);
         var diagnosticsOnlyProfile = CountReasons(rejectCounts, "DiagnosticsOnly");
         var experimentalPaperDisabled = options.PaperRisk.AllowExperimentalPaper ? 0 : CountReasons(rejectCounts, "Experimental", "BlockedByProfilePolicy");
+        var missingNoAskByReason = rejectCounts
+            .Where(x => x.Key.Contains("MissingNoAsk", StringComparison.OrdinalIgnoreCase) || x.Key.Contains("Orderbook", StringComparison.OrdinalIgnoreCase) || x.Key.Contains("InvalidToken", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
 
         var topRejected = rejectCounts
             .OrderByDescending(x => x.Value)
@@ -84,6 +98,17 @@ public static class PaperOpportunityFunnelExporter
             ExperimentalPaperDisabled: experimentalPaperDisabled,
             DiscoveryPartial: discoveryPartial,
             OrderbookUnavailable: CountReasons(rejectCounts, "OrderbookUnavailable", "BookCacheMiss", "MissingOrderbook", "NoAsk", "MissingNoAsk"),
+            BatchBookBadRequests: state.OrderBookServiceStats.BatchBadRequests,
+            BatchBookInvalidTokens: state.OrderBookServiceStats.BatchInvalidTokens,
+            InvalidTokenQuarantine: state.OrderBookServiceStats.QuarantinedTokens,
+            OrderbookFetchFailed: CountReasons(rejectCounts, "OrderbookFetchFailed"),
+            OrderbookUnavailableMarkets: state.OrderBookServiceStats.OrderbookUnavailableMarkets,
+            VerifiedGroupsPricingUnavailable: CountReasons(rejectCounts, "PricingUnavailable", "OrderbookFetchFailed"),
+            VerifiedGroupsInvalidToken: CountReasons(rejectCounts, "InvalidToken", "QuarantinedToken"),
+            VerifiedGroupsMissingNoAskByReason: missingNoAskByReason,
+            SingleMarketOrderbookUnavailable: CountReasons(single.DataQualityRejectedByReason, "OrderbookUnavailable", "BookCacheMiss", "MissingOrderbook", "NoAsk", "MissingNoAsk"),
+            SkippedQuarantinedTokens: state.OrderBookServiceStats.BatchBookSkippedQuarantinedTokens,
+            SkippedQuarantinedMarkets: state.OrderBookServiceStats.BatchBookSkippedMarketsWithQuarantinedTokens,
             InvalidTokenQuarantined: state.OrderBookServiceStats.QuarantinedTokens,
             RiskCapRejected: riskCapRejected,
             DuplicateSuppressed: state.PaperDuplicateSuppressions,

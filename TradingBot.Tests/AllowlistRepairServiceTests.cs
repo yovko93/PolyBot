@@ -11,6 +11,31 @@ public class AllowlistRepairServiceTests
 {
 
 
+
+    [Fact]
+    public void Orderbook_fetch_failed_missing_no_ask_is_pricing_unavailable_not_prune()
+    {
+        var pricing = new[]
+        {
+            new
+            {
+                groupKey = "winner:2026 colombian presidential election|kind:person",
+                noAskResolvedCount = 0,
+                missingNoAskCount = 3,
+                pricedLegs = Array.Empty<object>(),
+                missingPriceLegs = new[] { Leg("m-priced-1", "c1"), Leg("569373", "c-missing"), Leg("m-priced-2", "c2") },
+                missingNoAskReasonBreakdown = new Dictionary<string, int> { ["OrderbookFetchFailed"] = 3 }
+            }
+        };
+
+        var report = new AllowlistRepairService().BuildReport(Configured(), ResolvedWithColombianPricingProblem(), pricing, []);
+        var col = report.Groups.Single(x => x.GroupKey.Contains("colombian", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal("PricingUnavailable", col.HealthCategory);
+        Assert.Equal("KeepMonitoring", col.RecommendedAction);
+        Assert.Null(col.SuggestedPrunedTemplate);
+    }
+
     [Fact]
     public void Diagnostics_only_during_soak_suppresses_non_critical_repair_patches()
     {

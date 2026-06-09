@@ -134,6 +134,65 @@ public class OrderBookBatchTests
         Assert.Contains("BatchBookBadRequests=4", line);
     }
 
+    [Fact]
+    public async Task Confirmed_single_token_400_quarantines_and_skips_future_payload()
+    {
+        var seen = new List<string>();
+        var svc = new OrderBookService(new HttpClient(new BatchHandler(req =>
+        {
+            var ids = ReadTokenIds(req);
+            seen.AddRange(ids);
+            if (ids.SequenceEqual(new[] { "999" })) return Json(HttpStatusCode.BadRequest, "{\"error\":\"stale token\"}");
+            return Json(HttpStatusCode.OK, BookJson(ids));
+        }))) { MaxBatchBookRequestSize = 1, SplitBatchOnBadRequest = true, QuietLogGate = new QuietLogGate(), ExportInvalidTokenQuarantine = false };
+
+        await svc.GetOrderBooksBatchAsync(new[] { "999" });
+        Assert.True(svc.IsTokenQuarantined("999"));
+        await svc.GetOrderBooksBatchAsync(new[] { "999", "1" });
+
+        Assert.Equal(1, seen.Count(x => x == "999"));
+        Assert.True(svc.GetStats().BatchBookSkippedQuarantinedTokens >= 1);
+    }
+
+    [Fact]
+    public async Task Market_with_quarantined_token_is_marked_orderbook_unavailable()
+    {
+        var svc = new OrderBookService(new HttpClient(new BatchHandler(req =>
+        {
+            var ids = ReadTokenIds(req);
+            if (ids.Contains("bad")) return Json(HttpStatusCode.BadRequest, "{\"error\":\"bad\"}");
+            return Json(HttpStatusCode.OK, BookJson(ids));
+        }))) { MaxBatchBookRequestSize = 1, ExportInvalidTokenQuarantine = false };
+        var market = new Market { id = "m-bad", question = "q", outcomes = new List<string> { "Yes", "No" }, clobTokenIds = new List<string> { "1", "999" } };
+
+        await svc.PrefetchBinarySnapshotsAsync(new List<Market> { market });
+        svc.QuarantineInvalidToken("999");
+
+        Assert.Null(await svc.GetBinarySnapshotAsync(market));
+        Assert.True(svc.GetStats().OrderbookUnavailableMarkets >= 1);
+    }
+
+    [Fact]
+    public async Task Split_retry_counters_track_success_and_failure()
+    {
+        var svc = new OrderBookService(new HttpClient(new BatchHandler(req =>
+        {
+            var ids = ReadTokenIds(req);
+            if (ids.Count > 1) return Json(HttpStatusCode.BadRequest, "{\"error\":\"split\"}");
+            if (ids.Contains("999")) return Json(HttpStatusCode.BadRequest, "{\"error\":\"bad\"}");
+            return Json(HttpStatusCode.OK, BookJson(ids));
+        }))) { MaxBatchBookRequestSize = 3, SplitBatchOnBadRequest = true, QuietLogGate = new QuietLogGate(), ExportInvalidTokenQuarantine = false };
+
+        await svc.GetOrderBooksBatchAsync(new[] { "1", "999", "2" });
+        var stats = svc.GetStats();
+
+        Assert.True(stats.BatchBookSplitRetriesAttempted >= 1);
+        Assert.True(stats.BatchBookSplitRetrySucceeded >= 1);
+        Assert.True(stats.BatchBookSingleTokenFailures >= 1);
+        Assert.True(stats.BatchBookSingleTokenQuarantined >= 1);
+        Assert.True(stats.BatchRetrySuccesses >= 1);
+    }
+
     private static HttpResponseMessage Json(HttpStatusCode status, string body)
         => new(status) { Content = new StringContent(body) };
 

@@ -34,7 +34,9 @@ public sealed class VerifiedGroupPricingService
     {
         var tokens = ResolveBinaryTokens(market);
         if (!tokens.IsValidBinaryMarket)
-            return ResolvedNoAsk.Fail(market.id, market.conditionId, tokens.NoTokenId, "MissingNoTokenId");
+            return ResolvedNoAsk.Fail(market.id, market.conditionId, tokens.NoTokenId, "TokenMappingUnverified");
+        if (!string.IsNullOrWhiteSpace(tokens.NoTokenId) && !tokens.NoTokenId.All(char.IsDigit))
+            return ResolvedNoAsk.Fail(market.id, market.conditionId, tokens.NoTokenId, "InvalidToken");
         if (snapshot is null)
             return ResolvedNoAsk.Fail(market.id, market.conditionId, tokens.NoTokenId, "OrderbookFetchFailed");
 
@@ -47,7 +49,7 @@ public sealed class VerifiedGroupPricingService
             return new ResolvedNoAsk(market.id, market.conditionId, derived, snapshot.YesBid.Size, "DerivedFromYesBid", snapshot.YesBid.Price, snapshot.YesBid.Size, tokens.NoTokenId, nowUtc, false, null);
         }
 
-        return ResolvedNoAsk.Fail(market.id, market.conditionId, tokens.NoTokenId, "MissingYesBidForDerivedNoAsk");
+        return ResolvedNoAsk.Fail(market.id, market.conditionId, tokens.NoTokenId, "EmptyBook");
     }
 }
 

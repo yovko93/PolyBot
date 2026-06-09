@@ -565,6 +565,30 @@ public class PaperPhase2StabilityTests
         Assert.Contains("MemoryCriticals=0", line);
     }
 
+
+    [Fact]
+    public void Soak_status_orderbookStable_false_when_bad_requests_grow_linearly()
+    {
+        var state = new BotRuntimeState();
+        state.SetOrderBookServiceStats(new OrderBookServiceStats(BatchRequests: 1000, BatchBooksLoaded: 0, SingleRequests: 0, CacheHits: 0, SnapshotCacheHits: 0, Timeouts: 0, HttpErrors: 0, ParseErrors: 0, BookCacheMisses: 0, BatchBadRequests: 100));
+        var options = new TradingBotOptions { OrderBook = { MaxBadRequestRateForStable = 0.005, MaxBadRequestsPerHourForStable = 20 } };
+        var line = RuntimeHealthTrendTracker.ToSoakStatusLogLine(RuntimeHealthSnapshot.From(state), new RuntimeHealthTrend(1, 2, 1, 0, true, 2, BatchBookBadRequestsDeltaLastHour: 100), options, state);
+
+        Assert.Contains("OrderbookStable=false", line);
+    }
+
+    [Fact]
+    public void Soak_status_orderbookStable_true_after_quarantine_plateaus_bad_requests()
+    {
+        var state = new BotRuntimeState();
+        state.SetOrderBookServiceStats(new OrderBookServiceStats(BatchRequests: 10000, BatchBooksLoaded: 0, SingleRequests: 0, CacheHits: 0, SnapshotCacheHits: 0, Timeouts: 0, HttpErrors: 0, ParseErrors: 0, BookCacheMisses: 0, BatchBadRequests: 10, QuarantinedTokens: 3, BatchBookSkippedQuarantinedTokens: 50));
+        var options = new TradingBotOptions { OrderBook = { MaxBadRequestRateForStable = 0.005, MaxBadRequestsPerHourForStable = 20 } };
+        var line = RuntimeHealthTrendTracker.ToSoakStatusLogLine(RuntimeHealthSnapshot.From(state), new RuntimeHealthTrend(1, 2, 1, 0, true, 2, BatchBookBadRequestsDeltaLastHour: 0, BatchBookInvalidTokensDeltaLastHour: 0, SkippedQuarantinedTokensLastHour: 50), options, state);
+
+        Assert.Contains("OrderbookStable=true", line);
+        Assert.Contains("SkippedQuarantinedTokensLastHour=50", line);
+    }
+
     [Fact]
     public void Paper_funnel_export_includes_orderbookUnavailable_and_invalidTokenQuarantined_counts()
     {
@@ -577,6 +601,8 @@ public class PaperPhase2StabilityTests
 
         Assert.Contains("orderbookUnavailable", json);
         Assert.Contains("invalidTokenQuarantined", json);
+        Assert.Contains("batchBookBadRequests", json);
+        Assert.Contains("verifiedGroupsMissingNoAskByReason", json);
         Assert.Equal(5, snap.OrderbookUnavailable);
         Assert.Equal(3, snap.InvalidTokenQuarantined);
         Assert.True(snap.DiscoveryPartial);
