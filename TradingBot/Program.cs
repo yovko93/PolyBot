@@ -374,7 +374,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     http.Timeout = TimeSpan.FromSeconds(options.ExternalApiTimeoutSeconds);
 
     var marketService = new MarketDataService(http);
-    var orderbookService = new OrderBookService(http) { DisableSingleBookHttpFallback = true, LogPrefetchDetails = options.LogPrefetchDetails, LogBookCacheMissDetails = options.Logging.LogBookCacheMissDetails, BookCacheMissSampleSize = options.Logging.BookCacheMissSampleSize };
+    var orderbookService = new OrderBookService(http) { DisableSingleBookHttpFallback = true, LogPrefetchDetails = options.LogPrefetchDetails, LogBookCacheMissDetails = options.Logging.LogBookCacheMissDetails, BookCacheMissSampleSize = options.Logging.BookCacheMissSampleSize, ExportDirectory = Path.Combine(app.Environment.ContentRootPath, "exports") };
     orderbookService.ConfigureCache(TimeSpan.FromMinutes(Math.Max(1, options.RuntimeMemory.OrderbookCacheTtlMinutes)), Math.Min(options.Caches.MaxOrderbookCacheEntries, options.RuntimeMemory.MaxOrderbookCacheEntries));
     orderbookService.ConfigureBatchOptions(options.OrderBook, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate);
     orderbookService.MaxInvalidTokenCacheEntries = Math.Max(1, options.RuntimeMemory.MaxInvalidTokenCacheEntries);
@@ -654,7 +654,11 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         foreach (var m in markets.Take(options.MultiOutcomeArbitrage.MaxVerifiedGroupOrderbookRequestsPerCycle))
                         {
                             var s = await orderbookService.GetBinarySnapshotAsync(m, stoppingToken);
-                            resolvedNoAsks.Add(VerifiedGroupPricingService.ResolveNoAsk(m, s, DateTime.UtcNow, options.MultiOutcomeArbitrage.VerifiedGroupOrderbookMaxAgeMs));
+                            var tokens = VerifiedGroupPricingService.ResolveBinaryTokens(m);
+                            if ((tokens.YesTokenId is not null && orderbookService.IsTokenQuarantined(tokens.YesTokenId)) || (tokens.NoTokenId is not null && orderbookService.IsTokenQuarantined(tokens.NoTokenId)))
+                                resolvedNoAsks.Add(ResolvedNoAsk.Fail(m.id, m.conditionId, tokens.NoTokenId, "QuarantinedToken"));
+                            else
+                                resolvedNoAsks.Add(VerifiedGroupPricingService.ResolveNoAsk(m, s, DateTime.UtcNow, options.MultiOutcomeArbitrage.VerifiedGroupOrderbookMaxAgeMs));
                         }
                         var missingNoAskLegs = resolvedNoAsks.Where(x => !x.NoAsk.HasValue).ToList();
                         var noAskResolvedCount = resolvedNoAsks.Count - missingNoAskLegs.Count;
@@ -662,21 +666,29 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         {
                             skipReason = "MissingNoAsk";
                             verifiedPricingCycle++;
-                            var pricingFingerprint = $"{g.GroupKey}|{resolvedNoAsks.Count}|{noAskResolvedCount}|{missingNoAskLegs.Count}|{string.Join(",", missingNoAskLegs.Select(x => x.MarketId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}";
+                            var missingReasonBreakdown = missingNoAskLegs
+                                .GroupBy(x => x.FailureReason ?? "Unknown", StringComparer.OrdinalIgnoreCase)
+                                .ToDictionary(x => x.Key, x => x.Count(), StringComparer.OrdinalIgnoreCase);
+                            var pricingFingerprint = $"{g.GroupKey}|{resolvedNoAsks.Count}|{noAskResolvedCount}|{missingNoAskLegs.Count}|{string.Join(",", missingReasonBreakdown.OrderBy(x => x.Key).Select(x => x.Key + ":" + x.Value))}|{string.Join(",", missingNoAskLegs.Select(x => x.MarketId).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}";
                             var shouldLogPricing = !verifiedPricingLastFingerprint.TryGetValue(g.GroupKey, out var prevPricing)
                                 || prevPricing != pricingFingerprint
                                 || (options.Logging.LogVerifiedGroupPricingEveryNCycles > 0 && verifiedPricingCycle % options.Logging.LogVerifiedGroupPricingEveryNCycles == 0);
                             verifiedPricingLastFingerprint[g.GroupKey] = pricingFingerprint;
                             if (shouldLogPricing)
                             {
-                                Console.WriteLine($"[VERIFIED_GROUP_PRICING] Group={g.GroupKey} Legs={resolvedNoAsks.Count} NoAskResolved={noAskResolvedCount} MissingNoAsk={missingNoAskLegs.Count} MissingLiquidity=0 TopReason=MissingNoAsk");
+                                var breakdownText = string.Join(",", missingReasonBreakdown.OrderBy(x => x.Key).Select(x => $"{x.Key}:{x.Value}"));
+                                var topReason = missingReasonBreakdown.OrderByDescending(x => x.Value).ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase).FirstOrDefault().Key ?? "MissingNoAsk";
+                                Console.WriteLine($"[VERIFIED_GROUP_PRICING] Group={g.GroupKey} Legs={resolvedNoAsks.Count} NoAskResolved={noAskResolvedCount} MissingNoAsk={missingNoAskLegs.Count} MissingLiquidity=0 TopReason=MissingNoAsk_{topReason} ReasonBreakdown={{{breakdownText}}}");
                                 Console.WriteLine($"[VERIFIED_GROUP_MISSING_NO_ASK] Group={g.GroupKey} Missing={missingNoAskLegs.Count} Samples=[{string.Join(", ", missingNoAskLegs.Take(5).Select(x => $"{x.MarketId}:{x.FailureReason}"))}]");
+                                if (missingReasonBreakdown.TryGetValue("OrderbookFetchFailed", out var unavailable) && unavailable > 0)
+                                    Console.WriteLine($"[VERIFIED_GROUP_ORDERBOOK_UNAVAILABLE] Group={g.GroupKey} MissingNoAsk={unavailable} Reason=OrderbookFetchFailed Action=MonitorOnly");
                             }
                             var pricedLegs = resolvedNoAsks.Where(x => x.NoAsk.HasValue).ToList();
                             var missingIds = missingNoAskLegs.Select(x => x.MarketId).ToHashSet(StringComparer.OrdinalIgnoreCase);
                             var suggestedMarketIds = markets.Where(x => !missingIds.Contains(x.id) && x.active != false).Select(x => x.id).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
                             var suggestedConditionIds = markets.Where(x => !missingIds.Contains(x.id) && x.active != false && !string.IsNullOrWhiteSpace(x.conditionId)).Select(x => x.conditionId!).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-                            var suggestion = options.MultiOutcomeReview.IncludeSuggestedPrunedAllowlist ? new { enabled = true, groupKey = g.GroupKey, title = g.Title, verificationStatus = "Verified", groupType = "MutuallyExclusiveWinner", allowedStrategy = "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", marketIds = suggestedMarketIds, conditionIds = suggestedConditionIds, requiredOutcomeCount = suggestedMarketIds.Length, requireExactOutcomeCount = false, suggestionReason = "MissingNoAsk legs excluded", settlementNotes = "Pruned to priced mutually exclusive subset. Missing NO ask leg excluded." } : null;
+                            var fetchFailureOnly = missingReasonBreakdown.Count == 1 && missingReasonBreakdown.ContainsKey("OrderbookFetchFailed");
+                            var suggestion = options.MultiOutcomeReview.IncludeSuggestedPrunedAllowlist && !fetchFailureOnly ? new { enabled = true, groupKey = g.GroupKey, title = g.Title, verificationStatus = "Verified", groupType = "MutuallyExclusiveWinner", allowedStrategy = "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", marketIds = suggestedMarketIds, conditionIds = suggestedConditionIds, requiredOutcomeCount = suggestedMarketIds.Length, requireExactOutcomeCount = false, suggestionReason = "MissingNoAsk legs excluded", settlementNotes = "Pruned to priced mutually exclusive subset. Missing NO ask leg excluded." } : null;
                             verifiedPricingExport.Add(new
                             {
                                 groupKey = g.GroupKey,
@@ -685,10 +697,13 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 missingNoAskCount = missingNoAskLegs.Count,
                                 pricedLegs = pricedLegs.Select(x => new { marketId = x.MarketId, conditionId = x.ConditionId, noAsk = x.NoAsk, noAskQuantity = x.NoAskQuantity, noAskSource = x.Source, yesBid = x.YesBid, yesBidQuantity = x.YesBidQuantity, noTokenId = x.NoTokenId, priceResolutionFailureReason = x.FailureReason }).ToArray(),
                                 missingPriceLegs = missingNoAskLegs.Select(x => new { marketId = x.MarketId, conditionId = x.ConditionId, noAsk = x.NoAsk, noAskQuantity = x.NoAskQuantity, noAskSource = x.Source, yesBid = x.YesBid, yesBidQuantity = x.YesBidQuantity, noTokenId = x.NoTokenId, priceResolutionFailureReason = x.FailureReason }).ToArray(),
+                                missingNoAskReasonBreakdown = missingReasonBreakdown,
+                                pricingHealthCategory = fetchFailureOnly ? "PricingUnavailable" : "ReviewOnly",
                                 suggestedPrunedAllowlistTemplate = suggestion
                             });
-                            if (shouldLogPricing) Console.WriteLine($"[VERIFIED_GROUP_PRICING_SUGGESTION] Group={g.GroupKey} MissingNoAsk={missingNoAskLegs.Count} SuggestedPrunedLegs={suggestedMarketIds.Length}");
-                            groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, "VerifiedResolved", "MissingNoAsk", null, missingNoAskLegs.Count, 0, missingNoAskLegs.Select(x => x.MarketId).Take(5).ToArray(), Array.Empty<string>()));
+                            if (shouldLogPricing && suggestion is not null) Console.WriteLine($"[VERIFIED_GROUP_PRICING_SUGGESTION] Group={g.GroupKey} MissingNoAsk={missingNoAskLegs.Count} SuggestedPrunedLegs={suggestedMarketIds.Length}");
+                            var missingSkipReason = fetchFailureOnly ? "OrderbookFetchFailed" : missingReasonBreakdown.ContainsKey("QuarantinedToken") ? "QuarantinedToken" : missingReasonBreakdown.ContainsKey("InvalidToken") ? "InvalidToken" : "MissingNoAsk";
+                            groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, "VerifiedResolved", missingSkipReason, null, missingNoAskLegs.Count, 0, missingNoAskLegs.Select(x => x.MarketId).Take(5).ToArray(), Array.Empty<string>()));
                             continue;
                         }
                         var activeCostProfileName = options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile;

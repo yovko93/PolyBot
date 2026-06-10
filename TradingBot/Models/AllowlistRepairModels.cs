@@ -6,6 +6,7 @@ public enum AllowlistRepairHealthCategory
 {
     Healthy,
     MonitoringOnly,
+    PricingUnavailable,
     NeedsPricingPrune,
     NeedsRefresh,
     BrokenConfig,

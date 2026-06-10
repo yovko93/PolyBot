@@ -16,5 +16,14 @@ public record OrderBookServiceStats(
     long BatchInvalidTokens = 0,
     long BatchSuppressedErrors = 0,
     int QuarantinedTokens = 0,
-    int BatchBookErrorSampleCount = 0
+    int BatchBookErrorSampleCount = 0,
+    long BatchBookSplitRetriesAttempted = 0,
+    long BatchBookSplitRetrySucceeded = 0,
+    long BatchBookSplitRetryFailed = 0,
+    long BatchBookSingleTokenFailures = 0,
+    long BatchBookSingleTokenQuarantined = 0,
+    long BatchBookSkippedQuarantinedTokens = 0,
+    long BatchBookSkippedMarketsWithQuarantinedTokens = 0,
+    long BatchBookRepeatedInvalidTokenAfterQuarantine = 0,
+    int OrderbookUnavailableMarkets = 0
 );
