@@ -608,7 +608,7 @@ public class PaperTradingEngine
             LockedCapital += decision.TotalCost;
             ExpectedProfit += decision.ExpectedProfit;
             MarkPaperOpened(opportunity.GroupKey, PaperStrategyKind.VerifiedBasket);
-            Console.WriteLine($"[PAPER_POSITION_OPENED] ID={position.PositionId} MarketId={opportunity.Leg1.MarketId} PositionKey={groupKey}");
+            Console.WriteLine($"[PAPER_POSITION_OPENED] ID={position.PositionId} Group={opportunity.GroupKey} PositionKey={opportunity.GroupKey}");
             Console.WriteLine($"[PAPER_VERIFIED_BASKET_OPENED] Group={opportunity.GroupKey} Legs={opportunity.Legs.Count} Cost={decision.TotalCost:0.####} ExpectedProfit={decision.ExpectedProfit:0.####}");
 
             Console.WriteLine(
