@@ -66,6 +66,7 @@ public class BotRuntimeState
     private int _memoryCriticals;
     private DateTime? _lastMemoryCriticalAt;
     private bool _scannerPausedByMemoryGuard;
+    private readonly ConcurrentDictionary<string, StrategyRuntimeCounters> _strategyCounters = new(StringComparer.OrdinalIgnoreCase);
 
     private static void Trim<T>(ConcurrentQueue<T> q,int max){ var capped = Math.Max(0, max); while(q.Count>capped) q.TryDequeue(out _); }
     private void TrimAll()
@@ -82,6 +83,14 @@ public class BotRuntimeState
         Trim(_singleMarketOpportunities,_runtime.MaxSingleMarketOpportunities);
         Trim(_singleMarketExecutions,_runtime.MaxSingleMarketExecutions);
     }
+
+    public void RecordStrategyResult(OpportunityStrategyScanResult result)
+    {
+        _strategyCounters.GetOrAdd(result.StrategyName, _ => new StrategyRuntimeCounters()).Add(result);
+    }
+
+    public IReadOnlyDictionary<string, StrategyRuntimeCounterSnapshot> StrategyCountersSnapshot()
+        => _strategyCounters.ToDictionary(x => x.Key, x => x.Value.Snapshot(x.Key), StringComparer.OrdinalIgnoreCase);
 
     public int ScannerStatsHistoryCount => _scannerStatsHistory.Count;
     public int CandidateSnapshotCount => _candidateSnapshots.Count;

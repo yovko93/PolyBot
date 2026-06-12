@@ -37,6 +37,7 @@ public sealed record PaperOpportunityFunnelSnapshot(
     int RiskCapRejected,
     int DuplicateSuppressed,
     int PaperOpened,
+    IReadOnlyDictionary<string, StrategyRuntimeCounterSnapshot> PerStrategy,
     IReadOnlyList<object> TopRejectedSamples,
     IReadOnlyList<object> TopNearExecutableSamples);
 
@@ -113,6 +114,7 @@ public static class PaperOpportunityFunnelExporter
             RiskCapRejected: riskCapRejected,
             DuplicateSuppressed: state.PaperDuplicateSuppressions,
             PaperOpened: state.PaperExecutionsCount,
+            PerStrategy: state.StrategyCountersSnapshot(),
             TopRejectedSamples: topRejected,
             TopNearExecutableSamples: nearExecutable);
     }

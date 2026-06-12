@@ -28,6 +28,8 @@ public class SingleMarketOrderBookArbEngine
     private readonly SingleMarketFillSimulator _fillSimulator = new();
     private readonly VerifiedBasketExecutionCoordinator? _audit;
     private readonly QuietLogGate? _quietLogGate;
+    private readonly OpportunityExecutionQueue? _executionQueue;
+    private readonly StrategyMode _strategyMode;
     private readonly object _gate = new();
     private readonly Dictionary<string, MarketStability> _stability = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> _cooldownUntil = new(StringComparer.OrdinalIgnoreCase);
@@ -59,7 +61,9 @@ public class SingleMarketOrderBookArbEngine
         VerifiedBasketExecutionCoordinator? audit = null,
         bool operationalQuietMode = false,
         MultiOutcomeLoggingOptions? logging = null,
-        QuietLogGate? quietLogGate = null)
+        QuietLogGate? quietLogGate = null,
+        OpportunityExecutionQueue? executionQueue = null,
+        StrategyMode strategyMode = StrategyMode.PaperEligible)
     {
         _orderBooks = orderBooks;
         _options = options ?? new SingleMarketArbOptions { MinEdgePerShare = minEdgePerShare };
@@ -76,6 +80,8 @@ public class SingleMarketOrderBookArbEngine
         _operationalQuietMode = operationalQuietMode;
         _logging = logging ?? new MultiOutcomeLoggingOptions();
         _quietLogGate = quietLogGate;
+        _executionQueue = executionQueue;
+        _strategyMode = strategyMode;
     }
 
     public async Task<SingleMarketScanStats> ScanAsync(List<Market> markets, PaperTradingEngine paper, SemaphoreSlim semaphore, CancellationToken ct = default)
@@ -231,8 +237,7 @@ public class SingleMarketOrderBookArbEngine
                 return SuppressExecution(book, market.conditionId, diagnostics, adjustedCost, yes, no, rawCost, edge, expected, quantity, st.EdgeScans, st.ExecutionScans, suppression);
             }
 
-            var risk = CheckRisk(paper, quantity * adjustedCost);
-            if (risk == "Ok" && !TryReserveCycleSlot()) risk = "MaxPositionsPerCycleReached";
+            var risk = TryReserveCycleSlot() ? "Ok" : "MaxPositionsPerCycleReached";
             if (risk != "Ok")
             {
                 LogExecutionDecision(book.MarketId, edge, quantity, quantity * adjustedCost, expected, "RejectRisk", risk, $"single-market:{book.MarketId}");
@@ -272,7 +277,14 @@ public class SingleMarketOrderBookArbEngine
             _state?.SetPaperInFlightOpens(paper.PaperInFlightOpenCount);
             var opportunity = new ArbOpportunity(new ArbLeg(book.MarketId, book.Question, "YES", fill.YesAveragePrice, book.YesAsk.Size), new ArbLeg(book.MarketId, book.Question, "NO", fill.NoAveragePrice, book.NoAsk.Size), quantity, fill.SimulatedCost / quantity, fill.AdjustedEdgePerShare, fill.ExpectedProfit, 1.0, "SingleMarketBuyBoth", StrategyName);
             var equityBefore = paper.Equity;
-            var executed = paper.RecordArbitrage(opportunity);
+            var executed = _executionQueue == null
+                ? paper.RecordArbitrage(opportunity)
+                : await _executionQueue.EnqueueAsync(new OpportunityExecutionCandidate(
+                    "SingleMarketBuyBoth",
+                    _strategyMode,
+                    $"single-market:{book.MarketId}",
+                    fill.SimulatedCost,
+                    _ => Task.FromResult(paper.RecordArbitrage(opportunity))), ct);
             if (!executed)
             {
                 paper.ClearSingleMarketOpenInFlight(book.MarketId);

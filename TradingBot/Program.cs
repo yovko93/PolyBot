@@ -412,7 +412,15 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     paperSettlementValidationHarness.TryRun(options, paper, positionBook, state, contentRootPath);
     var monitor = new OpportunityMonitor(Path.Combine(AppContext.BaseDirectory, "data", "arb-opportunities.csv"), options.MinEdgePerShare, -0.02m, TimeSpan.FromMinutes(2), options.MinExpectedProfit, new DryRunLiveOrderBuilder(minEdgePerShare: -0.01m, maxPlanCost: 100000m, minSize: 1m, tickSize: 0.001m, orderType: LiveOrderType.FOK, policy: executionPolicy));
     var semaphore = new SemaphoreSlim(options.MaxConcurrentRequests);
-    var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketFees, options.SingleMarketSlippage, monitor, sizing, options.SingleMarketArb, state, contentRootPath, verifiedExecution, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate);
+    var opportunityExecutionQueue = new OpportunityExecutionQueue();
+    var singleConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "SingleMarketBuyBoth");
+    var verifiedConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "VerifiedMultiOutcome");
+    var autoConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "AutoCandidateMultiOutcome");
+    var experimentalConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "ExperimentalMultiOutcome");
+    var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketFees, options.SingleMarketSlippage, monitor, sizing, options.SingleMarketArb, state, contentRootPath, verifiedExecution, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate, opportunityExecutionQueue, singleConfig.Mode);
+    var singleMarketStrategy = new SingleMarketBuyBothOpportunityStrategy(singleMarketArb);
+    var strategyOrchestrator = new StrategyOrchestrator(new IOpportunityStrategy[] { singleMarketStrategy, new NullOpportunityStrategy("VerifiedMultiOutcome"), new NullOpportunityStrategy("AutoCandidateMultiOutcome"), new NullOpportunityStrategy("ExperimentalMultiOutcome") }, options, state.RecordStrategyResult);
+    Console.WriteLine($"[STRATEGY_ORCHESTRATOR] SingleMarketBuyBoth={singleConfig.Mode} VerifiedMultiOutcome={verifiedConfig.Mode} AutoCandidateMultiOutcome={autoConfig.Mode} ExperimentalMultiOutcome={experimentalConfig.Mode}");
     var singleMarketFullCycle = new SingleMarketFullCycleSummaryAggregator(options.SingleMarketArb);
 
     var config = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory).AddJsonFile("appsettings.json", optional: true).Build();
@@ -567,8 +575,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             var orderbookSemaphore = new SemaphoreSlim(options.MaxConcurrentOrderbookRequests);
             SetScannerStage("BatchOrderbookFetch", "OrderBookService");
             await orderbookService.PrefetchBinarySnapshotsAsync(filtered);
-            SetScannerStage("SingleMarketScan", "SingleMarketOrderBookArbEngine");
-            var scanStats = await singleMarketArb.ScanAsync(filtered!, paper, orderbookSemaphore, singleMarketFullCycleId, singleMarketFullCycleComplete, suppressBatchDataQualitySummary: options.Diagnostics.OperationalQuietMode || !options.SingleMarketArb.LogBatchSummaries, ct: stoppingToken);
+            SetScannerStage("StrategyOrchestrator", "StrategyOrchestrator");
+            var strategyResults = await strategyOrchestrator.RunEnabledAsync(new OpportunityStrategyContext(filtered!, new PaperTradingEngineFacade { Engine = paper }, orderbookSemaphore, singleMarketFullCycleId, singleMarketFullCycleComplete, options.Diagnostics.OperationalQuietMode || !options.SingleMarketArb.LogBatchSummaries, stoppingToken));
+            var singleResult = strategyResults.FirstOrDefault(x => x.StrategyName.Equals("SingleMarketBuyBoth", StringComparison.OrdinalIgnoreCase));
+            var scanStats = new SingleMarketScanStats((int)(singleResult?.Scanned ?? 0), 0, 0, (int)(singleResult?.Candidates ?? 0), (int)(singleResult?.PaperOpened ?? 0), 0, 0, 0);
             var singleMarketFullSummary = singleMarketFullCycle.AddBatch(singleMarketFullCycleId, state.SingleMarketSnapshot.Summary, state.SingleMarketSnapshot.DataQualityRejectSamples);
             if (options.Diagnostics.OperationalQuietMode && singleMarketFullCycle.ShouldLog(singleMarketFullSummary, options.Logging, singleMarketFullCycleComplete, options.SingleMarketArb.LogCycleProgress))
                 Console.WriteLine(SingleMarketFullCycleSummaryAggregator.ToLogLine(singleMarketFullSummary));
