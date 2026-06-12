@@ -374,7 +374,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     http.Timeout = TimeSpan.FromSeconds(options.ExternalApiTimeoutSeconds);
 
     var marketService = new MarketDataService(http);
-    var orderbookService = new OrderBookService(http) { DisableSingleBookHttpFallback = true, LogPrefetchDetails = options.LogPrefetchDetails, LogBookCacheMissDetails = options.Logging.LogBookCacheMissDetails, BookCacheMissSampleSize = options.Logging.BookCacheMissSampleSize, ExportDirectory = Path.Combine(app.Environment.ContentRootPath, "exports") };
+    var orderbookService = new OrderBookService(http) { DisableSingleBookHttpFallback = true, LogPrefetchDetails = options.LogPrefetchDetails, LogBookCacheMissDetails = options.Logging.LogBookCacheMissDetails, BookCacheMissSampleSize = options.Logging.BookCacheMissSampleSize, ExportDirectory = Path.Combine(contentRootPath, "exports") };
     orderbookService.ConfigureCache(TimeSpan.FromMinutes(Math.Max(1, options.RuntimeMemory.OrderbookCacheTtlMinutes)), Math.Min(options.Caches.MaxOrderbookCacheEntries, options.RuntimeMemory.MaxOrderbookCacheEntries));
     orderbookService.ConfigureBatchOptions(options.OrderBook, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate);
     orderbookService.MaxInvalidTokenCacheEntries = Math.Max(1, options.RuntimeMemory.MaxInvalidTokenCacheEntries);
@@ -1816,6 +1816,10 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
     state.SetRisk(new RiskStateDto(p.MaxNotionalPerTrade, p.MinNotionalPerTrade, p.MinEdgePerShare, p.MinExpectedProfit, p.MaxLockedCapital, paper.LockedCapital, p.MaxOpenPositions, pb.OpenPositions.Count, p.MaxExposurePerGroup, new Dictionary<string, decimal>(), p.AllowBasketArbs, p.AllowSingleMarketArbs, p.AllowCompleteSetSellArbs, p.AllowThresholdArbs, DateTime.UtcNow, state.NextSeq()));
     state.SetStatus(new BotStatusDto("PAPER", !state.Controls.IsPaused, "CONNECTED", paper.Balance, paper.LockedCapital, paper.Equity, paper.RealizedPnl, paper.ExpectedProfit, pb.OpenPositions.Count, top.Count, DateTime.UtcNow, DateTime.UtcNow));
     state.SetPaperOpenCountLastHour(paper.HourlyOpenCount);
+    state.SetPaperInFlightOpens(paper.PaperInFlightOpenCount);
+    state.SetPaperDuplicateDedupeEntries(paper.PaperDuplicateDedupeEntryCount);
+    state.SetPaperOpenPositionKeys(pb.OpenPositions.Select(x => x.GroupKey));
+    state.SetPaperOpenMarketIds(pb.OpenPositions.SelectMany(x => x.Legs.Select(l => l.MarketId)).Distinct(StringComparer.OrdinalIgnoreCase));
     state.ReplacePaperSettlements(pb.Settlements);
     state.SetPaperSettlementCounters(paper.SettlementRejects, paper.DuplicateSettlementSuppressions);
     var exportsRoot = Path.Combine(contentRootPath, "exports");

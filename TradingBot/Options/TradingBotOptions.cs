@@ -447,6 +447,10 @@ public class SingleMarketArbOptions
     public decimal MaxTotalSingleMarketExposure { get; set; } = 300m;
     public int MaxPositionsPerCycle { get; set; } = 1;
     public int CooldownSecondsPerMarket { get; set; } = 300;
+    public int InFlightOpenTtlSeconds { get; set; } = 120;
+    public int AlertRepeatCooldownMinutes { get; set; } = 30;
+    public decimal AlertMaterialEdgeChange { get; set; } = 0.01m;
+    public bool SuppressDuplicateArbAlertInQuietMode { get; set; } = true;
     public decimal MinReasonableYesNoAskSum { get; set; } = 0.90m;
     public decimal MaxReasonableYesNoAskSum { get; set; } = 1.05m;
     public bool RejectSuspiciousAskSum { get; set; } = true;
