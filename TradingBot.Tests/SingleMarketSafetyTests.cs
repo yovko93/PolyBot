@@ -468,11 +468,105 @@ public class SingleMarketSafetyTests
         Assert.Contains("[SINGLE_MARKET_DATA_QUALITY_HIGH_SEVERITY_SUPPRESSED] Count=2", output);
     }
 
+
+    [Fact]
+    public async Task Stale_duplicate_key_without_open_position_is_cleared_and_execution_continues()
+    {
+        var state = new BotRuntimeState(new RuntimeStateOptions { MaxSingleMarketOpportunities = 200, MaxSingleMarketExecutions = 100 });
+        var paper = NewPaper();
+        paper.MarkSingleMarketDedupeForDiagnostics("stale-market", "BUY_YES_AND_BUY_NO", DateTime.UtcNow.AddMinutes(-10));
+        var market = Market("stale-market");
+        var engine = NewEngine(BookFor(market), state, Options(), quiet: true);
+
+        var output = await CaptureConsole(async () => { for (var i = 0; i < 5; i++) await engine.ScanAsync([market], paper, new SemaphoreSlim(1)); });
+
+        Assert.Contains("[PAPER_DUPLICATE_STALE_ENTRY_CLEARED]", output);
+        Assert.Contains("Action=ClearStaleAndContinue", output);
+        Assert.Single(state.SingleMarketExecutions());
+    }
+
+    [Fact]
+    public async Task Actual_open_position_suppresses_duplicate_and_references_position_id()
+    {
+        var state = new BotRuntimeState(new RuntimeStateOptions { MaxSingleMarketOpportunities = 200, MaxSingleMarketExecutions = 100 });
+        var book = new PaperPositionBook(Path.GetTempFileName());
+        var paper = NewPaper(book);
+        Assert.True(paper.RecordArbitrage(NewOpportunity("dup-market")));
+        var positionId = book.OpenPositions.Single().PositionId;
+        var market = Market("dup-market");
+        var engine = NewEngine(BookFor(market), state, Options(), quiet: true);
+
+        var output = await CaptureConsole(async () => { for (var i = 0; i < 5; i++) await engine.ScanAsync([market], paper, new SemaphoreSlim(1)); });
+
+        Assert.Contains("[PAPER_DUPLICATE_SUPPRESSION_DIAG]", output);
+        Assert.Contains("existingpositionfound=true", output.ToLowerInvariant());
+        Assert.Contains($"ExistingPositionId={positionId}", output);
+        Assert.Contains("Reason=DuplicateOpenPosition", output);
+    }
+
+    [Fact]
+    public async Task Inflight_open_suppresses_until_ttl_expires_then_continues()
+    {
+        var state = new BotRuntimeState(new RuntimeStateOptions { MaxSingleMarketOpportunities = 200, MaxSingleMarketExecutions = 100 });
+        var book = new PaperPositionBook(Path.GetTempFileName());
+        var paper = NewPaper(book);
+        var market = Market("inflight-market");
+        Assert.True(paper.TryMarkSingleMarketOpenInFlight(market.id, "BUY_YES_AND_BUY_NO", out _));
+        var engine = NewEngine(BookFor(market), state, Options(), quiet: true);
+
+        var suppressed = await CaptureConsole(async () => { for (var i = 0; i < 5; i++) await engine.ScanAsync([market], paper, new SemaphoreSlim(1)); });
+        Assert.Contains("Reason=InFlightDuplicate", suppressed);
+        Assert.Empty(state.SingleMarketExecutions());
+
+        paper.ExpireSingleMarketInFlightOpen(market.id);
+        var opened = await CaptureConsole(async () => { for (var i = 0; i < 2; i++) await engine.ScanAsync([market], paper, new SemaphoreSlim(1)); });
+        Assert.Contains("[PAPER_OPEN_IN_FLIGHT_EXPIRED]", opened);
+        Assert.Single(state.SingleMarketExecutions());
+    }
+
+    [Fact]
+    public async Task Execution_stable_emits_decision_and_funnel_terminal_log()
+    {
+        var state = new BotRuntimeState(new RuntimeStateOptions { MaxSingleMarketOpportunities = 200, MaxSingleMarketExecutions = 100 });
+        var engine = NewEngine(Book(), state, Options(), quiet: true);
+        var output = await CaptureConsole(async () => { for (var i = 0; i < 5; i++) await engine.ScanAsync([Market()], NewPaper(), new SemaphoreSlim(1)); });
+
+        Assert.Contains("[SINGLE_MARKET_EXECUTION_READINESS_STABLE]", output);
+        Assert.Contains("[SINGLE_MARKET_EXECUTION_DECISION]", output);
+        Assert.Matches("\\[(PAPER_PRETRADE_APPROVED|PAPER_PRETRADE_REJECTED|PAPER_FILL_SIMULATION_PASSED|PAPER_FILL_SIMULATION_FAILED|PAPER_POSITION_OPENED|PAPER_EXECUTION_SUPPRESSED)\\]", output);
+    }
+
+    [Fact]
+    public async Task Quiet_mode_full_arb_alert_once_and_material_edge_logs_compact_update()
+    {
+        var state = new BotRuntimeState(new RuntimeStateOptions());
+        var market = Market("alert-market");
+        var books = new Dictionary<string, BinaryOrderBookSnapshot> { [market.id] = BookForEdge(market, 0.02m) };
+        var monitor = new OpportunityMonitor(minAlertExpectedProfit: 0m, alertEdgeThreshold: 0.001m, alertCooldown: TimeSpan.Zero);
+        var opts = Options();
+        opts.RequiredConsecutiveEdgeScans = 20;
+        var engine = new SingleMarketOrderBookArbEngine(new MapProvider(books), 0.005m, 0.001m, 0.001m, monitor, new ExecutionSizingService(new ExecutionPolicy { MaxNotionalPerTrade = 100m, MinNotionalPerTrade = 25m }), opts, state, null, null, true, new MultiOutcomeLoggingOptions { LogSingleMarketSummaryOnChangeOnly = true });
+
+        var output = await CaptureConsole(async () =>
+        {
+            await engine.ScanAsync([market], NewPaper(), new SemaphoreSlim(1));
+            await engine.ScanAsync([market], NewPaper(), new SemaphoreSlim(1));
+            books[market.id] = BookForEdge(market, 0.04m);
+            await engine.ScanAsync([market], NewPaper(), new SemaphoreSlim(1));
+        });
+
+        Assert.Equal(1, output.Split("========== ARB ALERT ==========").Length - 1);
+        Assert.Contains("[SINGLE_MARKET_OPPORTUNITY_STATE] MarketId=alert-market", output);
+    }
+
     private static SingleMarketOrderBookArbEngine NewEngine(BinaryOrderBookSnapshot book, BotRuntimeState state, SingleMarketArbOptions? opts = null, bool quiet = false, VerifiedBasketExecutionCoordinator? audit = null) => NewEngine(new FakeProvider(book), state, opts, quiet, audit);
+
 
     private static SingleMarketOrderBookArbEngine NewEngine(IOrderBookProvider provider, BotRuntimeState state, SingleMarketArbOptions? opts = null, bool quiet = false, VerifiedBasketExecutionCoordinator? audit = null) => new(provider, 0.005m, 0.001m, 0.001m, null, new ExecutionSizingService(new ExecutionPolicy { MaxNotionalPerTrade = 100m, MinNotionalPerTrade = 25m }), opts ?? Options(), state, null, audit, quiet, new MultiOutcomeLoggingOptions { LogSingleMarketSummaryOnChangeOnly = true, LogSingleMarketDataQualityOnChangeOnly = true, LogSingleMarketSummaryEveryNCycles = 25, LogSingleMarketDataQualityEveryNCycles = 25, SingleMarketDataQualitySignificantDelta = 25, LogSingleMarketNearMissEveryNCycles = 50, LogSingleMarketNearMissOnChangeOnly = true });
     private static SingleMarketArbOptions Options() => new() { RequiredConsecutiveEdgeScans = 3, RequiredConsecutiveExecutionReadyScans = 3, MinEdgePerShare = 0.005m, MinExpectedProfit = 0.50m, MinNotional = 25m, MaxNotionalPerTrade = 100m, MaxOpenSingleMarketPositions = 3, MaxTotalSingleMarketExposure = 300m, MaxPositionsPerCycle = 1, CooldownSecondsPerMarket = 300, AuditBelowMinEdgeEvents = false, AuditDetectedEvents = false, MaxAuditSamplesPerCycle = 20, AuditDataQualityRejectedEvents = false, AuditHighSeverityDataQualityRejectedEvents = true, MaxDataQualityAuditSamplesPerCycle = 3, HighSeveritySuspiciousAskSumDistance = 0.10m, MaxHighSeverityDataQualityLogsPerCycle = 3 };
-    private static PaperTradingEngine NewPaper() => new(new ExecutionPolicy { MaxNotionalPerTrade = 100m, MinNotionalPerTrade = 25m, MaxOpenPositions = 100, MaxLockedCapital = 1000m, MaxExposurePerGroup = 300m }, null, null, new PaperPositionBook(Path.GetTempFileName()));
+    private static PaperTradingEngine NewPaper() => NewPaper(new PaperPositionBook(Path.GetTempFileName()));
+    private static PaperTradingEngine NewPaper(PaperPositionBook book) => new(new ExecutionPolicy { MaxNotionalPerTrade = 100m, MinNotionalPerTrade = 25m, MaxOpenPositions = 100, MaxLockedCapital = 1000m, MaxExposurePerGroup = 300m }, null, null, book, new TradingBotOptions { TradingMode = new TradingModeOptions { PaperPhase = 2, PaperTradingEnabled = true, LiveTradingEnabled = false }, PaperRisk = new PaperRiskOptions { MaxPaperPositionsTotal = 100, MaxPaperPositionsPerStrategy = 100, MaxPaperOpenPerHour = 100, AllowSingleMarketPaper = true }, SingleMarketArb = Options() });
+    private static ArbOpportunity NewOpportunity(string marketId) => new(new ArbLeg(marketId, $"Will {marketId} win?", "YES", 0.235m, 200m), new ArbLeg(marketId, $"Will {marketId} win?", "NO", 0.733m, 200m), 50m, 0.968m, 0.03m, 1.5m, 1.0, "SingleMarketBuyBoth", "BUY_YES_AND_BUY_NO");
     private static Market Market(string id = "m1") => new() { id = id, question = $"Will {id} win?", conditionId = $"c-{id}", outcomes = new() { "Yes", "No" }, clobTokenIds = new() { $"yes-{id}", $"no-{id}" } };
     private static BinaryOrderBookSnapshot Book(decimal? yes = 0.235m, decimal? no = 0.733m, decimal yesSize = 200m, decimal noSize = 200m) => BookFor(Market(), yes, no, yesSize, noSize);
     private static BinaryOrderBookSnapshot BookFor(Market market, decimal? yes = 0.235m, decimal? no = 0.733m, decimal yesSize = 200m, decimal noSize = 200m) => new(market.id, market.question, market.clobTokenIds[0], market.clobTokenIds[1], null, yes.HasValue ? new BookQuote(yes.Value, yesSize) : null, null, no.HasValue ? new BookQuote(no.Value, noSize) : null, DateTime.UtcNow);

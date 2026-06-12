@@ -1816,6 +1816,10 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
     state.SetRisk(new RiskStateDto(p.MaxNotionalPerTrade, p.MinNotionalPerTrade, p.MinEdgePerShare, p.MinExpectedProfit, p.MaxLockedCapital, paper.LockedCapital, p.MaxOpenPositions, pb.OpenPositions.Count, p.MaxExposurePerGroup, new Dictionary<string, decimal>(), p.AllowBasketArbs, p.AllowSingleMarketArbs, p.AllowCompleteSetSellArbs, p.AllowThresholdArbs, DateTime.UtcNow, state.NextSeq()));
     state.SetStatus(new BotStatusDto("PAPER", !state.Controls.IsPaused, "CONNECTED", paper.Balance, paper.LockedCapital, paper.Equity, paper.RealizedPnl, paper.ExpectedProfit, pb.OpenPositions.Count, top.Count, DateTime.UtcNow, DateTime.UtcNow));
     state.SetPaperOpenCountLastHour(paper.HourlyOpenCount);
+    state.SetPaperInFlightOpens(paper.PaperInFlightOpenCount);
+    state.SetPaperDuplicateDedupeEntries(paper.PaperDuplicateDedupeEntryCount);
+    state.SetPaperOpenPositionKeys(pb.OpenPositions.Select(x => x.GroupKey));
+    state.SetPaperOpenMarketIds(pb.OpenPositions.SelectMany(x => x.Legs.Select(l => l.MarketId)).Distinct(StringComparer.OrdinalIgnoreCase));
     state.ReplacePaperSettlements(pb.Settlements);
     state.SetPaperSettlementCounters(paper.SettlementRejects, paper.DuplicateSettlementSuppressions);
     var exportsRoot = Path.Combine(contentRootPath, "exports");

@@ -50,6 +50,11 @@ public class BotRuntimeState
     private OrderBookServiceStats _orderBookServiceStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0);
     private int _paperPretradeRejects;
     private int _paperDuplicateSuppressions;
+    private int _paperInFlightOpens;
+    private int _paperDuplicateDedupeEntries;
+    private int _paperStaleDedupeEntriesCleared;
+    private string[] _paperOpenPositionKeys = Array.Empty<string>();
+    private string[] _paperOpenMarketIds = Array.Empty<string>();
     private int _paperExecutionsCount;
     private int _paperOpenEvents;
     private int _paperCloseEvents;
@@ -105,6 +110,11 @@ public class BotRuntimeState
     public int PaperOpenCountLastHour { get; private set; }
     public int PaperPretradeRejects => Volatile.Read(ref _paperPretradeRejects);
     public int PaperDuplicateSuppressions => Volatile.Read(ref _paperDuplicateSuppressions);
+    public int PaperInFlightOpens => Volatile.Read(ref _paperInFlightOpens);
+    public int PaperDuplicateDedupeEntries => Volatile.Read(ref _paperDuplicateDedupeEntries);
+    public int PaperStaleDedupeEntriesCleared => Volatile.Read(ref _paperStaleDedupeEntriesCleared);
+    public IReadOnlyList<string> PaperOpenPositionKeys => _paperOpenPositionKeys;
+    public IReadOnlyList<string> PaperOpenMarketIds => _paperOpenMarketIds;
     public int PaperSettlementRejects => Volatile.Read(ref _paperSettlementRejects);
     public int PaperDuplicateSettlementSuppressions => Volatile.Read(ref _paperDuplicateSettlementSuppressions);
     public int PaperOpenEvents => Volatile.Read(ref _paperOpenEvents);
@@ -188,6 +198,11 @@ public class BotRuntimeState
         if (reason.Equals("DuplicateOpenPosition", StringComparison.OrdinalIgnoreCase)) RecordPaperDuplicateSuppression();
     }
     public void RecordPaperDuplicateSuppression() => Interlocked.Increment(ref _paperDuplicateSuppressions);
+    public void SetPaperInFlightOpens(int count) => Interlocked.Exchange(ref _paperInFlightOpens, count);
+    public void SetPaperDuplicateDedupeEntries(int count) => Interlocked.Exchange(ref _paperDuplicateDedupeEntries, count);
+    public void RecordPaperStaleDedupeEntryCleared() => Interlocked.Increment(ref _paperStaleDedupeEntriesCleared);
+    public void SetPaperOpenPositionKeys(IEnumerable<string> keys) => _paperOpenPositionKeys = keys.Take(20).ToArray();
+    public void SetPaperOpenMarketIds(IEnumerable<string> marketIds) => _paperOpenMarketIds = marketIds.Take(20).ToArray();
     public void SetPaperOpenCountLastHour(int count) => PaperOpenCountLastHour = count;
     public void RecordPaperExecution() => Interlocked.Increment(ref _paperExecutionsCount);
     public void SetPaperSettlementCounters(int rejects, int duplicateSuppressions) { Interlocked.Exchange(ref _paperSettlementRejects, rejects); Interlocked.Exchange(ref _paperDuplicateSettlementSuppressions, duplicateSuppressions); }
@@ -226,6 +241,9 @@ public class BotRuntimeState
         ["paperOpenCountLastHour"] = PaperOpenCountLastHour,
         ["paperPretradeRejects"] = PaperPretradeRejects,
         ["paperDuplicateSuppressions"] = PaperDuplicateSuppressions,
+        ["paperInFlightOpens"] = PaperInFlightOpens,
+        ["paperDuplicateDedupeEntries"] = PaperDuplicateDedupeEntries,
+        ["paperStaleDedupeEntriesCleared"] = PaperStaleDedupeEntriesCleared,
         ["paperExecutionsCount"] = PaperExecutionsCount,
         ["paperLifecycleEvents"] = PaperLifecycleEvents,
         ["paperOpenEvents"] = PaperOpenEvents,

@@ -21,6 +21,9 @@ public class PaperTradingEngine
     private readonly Dictionary<string, int> _blockedCountsByReason = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<DateTime> _paperOpenTimesUtc = new();
     private readonly Dictionary<string, DateTime> _cooldownUntilByKey = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, DateTime> _paperDuplicateDedupeEntries = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, DateTime> _inFlightSingleMarketOpens = new(StringComparer.OrdinalIgnoreCase);
+
 
     public PaperTradingEngine(
         ExecutionPolicy? policy = null,
@@ -48,6 +51,9 @@ public class PaperTradingEngine
     public IReadOnlyDictionary<string, int> BlockedCountsByReason => _blockedCountsByReason;
     public int HourlyOpenCount => _paperOpenTimesUtc.Count(x => x >= DateTime.UtcNow.AddHours(-1));
     public List<Position> Positions { get; } = new();
+    public int PaperDuplicateDedupeEntryCount { get { lock (_lock) return _paperDuplicateDedupeEntries.Count; } }
+    public int PaperInFlightOpenCount { get { lock (_lock) { ExpireInFlightOpenAttemptsNoLock(DateTime.UtcNow, logExpired: true); return _inFlightSingleMarketOpens.Count; } } }
+
 
     private PaperAccountSnapshotForGate BuildGateAccount()
     {
@@ -93,6 +99,102 @@ public class PaperTradingEngine
         _cooldownUntilByKey.Remove(key);
         return false;
     }
+
+    public PaperDuplicateSuppressionDiagnostics GetSingleMarketDuplicateDiagnostics(string marketId, string strategy)
+    {
+        lock (_lock)
+        {
+            var now = DateTime.UtcNow;
+            ExpireInFlightOpenAttemptsNoLock(now, logExpired: true);
+            var positionKey = BuildSingleMarketPositionKey(marketId);
+            var dedupeKey = BuildSingleMarketDedupeKey(marketId, strategy);
+            var open = _positionBook?.OpenPositions.ToList() ?? new List<PaperPosition>();
+            var closed = _positionBook?.ClosedPositions.ToList() ?? new List<PaperPosition>();
+            static bool StrategyMatches(PaperPosition p, string strategy) =>
+                p.Engine.Equals("SingleMarketBuyBoth", StringComparison.OrdinalIgnoreCase)
+                || p.Strategy.Equals(strategy, StringComparison.OrdinalIgnoreCase)
+                || p.Strategy.Equals("TWO_LEG_ARB", StringComparison.OrdinalIgnoreCase);
+            var existingOpen = open.FirstOrDefault(p => p.Status == PaperPositionStatus.Open && p.GroupKey.Equals(positionKey, StringComparison.OrdinalIgnoreCase) && StrategyMatches(p, strategy));
+            var existingClosed = closed.FirstOrDefault(p => p.GroupKey.Equals(positionKey, StringComparison.OrdinalIgnoreCase) && StrategyMatches(p, strategy));
+            var dedupeContains = _paperDuplicateDedupeEntries.ContainsKey(dedupeKey) || _executedArbs.Contains(dedupeKey);
+            TimeSpan? dedupeAge = _paperDuplicateDedupeEntries.TryGetValue(dedupeKey, out var dedupeCreatedAt) ? now - dedupeCreatedAt : null;
+            var inFlight = _inFlightSingleMarketOpens.TryGetValue(positionKey, out var expiresAt) && expiresAt > now;
+            var inFlightAge = inFlight ? TimeSpan.FromSeconds(Math.Max(0, _botOptions.SingleMarketArb.InFlightOpenTtlSeconds) - Math.Max(0, (expiresAt - now).TotalSeconds)) : (TimeSpan?)null;
+            var source = existingOpen != null ? "Portfolio" : inFlight ? "InFlight" : dedupeContains ? "DedupeCache" : "Unknown";
+            var status = existingOpen != null ? "Open" : existingClosed != null ? "Closed" : "Unknown";
+            return new PaperDuplicateSuppressionDiagnostics(
+                MarketId: marketId,
+                Strategy: "SingleMarketBuyBoth",
+                PositionKey: positionKey,
+                DedupeKey: dedupeKey,
+                ExistingPositionFound: existingOpen != null,
+                ExistingPositionId: existingOpen?.PositionId ?? existingClosed?.PositionId ?? "None",
+                ExistingPositionStatus: status,
+                PaperPortfolioOpenCount: open.Count,
+                PaperOpenPositionsForMarket: open.Count(p => p.Status == PaperPositionStatus.Open && p.GroupKey.Equals(positionKey, StringComparison.OrdinalIgnoreCase)),
+                PaperOpenPositionsForStrategy: open.Count(p => p.Status == PaperPositionStatus.Open && StrategyMatches(p, strategy)),
+                PaperTotalExposure: open.Sum(p => p.TotalCost),
+                DedupeRegistryContains: dedupeContains,
+                DedupeEntryAge: dedupeAge,
+                DedupeSource: source,
+                InFlightFound: inFlight,
+                InFlightAge: inFlightAge,
+                Action: "Continue");
+        }
+    }
+
+    public void ClearSingleMarketDedupe(string marketId, string strategy)
+    {
+        lock (_lock)
+        {
+            var positionKey = BuildSingleMarketPositionKey(marketId);
+            var dedupeKey = BuildSingleMarketDedupeKey(marketId, strategy);
+            _paperDuplicateDedupeEntries.Remove(dedupeKey);
+            _executedArbs.Remove(dedupeKey);
+            _cooldownUntilByKey.Remove(positionKey);
+        }
+    }
+
+    public void MarkSingleMarketDedupeForDiagnostics(string marketId, string strategy, DateTime? createdAtUtc = null)
+    {
+        lock (_lock) _paperDuplicateDedupeEntries[BuildSingleMarketDedupeKey(marketId, strategy)] = createdAtUtc ?? DateTime.UtcNow;
+    }
+
+    public bool TryMarkSingleMarketOpenInFlight(string marketId, string strategy, out int ttlSeconds)
+    {
+        lock (_lock)
+        {
+            var now = DateTime.UtcNow;
+            ExpireInFlightOpenAttemptsNoLock(now, logExpired: true);
+            ttlSeconds = Math.Max(1, _botOptions.SingleMarketArb.InFlightOpenTtlSeconds);
+            var positionKey = BuildSingleMarketPositionKey(marketId);
+            if (_inFlightSingleMarketOpens.TryGetValue(positionKey, out var existing) && existing > now) return false;
+            _inFlightSingleMarketOpens[positionKey] = now.AddSeconds(ttlSeconds);
+            return true;
+        }
+    }
+
+    public void ClearSingleMarketOpenInFlight(string marketId)
+    {
+        lock (_lock) _inFlightSingleMarketOpens.Remove(BuildSingleMarketPositionKey(marketId));
+    }
+
+    public void ExpireSingleMarketInFlightOpen(string marketId)
+    {
+        lock (_lock) _inFlightSingleMarketOpens[BuildSingleMarketPositionKey(marketId)] = DateTime.UtcNow.AddMilliseconds(-1);
+    }
+
+    private void ExpireInFlightOpenAttemptsNoLock(DateTime now, bool logExpired)
+    {
+        foreach (var expired in _inFlightSingleMarketOpens.Where(x => x.Value <= now).Select(x => x.Key).ToArray())
+        {
+            _inFlightSingleMarketOpens.Remove(expired);
+            if (logExpired) Console.WriteLine($"[PAPER_OPEN_IN_FLIGHT_EXPIRED] PositionKey={expired}");
+        }
+    }
+
+    private static string BuildSingleMarketPositionKey(string marketId) => $"single-market:{marketId}";
+    private static string BuildSingleMarketDedupeKey(string marketId, string strategy) => $"single-market:{marketId}:{strategy}";
 
     public bool HasOpenPaperPosition(string marketOrGroup, string strategy)
         => _positionBook?.GetOpenPositions().Any(p => p.Status == PaperPositionStatus.Open && p.GroupKey.Equals(marketOrGroup, StringComparison.OrdinalIgnoreCase) && p.Strategy.Equals(strategy, StringComparison.OrdinalIgnoreCase)) == true;
@@ -294,13 +396,14 @@ public class PaperTradingEngine
             }
 
             _executedArbs.Add(key);
+            _paperDuplicateDedupeEntries[BuildSingleMarketDedupeKey(opportunity.Leg1.MarketId, opportunity.Strategy)] = DateTime.UtcNow;
 
             Balance -= totalCost;
             LockedCapital += totalCost;
             ExpectedProfit += expectedProfit;
             MarkPaperOpened(groupKey, PaperStrategyKind.SingleMarket);
 
-            Console.WriteLine($"[PAPER_POSITION_OPENED] ID={position.PositionId}");
+            Console.WriteLine($"[PAPER_POSITION_OPENED] ID={position.PositionId} MarketId={opportunity.Leg1.MarketId} PositionKey={groupKey}");
             Console.WriteLine($"[PAPER_SINGLE_MARKET_OPENED] MarketId={opportunity.Leg1.MarketId} Qty={executableQuantity:0.####} Cost={totalCost:0.####} ExpectedProfit={expectedProfit:0.####}");
             Console.WriteLine($"[PAPER ACCOUNT] Cash={Balance:0.####} Locked={LockedCapital:0.####} OpenExposure={LockedCapital:0.####} UnrealizedPnl={UnrealizedPnl:0.####} RealizedPnl={RealizedPnl:0.####} Equity={Equity:0.####}");
 
@@ -505,7 +608,7 @@ public class PaperTradingEngine
             LockedCapital += decision.TotalCost;
             ExpectedProfit += decision.ExpectedProfit;
             MarkPaperOpened(opportunity.GroupKey, PaperStrategyKind.VerifiedBasket);
-            Console.WriteLine($"[PAPER_POSITION_OPENED] ID={position.PositionId}");
+            Console.WriteLine($"[PAPER_POSITION_OPENED] ID={position.PositionId} MarketId={opportunity.Leg1.MarketId} PositionKey={groupKey}");
             Console.WriteLine($"[PAPER_VERIFIED_BASKET_OPENED] Group={opportunity.GroupKey} Legs={opportunity.Legs.Count} Cost={decision.TotalCost:0.####} ExpectedProfit={decision.ExpectedProfit:0.####}");
 
             Console.WriteLine(
@@ -749,4 +852,26 @@ public class PaperTradingEngine
             opportunity.Leg2.Outcome
         );
     }
+}
+
+public sealed record PaperDuplicateSuppressionDiagnostics(
+    string MarketId,
+    string Strategy,
+    string PositionKey,
+    string DedupeKey,
+    bool ExistingPositionFound,
+    string ExistingPositionId,
+    string ExistingPositionStatus,
+    int PaperPortfolioOpenCount,
+    int PaperOpenPositionsForMarket,
+    int PaperOpenPositionsForStrategy,
+    decimal PaperTotalExposure,
+    bool DedupeRegistryContains,
+    TimeSpan? DedupeEntryAge,
+    string DedupeSource,
+    bool InFlightFound,
+    TimeSpan? InFlightAge,
+    string Action)
+{
+    public PaperDuplicateSuppressionDiagnostics WithAction(string action) => this with { Action = action };
 }
