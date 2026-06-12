@@ -138,7 +138,7 @@ public sealed class StrategyOrchestrator
 
         var tasks = enabled.Select(x =>
         {
-            LogScanStart(x.Strategy.Name, x.Config, context);
+            LogScanStart(x.Strategy.Name, x.Config, context.Markets.Count);
             return RunOneAsync(x.Strategy, x.Config, context);
         }).ToArray();
         var results = await Task.WhenAll(tasks);
@@ -164,12 +164,22 @@ public sealed class StrategyOrchestrator
         }
     }
 
-    private void LogScanStart(string strategyName, OpportunityStrategyConfig config, OpportunityStrategyContext context)
+    public void RecordExternalResult(OpportunityStrategyScanResult result, int scannedItems)
+    {
+        var config = ResolveConfig(_options.Strategies, result.StrategyName);
+        if (!config.Enabled || config.Mode == StrategyMode.Disabled) return;
+        LogScanStart(result.StrategyName, config, scannedItems);
+        result = result with { Mode = config.Mode };
+        LogScanResult(result, config);
+        _recordResult?.Invoke(result);
+    }
+
+    private void LogScanStart(string strategyName, OpportunityStrategyConfig config, int scannedItems)
     {
         var shouldLog = !_options.Diagnostics.OperationalQuietMode;
         lock (_logGate) shouldLog = shouldLog || _startLogged.Add(strategyName);
         if (shouldLog)
-            Console.WriteLine($"[STRATEGY_SCAN_START] Strategy={strategyName} Mode={config.Mode} PaperEligible={(config.Mode == StrategyMode.PaperEligible).ToString().ToLowerInvariant()} Markets={context.Markets.Count} Priority={config.Priority}");
+            Console.WriteLine($"[STRATEGY_SCAN_START] Strategy={strategyName} Mode={config.Mode} PaperEligible={(config.Mode == StrategyMode.PaperEligible).ToString().ToLowerInvariant()} Markets={scannedItems} Priority={config.Priority}");
         if (config.Mode == StrategyMode.DiagnosticsOnly)
         {
             var shouldLogDiagnostics = false;
@@ -198,6 +208,8 @@ public sealed class StrategyOrchestrator
                 summaryDue = true;
             }
         }
+        if (config.Mode == StrategyMode.DiagnosticsOnly && result.DiagnosticsOnlyBlocked > 0)
+            Console.WriteLine($"[STRATEGY_DIAGNOSTICS_ONLY] Strategy={result.StrategyName} CandidatesSuppressed={result.DiagnosticsOnlyBlocked} Reason=ModeDiagnosticsOnly");
         if (summaryDue)
             Console.WriteLine($"[STRATEGY_SUMMARY] Strategy={result.StrategyName} Mode={config.Mode} Scanned={result.Scanned} Books={result.Books} Candidates={result.Candidates} Positive={result.PositiveEdges} ExecutionReady={result.ExecutionReady} PaperOpened={result.PaperOpened} RejectedByReason={FormatReasons(result.RejectedByReason)}");
     }
@@ -232,6 +244,10 @@ public sealed class StrategyRuntimeCounters
     private long _orderbookUnavailable;
     private readonly object _reasonGate = new();
     private readonly Dictionary<string, long> _rejectedByReason = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _bestEdgeGate = new();
+    private decimal? _bestEdge;
+    private string _topSkipReason = "None";
+    private int _topSkipCount;
     private DateTime _lastScanUtc;
     private string? _lastError;
     private StrategyMode _mode;
@@ -252,6 +268,15 @@ public sealed class StrategyRuntimeCounters
         Interlocked.Add(ref _positiveEdges, result.PositiveEdges);
         Interlocked.Add(ref _executionReady, result.ExecutionReady);
         Interlocked.Add(ref _orderbookUnavailable, result.OrderbookUnavailable);
+        if (result.BestEdge.HasValue)
+        {
+            lock (_bestEdgeGate)
+            {
+                if (!_bestEdge.HasValue || result.BestEdge.Value > _bestEdge.Value) _bestEdge = result.BestEdge.Value;
+            }
+        }
+        _topSkipReason = result.TopSkipReason;
+        _topSkipCount = result.TopSkipCount;
         if (result.RejectedByReason is { Count: > 0 })
         {
             lock (_reasonGate)
@@ -277,8 +302,16 @@ public sealed class StrategyRuntimeCounters
         Interlocked.Read(ref _executionReady),
         Interlocked.Read(ref _orderbookUnavailable),
         RejectedReasonsSnapshot(),
+        BestEdgeSnapshot(),
+        _topSkipReason,
+        _topSkipCount,
         _lastScanUtc,
         _lastError);
+
+    private decimal? BestEdgeSnapshot()
+    {
+        lock (_bestEdgeGate) return _bestEdge;
+    }
 
     private IReadOnlyDictionary<string, long> RejectedReasonsSnapshot()
     {
@@ -301,5 +334,8 @@ public sealed record StrategyRuntimeCounterSnapshot(
     long ExecutionReady,
     long OrderbookUnavailable,
     IReadOnlyDictionary<string, long> RejectedByReason,
+    decimal? BestEdge,
+    string TopSkipReason,
+    int TopSkipCount,
     DateTime LastScanUtc,
     string? LastError);

@@ -117,6 +117,73 @@ public class StrategyOrchestratorTests
         Assert.Contains("AutoCandidateMultiOutcome", health.StrategyCounters.Keys);
     }
 
+
+    [Fact]
+    public void AutoCandidateMultiOutcome_external_result_maps_real_candidate_scan_counters()
+    {
+        var state = new BotRuntimeState();
+        var options = new TradingBotOptions
+        {
+            Strategies = new Dictionary<string, OpportunityStrategyConfig>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["AutoCandidateMultiOutcome"] = new(true, StrategyMode.DiagnosticsOnly, 25)
+            }
+        };
+        var orchestrator = new StrategyOrchestrator(Array.Empty<IOpportunityStrategy>(), options, state.RecordStrategyResult);
+
+        orchestrator.RecordExternalResult(new OpportunityStrategyScanResult(
+            "AutoCandidateMultiOutcome",
+            StrategyMode.DiagnosticsOnly,
+            Scanned: 20,
+            Candidates: 20,
+            TopSkipReason: "AutoCandidateUnverified",
+            TopSkipCount: 20,
+            RejectedByReason: new Dictionary<string, int> { ["AutoCandidateUnverified"] = 20 }), 20);
+
+        var snap = state.StrategyCountersSnapshot()["AutoCandidateMultiOutcome"];
+        Assert.Equal(20, snap.Scanned);
+        Assert.Equal(20, snap.Candidates);
+        Assert.Equal("AutoCandidateUnverified", snap.TopSkipReason);
+        Assert.Equal(20, snap.RejectedByReason["AutoCandidateUnverified"]);
+    }
+
+    [Fact]
+    public void VerifiedMultiOutcome_external_result_maps_real_verified_scan_counters_and_suppression()
+    {
+        var state = new BotRuntimeState();
+        var options = new TradingBotOptions
+        {
+            Strategies = new Dictionary<string, OpportunityStrategyConfig>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["VerifiedMultiOutcome"] = new(true, StrategyMode.DiagnosticsOnly, 50)
+            }
+        };
+        var orchestrator = new StrategyOrchestrator(Array.Empty<IOpportunityStrategy>(), options, state.RecordStrategyResult);
+
+        orchestrator.RecordExternalResult(new OpportunityStrategyScanResult(
+            "VerifiedMultiOutcome",
+            StrategyMode.DiagnosticsOnly,
+            Scanned: 11,
+            Candidates: 8,
+            ExecutionCandidates: 0,
+            DiagnosticsOnlyBlocked: 2,
+            PositiveEdges: 1,
+            ExecutionReady: 1,
+            BestEdge: 0.012m,
+            TopSkipReason: "Unresolved",
+            TopSkipCount: 3,
+            RejectedByReason: new Dictionary<string, int> { ["Unresolved"] = 3, ["DiagnosticsOnly"] = 1 }), 11);
+
+        var snap = state.StrategyCountersSnapshot()["VerifiedMultiOutcome"];
+        Assert.Equal(11, snap.Scanned);
+        Assert.Equal(8, snap.Candidates);
+        Assert.Equal(1, snap.PositiveEdges);
+        Assert.Equal(1, snap.ExecutionReady);
+        Assert.Equal(2, snap.DiagnosticsOnlyBlocked);
+        Assert.Equal(0, snap.PaperOpened);
+        Assert.Equal(0.012m, snap.BestEdge);
+    }
+
     [Fact]
     public async Task Disabled_strategy_is_not_scanned()
     {
@@ -222,11 +289,15 @@ public class StrategyOrchestratorTests
     public void Funnel_includes_per_strategy_breakdown()
     {
         var state = new BotRuntimeState();
+        state.RecordStrategyResult(new OpportunityStrategyScanResult("SingleMarketBuyBoth", StrategyMode.PaperEligible, Scanned: 1));
         state.RecordStrategyResult(new OpportunityStrategyScanResult("VerifiedMultiOutcome", StrategyMode.DiagnosticsOnly, Scanned: 3));
+        state.RecordStrategyResult(new OpportunityStrategyScanResult("AutoCandidateMultiOutcome", StrategyMode.DiagnosticsOnly, Scanned: 20));
 
         var funnel = PaperOpportunityFunnelExporter.Build(new TradingBotOptions(), state, new SingleMarketScanStats(0, 0, 0, 0, 0, 0, 0, 0), new MultiOutcomeGroupArbEngine.MultiOutcomeScanReport(0, 0, 0, 0, 0, 0, 0, 0m, 0m, 0m, "", "", new Dictionary<string, int>(), Array.Empty<MultiOutcomeGroupArbEngine.RejectedSample>(), Array.Empty<MultiOutcomeGroupArbEngine.CandidateGroupReview>()), 0);
 
-        Assert.True(funnel.PerStrategy.ContainsKey("VerifiedMultiOutcome"));
+        Assert.True(funnel.Strategies.ContainsKey("SingleMarketBuyBoth"));
+        Assert.True(funnel.Strategies.ContainsKey("VerifiedMultiOutcome"));
+        Assert.True(funnel.Strategies.ContainsKey("AutoCandidateMultiOutcome"));
     }
 
     [Fact]
