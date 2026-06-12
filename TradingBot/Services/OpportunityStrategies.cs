@@ -23,13 +23,28 @@ public sealed class SingleMarketBuyBothOpportunityStrategy : IOpportunityStrateg
             context.SuppressBatchDataQualitySummary,
             context.CancellationToken);
 
+        var rejectedByReason = stats.SkipReasons ?? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var topSkip = rejectedByReason
+            .OrderByDescending(x => x.Value)
+            .ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+
         return new OpportunityStrategyScanResult(
             Name,
             StrategyMode.PaperEligible,
             Scanned: stats.Scanned,
             Candidates: stats.Candidates,
-            ExecutionCandidates: stats.Candidates,
-            PaperOpened: stats.Executed);
+            ExecutionCandidates: stats.Executed,
+            PaperOpened: stats.Executed,
+            Books: stats.BookOk,
+            BothAsks: stats.BothAsks,
+            PositiveEdges: stats.PositiveEdgeFound,
+            ExecutionReady: stats.ExecutionReady,
+            OrderbookUnavailable: rejectedByReason.Where(x => x.Key.Contains("OrderbookUnavailable", StringComparison.OrdinalIgnoreCase)).Sum(x => x.Value),
+            BestEdge: stats.BestEdgeSeen,
+            TopSkipReason: topSkip.Key ?? "None",
+            TopSkipCount: topSkip.Value,
+            RejectedByReason: rejectedByReason);
     }
 }
 
@@ -62,5 +77,5 @@ public sealed class NullOpportunityStrategy(string name) : IOpportunityStrategy
     public string Name { get; } = name;
 
     public Task<OpportunityStrategyScanResult> ScanAsync(OpportunityStrategyContext context)
-        => Task.FromResult(new OpportunityStrategyScanResult(Name, StrategyMode.DiagnosticsOnly, Scanned: context.Markets.Count));
+        => Task.FromResult(new OpportunityStrategyScanResult(Name, StrategyMode.DiagnosticsOnly, Scanned: context.Markets.Count, TopSkipReason: "DiagnosticsOnly"));
 }

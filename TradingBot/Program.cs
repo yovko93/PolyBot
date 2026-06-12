@@ -243,6 +243,8 @@ var state = app.Services.GetRequiredService<BotRuntimeState>();
 var quietLogGate = app.Services.GetRequiredService<QuietLogGate>();
 var logger = app.Services.GetRequiredService<IBotUiLogger>();
 options = app.Services.GetRequiredService<IOptions<TradingBotOptions>>().Value;
+foreach (var strategyEntry in options.Strategies.Where(x => x.Value.Enabled && x.Value.Mode != StrategyMode.Disabled))
+    state.RecordStrategyResult(new OpportunityStrategyScanResult(strategyEntry.Key, strategyEntry.Value.Mode));
 quietLogGate.ConfigureBounds(options.RuntimeMemory.MaxQuietLogGateEntries, TimeSpan.FromMinutes(options.RuntimeMemory.QuietLogGateTtlMinutes));
 
 Console.SetOut(new MultiTextWriter(originalOut, msg => logger.LogInfo("console", msg)));
@@ -578,7 +580,20 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             SetScannerStage("StrategyOrchestrator", "StrategyOrchestrator");
             var strategyResults = await strategyOrchestrator.RunEnabledAsync(new OpportunityStrategyContext(filtered!, new PaperTradingEngineFacade { Engine = paper }, orderbookSemaphore, singleMarketFullCycleId, singleMarketFullCycleComplete, options.Diagnostics.OperationalQuietMode || !options.SingleMarketArb.LogBatchSummaries, stoppingToken));
             var singleResult = strategyResults.FirstOrDefault(x => x.StrategyName.Equals("SingleMarketBuyBoth", StringComparison.OrdinalIgnoreCase));
-            var scanStats = new SingleMarketScanStats((int)(singleResult?.Scanned ?? 0), 0, 0, (int)(singleResult?.Candidates ?? 0), (int)(singleResult?.PaperOpened ?? 0), 0, 0, 0);
+            var scanStats = new SingleMarketScanStats(
+                (int)(singleResult?.Scanned ?? 0),
+                (int)(singleResult?.Books ?? 0),
+                (int)(singleResult?.BothAsks ?? 0),
+                (int)(singleResult?.Candidates ?? 0),
+                (int)(singleResult?.PaperOpened ?? 0),
+                (int)(singleResult?.PositiveEdges ?? 0),
+                0,
+                0,
+                singleResult?.RejectedByReason?.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase),
+                null,
+                singleResult?.BestEdge,
+                null,
+                (int)(singleResult?.ExecutionReady ?? 0));
             var singleMarketFullSummary = singleMarketFullCycle.AddBatch(singleMarketFullCycleId, state.SingleMarketSnapshot.Summary, state.SingleMarketSnapshot.DataQualityRejectSamples);
             if (options.Diagnostics.OperationalQuietMode && singleMarketFullCycle.ShouldLog(singleMarketFullSummary, options.Logging, singleMarketFullCycleComplete, options.SingleMarketArb.LogCycleProgress))
                 Console.WriteLine(SingleMarketFullCycleSummaryAggregator.ToLogLine(singleMarketFullSummary));

@@ -26,7 +26,16 @@ public sealed record OpportunityStrategyScanResult(
     int PaperOpened = 0,
     int DiagnosticsOnlyBlocked = 0,
     int Faults = 0,
-    string? LastError = null)
+    string? LastError = null,
+    int Books = 0,
+    int BothAsks = 0,
+    int PositiveEdges = 0,
+    int ExecutionReady = 0,
+    int OrderbookUnavailable = 0,
+    decimal? BestEdge = null,
+    string TopSkipReason = "None",
+    int TopSkipCount = 0,
+    IReadOnlyDictionary<string, int>? RejectedByReason = null)
 {
     public static OpportunityStrategyScanResult Disabled(string strategyName) => new(strategyName, StrategyMode.Disabled);
 }
@@ -66,10 +75,12 @@ public sealed class OpportunityExecutionQueue
         if (candidate.Mode != StrategyMode.PaperEligible)
         {
             Interlocked.Increment(ref _rejectedDiagnosticsOnly);
+            Console.WriteLine($"[STRATEGY_EXECUTION_SKIPPED] Strategy={candidate.StrategyName} Mode={candidate.Mode} MarketOrGroup={candidate.MarketOrGroup} Reason=DiagnosticsOnlyCannotOpenPaper");
             Console.WriteLine($"[STRATEGY_EXECUTION_BLOCKED] Strategy={candidate.StrategyName} Mode={candidate.Mode} MarketOrGroup={candidate.MarketOrGroup} Reason=DiagnosticsOnlyCannotOpenPaper");
             return false;
         }
 
+        Console.WriteLine($"[STRATEGY_EXECUTION_CANDIDATE] Strategy={candidate.StrategyName} Mode={candidate.Mode} MarketOrGroup={candidate.MarketOrGroup} Notional={candidate.Notional:0.####}");
         await _serializedExecution.WaitAsync(ct);
         var concurrent = Interlocked.Increment(ref _currentConcurrency);
         UpdateMaxConcurrency(concurrent);
@@ -103,6 +114,11 @@ public sealed class StrategyOrchestrator
     private readonly IReadOnlyList<IOpportunityStrategy> _strategies;
     private readonly TradingBotOptions _options;
     private readonly Action<OpportunityStrategyScanResult>? _recordResult;
+    private readonly Dictionary<string, DateTime> _lastSummaryAt = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _startLogged = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _resultLogged = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _diagnosticsOnlyLogged = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _logGate = new();
 
     public StrategyOrchestrator(IEnumerable<IOpportunityStrategy> strategies, TradingBotOptions options, Action<OpportunityStrategyScanResult>? recordResult = null)
     {
@@ -120,7 +136,11 @@ public sealed class StrategyOrchestrator
             .OrderByDescending(x => x.Config.Priority)
             .ToArray();
 
-        var tasks = enabled.Select(x => RunOneAsync(x.Strategy, x.Config, context)).ToArray();
+        var tasks = enabled.Select(x =>
+        {
+            LogScanStart(x.Strategy.Name, x.Config, context);
+            return RunOneAsync(x.Strategy, x.Config, context);
+        }).ToArray();
         var results = await Task.WhenAll(tasks);
         foreach (var result in results) _recordResult?.Invoke(result);
         return results;
@@ -131,14 +151,61 @@ public sealed class StrategyOrchestrator
         try
         {
             var result = await strategy.ScanAsync(context);
-            return result with { Mode = config.Mode };
+            result = result with { Mode = config.Mode };
+            LogScanResult(result, config);
+            return result;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[STRATEGY_FAULT] Strategy={strategy.Name} Mode={config.Mode} Error={ex.Message}");
-            return new OpportunityStrategyScanResult(strategy.Name, config.Mode, Faults: 1, LastError: ex.Message);
+            var result = new OpportunityStrategyScanResult(strategy.Name, config.Mode, Faults: 1, LastError: ex.Message, TopSkipReason: "Fault");
+            LogScanResult(result, config);
+            return result;
         }
     }
+
+    private void LogScanStart(string strategyName, OpportunityStrategyConfig config, OpportunityStrategyContext context)
+    {
+        var shouldLog = !_options.Diagnostics.OperationalQuietMode;
+        lock (_logGate) shouldLog = shouldLog || _startLogged.Add(strategyName);
+        if (shouldLog)
+            Console.WriteLine($"[STRATEGY_SCAN_START] Strategy={strategyName} Mode={config.Mode} PaperEligible={(config.Mode == StrategyMode.PaperEligible).ToString().ToLowerInvariant()} Markets={context.Markets.Count} Priority={config.Priority}");
+        if (config.Mode == StrategyMode.DiagnosticsOnly)
+        {
+            var shouldLogDiagnostics = false;
+            lock (_logGate) shouldLogDiagnostics = _diagnosticsOnlyLogged.Add(strategyName);
+            if (shouldLogDiagnostics)
+                Console.WriteLine($"[STRATEGY_DIAGNOSTICS_ONLY] Strategy={strategyName} Reason=ModeDiagnosticsOnly");
+        }
+    }
+
+    private void LogScanResult(OpportunityStrategyScanResult result, OpportunityStrategyConfig config)
+    {
+        var shouldLog = !_options.Diagnostics.OperationalQuietMode;
+        lock (_logGate) shouldLog = shouldLog || _resultLogged.Add(result.StrategyName);
+        if (shouldLog)
+        {
+            Console.WriteLine($"[STRATEGY_SCAN_RESULT] Strategy={result.StrategyName} Mode={config.Mode} PaperEligible={(config.Mode == StrategyMode.PaperEligible).ToString().ToLowerInvariant()} Scanned={result.Scanned} Books={result.Books} BothAsks={result.BothAsks} Candidates={result.Candidates} Positive={result.PositiveEdges} ExecutionReady={result.ExecutionReady} PaperOpened={result.PaperOpened} ExecutionCandidates={result.ExecutionCandidates} ExecutionCandidatesSuppressed={result.DiagnosticsOnlyBlocked} OrderbookUnavailable={result.OrderbookUnavailable} BestEdge={(result.BestEdge.HasValue ? result.BestEdge.Value.ToString("0.####") : "N/A")} TopSkip={result.TopSkipReason}:{result.TopSkipCount} Faults={result.Faults}");
+        }
+
+        var now = DateTime.UtcNow;
+        var summaryDue = false;
+        lock (_logGate)
+        {
+            if (!_lastSummaryAt.TryGetValue(result.StrategyName, out var last) || now - last >= TimeSpan.FromMinutes(Math.Max(1, _options.Logging.LogScannerSummaryEveryMinutes)))
+            {
+                _lastSummaryAt[result.StrategyName] = now;
+                summaryDue = true;
+            }
+        }
+        if (summaryDue)
+            Console.WriteLine($"[STRATEGY_SUMMARY] Strategy={result.StrategyName} Mode={config.Mode} Scanned={result.Scanned} Books={result.Books} Candidates={result.Candidates} Positive={result.PositiveEdges} ExecutionReady={result.ExecutionReady} PaperOpened={result.PaperOpened} RejectedByReason={FormatReasons(result.RejectedByReason)}");
+    }
+
+    private static string FormatReasons(IReadOnlyDictionary<string, int>? reasons)
+        => reasons is null || reasons.Count == 0
+            ? "None"
+            : string.Join("|", reasons.OrderByDescending(x => x.Value).ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value}"));
 
     public static OpportunityStrategyConfig ResolveConfig(IReadOnlyDictionary<string, OpportunityStrategyConfig> strategies, string name)
         => strategies.TryGetValue(name, out var config) ? config : new OpportunityStrategyConfig(false, StrategyMode.Disabled, 0);
@@ -158,6 +225,13 @@ public sealed class StrategyRuntimeCounters
     private long _paperOpened;
     private long _diagnosticsOnlyBlocked;
     private long _faults;
+    private long _books;
+    private long _bothAsks;
+    private long _positiveEdges;
+    private long _executionReady;
+    private long _orderbookUnavailable;
+    private readonly object _reasonGate = new();
+    private readonly Dictionary<string, long> _rejectedByReason = new(StringComparer.OrdinalIgnoreCase);
     private DateTime _lastScanUtc;
     private string? _lastError;
     private StrategyMode _mode;
@@ -173,6 +247,19 @@ public sealed class StrategyRuntimeCounters
         Interlocked.Add(ref _paperOpened, result.PaperOpened);
         Interlocked.Add(ref _diagnosticsOnlyBlocked, result.DiagnosticsOnlyBlocked);
         Interlocked.Add(ref _faults, result.Faults);
+        Interlocked.Add(ref _books, result.Books);
+        Interlocked.Add(ref _bothAsks, result.BothAsks);
+        Interlocked.Add(ref _positiveEdges, result.PositiveEdges);
+        Interlocked.Add(ref _executionReady, result.ExecutionReady);
+        Interlocked.Add(ref _orderbookUnavailable, result.OrderbookUnavailable);
+        if (result.RejectedByReason is { Count: > 0 })
+        {
+            lock (_reasonGate)
+            {
+                foreach (var (reason, count) in result.RejectedByReason)
+                    _rejectedByReason[reason] = _rejectedByReason.TryGetValue(reason, out var existing) ? existing + count : count;
+            }
+        }
     }
 
     public StrategyRuntimeCounterSnapshot Snapshot(string strategyName) => new(
@@ -184,8 +271,19 @@ public sealed class StrategyRuntimeCounters
         Interlocked.Read(ref _paperOpened),
         Interlocked.Read(ref _diagnosticsOnlyBlocked),
         Interlocked.Read(ref _faults),
+        Interlocked.Read(ref _books),
+        Interlocked.Read(ref _bothAsks),
+        Interlocked.Read(ref _positiveEdges),
+        Interlocked.Read(ref _executionReady),
+        Interlocked.Read(ref _orderbookUnavailable),
+        RejectedReasonsSnapshot(),
         _lastScanUtc,
         _lastError);
+
+    private IReadOnlyDictionary<string, long> RejectedReasonsSnapshot()
+    {
+        lock (_reasonGate) return _rejectedByReason.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
+    }
 }
 
 public sealed record StrategyRuntimeCounterSnapshot(
@@ -197,5 +295,11 @@ public sealed record StrategyRuntimeCounterSnapshot(
     long PaperOpened,
     long DiagnosticsOnlyBlocked,
     long Faults,
+    long Books,
+    long BothAsks,
+    long PositiveEdges,
+    long ExecutionReady,
+    long OrderbookUnavailable,
+    IReadOnlyDictionary<string, long> RejectedByReason,
     DateTime LastScanUtc,
     string? LastError);

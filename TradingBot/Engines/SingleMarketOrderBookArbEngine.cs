@@ -7,7 +7,7 @@ using TradingBot.Services;
 
 namespace TradingBot.Engines;
 
-public record SingleMarketScanStats(int Scanned,int BookOk,int BothAsks,int Candidates,int Executed,int PositiveEdgeFound,int NegativeEdgeSkipped,int ZeroEdgeSkipped, Dictionary<string,int>? SkipReasons = null, List<NearMissOpportunity>? NearMisses = null, decimal? BestEdgeSeen = null, decimal? WorstEdgeSeen = null);
+public record SingleMarketScanStats(int Scanned,int BookOk,int BothAsks,int Candidates,int Executed,int PositiveEdgeFound,int NegativeEdgeSkipped,int ZeroEdgeSkipped, Dictionary<string,int>? SkipReasons = null, List<NearMissOpportunity>? NearMisses = null, decimal? BestEdgeSeen = null, decimal? WorstEdgeSeen = null, int ExecutionReady = 0, int FillPassed = 0);
 
 public class SingleMarketOrderBookArbEngine
 {
@@ -109,7 +109,7 @@ public class SingleMarketOrderBookArbEngine
             if (!string.IsNullOrWhiteSpace(r.SkipReason)) skipReasons[r.SkipReason!] = skipReasons.GetValueOrDefault(r.SkipReason!, 0) + 1;
             if (r.NearMiss != null) nearMisses.Add(r.NearMiss);
         }
-        return new SingleMarketScanStats(results.Length, results.Count(x => x.BookOk), results.Count(x => x.BothAsks), results.Count(x => x.Candidate), results.Count(x => x.Executed), results.Count(x => x.Candidate && x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value > 0m), results.Count(x => x.Candidate && x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value < 0m), results.Count(x => x.Candidate && x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value == 0m), skipReasons, nearMisses, edges.Count>0?edges.Max():null, edges.Count>0?edges.Min():null);
+        return new SingleMarketScanStats(results.Length, results.Count(x => x.BookOk), results.Count(x => x.BothAsks), results.Count(x => x.Candidate), results.Count(x => x.Executed), results.Count(x => x.Candidate && x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value > 0m), results.Count(x => x.Candidate && x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value < 0m), results.Count(x => x.Candidate && x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value == 0m), skipReasons, nearMisses, edges.Count>0?edges.Max():null, edges.Count>0?edges.Min():null, diagnostics.ExecutionReady, diagnostics.FillPassed);
     }
 
     private async Task<SingleMarketScanResult> ScanMarketAsync(Market market, PaperTradingEngine paper, SemaphoreSlim semaphore, SingleMarketCycleDiagnostics diagnostics, CancellationToken ct)
@@ -121,7 +121,11 @@ public class SingleMarketOrderBookArbEngine
             if (!_options.Enabled) return SingleMarketScanResult.Empty;
             var now = DateTime.UtcNow;
             var book = await _orderBooks.GetBinarySnapshotAsync(market, ct);
-            if (book == null) return SingleMarketScanResult.Empty;
+            if (book == null)
+            {
+                diagnostics.AddReject("OrderbookUnavailable");
+                return new SingleMarketScanResult(false, false, false, false, null, market.question, null, "OrderbookUnavailable", null);
+            }
             diagnostics.IncrementBookOk();
             if (book.TimestampUtc == default) book = book with { TimestampUtc = now };
 

@@ -25,6 +25,98 @@ public class StrategyOrchestratorTests
     private static OpportunityStrategyContext Context()
         => new(Array.Empty<Market>(), new PaperTradingEngineFacade { Engine = new PaperTradingEngine(botOptions: new TradingBotOptions()) }, new SemaphoreSlim(1, 1), null, false, false, CancellationToken.None);
 
+    private sealed class MapProvider(IReadOnlyDictionary<string, BinaryOrderBookSnapshot?> books) : IOrderBookProvider
+    {
+        public Task<BinaryOrderBookSnapshot?> GetBinarySnapshotAsync(Market market, CancellationToken ct = default)
+            => Task.FromResult(books.TryGetValue(market.id, out var book) ? book : null);
+    }
+
+    private static Market Market(string id = "m1") => new() { id = id, question = $"Will {id}?", conditionId = $"c-{id}", outcomes = new() { "Yes", "No" }, clobTokenIds = new() { $"yes-{id}", $"no-{id}" } };
+
+    private static BinaryOrderBookSnapshot Book(Market market, decimal yesAsk = 0.60m, decimal noAsk = 0.41m)
+        => new(market.id, market.question, market.clobTokenIds[0], market.clobTokenIds[1], null, new BookQuote(yesAsk, 100m), null, new BookQuote(noAsk, 100m), DateTime.UtcNow);
+
+
+    [Fact]
+    public async Task SingleMarketBuyBoth_strategy_scan_context_contains_orderbooks_and_maps_scan_result()
+    {
+        var market = Market();
+        var state = new BotRuntimeState();
+        var engine = new SingleMarketOrderBookArbEngine(
+            new MapProvider(new Dictionary<string, BinaryOrderBookSnapshot?> { [market.id] = Book(market) }),
+            options: new SingleMarketArbOptions { MinEdgePerShare = 0.005m, MinExpectedProfit = 0.01m, MinNotional = 1m, RequiredConsecutiveEdgeScans = 99, RequiredConsecutiveExecutionReadyScans = 99 },
+            state: state,
+            operationalQuietMode: true);
+        var strategy = new SingleMarketBuyBothOpportunityStrategy(engine);
+
+        var result = await strategy.ScanAsync(new OpportunityStrategyContext(new[] { market }, new PaperTradingEngineFacade { Engine = new PaperTradingEngine(botOptions: new TradingBotOptions()) }, new SemaphoreSlim(1, 1), null, false, true, CancellationToken.None));
+
+        Assert.Equal(1, result.Scanned);
+        Assert.Equal(1, result.Books);
+        Assert.Equal(1, result.BothAsks);
+        Assert.Equal(1, result.Candidates);
+        Assert.Equal("BelowMinEdge", result.TopSkipReason);
+        Assert.True(result.BestEdge.HasValue);
+    }
+
+    [Fact]
+    public async Task SingleMarketBuyBoth_strategy_counts_orderbook_unavailable_when_books_are_missing()
+    {
+        var market = Market();
+        var engine = new SingleMarketOrderBookArbEngine(new MapProvider(new Dictionary<string, BinaryOrderBookSnapshot?> { [market.id] = null }), options: new SingleMarketArbOptions(), operationalQuietMode: true);
+        var strategy = new SingleMarketBuyBothOpportunityStrategy(engine);
+
+        var result = await strategy.ScanAsync(new OpportunityStrategyContext(new[] { market }, new PaperTradingEngineFacade { Engine = new PaperTradingEngine(botOptions: new TradingBotOptions()) }, new SemaphoreSlim(1, 1), null, false, true, CancellationToken.None));
+
+        Assert.Equal(0, result.Books);
+        Assert.Equal(1, result.OrderbookUnavailable);
+        Assert.Equal("OrderbookUnavailable", result.TopSkipReason);
+    }
+
+    [Fact]
+    public async Task Strategy_scan_result_emitted_once_per_enabled_strategy_in_quiet_mode()
+    {
+        var strategy = new FakeStrategy("SingleMarketBuyBoth");
+        var options = new TradingBotOptions
+        {
+            Diagnostics = new DiagnosticsOptions { OperationalQuietMode = true },
+            Strategies = new Dictionary<string, OpportunityStrategyConfig>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["SingleMarketBuyBoth"] = new(true, StrategyMode.PaperEligible, 100)
+            }
+        };
+
+        using var writer = new StringWriter();
+        var original = Console.Out;
+        Console.SetOut(writer);
+        try
+        {
+            await new StrategyOrchestrator(new[] { strategy }, options).RunEnabledAsync(Context());
+        }
+        finally
+        {
+            Console.SetOut(original);
+        }
+
+        Assert.Contains("[STRATEGY_SCAN_START] Strategy=SingleMarketBuyBoth", writer.ToString());
+        Assert.Contains("[STRATEGY_SCAN_RESULT] Strategy=SingleMarketBuyBoth", writer.ToString());
+    }
+
+    [Fact]
+    public void RuntimeHealth_strategies_populated_after_orchestrator_init()
+    {
+        var state = new BotRuntimeState();
+        state.RecordStrategyResult(new OpportunityStrategyScanResult("SingleMarketBuyBoth", StrategyMode.PaperEligible));
+        state.RecordStrategyResult(new OpportunityStrategyScanResult("VerifiedMultiOutcome", StrategyMode.DiagnosticsOnly));
+        state.RecordStrategyResult(new OpportunityStrategyScanResult("AutoCandidateMultiOutcome", StrategyMode.DiagnosticsOnly));
+
+        var health = RuntimeHealthSnapshot.From(state, new TradingBotOptions());
+
+        Assert.Contains("SingleMarketBuyBoth", health.StrategyCounters.Keys);
+        Assert.Contains("VerifiedMultiOutcome", health.StrategyCounters.Keys);
+        Assert.Contains("AutoCandidateMultiOutcome", health.StrategyCounters.Keys);
+    }
+
     [Fact]
     public async Task Disabled_strategy_is_not_scanned()
     {
