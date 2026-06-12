@@ -63,6 +63,8 @@ public static class RuntimeSoakStatusExporter
             quarantinedTokens = state.OrderBookServiceStats.QuarantinedTokens,
             skippedQuarantinedTokensLastHour = trend.SkippedQuarantinedTokensLastHour,
             orderbookUnavailableMarkets = health.OrderbookUnavailableMarkets,
+            strategies = health.StrategyCounters,
+            strategyCompact = string.Join(",", health.StrategyCounters.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value.Mode}:scan={x.Value.Scanned}:books={x.Value.Books}:paper={x.Value.PaperOpened}:faults={x.Value.Faults}")),
             verifiedPricingUnavailableGroups = 0,
             orderbookStable = (health.BatchBookRequests <= 0 ? 0d : (double)health.BatchBookBadRequests / health.BatchBookRequests) <= options.OrderBook.MaxBadRequestRateForStable
                 && trend.BatchBookBadRequestsDeltaLastHour <= options.OrderBook.MaxBadRequestsPerHourForStable

@@ -243,6 +243,8 @@ var state = app.Services.GetRequiredService<BotRuntimeState>();
 var quietLogGate = app.Services.GetRequiredService<QuietLogGate>();
 var logger = app.Services.GetRequiredService<IBotUiLogger>();
 options = app.Services.GetRequiredService<IOptions<TradingBotOptions>>().Value;
+foreach (var strategyEntry in options.Strategies.Where(x => x.Value.Enabled && x.Value.Mode != StrategyMode.Disabled))
+    state.RecordStrategyResult(new OpportunityStrategyScanResult(strategyEntry.Key, strategyEntry.Value.Mode));
 quietLogGate.ConfigureBounds(options.RuntimeMemory.MaxQuietLogGateEntries, TimeSpan.FromMinutes(options.RuntimeMemory.QuietLogGateTtlMinutes));
 
 Console.SetOut(new MultiTextWriter(originalOut, msg => logger.LogInfo("console", msg)));
@@ -412,7 +414,15 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     paperSettlementValidationHarness.TryRun(options, paper, positionBook, state, contentRootPath);
     var monitor = new OpportunityMonitor(Path.Combine(AppContext.BaseDirectory, "data", "arb-opportunities.csv"), options.MinEdgePerShare, -0.02m, TimeSpan.FromMinutes(2), options.MinExpectedProfit, new DryRunLiveOrderBuilder(minEdgePerShare: -0.01m, maxPlanCost: 100000m, minSize: 1m, tickSize: 0.001m, orderType: LiveOrderType.FOK, policy: executionPolicy));
     var semaphore = new SemaphoreSlim(options.MaxConcurrentRequests);
-    var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketFees, options.SingleMarketSlippage, monitor, sizing, options.SingleMarketArb, state, contentRootPath, verifiedExecution, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate);
+    var opportunityExecutionQueue = new OpportunityExecutionQueue();
+    var singleConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "SingleMarketBuyBoth");
+    var verifiedConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "VerifiedMultiOutcome");
+    var autoConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "AutoCandidateMultiOutcome");
+    var experimentalConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "ExperimentalMultiOutcome");
+    var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketFees, options.SingleMarketSlippage, monitor, sizing, options.SingleMarketArb, state, contentRootPath, verifiedExecution, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate, opportunityExecutionQueue, singleConfig.Mode);
+    var singleMarketStrategy = new SingleMarketBuyBothOpportunityStrategy(singleMarketArb);
+    var strategyOrchestrator = new StrategyOrchestrator(new IOpportunityStrategy[] { singleMarketStrategy }, options, state.RecordStrategyResult);
+    Console.WriteLine($"[STRATEGY_ORCHESTRATOR] SingleMarketBuyBoth={singleConfig.Mode} VerifiedMultiOutcome={verifiedConfig.Mode} AutoCandidateMultiOutcome={autoConfig.Mode} ExperimentalMultiOutcome={experimentalConfig.Mode}");
     var singleMarketFullCycle = new SingleMarketFullCycleSummaryAggregator(options.SingleMarketArb);
 
     var config = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory).AddJsonFile("appsettings.json", optional: true).Build();
@@ -567,8 +577,23 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             var orderbookSemaphore = new SemaphoreSlim(options.MaxConcurrentOrderbookRequests);
             SetScannerStage("BatchOrderbookFetch", "OrderBookService");
             await orderbookService.PrefetchBinarySnapshotsAsync(filtered);
-            SetScannerStage("SingleMarketScan", "SingleMarketOrderBookArbEngine");
-            var scanStats = await singleMarketArb.ScanAsync(filtered!, paper, orderbookSemaphore, singleMarketFullCycleId, singleMarketFullCycleComplete, suppressBatchDataQualitySummary: options.Diagnostics.OperationalQuietMode || !options.SingleMarketArb.LogBatchSummaries, ct: stoppingToken);
+            SetScannerStage("StrategyOrchestrator", "StrategyOrchestrator");
+            var strategyResults = await strategyOrchestrator.RunEnabledAsync(new OpportunityStrategyContext(filtered!, new PaperTradingEngineFacade { Engine = paper }, orderbookSemaphore, singleMarketFullCycleId, singleMarketFullCycleComplete, options.Diagnostics.OperationalQuietMode || !options.SingleMarketArb.LogBatchSummaries, stoppingToken));
+            var singleResult = strategyResults.FirstOrDefault(x => x.StrategyName.Equals("SingleMarketBuyBoth", StringComparison.OrdinalIgnoreCase));
+            var scanStats = new SingleMarketScanStats(
+                (int)(singleResult?.Scanned ?? 0),
+                (int)(singleResult?.Books ?? 0),
+                (int)(singleResult?.BothAsks ?? 0),
+                (int)(singleResult?.Candidates ?? 0),
+                (int)(singleResult?.PaperOpened ?? 0),
+                (int)(singleResult?.PositiveEdges ?? 0),
+                0,
+                0,
+                singleResult?.RejectedByReason?.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase),
+                null,
+                singleResult?.BestEdge,
+                null,
+                (int)(singleResult?.ExecutionReady ?? 0));
             var singleMarketFullSummary = singleMarketFullCycle.AddBatch(singleMarketFullCycleId, state.SingleMarketSnapshot.Summary, state.SingleMarketSnapshot.DataQualityRejectSamples);
             if (options.Diagnostics.OperationalQuietMode && singleMarketFullCycle.ShouldLog(singleMarketFullSummary, options.Logging, singleMarketFullCycleComplete, options.SingleMarketArb.LogCycleProgress))
                 Console.WriteLine(SingleMarketFullCycleSummaryAggregator.ToLogLine(singleMarketFullSummary));
@@ -1209,6 +1234,23 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         Console.WriteLine($"[MULTI_CANDIDATE_SCAN] Candidates={multiOutcomeReport.GroupsDetected} Rejected={rejectedCandidates} TopReject={multiOutcomeReport.TopSkipReason} RejectedByReason={{{candidateReasons}}}");
                     lastCandidateScanFingerprint = candidateFingerprint;
                     if (rejectedOnlyCandidateScan) lastRejectedOnlyCandidateScanFingerprint = rejectedOnlyMaterialFingerprint;
+                    var autoTopSkipReason = string.IsNullOrWhiteSpace(multiOutcomeReport.TopSkipReason) ? "None" : multiOutcomeReport.TopSkipReason;
+                    var autoTopSkipCount = autoTopSkipReason == "None" ? 0 : (multiOutcomeReport.RejectedByReason.TryGetValue(autoTopSkipReason, out var autoTopSkipValue) ? autoTopSkipValue : 0);
+                    strategyOrchestrator.RecordExternalResult(new OpportunityStrategyScanResult(
+                        "AutoCandidateMultiOutcome",
+                        StrategyMode.DiagnosticsOnly,
+                        Scanned: multiOutcomeReport.GroupsDetected,
+                        Candidates: multiOutcomeReport.GroupsDetected,
+                        ExecutionCandidates: 0,
+                        PaperOpened: 0,
+                        DiagnosticsOnlyBlocked: multiOutcomeReport.ExecutableGroups,
+                        PositiveEdges: 0,
+                        ExecutionReady: 0,
+                        BestEdge: multiOutcomeReport.BestCandidateEdge,
+                        TopSkipReason: autoTopSkipReason,
+                        TopSkipCount: autoTopSkipCount,
+                        RejectedByReason: multiOutcomeReport.RejectedByReason),
+                        multiOutcomeReport.GroupsDetected);
                     var bestConservativeNet = snapshot.BestByConservative?.ActiveProfileNetEdge;
                     decimal? bestExperimentalNet = ScanLogSummaryService.BestExperimentalNet(snapshot.ExperimentalCandidates);
                     var bestAlternateProfileNet = ScanLogSummaryService.BestAlternateProfileNet(snapshot.VerifiedBaskets, "PolymarketApprox") ?? decimal.MinValue;
@@ -1246,6 +1288,37 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var verifiedImportance = paperOpenedCount > 0 ? LogImportance.Critical : activeExecutable > 0 ? LogImportance.Important : LogImportance.Normal;
                     var shouldLogVerifiedScan = ShouldQuietLog("multi-verified", "MULTI_VERIFIED_SCAN", verifiedScanFingerprint, verifiedImportance, verifiedScanFingerprint, everyNCycles: options.Logging.LogVerifiedScanEveryNCycles, maxPerHour: options.Logging.MaxMultiVerifiedScanLogsPerHour);
                     if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} BrokenConfigCount={unresolvedCounts.BrokenConfig} NeedsRefreshCount={unresolvedCounts.NeedsRefresh} ReviewOnlyCount={unresolvedCounts.ReviewOnly} MonitoringOnlyUnresolvedCount={unresolvedCounts.MonitoringOnly} OtherUnresolvedCount={unresolvedCounts.Other} UnresolvedSamplesShown={unresolvedCounts.SamplesShown} SuppressedUnresolvedSamples={unresolvedCounts.Suppressed} UnresolvedTotal={unresolvedCounts.Total} Evaluated={verifiedEvaluated} ActiveExecutable={activeExecutable} ExperimentalCandidates={experimentalCandidates} DiagnosticsOnlyPositive={diagnosticsOnlyPositive} PaperOpened={paperOpenedCount} SuppressedDuplicate={suppressedDuplicateCount} Mismatch={verifiedMismatch} BestActiveNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestExperimentalNet={bestExperimentalText} BestAlternateProfileNet={bestAlternateProfileNet} BestRaw={bestRaw}");
+                    var verifiedRejectedByReason = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var reasonGroup in groupDiagnostics.Concat(pricingDiagnostics.Select(x => new VerifiedGroupDiagnosticDto(x.GroupKey, x.Legs, x.Legs, 0, "Pricing", x.SkipReason, x.NetEdge, x.SkipReason.Contains("MissingNoAsk", StringComparison.OrdinalIgnoreCase) ? 1 : 0, 0, Array.Empty<string>(), Array.Empty<string>())))
+                        .Where(x => !string.IsNullOrWhiteSpace(x.SkipReason) && !x.SkipReason.Equals("None", StringComparison.OrdinalIgnoreCase))
+                        .GroupBy(x => x.SkipReason, StringComparer.OrdinalIgnoreCase))
+                        verifiedRejectedByReason[reasonGroup.Key] = reasonGroup.Count();
+                    if (unresolved > 0) verifiedRejectedByReason["Unresolved"] = unresolved;
+                    if (unresolvedCounts.BrokenConfig > 0) verifiedRejectedByReason["BrokenConfig"] = unresolvedCounts.BrokenConfig;
+                    if (unresolvedCounts.NeedsRefresh > 0) verifiedRejectedByReason["NeedsRefresh"] = unresolvedCounts.NeedsRefresh;
+                    if (unresolvedCounts.ReviewOnly > 0) verifiedRejectedByReason["ReviewOnly"] = unresolvedCounts.ReviewOnly;
+                    if (activeExecutable > 0) verifiedRejectedByReason["DiagnosticsOnly"] = activeExecutable;
+                    var verifiedTopSkip = verifiedRejectedByReason.OrderByDescending(x => x.Value).ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase).FirstOrDefault();
+                    decimal? verifiedBestStrategyEdge = bestConservativeNet
+                        ?? (bestAlternateProfileNet == decimal.MinValue
+                            ? (bestRaw == decimal.MinValue ? (decimal?)null : bestRaw)
+                            : bestAlternateProfileNet);
+                    strategyOrchestrator.RecordExternalResult(new OpportunityStrategyScanResult(
+                        "VerifiedMultiOutcome",
+                        StrategyMode.DiagnosticsOnly,
+                        Scanned: multiOutcomeValidator.LoadedAllowlistCount,
+                        Candidates: verifiedEvaluated,
+                        ExecutionCandidates: 0,
+                        PaperOpened: 0,
+                        DiagnosticsOnlyBlocked: activeExecutable + diagnosticsOnlyPositive,
+                        PositiveEdges: diagnosticsOnlyPositive + experimentalCandidates,
+                        ExecutionReady: activeExecutable,
+                        OrderbookUnavailable: verifiedRejectedByReason.Where(x => x.Key.Contains("Orderbook", StringComparison.OrdinalIgnoreCase) || x.Key.Contains("MissingNoAsk", StringComparison.OrdinalIgnoreCase)).Sum(x => x.Value),
+                        BestEdge: verifiedBestStrategyEdge,
+                        TopSkipReason: verifiedTopSkip.Key ?? "None",
+                        TopSkipCount: verifiedTopSkip.Value,
+                        RejectedByReason: verifiedRejectedByReason),
+                        multiOutcomeValidator.LoadedAllowlistCount);
                     if (!unresolvedCounts.InvariantOk)
                         Console.WriteLine(unresolvedCounts.ToCounterErrorLogLine());
                     var unresolvedFingerprint = ScanLogSummaryService.VerifiedUnresolvedCategoryFingerprint(unresolvedCounts, unresolvedGroupSetFingerprint);

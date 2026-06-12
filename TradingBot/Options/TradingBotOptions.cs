@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using TradingBot.Services;
 
 namespace TradingBot.Options;
 
@@ -94,6 +95,15 @@ public class TradingBotOptions
     public RuntimeMemoryOptions RuntimeMemory { get; set; } = new();
     public CacheOptions Caches { get; set; } = new();
     public OrderBookOptions OrderBook { get; set; } = new();
+    public Dictionary<string, OpportunityStrategyConfig> Strategies { get; set; } = StrategyDefaults();
+
+    private static Dictionary<string, OpportunityStrategyConfig> StrategyDefaults() => new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["SingleMarketBuyBoth"] = new(true, StrategyMode.PaperEligible, 100),
+        ["VerifiedMultiOutcome"] = new(true, StrategyMode.DiagnosticsOnly, 50),
+        ["AutoCandidateMultiOutcome"] = new(true, StrategyMode.DiagnosticsOnly, 25),
+        ["ExperimentalMultiOutcome"] = new(false, StrategyMode.Disabled, 0)
+    };
 }
 
 public class TradingModeOptions
