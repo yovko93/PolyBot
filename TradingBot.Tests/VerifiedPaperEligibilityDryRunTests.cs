@@ -1,4 +1,5 @@
 using TradingBot.Services;
+using Xunit;
 
 namespace TradingBot.Tests;
 
