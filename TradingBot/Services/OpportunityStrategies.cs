@@ -67,7 +67,9 @@ public sealed class DiagnosticsOnlyOpportunityStrategy : IOpportunityStrategy
             StrategyName = Name,
             Mode = StrategyMode.DiagnosticsOnly,
             PaperOpened = 0,
-            DiagnosticsOnlyBlocked = Math.Max(result.DiagnosticsOnlyBlocked, result.ExecutionCandidates)
+            DiagnosticsOnlyBlocked = result.StrategyName.Equals("VerifiedMultiOutcome", StringComparison.OrdinalIgnoreCase)
+                ? result.DiagnosticsOnlyBlocked
+                : Math.Max(result.DiagnosticsOnlyBlocked, result.ExecutionCandidates)
         };
     }
 }

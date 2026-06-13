@@ -35,7 +35,19 @@ public sealed record OpportunityStrategyScanResult(
     decimal? BestEdge = null,
     string TopSkipReason = "None",
     int TopSkipCount = 0,
-    IReadOnlyDictionary<string, int>? RejectedByReason = null)
+    IReadOnlyDictionary<string, int>? RejectedByReason = null,
+    int VerifiedActiveConservativePositive = 0,
+    int VerifiedActiveConservativeExecutable = 0,
+    int VerifiedRawPositiveOnly = 0,
+    int VerifiedAlternateProfilePositive = 0,
+    int VerifiedExperimentalProfileCandidate = 0,
+    int VerifiedDiagnosticsOnlyBlocked = 0,
+    int VerifiedWouldOpenIfPaperEligible = 0,
+    int VerifiedRejectedByCostProfile = 0,
+    int VerifiedRejectedByStability = 0,
+    int VerifiedRejectedByMissingNoAsk = 0,
+    int VerifiedRejectedByUnresolvedGroup = 0,
+    int VerifiedRejectedByRisk = 0)
 {
     public static OpportunityStrategyScanResult Disabled(string strategyName) => new(strategyName, StrategyMode.Disabled);
 }
@@ -118,6 +130,8 @@ public sealed class StrategyOrchestrator
     private readonly HashSet<string> _startLogged = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _resultLogged = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _diagnosticsOnlyLogged = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, DateTime> _lastDiagnosticsSummaryAt = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _lastDiagnosticsFingerprint = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _logGate = new();
 
     public StrategyOrchestrator(IEnumerable<IOpportunityStrategy> strategies, TradingBotOptions options, Action<OpportunityStrategyScanResult>? recordResult = null)
@@ -209,10 +223,31 @@ public sealed class StrategyOrchestrator
             }
         }
         if (config.Mode == StrategyMode.DiagnosticsOnly && result.DiagnosticsOnlyBlocked > 0)
-            Console.WriteLine($"[STRATEGY_DIAGNOSTICS_ONLY] Strategy={result.StrategyName} CandidatesSuppressed={result.DiagnosticsOnlyBlocked} Reason=ModeDiagnosticsOnly");
+        {
+            var diagnosticsFingerprint = $"{result.TopSkipReason}|{EdgeBucket(result.BestEdge)}|{result.VerifiedWouldOpenIfPaperEligible}|{result.DiagnosticsOnlyBlocked}";
+            var shouldDiagnosticsLog = false;
+            var shouldDiagnosticsSummary = false;
+            lock (_logGate)
+            {
+                var key = result.StrategyName;
+                var changed = !_lastDiagnosticsFingerprint.TryGetValue(key, out var prev) || prev != diagnosticsFingerprint;
+                _lastDiagnosticsFingerprint[key] = diagnosticsFingerprint;
+                var first = _diagnosticsOnlyLogged.Add($"{result.StrategyName}:suppressed");
+                var due = !_lastDiagnosticsSummaryAt.TryGetValue(key, out var last) || now - last >= TimeSpan.FromMinutes(10);
+                shouldDiagnosticsLog = first || changed;
+                shouldDiagnosticsSummary = due;
+                if (due) _lastDiagnosticsSummaryAt[key] = now;
+            }
+            if (shouldDiagnosticsLog)
+                Console.WriteLine($"[STRATEGY_DIAGNOSTICS_ONLY] Strategy={result.StrategyName} CandidatesSuppressed={result.DiagnosticsOnlyBlocked} Reason=ModeDiagnosticsOnly");
+            if (shouldDiagnosticsSummary)
+                Console.WriteLine($"[STRATEGY_DIAGNOSTICS_ONLY_SUMMARY] Strategy={result.StrategyName} CandidatesSuppressed={result.DiagnosticsOnlyBlocked} ActiveConservativeExecutable={result.VerifiedActiveConservativeExecutable} RawPositiveOnly={result.VerifiedRawPositiveOnly} AlternateProfilePositive={result.VerifiedAlternateProfilePositive} ExperimentalProfileCandidate={result.VerifiedExperimentalProfileCandidate} WouldOpenIfPaperEligible={result.VerifiedWouldOpenIfPaperEligible}");
+        }
         if (summaryDue)
             Console.WriteLine($"[STRATEGY_SUMMARY] Strategy={result.StrategyName} Mode={config.Mode} Scanned={result.Scanned} Books={result.Books} Candidates={result.Candidates} Positive={result.PositiveEdges} ExecutionReady={result.ExecutionReady} PaperOpened={result.PaperOpened} RejectedByReason={FormatReasons(result.RejectedByReason)}");
     }
+
+    private static string EdgeBucket(decimal? edge) => edge.HasValue ? Math.Round(edge.Value, 3).ToString("0.###") : "N/A";
 
     private static string FormatReasons(IReadOnlyDictionary<string, int>? reasons)
         => reasons is null || reasons.Count == 0
@@ -242,6 +277,18 @@ public sealed class StrategyRuntimeCounters
     private long _positiveEdges;
     private long _executionReady;
     private long _orderbookUnavailable;
+    private long _verifiedActiveConservativePositive;
+    private long _verifiedActiveConservativeExecutable;
+    private long _verifiedRawPositiveOnly;
+    private long _verifiedAlternateProfilePositive;
+    private long _verifiedExperimentalProfileCandidate;
+    private long _verifiedDiagnosticsOnlyBlocked;
+    private long _verifiedWouldOpenIfPaperEligible;
+    private long _verifiedRejectedByCostProfile;
+    private long _verifiedRejectedByStability;
+    private long _verifiedRejectedByMissingNoAsk;
+    private long _verifiedRejectedByUnresolvedGroup;
+    private long _verifiedRejectedByRisk;
     private readonly object _reasonGate = new();
     private readonly Dictionary<string, long> _rejectedByReason = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _bestEdgeGate = new();
@@ -268,6 +315,18 @@ public sealed class StrategyRuntimeCounters
         Interlocked.Add(ref _positiveEdges, result.PositiveEdges);
         Interlocked.Add(ref _executionReady, result.ExecutionReady);
         Interlocked.Add(ref _orderbookUnavailable, result.OrderbookUnavailable);
+        Interlocked.Add(ref _verifiedActiveConservativePositive, result.VerifiedActiveConservativePositive);
+        Interlocked.Add(ref _verifiedActiveConservativeExecutable, result.VerifiedActiveConservativeExecutable);
+        Interlocked.Add(ref _verifiedRawPositiveOnly, result.VerifiedRawPositiveOnly);
+        Interlocked.Add(ref _verifiedAlternateProfilePositive, result.VerifiedAlternateProfilePositive);
+        Interlocked.Add(ref _verifiedExperimentalProfileCandidate, result.VerifiedExperimentalProfileCandidate);
+        Interlocked.Add(ref _verifiedDiagnosticsOnlyBlocked, result.VerifiedDiagnosticsOnlyBlocked);
+        Interlocked.Add(ref _verifiedWouldOpenIfPaperEligible, result.VerifiedWouldOpenIfPaperEligible);
+        Interlocked.Add(ref _verifiedRejectedByCostProfile, result.VerifiedRejectedByCostProfile);
+        Interlocked.Add(ref _verifiedRejectedByStability, result.VerifiedRejectedByStability);
+        Interlocked.Add(ref _verifiedRejectedByMissingNoAsk, result.VerifiedRejectedByMissingNoAsk);
+        Interlocked.Add(ref _verifiedRejectedByUnresolvedGroup, result.VerifiedRejectedByUnresolvedGroup);
+        Interlocked.Add(ref _verifiedRejectedByRisk, result.VerifiedRejectedByRisk);
         if (result.BestEdge.HasValue)
         {
             lock (_bestEdgeGate)
@@ -306,7 +365,19 @@ public sealed class StrategyRuntimeCounters
         _topSkipReason,
         _topSkipCount,
         _lastScanUtc,
-        _lastError);
+        _lastError,
+        Interlocked.Read(ref _verifiedActiveConservativePositive),
+        Interlocked.Read(ref _verifiedActiveConservativeExecutable),
+        Interlocked.Read(ref _verifiedRawPositiveOnly),
+        Interlocked.Read(ref _verifiedAlternateProfilePositive),
+        Interlocked.Read(ref _verifiedExperimentalProfileCandidate),
+        Interlocked.Read(ref _verifiedDiagnosticsOnlyBlocked),
+        Interlocked.Read(ref _verifiedWouldOpenIfPaperEligible),
+        Interlocked.Read(ref _verifiedRejectedByCostProfile),
+        Interlocked.Read(ref _verifiedRejectedByStability),
+        Interlocked.Read(ref _verifiedRejectedByMissingNoAsk),
+        Interlocked.Read(ref _verifiedRejectedByUnresolvedGroup),
+        Interlocked.Read(ref _verifiedRejectedByRisk));
 
     private decimal? BestEdgeSnapshot()
     {
@@ -338,4 +409,16 @@ public sealed record StrategyRuntimeCounterSnapshot(
     string TopSkipReason,
     int TopSkipCount,
     DateTime LastScanUtc,
-    string? LastError);
+    string? LastError,
+    long VerifiedActiveConservativePositive = 0,
+    long VerifiedActiveConservativeExecutable = 0,
+    long VerifiedRawPositiveOnly = 0,
+    long VerifiedAlternateProfilePositive = 0,
+    long VerifiedExperimentalProfileCandidate = 0,
+    long VerifiedDiagnosticsOnlyBlocked = 0,
+    long VerifiedWouldOpenIfPaperEligible = 0,
+    long VerifiedRejectedByCostProfile = 0,
+    long VerifiedRejectedByStability = 0,
+    long VerifiedRejectedByMissingNoAsk = 0,
+    long VerifiedRejectedByUnresolvedGroup = 0,
+    long VerifiedRejectedByRisk = 0);
