@@ -636,6 +636,15 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var activeExecutable = 0;
                     var experimentalCandidates = 0;
                     var diagnosticsOnlyPositive = 0;
+                    var verifiedActivePositive = 0;
+                    var verifiedRawPositiveOnly = 0;
+                    var verifiedAlternatePositive = 0;
+                    var verifiedWouldOpenIfPaperEligible = 0;
+                    var verifiedRejectedByCostProfile = 0;
+                    var verifiedRejectedByStability = 0;
+                    var verifiedRejectedByMissingNoAsk = 0;
+                    var verifiedRejectedByUnresolvedGroup = 0;
+                    var verifiedRejectedByRisk = 0;
                     var paperOpenedCount = 0;
                     var suppressedDuplicateCount = 0;
                     var skipReason = "None";
@@ -659,6 +668,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 var should = options.Logging.DebugVerifiedMismatch || changed || periodic || !options.Logging.LogVerifiedMismatchOnChangeOnly;
                                 if (should) Console.WriteLine($"[VERIFY_GROUP_MISMATCH] Group={g.GroupKey} RequiredMarkets={g.MarketIds.Count} FoundMarkets={g.ResolvedMarkets.Count} MissingMarkets={g.MissingMarketIds.Count} Source=FullDiscoveredPool MissingSample=[{string.Join(",", g.MissingMarketIds.Take(options.MultiOutcomeArbitrage.VerifiedGroupMismatchSampleSize))}] FoundSample=[{string.Join(",", g.ResolvedMarkets.Select(x=>x.id).Take(options.MultiOutcomeArbitrage.VerifiedGroupMismatchSampleSize))}]");
                             }
+                            verifiedRejectedByUnresolvedGroup++;
+                            if (ShouldQuietLog("multi-verified", "VERIFIED_STRATEGY_CLASSIFICATION", $"{g.GroupKey}|Unresolved|{g.RejectionReason}", LogImportance.Normal, "Unresolved", groupKey: g.GroupKey, everyNCycles: options.Logging.LogVerifiedScanEveryNCycles, maxPerHour: options.Logging.MaxMultiVerifiedScanLogsPerHour))
+                                Console.WriteLine($"[VERIFIED_STRATEGY_CLASSIFICATION] Group={g.GroupKey} ActiveNet=0 RawNet=0 AlternateProfileNet=0 ConservativeNet=0 CostProfile=Unknown Classification=Unresolved WouldOpenIfPaperEligible=false PaperEligible=false Reason={g.RejectionReason}");
                             groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, g.ValidationStatus, g.RejectionReason, null, 0, 0, g.MissingMarketIds.Take(5).ToArray(), g.MissingConditionIds.Take(5).ToArray()));
                             continue;
                         }
@@ -728,6 +740,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             });
                             if (shouldLogPricing && suggestion is not null) Console.WriteLine($"[VERIFIED_GROUP_PRICING_SUGGESTION] Group={g.GroupKey} MissingNoAsk={missingNoAskLegs.Count} SuggestedPrunedLegs={suggestedMarketIds.Length}");
                             var missingSkipReason = fetchFailureOnly ? "OrderbookFetchFailed" : missingReasonBreakdown.ContainsKey("QuarantinedToken") ? "QuarantinedToken" : missingReasonBreakdown.ContainsKey("InvalidToken") ? "InvalidToken" : "MissingNoAsk";
+                            verifiedRejectedByMissingNoAsk++;
+                            if (ShouldQuietLog("multi-verified", "VERIFIED_STRATEGY_CLASSIFICATION", $"{g.GroupKey}|MissingNoAsk|{missingSkipReason}", LogImportance.Normal, "MissingNoAsk", groupKey: g.GroupKey, everyNCycles: options.Logging.LogVerifiedScanEveryNCycles, maxPerHour: options.Logging.MaxMultiVerifiedScanLogsPerHour))
+                                Console.WriteLine($"[VERIFIED_STRATEGY_CLASSIFICATION] Group={g.GroupKey} ActiveNet=0 RawNet=0 AlternateProfileNet=0 ConservativeNet=0 CostProfile=Unknown Classification=MissingNoAsk WouldOpenIfPaperEligible=false PaperEligible=false Reason={missingSkipReason}");
                             groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, "VerifiedResolved", missingSkipReason, null, missingNoAskLegs.Count, 0, missingNoAskLegs.Select(x => x.MarketId).Take(5).ToArray(), Array.Empty<string>()));
                             continue;
                         }
@@ -737,6 +752,13 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         var breakdown = VerifiedBasketDiagnostics.Compute(g.GroupKey, resolvedNoAsks.Count, formula, activeCostProfile.FeePerLeg, activeCostProfile.SlippageBufferPerLeg, options.MultiOutcomeArbitrage.NearExecutableCostReductionThreshold, options.MultiOutcomeArbitrage.FarFromExecutableCostReductionThreshold);
                         var screen = VerifiedBasketScreener.Evaluate(g.GroupKey, resolvedNoAsks, options.MultiOutcomeArbitrage);
                         verifiedScreenResults.Add(screen);
+                        var initialClassification = VerifiedStrategyClassifier.Classify(screen, options.MultiOutcomeArbitrage);
+                        if (initialClassification.ActiveConservativePositive) verifiedActivePositive++;
+                        if (initialClassification.RawPositiveOnly) verifiedRawPositiveOnly++;
+                        if (initialClassification.AlternateProfilePositive) verifiedAlternatePositive++;
+                        var classificationFingerprint = $"{g.GroupKey}|{initialClassification.Classification}|active:{EdgeBucket(initialClassification.ActiveNet, 0.002m)}|raw:{EdgeBucket(initialClassification.RawNet, 0.002m)}|alt:{EdgeBucket(initialClassification.AlternateProfileNet, 0.002m)}|would:false";
+                        if (ShouldQuietLog("multi-verified", "VERIFIED_STRATEGY_CLASSIFICATION", classificationFingerprint, LogImportance.Normal, $"{initialClassification.Classification}|{EdgeBucket(initialClassification.ActiveNet, 0.002m)}", groupKey: g.GroupKey, everyNCycles: options.Logging.LogVerifiedScanEveryNCycles, maxPerHour: options.Logging.MaxMultiVerifiedScanLogsPerHour))
+                            Console.WriteLine($"[VERIFIED_STRATEGY_CLASSIFICATION] Group={g.GroupKey} ActiveNet={initialClassification.ActiveNet:0.####} RawNet={initialClassification.RawNet:0.####} AlternateProfileNet={initialClassification.AlternateProfileNet:0.####} ConservativeNet={initialClassification.ConservativeNet:0.####} CostProfile={initialClassification.CostProfile} Classification={initialClassification.Classification} WouldOpenIfPaperEligible=false PaperEligible=false Reason={initialClassification.Reason}");
                         basketCostDiagnostics.Add(new VerifiedBasketCostBreakdownDto(g.GroupKey, resolvedNoAsks.Count, formula.GuaranteedPayout, formula.NoAskSum, formula.GrossEdge, formula.Fees, formula.Slippage, formula.SafetyBuffer, formula.NetEdge, breakdown.CurrentTotalCosts, breakdown.CostReductionNeeded, breakdown.Classification, breakdown.DominantCostComponent, new VerifiedBasketSensitivityDto(breakdown.SensitivityScenarios.Actual, breakdown.SensitivityScenarios.ZeroFees, breakdown.SensitivityScenarios.ZeroSlippage, breakdown.SensitivityScenarios.ZeroFeesZeroSlippage, breakdown.SensitivityScenarios.RawOnly, breakdown.SensitivityScenarios.HalfFeesHalfSlippage), new VerifiedBasketBreakEvenDto(formula.GrossEdge, breakdown.CurrentTotalCosts, breakdown.CostReductionNeeded, breakdown.BreakEvenFeeLimit, breakdown.BreakEvenSlippageLimit)));
                         var currentExec = formula.NetEdge > options.MultiOutcomeArbitrage.MinMultiOutcomeEdge;
                         var fingerprint = $"{formula.GrossEdge}|{formula.Fees}|{formula.Slippage}|{formula.SafetyBuffer}|{formula.NetEdge}";
@@ -836,6 +858,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             if (!readiness.Ready)
                             {
                                 verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "ExecutionReadinessRejected", "Rejected", readiness.NotReadyReason ?? "NotReady", opp.NetEdge, readiness.PlannedExpectedProfit, readiness.PlannedCost, readiness.PlannedQty, $"MinQty={executionOptions.MinPlannedBasketQty}"));
+                                verifiedRejectedByStability++;
                                 Console.WriteLine($"[EXECUTION_READINESS_REJECTED] Group={opp.GroupKey} Reason={readiness.NotReadyReason} PlannedQty={readiness.PlannedQty:0.####} MinQty={executionOptions.MinPlannedBasketQty} MaxQtyByLiquidity={readiness.MaxQtyByLiquidity:0.####}");
                                 verifiedExecution.AuditQuiet(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PreTradeBlocked", "Blocked", "WaitingForExecutionReadiness", opp.NetEdge, readiness.PlannedExpectedProfit, readiness.PlannedCost, readiness.PlannedQty, ""), options.Logging.MaxVerifiedPretradeBlockedAuditPerHour, options.Logging.SuppressRepeatedVerifiedPretradeBlockedAudit, 100);
                                 if (ShouldQuietLog("multi-verified", "VERIFIED_PRETRADE_BLOCKED", $"{opp.GroupKey}|{Math.Round(opp.NetEdge, 4)}|WaitingForExecutionReadiness|{st}", LogImportance.Important, $"{Math.Round(opp.NetEdge, 4)}|WaitingForExecutionReadiness", opp.GroupKey, everyNCycles: 100, maxPerHour: options.Logging.MaxVerifiedPretradeBlockedAuditPerHour)) Console.WriteLine($"[VERIFIED_PRETRADE_BLOCKED] Group={opp.GroupKey} Reason=WaitingForExecutionReadiness State={st}");
@@ -845,6 +868,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             if (readinessState != VerifiedBasketState.ExecutionStable)
                             {
                                 verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "ExecutionReadinessPending", "Pending", "WaitingConsecutiveExecutionReadyScans", opp.NetEdge, readiness.PlannedExpectedProfit, readiness.PlannedCost, readiness.PlannedQty, $"ConsecutiveReady={readiness.ConsecutiveReadyScans};Required={readiness.RequiredConsecutiveReadyScans}"));
+                                verifiedRejectedByStability++;
                                 Console.WriteLine($"[EXECUTION_READINESS_PENDING] Group={opp.GroupKey} ConsecutiveReady={readiness.ConsecutiveReadyScans} Required={readiness.RequiredConsecutiveReadyScans} PlannedQty={readiness.PlannedQty:0.####} PlannedCost={readiness.PlannedCost:0.####} ExpectedProfit={readiness.PlannedExpectedProfit:0.####}");
                                 verifiedExecution.AuditQuiet(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "PreTradeBlocked", "Blocked", "WaitingForExecutionReadiness", opp.NetEdge, readiness.PlannedExpectedProfit, readiness.PlannedCost, readiness.PlannedQty, ""), options.Logging.MaxVerifiedPretradeBlockedAuditPerHour, options.Logging.SuppressRepeatedVerifiedPretradeBlockedAudit, 100);
                                 if (ShouldQuietLog("multi-verified", "VERIFIED_PRETRADE_BLOCKED", $"{opp.GroupKey}|{Math.Round(opp.NetEdge, 4)}|WaitingForExecutionReadiness|{st}", LogImportance.Important, $"{Math.Round(opp.NetEdge, 4)}|WaitingForExecutionReadiness", opp.GroupKey, everyNCycles: 100, maxPerHour: options.Logging.MaxVerifiedPretradeBlockedAuditPerHour)) Console.WriteLine($"[VERIFIED_PRETRADE_BLOCKED] Group={opp.GroupKey} Reason=WaitingForExecutionReadiness State={st}");
@@ -859,6 +883,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             state.AddOpportunity(new OpportunityDto(opp.Id, DateTime.UtcNow, 1, opp.Strategy, opp.GroupKey, opp.Title, "NO", pre.NetEdge, pre.ExpectedProfit, pre.EstimatedCost, opp.GuaranteedPayout, pre.Quantity, true, "ACTIONABLE", null, state.NextSeq()));
                             if (!pre.Approved)
                             {
+                                verifiedRejectedByRisk++;
                                 Console.WriteLine($"[VERIFIED_PRETRADE_REJECTED] Group={opp.GroupKey} Reason={pre.Reason} Cost={pre.EstimatedCost} MaxNotional={options.MultiOutcomeArbitrage.MaxNotionalPerGroup}");
                             }
                             else
@@ -870,6 +895,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 {
                                     var reason = plan.ValidationErrors.FirstOrDefault() ?? "Unknown";
                                     verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "DryRunOrderPlanRejected", "Rejected", reason, pre.NetEdge, pre.ExpectedProfit, pre.EstimatedCost, pre.Quantity, ""));
+                                    verifiedRejectedByCostProfile++;
                                     Console.WriteLine($"[DRY_RUN_ORDER_PLAN_REJECTED] Group={opp.GroupKey} Reason={reason}");
                                     continue;
                                 }
@@ -905,13 +931,18 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 var paperGate = new PaperPreTradeGate(options).Validate(
                                     new PaperPreTradeOpportunity(opp.Strategy, opp.GroupKey, PaperStrategyKind.VerifiedBasket, options.VerifiedBasketArb.PaperOnly, fill.EstimatedFilledCost, fill.FillAdjustedExpectedProfit, true, true, fill.Status == FillSimulationStatus.FullyFillable, true, openPositionsForGate.Any(p => p.GroupKey.Equals(opp.GroupKey, StringComparison.OrdinalIgnoreCase) && p.Strategy.Equals(opp.Strategy, StringComparison.OrdinalIgnoreCase)), false),
                                     new PaperAccountSnapshotForGate(paper.Balance, openPositionsForGate.Sum(p => p.TotalCost), openPositionsForGate.Count, openPositionsForGate.GroupBy(p => p.Strategy, StringComparer.OrdinalIgnoreCase).ToDictionary(gp => gp.Key, gp => gp.Count(), StringComparer.OrdinalIgnoreCase), paper.HourlyOpenCount));
+                                var verifiedMode = StrategyOrchestrator.ResolveConfig(options.Strategies, "VerifiedMultiOutcome").Mode;
+                                var wouldOpenIfPaperEligible = paperGate.Approved && fill.Status == FillSimulationStatus.FullyFillable;
+                                if (wouldOpenIfPaperEligible) verifiedWouldOpenIfPaperEligible++;
+                                else if (!paperGate.Approved) verifiedRejectedByRisk++;
+                                Console.WriteLine($"[VERIFIED_PAPER_DRY_RUN] Group={opp.GroupKey} Strategy=VerifiedMultiOutcome Mode={verifiedMode} ActiveNet={opp.NetEdge:0.####} Notional={fill.EstimatedFilledCost:0.####} Qty={fill.SafeExecutableQty:0.####} WouldPassRisk={paperGate.Approved.ToString().ToLowerInvariant()} WouldPassFill={(fill.Status == FillSimulationStatus.FullyFillable).ToString().ToLowerInvariant()} WouldOpenIfPaperEligible={wouldOpenIfPaperEligible.ToString().ToLowerInvariant()} BlockedReason={(verifiedMode == StrategyMode.DiagnosticsOnly ? "ModeDiagnosticsOnly" : !paperGate.Approved ? "Risk" : fill.Status != FillSimulationStatus.FullyFillable ? "Fill" : "None")}");
                                 if (!paperGate.Approved)
                                 {
                                     state.RecordPaperPretradeReject(paperGate.Reason);
                                     if (paperGate.Reason is "DuplicateOpenPosition" or "CooldownActive" or "MaxPaperOpenPerHourReached") Console.WriteLine($"[PAPER_OPEN_SUPPRESSED] Reason={paperGate.Reason} Strategy={opp.Strategy} MarketOrGroup={opp.GroupKey}");
                                 }
-                                else opened = verifiedExecution.OpenPaperPosition(opp, pre, positionBook, plan, fill);
-                                if (opened is null) Console.WriteLine($"[PAPER BASKET SKIPPED] Group={opp.GroupKey} Reason={(paperGate.Approved ? (fill.Status == FillSimulationStatus.FullyFillable ? "DuplicateOpenPosition" : "FillSimulationFailed") : paperGate.Reason)}");
+                                else if (verifiedMode == StrategyMode.PaperEligible) opened = verifiedExecution.OpenPaperPosition(opp, pre, positionBook, plan, fill);
+                                if (opened is null) Console.WriteLine($"[PAPER BASKET SKIPPED] Group={opp.GroupKey} Reason={(verifiedMode == StrategyMode.DiagnosticsOnly ? "ModeDiagnosticsOnly" : paperGate.Approved ? (fill.Status == FillSimulationStatus.FullyFillable ? "DuplicateOpenPosition" : "FillSimulationFailed") : paperGate.Reason)}");
                                 else { stability.MarkPaperOpened(opp.GroupKey); paper.RegisterExternalBasketOpen(opened, opened.TotalCost, opened.ExpectedProfit); Console.WriteLine($"[PAPER_POSITION_OPENED] ID={opened.PositionId}"); Console.WriteLine($"[PAPER_VERIFIED_BASKET_OPENED] Group={opp.GroupKey} Legs={opp.LegsCount} Cost={opened.TotalCost:0.####} ExpectedProfit={opened.ExpectedProfit:0.####}"); Console.WriteLine($"[PAPER BASKET OPENED] Group={opp.GroupKey} Legs={opp.LegsCount} Qty={opened.Quantity:0.####} Cost={opened.TotalCost:0.####} GrossEdge={opened.GrossEdgeAtOpen:0.####} NetEdge={opened.NetEdgeAtOpen:0.####} FillAdjustedNetEdge={fill.FillAdjustedNetEdgePerBasket:0.####} ExpectedProfit={opened.ExpectedProfit:0.####} CostSource=FillSimulation Profile={opened.ActiveProfile}"); Console.WriteLine($"[PAPER ACCOUNT] Cash={paper.Balance:0.####} Locked={paper.LockedCapital:0.####} OpenExposure={paper.LockedCapital:0.####} UnrealizedPnl={paper.UnrealizedPnl:0.####} RealizedPnl={paper.RealizedPnl:0.####} Equity={paper.Equity:0.####} OpenPositions={positionBook.OpenPositions.Count}"); var mtmFingerprint=$"{opp.GroupKey}|Incomplete|{opp.LegsCount}"; mtmCycle++; var logMtm = !options.Logging.LogPaperMtmOnChangeOnly || mtmFingerprint != lastMtmFingerprint || (options.Logging.LogPaperMtmEveryNCycles > 0 && mtmCycle % options.Logging.LogPaperMtmEveryNCycles == 0); lastMtmFingerprint = mtmFingerprint; if (logMtm) Console.WriteLine($"[PAPER_BASKET_MTM] Group={opp.GroupKey} MtMStatus=Incomplete MissingExitPrices={opp.LegsCount}"); verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "MtMUpdated", "Ok", "Incomplete", opened.NetEdgeAtOpen, 0m, opened.TotalCost, opened.Quantity, $"MissingExitPrices={opp.LegsCount}")); }
                             }
                         }
@@ -1181,8 +1212,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         var bestRawSum = snapshot.VerifiedBaskets.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue).DefaultIfEmpty(decimal.MinValue).Max();
                         Console.WriteLine($"[PROFILE_COMPARISON_SUMMARY] Verified={snapshot.VerifiedBaskets.Count} NearExecutable={snapshot.NearExecutableBaskets.Count} BestConservative={bestCons} BestPolymarketApprox={bestPolySum} BestRaw={bestRawSum}");
                     }
-                    var nearFingerprint = string.Join("|", snapshot.NearExecutableBaskets.OrderBy(x => x.GroupKey).Select(x => $"{x.GroupKey}:{x.ActiveProfileNetEdge}:{x.CostReductionNeeded}"));
-                    var shouldLogNear = !options.Logging.LogNearExecutableOnlyOnChange || nearFingerprint != nearExecutableFingerprint;
+                    var nearFingerprint = string.Join("|", snapshot.NearExecutableBaskets.OrderBy(x => x.GroupKey).Select(x => $"{x.GroupKey}:{EdgeBucket(x.ActiveProfileNetEdge, 0.002m)}:{EdgeBucket(x.CostReductionNeeded, 0.002m)}"));
+                    var shouldLogNear = ShouldQuietLog("verified-basket", "NEAR_EXECUTABLE_VERIFIED_BASKET", nearFingerprint, LogImportance.Normal, nearFingerprint, everyNCycles: options.Logging.LogVerifiedBasketEveryNCycles, maxPerHour: options.Logging.MaxMultiVerifiedScanLogsPerHour);
                     nearExecutableFingerprint = nearFingerprint;
                     if (shouldLogNear)
                     {
@@ -1297,7 +1328,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     if (unresolvedCounts.BrokenConfig > 0) verifiedRejectedByReason["BrokenConfig"] = unresolvedCounts.BrokenConfig;
                     if (unresolvedCounts.NeedsRefresh > 0) verifiedRejectedByReason["NeedsRefresh"] = unresolvedCounts.NeedsRefresh;
                     if (unresolvedCounts.ReviewOnly > 0) verifiedRejectedByReason["ReviewOnly"] = unresolvedCounts.ReviewOnly;
-                    if (activeExecutable > 0) verifiedRejectedByReason["DiagnosticsOnly"] = activeExecutable;
+                    if (verifiedWouldOpenIfPaperEligible > 0) verifiedRejectedByReason["DiagnosticsOnly"] = verifiedWouldOpenIfPaperEligible;
+                    if (verifiedRawPositiveOnly > 0) verifiedRejectedByReason["RawPositiveOnly"] = verifiedRawPositiveOnly;
+                    if (verifiedAlternatePositive > 0) verifiedRejectedByReason["AlternateProfilePositive"] = verifiedAlternatePositive;
+                    if (experimentalCandidates > 0) verifiedRejectedByReason["ExperimentalProfileCandidate"] = experimentalCandidates;
                     var verifiedTopSkip = verifiedRejectedByReason.OrderByDescending(x => x.Value).ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase).FirstOrDefault();
                     decimal? verifiedBestStrategyEdge = bestConservativeNet
                         ?? (bestAlternateProfileNet == decimal.MinValue
@@ -1310,14 +1344,26 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         Candidates: verifiedEvaluated,
                         ExecutionCandidates: 0,
                         PaperOpened: 0,
-                        DiagnosticsOnlyBlocked: activeExecutable + diagnosticsOnlyPositive,
-                        PositiveEdges: diagnosticsOnlyPositive + experimentalCandidates,
-                        ExecutionReady: activeExecutable,
+                        DiagnosticsOnlyBlocked: verifiedWouldOpenIfPaperEligible,
+                        PositiveEdges: verifiedActivePositive + verifiedRawPositiveOnly + verifiedAlternatePositive + experimentalCandidates,
+                        ExecutionReady: verifiedWouldOpenIfPaperEligible,
                         OrderbookUnavailable: verifiedRejectedByReason.Where(x => x.Key.Contains("Orderbook", StringComparison.OrdinalIgnoreCase) || x.Key.Contains("MissingNoAsk", StringComparison.OrdinalIgnoreCase)).Sum(x => x.Value),
                         BestEdge: verifiedBestStrategyEdge,
                         TopSkipReason: verifiedTopSkip.Key ?? "None",
                         TopSkipCount: verifiedTopSkip.Value,
-                        RejectedByReason: verifiedRejectedByReason),
+                        RejectedByReason: verifiedRejectedByReason,
+                        VerifiedActiveConservativePositive: verifiedActivePositive,
+                        VerifiedActiveConservativeExecutable: activeExecutable,
+                        VerifiedRawPositiveOnly: verifiedRawPositiveOnly,
+                        VerifiedAlternateProfilePositive: verifiedAlternatePositive,
+                        VerifiedExperimentalProfileCandidate: experimentalCandidates,
+                        VerifiedDiagnosticsOnlyBlocked: verifiedWouldOpenIfPaperEligible,
+                        VerifiedWouldOpenIfPaperEligible: verifiedWouldOpenIfPaperEligible,
+                        VerifiedRejectedByCostProfile: verifiedRejectedByCostProfile,
+                        VerifiedRejectedByStability: verifiedRejectedByStability,
+                        VerifiedRejectedByMissingNoAsk: verifiedRejectedByMissingNoAsk,
+                        VerifiedRejectedByUnresolvedGroup: verifiedRejectedByUnresolvedGroup,
+                        VerifiedRejectedByRisk: verifiedRejectedByRisk),
                         multiOutcomeValidator.LoadedAllowlistCount);
                     if (!unresolvedCounts.InvariantOk)
                         Console.WriteLine(unresolvedCounts.ToCounterErrorLogLine());
@@ -1426,10 +1472,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     portfolioCycle++;
                     var openPositionFingerprint = string.Join("|", positionBook.OpenPositions.Select(p => $"{p.GroupKey}:{p.Status}:{p.Quantity}").OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
                     var portfolioFingerprint = $"{multiOutcomeValidator.LoadedAllowlistCount}|{verifiedExecutable}|{bestPricing?.GroupKey}|{bestPricing?.NetEdge}|{openPositionFingerprint}";
-                    var shouldLogPortfolio = string.IsNullOrEmpty(lastPortfolioFingerprint)
-                        || !options.Logging.LogPortfolioOnChangeOnly
-                        || !string.Equals(portfolioFingerprint, lastPortfolioFingerprint, StringComparison.Ordinal)
-                        || (options.Logging.LogPortfolioEveryNCycles > 0 && portfolioCycle % options.Logging.LogPortfolioEveryNCycles == 0);
+                    var shouldLogPortfolio = ShouldQuietLog("multi-verified", "VERIFIED_GROUP_PORTFOLIO", portfolioFingerprint, LogImportance.Normal, portfolioFingerprint, everyNCycles: options.Logging.LogPortfolioEveryNCycles, maxPerHour: options.Logging.MaxMultiVerifiedScanLogsPerHour);
                     if (shouldLogPortfolio)
                         Console.WriteLine($"[VERIFIED_GROUP_PORTFOLIO] Total={multiOutcomeValidator.LoadedAllowlistCount} Keep={triageRows.Count(x => x.recommendedConfigAction is "KeepEnabled" or "KeepForMonitoring")} DisableRecommended={triageRows.Count(x => x.recommendedConfigAction == "DisableUntilBetterPricing")} NeedsPruning={triageRows.Count(x => x.recommendedConfigAction == "PruneMissingNoAskLegs")} Executable={verifiedExecutable} Best={(bestPricing?.GroupKey ?? "N/A")}");
                     lastPortfolioFingerprint = portfolioFingerprint;
