@@ -93,7 +93,8 @@ public class VerifiedStrategyClassificationTests
         var state = new BotRuntimeState();
         state.RecordStrategyResult(ScanResult(Screen(active: 0.02m), wouldOpen: 1));
         var line = RuntimeHealthTrendTracker.ToSoakStatusLogLine(RuntimeHealthSnapshot.From(state), new RuntimeHealthTrend(1, 1, 0, 0, true, 1), new TradingBotOptions(), state);
-        Assert.Contains("VerifiedMultiOutcome:DiagnosticsOnly:activePositive=1:wouldOpen=1:diagBlocked=1", line);
+        Assert.Contains("VerifiedMultiOutcome:DiagnosticsOnly:activePositive=1:wouldOpen=1:", line);
+        Assert.Contains("diagBlocked=1", line);
     }
 
     [Fact]

@@ -645,6 +645,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var verifiedRejectedByMissingNoAsk = 0;
                     var verifiedRejectedByUnresolvedGroup = 0;
                     var verifiedRejectedByRisk = 0;
+                    var verifiedBlockedByFill = 0;
+                    var verifiedBlockedByDepth = 0;
+                    var verifiedBlockedByUnknown = 0;
                     var paperOpenedCount = 0;
                     var suppressedDuplicateCount = 0;
                     var skipReason = "None";
@@ -931,17 +934,25 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 var paperGate = new PaperPreTradeGate(options).Validate(
                                     new PaperPreTradeOpportunity(opp.Strategy, opp.GroupKey, PaperStrategyKind.VerifiedBasket, options.VerifiedBasketArb.PaperOnly, fill.EstimatedFilledCost, fill.FillAdjustedExpectedProfit, true, true, fill.Status == FillSimulationStatus.FullyFillable, true, openPositionsForGate.Any(p => p.GroupKey.Equals(opp.GroupKey, StringComparison.OrdinalIgnoreCase) && p.Strategy.Equals(opp.Strategy, StringComparison.OrdinalIgnoreCase)), false),
                                     new PaperAccountSnapshotForGate(paper.Balance, openPositionsForGate.Sum(p => p.TotalCost), openPositionsForGate.Count, openPositionsForGate.GroupBy(p => p.Strategy, StringComparer.OrdinalIgnoreCase).ToDictionary(gp => gp.Key, gp => gp.Count(), StringComparer.OrdinalIgnoreCase), paper.HourlyOpenCount));
-                                var verifiedMode = StrategyOrchestrator.ResolveConfig(options.Strategies, "VerifiedMultiOutcome").Mode;
-                                var wouldOpenIfPaperEligible = paperGate.Approved && fill.Status == FillSimulationStatus.FullyFillable;
+                                var verifiedPaperConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "VerifiedMultiOutcome");
+                                var verifiedMode = verifiedPaperConfig.Mode;
+                                var eligibilityInput = new VerifiedPaperEligibilityInput(opp.GroupKey, opp.NetEdge, opp.NetEdge, formula.GrossEdge, screen.ProfileResults.FirstOrDefault(x => x.ProfileName.Equals("PolymarketApprox", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? 0m, fill.SafeExecutableQty, fill.EstimatedFilledCost, StabilityPassed: true, RiskPassed: paperGate.Approved, FillPassed: fill.Status == FillSimulationStatus.FullyFillable, DepthPassed: fill.Status != FillSimulationStatus.MissingOrderbook, MissingNoAsk: false, OrderbookUnavailable: fill.Status == FillSimulationStatus.MissingOrderbook, CostProfilePassed: true, Mode: verifiedMode);
+                                var eligibility = VerifiedPaperEligibilityDryRun.Evaluate(eligibilityInput);
+                                var wouldOpenIfPaperEligible = eligibility.WouldOpenIfPaperEligible;
                                 if (wouldOpenIfPaperEligible) verifiedWouldOpenIfPaperEligible++;
-                                else if (!paperGate.Approved) verifiedRejectedByRisk++;
-                                Console.WriteLine($"[VERIFIED_PAPER_DRY_RUN] Group={opp.GroupKey} Strategy=VerifiedMultiOutcome Mode={verifiedMode} ActiveNet={opp.NetEdge:0.####} Notional={fill.EstimatedFilledCost:0.####} Qty={fill.SafeExecutableQty:0.####} WouldPassRisk={paperGate.Approved.ToString().ToLowerInvariant()} WouldPassFill={(fill.Status == FillSimulationStatus.FullyFillable).ToString().ToLowerInvariant()} WouldOpenIfPaperEligible={wouldOpenIfPaperEligible.ToString().ToLowerInvariant()} BlockedReason={(verifiedMode == StrategyMode.DiagnosticsOnly ? "ModeDiagnosticsOnly" : !paperGate.Approved ? "Risk" : fill.Status != FillSimulationStatus.FullyFillable ? "Fill" : "None")}");
+                                if (eligibility.BlockedReason == VerifiedPaperBlockedReason.Risk) verifiedRejectedByRisk++;
+                                else if (eligibility.BlockedReason == VerifiedPaperBlockedReason.Fill) verifiedBlockedByFill++;
+                                else if (eligibility.BlockedReason == VerifiedPaperBlockedReason.Depth) verifiedBlockedByDepth++;
+                                else if (eligibility.BlockedReason == VerifiedPaperBlockedReason.CostProfile) verifiedRejectedByCostProfile++;
+                                else if (eligibility.BlockedReason == VerifiedPaperBlockedReason.MissingNoAsk) verifiedRejectedByMissingNoAsk++;
+                                else if (eligibility.BlockedReason == VerifiedPaperBlockedReason.Unknown && !VerifiedPaperEligibilityDryRun.CanOpenPaper(eligibility, verifiedPaperConfig)) verifiedBlockedByUnknown++;
+                                if (ShouldQuietLog("multi-verified", "VERIFIED_PAPER_ELIGIBILITY_DRY_RUN", $"{opp.GroupKey}|{eligibility.BlockedReason}|{wouldOpenIfPaperEligible}|{Math.Round(opp.NetEdge,4)}", LogImportance.Important, $"{eligibility.BlockedReason}|{wouldOpenIfPaperEligible}", opp.GroupKey, everyNCycles: 1, maxPerHour: options.Logging.MaxVerifiedPretradeBlockedAuditPerHour)) Console.WriteLine(eligibility.ToLogLine(eligibilityInput));
                                 if (!paperGate.Approved)
                                 {
                                     state.RecordPaperPretradeReject(paperGate.Reason);
                                     if (paperGate.Reason is "DuplicateOpenPosition" or "CooldownActive" or "MaxPaperOpenPerHourReached") Console.WriteLine($"[PAPER_OPEN_SUPPRESSED] Reason={paperGate.Reason} Strategy={opp.Strategy} MarketOrGroup={opp.GroupKey}");
                                 }
-                                else if (verifiedMode == StrategyMode.PaperEligible) opened = verifiedExecution.OpenPaperPosition(opp, pre, positionBook, plan, fill);
+                                else if (VerifiedPaperEligibilityDryRun.CanOpenPaper(eligibility, verifiedPaperConfig)) opened = verifiedExecution.OpenPaperPosition(opp, pre, positionBook, plan, fill);
                                 if (opened is null) Console.WriteLine($"[PAPER BASKET SKIPPED] Group={opp.GroupKey} Reason={(verifiedMode == StrategyMode.DiagnosticsOnly ? "ModeDiagnosticsOnly" : paperGate.Approved ? (fill.Status == FillSimulationStatus.FullyFillable ? "DuplicateOpenPosition" : "FillSimulationFailed") : paperGate.Reason)}");
                                 else { stability.MarkPaperOpened(opp.GroupKey); paper.RegisterExternalBasketOpen(opened, opened.TotalCost, opened.ExpectedProfit); Console.WriteLine($"[PAPER_POSITION_OPENED] ID={opened.PositionId}"); Console.WriteLine($"[PAPER_VERIFIED_BASKET_OPENED] Group={opp.GroupKey} Legs={opp.LegsCount} Cost={opened.TotalCost:0.####} ExpectedProfit={opened.ExpectedProfit:0.####}"); Console.WriteLine($"[PAPER BASKET OPENED] Group={opp.GroupKey} Legs={opp.LegsCount} Qty={opened.Quantity:0.####} Cost={opened.TotalCost:0.####} GrossEdge={opened.GrossEdgeAtOpen:0.####} NetEdge={opened.NetEdgeAtOpen:0.####} FillAdjustedNetEdge={fill.FillAdjustedNetEdgePerBasket:0.####} ExpectedProfit={opened.ExpectedProfit:0.####} CostSource=FillSimulation Profile={opened.ActiveProfile}"); Console.WriteLine($"[PAPER ACCOUNT] Cash={paper.Balance:0.####} Locked={paper.LockedCapital:0.####} OpenExposure={paper.LockedCapital:0.####} UnrealizedPnl={paper.UnrealizedPnl:0.####} RealizedPnl={paper.RealizedPnl:0.####} Equity={paper.Equity:0.####} OpenPositions={positionBook.OpenPositions.Count}"); var mtmFingerprint=$"{opp.GroupKey}|Incomplete|{opp.LegsCount}"; mtmCycle++; var logMtm = !options.Logging.LogPaperMtmOnChangeOnly || mtmFingerprint != lastMtmFingerprint || (options.Logging.LogPaperMtmEveryNCycles > 0 && mtmCycle % options.Logging.LogPaperMtmEveryNCycles == 0); lastMtmFingerprint = mtmFingerprint; if (logMtm) Console.WriteLine($"[PAPER_BASKET_MTM] Group={opp.GroupKey} MtMStatus=Incomplete MissingExitPrices={opp.LegsCount}"); verifiedExecution.Audit(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "MtMUpdated", "Ok", "Incomplete", opened.NetEdgeAtOpen, 0m, opened.TotalCost, opened.Quantity, $"MissingExitPrices={opp.LegsCount}")); }
                             }
@@ -1363,7 +1374,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         VerifiedRejectedByStability: verifiedRejectedByStability,
                         VerifiedRejectedByMissingNoAsk: verifiedRejectedByMissingNoAsk,
                         VerifiedRejectedByUnresolvedGroup: verifiedRejectedByUnresolvedGroup,
-                        VerifiedRejectedByRisk: verifiedRejectedByRisk),
+                        VerifiedRejectedByRisk: verifiedRejectedByRisk,
+                        VerifiedWouldOpenBlockedByFill: verifiedBlockedByFill,
+                        VerifiedWouldOpenBlockedByDepth: verifiedBlockedByDepth,
+                        VerifiedWouldOpenBlockedByUnknown: verifiedBlockedByUnknown),
                         multiOutcomeValidator.LoadedAllowlistCount);
                     if (!unresolvedCounts.InvariantOk)
                         Console.WriteLine(unresolvedCounts.ToCounterErrorLogLine());
