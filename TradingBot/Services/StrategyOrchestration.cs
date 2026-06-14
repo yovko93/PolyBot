@@ -56,6 +56,10 @@ public sealed record OpportunityStrategyScanResult(
     int VerifiedRejectedByMissingNoAsk = 0,
     int VerifiedRejectedByUnresolvedGroup = 0,
     int VerifiedRejectedByRisk = 0,
+    int VerifiedPricingBlockedByMissingNoAsk = 0,
+    int VerifiedPricingBlockedByOrderbookUnavailable = 0,
+    int VerifiedPricingBlockedByQuarantinedToken = 0,
+    int VerifiedPricingBlockedByEmptyBook = 0,
     int VerifiedWouldOpenBlockedByFill = 0,
     int VerifiedWouldOpenBlockedByDepth = 0,
     int VerifiedWouldOpenBlockedByUnknown = 0)
@@ -300,6 +304,10 @@ public sealed class StrategyRuntimeCounters
     private long _verifiedRejectedByMissingNoAsk;
     private long _verifiedRejectedByUnresolvedGroup;
     private long _verifiedRejectedByRisk;
+    private long _verifiedPricingBlockedByMissingNoAsk;
+    private long _verifiedPricingBlockedByOrderbookUnavailable;
+    private long _verifiedPricingBlockedByQuarantinedToken;
+    private long _verifiedPricingBlockedByEmptyBook;
     private long _verifiedWouldOpenBlockedByFill;
     private long _verifiedWouldOpenBlockedByDepth;
     private long _verifiedWouldOpenBlockedByUnknown;
@@ -341,6 +349,10 @@ public sealed class StrategyRuntimeCounters
         Interlocked.Add(ref _verifiedRejectedByMissingNoAsk, result.VerifiedRejectedByMissingNoAsk);
         Interlocked.Add(ref _verifiedRejectedByUnresolvedGroup, result.VerifiedRejectedByUnresolvedGroup);
         Interlocked.Add(ref _verifiedRejectedByRisk, result.VerifiedRejectedByRisk);
+        Interlocked.Add(ref _verifiedPricingBlockedByMissingNoAsk, result.VerifiedPricingBlockedByMissingNoAsk);
+        Interlocked.Add(ref _verifiedPricingBlockedByOrderbookUnavailable, result.VerifiedPricingBlockedByOrderbookUnavailable);
+        Interlocked.Add(ref _verifiedPricingBlockedByQuarantinedToken, result.VerifiedPricingBlockedByQuarantinedToken);
+        Interlocked.Add(ref _verifiedPricingBlockedByEmptyBook, result.VerifiedPricingBlockedByEmptyBook);
         Interlocked.Add(ref _verifiedWouldOpenBlockedByFill, result.VerifiedWouldOpenBlockedByFill);
         Interlocked.Add(ref _verifiedWouldOpenBlockedByDepth, result.VerifiedWouldOpenBlockedByDepth);
         Interlocked.Add(ref _verifiedWouldOpenBlockedByUnknown, result.VerifiedWouldOpenBlockedByUnknown);
@@ -395,6 +407,10 @@ public sealed class StrategyRuntimeCounters
         Interlocked.Read(ref _verifiedRejectedByMissingNoAsk),
         Interlocked.Read(ref _verifiedRejectedByUnresolvedGroup),
         Interlocked.Read(ref _verifiedRejectedByRisk),
+        Interlocked.Read(ref _verifiedPricingBlockedByMissingNoAsk),
+        Interlocked.Read(ref _verifiedPricingBlockedByOrderbookUnavailable),
+        Interlocked.Read(ref _verifiedPricingBlockedByQuarantinedToken),
+        Interlocked.Read(ref _verifiedPricingBlockedByEmptyBook),
         Interlocked.Read(ref _verifiedWouldOpenBlockedByFill),
         Interlocked.Read(ref _verifiedWouldOpenBlockedByDepth),
         Interlocked.Read(ref _verifiedWouldOpenBlockedByUnknown));
@@ -442,6 +458,10 @@ public sealed record StrategyRuntimeCounterSnapshot(
     long VerifiedRejectedByMissingNoAsk = 0,
     long VerifiedRejectedByUnresolvedGroup = 0,
     long VerifiedRejectedByRisk = 0,
+    long VerifiedPricingBlockedByMissingNoAsk = 0,
+    long VerifiedPricingBlockedByOrderbookUnavailable = 0,
+    long VerifiedPricingBlockedByQuarantinedToken = 0,
+    long VerifiedPricingBlockedByEmptyBook = 0,
     long VerifiedWouldOpenBlockedByFill = 0,
     long VerifiedWouldOpenBlockedByDepth = 0,
     long VerifiedWouldOpenBlockedByUnknown = 0);

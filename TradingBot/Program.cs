@@ -642,6 +642,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var verifiedWouldOpenIfPaperEligible = 0;
                     var verifiedRejectedByCostProfile = 0;
                     var verifiedRejectedByStability = 0;
+                    var verifiedPricingBlockedByMissingNoAsk = 0;
+                    var verifiedPricingBlockedByOrderbookUnavailable = 0;
+                    var verifiedPricingBlockedByQuarantinedToken = 0;
+                    var verifiedPricingBlockedByEmptyBook = 0;
                     var verifiedRejectedByMissingNoAsk = 0;
                     var verifiedRejectedByUnresolvedGroup = 0;
                     var verifiedRejectedByRisk = 0;
@@ -729,6 +733,20 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             var suggestedConditionIds = markets.Where(x => !missingIds.Contains(x.id) && x.active != false && !string.IsNullOrWhiteSpace(x.conditionId)).Select(x => x.conditionId!).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
                             var fetchFailureOnly = missingReasonBreakdown.Count == 1 && missingReasonBreakdown.ContainsKey("OrderbookFetchFailed");
                             var suggestion = options.MultiOutcomeReview.IncludeSuggestedPrunedAllowlist && !fetchFailureOnly ? new { enabled = true, groupKey = g.GroupKey, title = g.Title, verificationStatus = "Verified", groupType = "MutuallyExclusiveWinner", allowedStrategy = "BUY_ALL_NO_MUTUALLY_EXCLUSIVE", marketIds = suggestedMarketIds, conditionIds = suggestedConditionIds, requiredOutcomeCount = suggestedMarketIds.Length, requireExactOutcomeCount = false, suggestionReason = "MissingNoAsk legs excluded", settlementNotes = "Pruned to priced mutually exclusive subset. Missing NO ask leg excluded." } : null;
+                            var missingMarketIds = missingNoAskLegs.Select(x => x.MarketId).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                            var currentLegList = resolvedNoAsks.Select(x => new VerifiedPruneDryRunLeg(x.MarketId, x.ConditionId, x.NoTokenId, x.NoAsk, x.NoAskQuantity, x.Source, x.FailureReason)).ToArray();
+                            var suggestedPrunedLegList = pricedLegs.Select(x => new VerifiedPruneDryRunLeg(x.MarketId, x.ConditionId, x.NoTokenId, x.NoAsk, x.NoAskQuantity, x.Source, x.FailureReason)).ToArray();
+                            var removedLegMetadata = missingNoAskLegs.Select(x => new VerifiedPruneDryRunLeg(x.MarketId, x.ConditionId, x.NoTokenId, x.NoAsk, x.NoAskQuantity, x.Source, x.FailureReason)).ToArray();
+                            var pruneActiveProfileName = options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile;
+                            if (!options.MultiOutcomeArbitrage.CostProfiles.Profiles.TryGetValue(pruneActiveProfileName, out var pruneActiveProfile)) pruneActiveProfile = options.MultiOutcomeArbitrage.CostProfiles.Profiles["Conservative"];
+                            var originalFormula = VerifiedBasketFormulaService.Evaluate(resolvedNoAsks, pruneActiveProfile.FeePerLeg, pruneActiveProfile.SlippageBufferPerLeg, pruneActiveProfile.SafetyBufferPerGroup, options.MultiOutcomeArbitrage.RequireAllNoPrices);
+                            var prunedFormula = VerifiedBasketFormulaService.Evaluate(pricedLegs, pruneActiveProfile.FeePerLeg, pruneActiveProfile.SlippageBufferPerLeg, pruneActiveProfile.SafetyBufferPerGroup, options.MultiOutcomeArbitrage.RequireAllNoPrices);
+                            var originalRawFormula = VerifiedBasketFormulaService.Evaluate(resolvedNoAsks, 0m, 0m, 0m, options.MultiOutcomeArbitrage.RequireAllNoPrices);
+                            var prunedRawFormula = VerifiedBasketFormulaService.Evaluate(pricedLegs, 0m, 0m, 0m, options.MultiOutcomeArbitrage.RequireAllNoPrices);
+                            var wouldBecomeActivePositive = prunedFormula.IsValid && prunedFormula.NetEdge >= options.VerifiedBasketArb.MinNetEdgePerBasket;
+                            var pruneEligibility = VerifiedPaperEligibilityDryRun.Evaluate(new VerifiedPaperEligibilityInput(g.GroupKey, prunedFormula.NetEdge, prunedFormula.NetEdge, prunedRawFormula.NetEdge, prunedFormula.NetEdge, 0m, 0m, StabilityPassed: wouldBecomeActivePositive, RiskPassed: true, FillPassed: true, DepthPassed: true, MissingNoAsk: false, OrderbookUnavailable: false, CostProfilePassed: prunedFormula.IsValid, Mode: StrategyMode.DiagnosticsOnly));
+                            var pruneDryRun = new { result = new VerifiedPruneDryRunResult(g.GroupKey, missingMarketIds, resolvedNoAsks.Count, pricedLegs.Count, originalFormula.NetEdge, prunedFormula.NetEdge, originalRawFormula.NetEdge, prunedRawFormula.NetEdge, wouldBecomeActivePositive, pruneEligibility.WouldOpenIfPaperEligible, "ReviewOnly", false, currentLegList, suggestedPrunedLegList, removedLegMetadata), beforeAfterCostProfileComparison = new { activeProfile = pruneActiveProfileName, original = originalFormula, pruned = prunedFormula } };
+                            if (shouldLogPricing && suggestion is not null) Console.WriteLine(pruneDryRun.result.ToLogLine());
                             verifiedPricingExport.Add(new
                             {
                                 groupKey = g.GroupKey,
@@ -739,11 +757,15 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 missingPriceLegs = missingNoAskLegs.Select(x => new { marketId = x.MarketId, conditionId = x.ConditionId, noAsk = x.NoAsk, noAskQuantity = x.NoAskQuantity, noAskSource = x.Source, yesBid = x.YesBid, yesBidQuantity = x.YesBidQuantity, noTokenId = x.NoTokenId, priceResolutionFailureReason = x.FailureReason }).ToArray(),
                                 missingNoAskReasonBreakdown = missingReasonBreakdown,
                                 pricingHealthCategory = fetchFailureOnly ? "PricingUnavailable" : "ReviewOnly",
-                                suggestedPrunedAllowlistTemplate = suggestion
+                                suggestedPrunedAllowlistTemplate = suggestion,
+                                pruneDryRun
                             });
                             if (shouldLogPricing && suggestion is not null) Console.WriteLine($"[VERIFIED_GROUP_PRICING_SUGGESTION] Group={g.GroupKey} MissingNoAsk={missingNoAskLegs.Count} SuggestedPrunedLegs={suggestedMarketIds.Length}");
-                            var missingSkipReason = fetchFailureOnly ? "OrderbookFetchFailed" : missingReasonBreakdown.ContainsKey("QuarantinedToken") ? "QuarantinedToken" : missingReasonBreakdown.ContainsKey("InvalidToken") ? "InvalidToken" : "MissingNoAsk";
-                            verifiedRejectedByMissingNoAsk++;
+                            var missingSkipReason = fetchFailureOnly ? "OrderbookFetchFailed" : missingReasonBreakdown.ContainsKey("QuarantinedToken") ? "QuarantinedToken" : missingReasonBreakdown.ContainsKey("InvalidToken") ? "InvalidToken" : missingReasonBreakdown.ContainsKey("EmptyBook") ? "EmptyBook" : "MissingNoAsk";
+                            verifiedPricingBlockedByMissingNoAsk++;
+                            verifiedPricingBlockedByOrderbookUnavailable += missingReasonBreakdown.GetValueOrDefault("OrderbookFetchFailed");
+                            verifiedPricingBlockedByQuarantinedToken += missingReasonBreakdown.GetValueOrDefault("QuarantinedToken");
+                            verifiedPricingBlockedByEmptyBook += missingReasonBreakdown.GetValueOrDefault("EmptyBook");
                             if (ShouldQuietLog("multi-verified", "VERIFIED_STRATEGY_CLASSIFICATION", $"{g.GroupKey}|MissingNoAsk|{missingSkipReason}", LogImportance.Normal, "MissingNoAsk", groupKey: g.GroupKey, everyNCycles: options.Logging.LogVerifiedScanEveryNCycles, maxPerHour: options.Logging.MaxMultiVerifiedScanLogsPerHour))
                                 Console.WriteLine($"[VERIFIED_STRATEGY_CLASSIFICATION] Group={g.GroupKey} ActiveNet=0 RawNet=0 AlternateProfileNet=0 ConservativeNet=0 CostProfile=Unknown Classification=MissingNoAsk WouldOpenIfPaperEligible=false PaperEligible=false Reason={missingSkipReason}");
                             groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey, g.MarketIds.Count, g.ResolvedMarkets.Count, g.MissingMarketIds.Count, "VerifiedResolved", missingSkipReason, null, missingNoAskLegs.Count, 0, missingNoAskLegs.Select(x => x.MarketId).Take(5).ToArray(), Array.Empty<string>()));
@@ -944,7 +966,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 else if (eligibility.BlockedReason == VerifiedPaperBlockedReason.Fill) verifiedBlockedByFill++;
                                 else if (eligibility.BlockedReason == VerifiedPaperBlockedReason.Depth) verifiedBlockedByDepth++;
                                 else if (eligibility.BlockedReason == VerifiedPaperBlockedReason.CostProfile) verifiedRejectedByCostProfile++;
-                                else if (eligibility.BlockedReason == VerifiedPaperBlockedReason.MissingNoAsk) verifiedRejectedByMissingNoAsk++;
+                                else if (eligibility.BlockedReason == VerifiedPaperBlockedReason.MissingNoAsk) verifiedPricingBlockedByMissingNoAsk++;
                                 else if (eligibility.BlockedReason == VerifiedPaperBlockedReason.Unknown && !VerifiedPaperEligibilityDryRun.CanOpenPaper(eligibility, verifiedPaperConfig)) verifiedBlockedByUnknown++;
                                 if (ShouldQuietLog("multi-verified", "VERIFIED_PAPER_ELIGIBILITY_DRY_RUN", $"{opp.GroupKey}|{eligibility.BlockedReason}|{wouldOpenIfPaperEligible}|{Math.Round(opp.NetEdge,4)}", LogImportance.Important, $"{eligibility.BlockedReason}|{wouldOpenIfPaperEligible}", opp.GroupKey, everyNCycles: 1, maxPerHour: options.Logging.MaxVerifiedPretradeBlockedAuditPerHour)) Console.WriteLine(eligibility.ToLogLine(eligibilityInput));
                                 if (!paperGate.Approved)
@@ -1375,6 +1397,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         VerifiedRejectedByMissingNoAsk: verifiedRejectedByMissingNoAsk,
                         VerifiedRejectedByUnresolvedGroup: verifiedRejectedByUnresolvedGroup,
                         VerifiedRejectedByRisk: verifiedRejectedByRisk,
+                        VerifiedPricingBlockedByMissingNoAsk: verifiedPricingBlockedByMissingNoAsk,
+                        VerifiedPricingBlockedByOrderbookUnavailable: verifiedPricingBlockedByOrderbookUnavailable,
+                        VerifiedPricingBlockedByQuarantinedToken: verifiedPricingBlockedByQuarantinedToken,
+                        VerifiedPricingBlockedByEmptyBook: verifiedPricingBlockedByEmptyBook,
                         VerifiedWouldOpenBlockedByFill: verifiedBlockedByFill,
                         VerifiedWouldOpenBlockedByDepth: verifiedBlockedByDepth,
                         VerifiedWouldOpenBlockedByUnknown: verifiedBlockedByUnknown),
