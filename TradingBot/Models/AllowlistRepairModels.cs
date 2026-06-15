@@ -151,6 +151,34 @@ public sealed record AllowlistRepairGroup(
     string ExpectedResultAfterManualApply,
     string CopyInstructions);
 
+
+public sealed record AllowlistRefreshDiagnosticsExport(
+    DateTime Timestamp,
+    string SnapshotId,
+    bool AutoApplyAllowed,
+    IReadOnlyList<AllowlistRefreshDiagnosticsItem> Items);
+
+public sealed record AllowlistRefreshDiagnosticsItem(
+    string GroupKey,
+    IReadOnlyList<string> CurrentConfiguredMarketIds,
+    IReadOnlyList<string> CurrentConfiguredTokenIds,
+    int ConfiguredLegCount,
+    string ResolverStatus,
+    int DiscoveredCandidateMatches,
+    string BestCandidateGroupKey,
+    decimal BestCandidateScore,
+    IReadOnlyList<string> MatchedMarketIds,
+    IReadOnlyList<string> MissingMarketIds,
+    IReadOnlyList<string> AddedMarketIds,
+    IReadOnlyList<string> RemovedMarketIds,
+    decimal OverlapRatio,
+    decimal TitleSimilarity,
+    bool CategoryKindMatch,
+    string Reason,
+    string RecommendedAction,
+    string Confidence,
+    bool AutoApplyAllowed);
+
 public sealed record AllowlistRepairSuggestedConfig(
     string SnapshotId,
     DateTime GeneratedAt,

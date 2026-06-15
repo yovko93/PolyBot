@@ -432,8 +432,18 @@ public class AllowlistRepairOptions
     public bool DiagnosticsOnlyDuringSoak { get; set; } = false;
     public bool DiscoveryPartialDiagnosticsOnly { get; set; } = false;
     public int RequiredStableRepairSnapshots { get; set; } = 3;
+    public AllowlistRefreshPreviewOptions RefreshPreview { get; set; } = new();
     public bool QuarantineOnActionChange { get; set; } = true;
     public List<AllowlistRepairLockedGroupOptions> LockedGroups { get; set; } = new();
+}
+
+public class AllowlistRefreshPreviewOptions
+{
+    public int RequiredConsecutiveMatches { get; set; } = 3;
+    public decimal MinOverlapRatio { get; set; } = 0.75m;
+    public decimal MinTitleSimilarity { get; set; } = 0.70m;
+    public bool RequireKindMatch { get; set; } = true;
+    public bool AutoApply { get; set; } = false;
 }
 
 public class AllowlistRepairLockedGroupOptions

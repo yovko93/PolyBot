@@ -1034,6 +1034,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         options.AllowlistRepair.DiscoveryPartialDiagnosticsOnly = !lastDiscoverySummary.DiscoveryHealthy && lastDiscoverySummary.ActiveMarketsAvailable < options.MarketDiscovery.MinHealthyActiveMarkets;
                         var repairExports = allowlistRepairService.Export(repairReportPath, repairSuggestedPath, allowlistedGroups, resolved, verifiedPricingExport, boundedCandidates, options.AllowlistRepair, contentRootPath, options.Logging);
                         repairReport = repairExports.Report;
+                        var refreshDiagnosticsPath = Path.Combine(contentRootPath, "exports/verified-allowlist-refresh-diagnostics-latest.json");
+                        allowlistRepairService.ExportRefreshDiagnostics(refreshDiagnosticsPath, repairReport, allowlistedGroups);
                         patchPreview = allowlistRepairService.ExportPatchPreview(patchPreviewPath, patchedPreviewPath, patchedPreviewMetadataPath, repairReport, allowlistedGroups, contentRootPath).PatchPreview;
                     }
                     catch (Exception ex)
@@ -1095,6 +1097,27 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         : $"{repairReport.SnapshotId}|{summary.ConfiguredGroups}|{summary.Healthy}|{summary.MonitoringOnly}|{summary.NeedsPricingPrune}|{summary.NeedsRefresh}|{summary.BrokenConfig}|{summary.Disabled}|{summary.Ignored}|{string.Join(";", repairReport.Groups.Select(x => $"{x.GroupKey}:{x.HealthCategory}:{x.RecommendedAction}:{x.RepairConfidence}:{x.ActionVersion}"))}";
                     if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_REPORT", repairReportFingerprint, LogImportance.Normal, everyNCycles: repairLogEveryNCycles))
                         Console.WriteLine($"[ALLOWLIST_REPAIR_REPORT] Groups={repairReport.ConfiguredGroups} Healthy={summary.Healthy} MonitoringOnly={summary.MonitoringOnly} NeedsPricingPrune={summary.NeedsPricingPrune} NeedsRefresh={summary.NeedsRefresh} BrokenConfig={summary.BrokenConfig} Disabled={summary.Disabled} Ignored={summary.Ignored} BrokenTotal={summary.Broken} Path={options.MultiOutcomeReview.ExportAllowlistRepairReportPath}");
+
+                    var refreshDiag = allowlistRepairService.BuildRefreshDiagnostics(repairReport, allowlistedGroups);
+                    state.SetAllowlistRefreshCounters(
+                        repairReport.Summary.NeedsRefresh,
+                        refreshDiag.Items.Count(x => x.RecommendedAction.Equals("NeedsManualReview", StringComparison.OrdinalIgnoreCase)),
+                        refreshDiag.Items.Count(x => x.ResolverStatus.Contains("Mismatch", StringComparison.OrdinalIgnoreCase)),
+                        refreshDiag.Items.Count(x => x.RecommendedAction.Equals("RefreshFromCandidateExport", StringComparison.OrdinalIgnoreCase)),
+                        refreshDiag.Items.Count(x => x.Confidence.Equals("High", StringComparison.OrdinalIgnoreCase)));
+                    foreach (var item in refreshDiag.Items)
+                    {
+                        var status = item.ResolverStatus.Contains("Mismatch", StringComparison.OrdinalIgnoreCase) ? "Mismatch"
+                            : item.ResolverStatus.Contains("NotFound", StringComparison.OrdinalIgnoreCase) ? "NotFound"
+                            : item.RecommendedAction.Equals("NeedsManualReview", StringComparison.OrdinalIgnoreCase) ? "ReviewOnly"
+                            : "NeedsRefresh";
+                        var action = item.RecommendedAction.Equals("RefreshFromCandidateExport", StringComparison.OrdinalIgnoreCase) ? "RefreshPreview"
+                            : item.RecommendedAction.Equals("KeepMonitoring", StringComparison.OrdinalIgnoreCase) ? "NoOp"
+                            : "ManualReview";
+                        var fp = $"{item.GroupKey}|{status}|{item.BestCandidateGroupKey}|{item.BestCandidateScore}|{item.OverlapRatio}|{string.Join(',', item.MissingMarketIds)}|{string.Join(',', item.AddedMarketIds)}|{string.Join(',', item.RemovedMarketIds)}|{item.Confidence}|{action}";
+                        if (ShouldQuietLog("allowlist-refresh", "ALLOWLIST_REFRESH_DIAG", fp, LogImportance.Normal, groupKey: item.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
+                            Console.WriteLine($"[ALLOWLIST_REFRESH_DIAG] Group={item.GroupKey} Status={status} ConfiguredLegs={item.ConfiguredLegCount} BestCandidate={item.BestCandidateGroupKey} Score={item.BestCandidateScore:0.##} Overlap={item.OverlapRatio:0.##} MissingMarketIds=[{string.Join(',', item.MissingMarketIds)}] AddedMarketIds=[{string.Join(',', item.AddedMarketIds)}] RemovedMarketIds=[{string.Join(',', item.RemovedMarketIds)}] Confidence={item.Confidence} Action={action} AutoApply=false");
+                    }
                     var patchableCount = patchPreview.Summary.PatchableHighConfidence + patchPreview.Summary.PatchableMediumConfidence;
                     var quarantinedCount = patchPreview.Summary.Quarantined;
                     var noOpCount = patchPreview.Summary.NoOp;
@@ -1158,6 +1181,13 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             else if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_ACTION_CHANGED", directionFingerprint, LogImportance.Normal, groupKey: repair.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
                             {
                                 Console.WriteLine($"[ALLOWLIST_REPAIR_ACTION_CHANGED] Group={repair.GroupKey} From={repair.PreviousAction} To={repair.CurrentAction} Reason={repair.ReasonForChange} ConsecutiveSnapshotMisses={repair.ConsecutiveMatchMisses}");
+                                if (repair.GroupKey.Equals("winner:2026 nba finals|kind:generic", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    var m = repair.RepairMatch;
+                                    var bestCandidateScore = m?.Score ?? 0m;
+                                    var bestCandidateOverlap = m?.MarketOverlap ?? 0m;
+                                    Console.WriteLine($"[ALLOWLIST_REFRESH_ACTION_EXPLAINED] Group={repair.GroupKey} PreviousAction={repair.PreviousAction} NewAction={repair.CurrentAction} Reason={repair.ReasonForChange} ConsecutiveMisses={repair.ConsecutiveMatchMisses} RequiredForRefresh={options.AllowlistRepair.RefreshPreview.RequiredConsecutiveMatches} BestCandidateScore={bestCandidateScore:0.##} BestCandidateOverlap={bestCandidateOverlap:0.##} MissingMarketIds=[{string.Join(',', repair.MissingMarketIds)}] CandidateMarketIds=[{string.Join(',', m?.AddedMarketIds ?? Array.Empty<string>())}]");
+                                }
                             }
                         }
                         if (repair.RepairMatch is not null)

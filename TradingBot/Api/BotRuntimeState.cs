@@ -46,6 +46,11 @@ public class BotRuntimeState
     private int _marketCacheCount;
     private int _exportQueueCount;
     private int _patchPreviewItemsCount;
+    private int _allowlistNeedsRefresh;
+    private int _allowlistReviewOnly;
+    private int _allowlistMismatch;
+    private int _allowlistRefreshPreviewCandidates;
+    private int _allowlistRefreshHighConfidence;
     private QuietLogGateStats _quietLogGateStats = new(0, 0, new Dictionary<string, long>(), new Dictionary<string, long>(), 0, 0);
     private OrderBookServiceStats _orderBookServiceStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0);
     private int _paperPretradeRejects;
@@ -104,6 +109,11 @@ public class BotRuntimeState
     public int MarketCacheCount => Volatile.Read(ref _marketCacheCount);
     public int ExportQueueCount => Volatile.Read(ref _exportQueueCount);
     public int PatchPreviewItemsCount => Volatile.Read(ref _patchPreviewItemsCount);
+    public int AllowlistNeedsRefresh => Volatile.Read(ref _allowlistNeedsRefresh);
+    public int AllowlistReviewOnly => Volatile.Read(ref _allowlistReviewOnly);
+    public int AllowlistMismatch => Volatile.Read(ref _allowlistMismatch);
+    public int AllowlistRefreshPreviewCandidates => Volatile.Read(ref _allowlistRefreshPreviewCandidates);
+    public int AllowlistRefreshHighConfidence => Volatile.Read(ref _allowlistRefreshHighConfidence);
     public QuietLogGateStats QuietLogGateStats => _quietLogGateStats;
     public OrderBookServiceStats OrderBookServiceStats => _orderBookServiceStats;
     public int SingleMarketOpportunitiesCount => _singleMarketOpportunities.Count;
@@ -227,6 +237,15 @@ public class BotRuntimeState
         if (exportQueueCount is int eq) Interlocked.Exchange(ref _exportQueueCount, eq);
         if (patchPreviewItemsCount is int pp) Interlocked.Exchange(ref _patchPreviewItemsCount, pp);
     }
+    public void SetAllowlistRefreshCounters(int needsRefresh, int reviewOnly, int mismatch, int refreshPreviewCandidates, int highConfidence)
+    {
+        Interlocked.Exchange(ref _allowlistNeedsRefresh, needsRefresh);
+        Interlocked.Exchange(ref _allowlistReviewOnly, reviewOnly);
+        Interlocked.Exchange(ref _allowlistMismatch, mismatch);
+        Interlocked.Exchange(ref _allowlistRefreshPreviewCandidates, refreshPreviewCandidates);
+        Interlocked.Exchange(ref _allowlistRefreshHighConfidence, highConfidence);
+    }
+
     public IReadOnlyDictionary<string,int> GetRuntimeCollectionCounts() => new Dictionary<string,int>
     {
         ["recentLogs"] = Logs().Length,

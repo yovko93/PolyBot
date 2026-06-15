@@ -105,6 +105,72 @@ public sealed class AllowlistRepairService
         }
     }
 
+
+    public AllowlistRefreshDiagnosticsExport BuildRefreshDiagnostics(AllowlistRepairReport report, IReadOnlyList<VerifiedMultiOutcomeGroupConfig> configuredGroups)
+    {
+        var byKey = configuredGroups.ToDictionary(x => x.GroupKey, StringComparer.OrdinalIgnoreCase);
+        var items = report.Groups
+            .Where(IsRefreshDiagnosticCandidate)
+            .Select(g =>
+            {
+                byKey.TryGetValue(g.GroupKey, out var cfg);
+                var configuredIds = cfg?.MarketIds ?? Array.Empty<string>();
+                var tokenIds = cfg?.ConditionIds ?? Array.Empty<string>();
+                var match = g.RepairMatch;
+                var matched = match is null ? Array.Empty<string>() : configuredIds.Except(match.RemovedMarketIds, StringComparer.OrdinalIgnoreCase).ToArray();
+                return new AllowlistRefreshDiagnosticsItem(
+                    g.GroupKey,
+                    configuredIds,
+                    tokenIds,
+                    configuredIds.Count,
+                    g.MismatchReason ?? (g.Resolved ? "VerifiedGroupResolved" : "ResolverMissingConfiguredGroup"),
+                    match is null ? 0 : 1,
+                    match?.CandidateGroupKey ?? string.Empty,
+                    match?.Score ?? 0m,
+                    matched,
+                    g.MissingMarketIds,
+                    match?.AddedMarketIds ?? Array.Empty<string>(),
+                    match?.RemovedMarketIds ?? Array.Empty<string>(),
+                    match?.MarketOverlap ?? 0m,
+                    match?.TitleSimilarity ?? 0m,
+                    match is not null && KindMatches(g.GroupKey, match.CandidateGroupKey),
+                    g.Reason,
+                    g.RecommendedAction,
+                    g.RepairConfidence,
+                    false);
+            })
+            .ToArray();
+        return new AllowlistRefreshDiagnosticsExport(DateTime.UtcNow, report.SnapshotId, false, items);
+    }
+
+    public AllowlistRefreshDiagnosticsExport ExportRefreshDiagnostics(string path, AllowlistRepairReport report, IReadOnlyList<VerifiedMultiOutcomeGroupConfig> configuredGroups)
+    {
+        var export = BuildRefreshDiagnostics(report, configuredGroups);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, JsonSerializer.Serialize(export, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+        return export;
+    }
+
+    private static bool IsRefreshDiagnosticCandidate(AllowlistRepairGroup g)
+        => g.HealthCategory.Equals(nameof(AllowlistRepairHealthCategory.NeedsRefresh), StringComparison.OrdinalIgnoreCase)
+            || g.RecommendedAction.Equals(nameof(AllowlistRepairRecommendedAction.NeedsManualReview), StringComparison.OrdinalIgnoreCase)
+            || string.Equals(g.MismatchReason, "VerifiedGroupMarketMismatch", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(g.MismatchReason, "VerifiedGroupNotFoundInDiscoveredPool", StringComparison.OrdinalIgnoreCase)
+            || g.Status.Equals("ReviewOnly", StringComparison.OrdinalIgnoreCase);
+
+    private static bool KindMatches(string groupKey, string candidateGroupKey)
+    {
+        static string Kind(string value)
+        {
+            var marker = "|kind:";
+            var idx = value.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            return idx < 0 ? string.Empty : value[(idx + marker.Length)..].Trim();
+        }
+        var left = Kind(groupKey);
+        var right = Kind(candidateGroupKey);
+        return string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right) || left.Equals(right, StringComparison.OrdinalIgnoreCase);
+    }
+
     public AllowlistRepairSuggestedConfig BuildSuggestedConfig(AllowlistRepairReport report)
         => new(
             report.SnapshotId,
@@ -1216,9 +1282,21 @@ public sealed class VerifiedAllowlistGroupHealthClassifier
                 var template = BuildRefreshTemplate(cfg, match.Match.Candidate);
                 if (template is not null)
                 {
+                    var preview = options.RefreshPreview ?? new AllowlistRefreshPreviewOptions();
+                    var kindMatch = KindMatches(cfg.GroupKey, match.Match.Diagnostics.CandidateGroupKey);
+                    var consecutive = Math.Max(1, match.Match.ConsecutiveMatches);
+                    var stableEnough = consecutive >= Math.Max(1, preview.RequiredConsecutiveMatches);
+                    var overlapOk = match.Match.Diagnostics.MarketOverlap >= preview.MinOverlapRatio;
+                    var titleOk = match.Match.Diagnostics.TitleSimilarity >= preview.MinTitleSimilarity;
+                    var kindOk = !preview.RequireKindMatch || kindMatch;
+                    var confidenceOk = !match.Match.Diagnostics.Confidence.Equals("Low", StringComparison.OrdinalIgnoreCase);
+                    var previewReady = stableEnough && overlapOk && titleOk && kindOk && confidenceOk && !preview.AutoApply;
                     if (IsNoOpRefresh(cfg, template, match.Match.Diagnostics))
                         return Result(cfg, AllowlistRepairHealthCategory.MonitoringOnly, AllowlistRepairRecommendedAction.KeepMonitoring, match.Match.Diagnostics.Confidence, "Stable candidate export matches current group; no repair patch is required.", missingMarketIds, missingNoAskIds, repairMatch: match.Match.Diagnostics, misses: match.ConsecutiveMisses);
-                    return Result(cfg, AllowlistRepairHealthCategory.NeedsRefresh, AllowlistRepairRecommendedAction.RefreshFromCandidateExport, match.Match.Diagnostics.Confidence, "Market mismatch; stable refreshed candidate is available for manual review.", missingMarketIds, missingNoAskIds, refreshed: template, repairMatch: match.Match.Diagnostics, misses: match.ConsecutiveMisses);
+                    if (previewReady)
+                        return Result(cfg, AllowlistRepairHealthCategory.NeedsRefresh, AllowlistRepairRecommendedAction.RefreshFromCandidateExport, match.Match.Diagnostics.Confidence, "Market mismatch; refresh preview passed consecutive-match, overlap, title, kind and confidence gates. AutoApply=false; manual review required.", missingMarketIds, missingNoAskIds, refreshed: template, repairMatch: match.Match.Diagnostics, misses: match.ConsecutiveMisses);
+                    var gateReason = $"Refresh preview not stable: ConsecutiveMatches={consecutive}/{Math.Max(1, preview.RequiredConsecutiveMatches)} Overlap={match.Match.Diagnostics.MarketOverlap:0.##}/{preview.MinOverlapRatio:0.##} TitleSimilarity={match.Match.Diagnostics.TitleSimilarity:0.##}/{preview.MinTitleSimilarity:0.##} KindMatch={kindOk} Confidence={match.Match.Diagnostics.Confidence} AutoApply=false.";
+                    return Result(cfg, AllowlistRepairHealthCategory.NeedsRefresh, AllowlistRepairRecommendedAction.NeedsManualReview, "Low", gateReason, missingMarketIds, missingNoAskIds, refreshed: template, repairMatch: match.Match.Diagnostics, misses: match.ConsecutiveMisses);
                 }
             }
 
@@ -1236,8 +1314,12 @@ public sealed class VerifiedAllowlistGroupHealthClassifier
         var scored = candidates.Select(c => ScoreCandidate(cfg, resolved, c)).Where(x => x.Diagnostics.Score >= options.MinRefreshMatchScore).OrderByDescending(x => x.Diagnostics.Score).FirstOrDefault();
         if (scored.Candidate is not null)
         {
-            _cache[cfg.GroupKey] = new CachedRepairMatch(scored.Candidate, scored.Diagnostics, 0);
-            return new StableMatch(new CachedRepairMatch(scored.Candidate, scored.Diagnostics, 0), 0);
+            var consecutive = _cache.TryGetValue(cfg.GroupKey, out var prev) && prev.Diagnostics.CandidateGroupKey.Equals(scored.Diagnostics.CandidateGroupKey, StringComparison.OrdinalIgnoreCase)
+                ? prev.ConsecutiveMatches + 1
+                : 1;
+            var cachedMatch = new CachedRepairMatch(scored.Candidate, scored.Diagnostics, 0, consecutive);
+            _cache[cfg.GroupKey] = cachedMatch;
+            return new StableMatch(cachedMatch, 0);
         }
 
         if (_cache.TryGetValue(cfg.GroupKey, out var cached))
@@ -1353,10 +1435,22 @@ public sealed class VerifiedAllowlistGroupHealthClassifier
     private static decimal Overlap(IReadOnlyList<string> expected, IReadOnlyList<string> actual) => expected.Count == 0 ? 0m : expected.Intersect(actual, StringComparer.OrdinalIgnoreCase).Count() / (decimal)expected.Count;
     private static decimal TokenSimilarity(string a, string b) { var aa = a.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.OrdinalIgnoreCase); var bb = b.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.OrdinalIgnoreCase); return aa.Count == 0 ? 0m : aa.Intersect(bb, StringComparer.OrdinalIgnoreCase).Count() / (decimal)aa.Count; }
     private static decimal SemanticScore(string groupKey, string candidateHaystack) { var n = Normalize(groupKey); if (n.Contains("nba finals")) return candidateHaystack.Contains("nba finals") && candidateHaystack.Contains("2026") ? 1m : 0m; if (n.Contains("peruvian presidential")) return (candidateHaystack.Contains("peru") || candidateHaystack.Contains("peruvian")) && candidateHaystack.Contains("presidential") ? 1m : 0m; if (n.Contains("women s us open")) return candidateHaystack.Contains("women") && candidateHaystack.Contains("us open") ? 1m : 0m; return candidateHaystack.Contains("winner") || candidateHaystack.Contains(" win ") ? 0.5m : 0m; }
+    private static bool KindMatches(string groupKey, string candidateGroupKey)
+    {
+        static string Kind(string value)
+        {
+            var marker = "|kind:";
+            var idx = value.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            return idx < 0 ? string.Empty : value[(idx + marker.Length)..].Trim();
+        }
+        var left = Kind(groupKey);
+        var right = Kind(candidateGroupKey);
+        return string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right) || left.Equals(right, StringComparison.OrdinalIgnoreCase);
+    }
     private static bool IsWomenUsOpen(string groupKey) => Normalize(groupKey).Contains("women s us open");
     private static string Normalize(string s) => Regex.Replace(s.ToLowerInvariant().Replace("’", " ").Replace("'", " "), @"[^a-z0-9]+", " ").Trim();
     private static bool? GetBool(JsonNode? node, string name) => node is JsonObject o && o.TryGetPropertyValue(name, out var n) && n is not null && n.GetValueKind() is JsonValueKind.True or JsonValueKind.False ? n.GetValue<bool>() : null;
 
     private sealed record StableMatch(CachedRepairMatch? Match, int ConsecutiveMisses);
-    private sealed record CachedRepairMatch(JsonObject Candidate, AllowlistRepairMatch Diagnostics, int ConsecutiveMisses);
+    private sealed record CachedRepairMatch(JsonObject Candidate, AllowlistRepairMatch Diagnostics, int ConsecutiveMisses, int ConsecutiveMatches);
 }
