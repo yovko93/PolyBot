@@ -51,6 +51,12 @@ public class BotRuntimeState
     private int _allowlistMismatch;
     private int _allowlistRefreshPreviewCandidates;
     private int _allowlistRefreshHighConfidence;
+    private int _allowlistRefreshFinalNoCandidate;
+    private int _allowlistRefreshFinalSemanticConflict;
+    private int _allowlistRefreshFinalLowConfidence;
+    private int _allowlistRefreshFinalUnstable;
+    private int _allowlistRefreshFinalPreviewOnly;
+    private int _allowlistRefreshFinalLockedManualReview;
     private QuietLogGateStats _quietLogGateStats = new(0, 0, new Dictionary<string, long>(), new Dictionary<string, long>(), 0, 0);
     private OrderBookServiceStats _orderBookServiceStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0);
     private int _paperPretradeRejects;
@@ -114,6 +120,12 @@ public class BotRuntimeState
     public int AllowlistMismatch => Volatile.Read(ref _allowlistMismatch);
     public int AllowlistRefreshPreviewCandidates => Volatile.Read(ref _allowlistRefreshPreviewCandidates);
     public int AllowlistRefreshHighConfidence => Volatile.Read(ref _allowlistRefreshHighConfidence);
+    public int AllowlistRefreshFinalNoCandidate => Volatile.Read(ref _allowlistRefreshFinalNoCandidate);
+    public int AllowlistRefreshFinalSemanticConflict => Volatile.Read(ref _allowlistRefreshFinalSemanticConflict);
+    public int AllowlistRefreshFinalLowConfidence => Volatile.Read(ref _allowlistRefreshFinalLowConfidence);
+    public int AllowlistRefreshFinalUnstable => Volatile.Read(ref _allowlistRefreshFinalUnstable);
+    public int AllowlistRefreshFinalPreviewOnly => Volatile.Read(ref _allowlistRefreshFinalPreviewOnly);
+    public int AllowlistRefreshFinalLockedManualReview => Volatile.Read(ref _allowlistRefreshFinalLockedManualReview);
     public QuietLogGateStats QuietLogGateStats => _quietLogGateStats;
     public OrderBookServiceStats OrderBookServiceStats => _orderBookServiceStats;
     public int SingleMarketOpportunitiesCount => _singleMarketOpportunities.Count;
@@ -237,13 +249,19 @@ public class BotRuntimeState
         if (exportQueueCount is int eq) Interlocked.Exchange(ref _exportQueueCount, eq);
         if (patchPreviewItemsCount is int pp) Interlocked.Exchange(ref _patchPreviewItemsCount, pp);
     }
-    public void SetAllowlistRefreshCounters(int needsRefresh, int reviewOnly, int mismatch, int refreshPreviewCandidates, int highConfidence)
+    public void SetAllowlistRefreshCounters(int needsRefresh, int reviewOnly, int mismatch, int refreshPreviewCandidates, int highConfidence, int finalNoCandidate = 0, int finalSemanticConflict = 0, int finalLowConfidence = 0, int finalUnstable = 0, int finalPreviewOnly = 0, int finalLockedManualReview = 0)
     {
         Interlocked.Exchange(ref _allowlistNeedsRefresh, needsRefresh);
         Interlocked.Exchange(ref _allowlistReviewOnly, reviewOnly);
         Interlocked.Exchange(ref _allowlistMismatch, mismatch);
         Interlocked.Exchange(ref _allowlistRefreshPreviewCandidates, refreshPreviewCandidates);
         Interlocked.Exchange(ref _allowlistRefreshHighConfidence, highConfidence);
+        Interlocked.Exchange(ref _allowlistRefreshFinalNoCandidate, finalNoCandidate);
+        Interlocked.Exchange(ref _allowlistRefreshFinalSemanticConflict, finalSemanticConflict);
+        Interlocked.Exchange(ref _allowlistRefreshFinalLowConfidence, finalLowConfidence);
+        Interlocked.Exchange(ref _allowlistRefreshFinalUnstable, finalUnstable);
+        Interlocked.Exchange(ref _allowlistRefreshFinalPreviewOnly, finalPreviewOnly);
+        Interlocked.Exchange(ref _allowlistRefreshFinalLockedManualReview, finalLockedManualReview);
     }
 
     public IReadOnlyDictionary<string,int> GetRuntimeCollectionCounts() => new Dictionary<string,int>

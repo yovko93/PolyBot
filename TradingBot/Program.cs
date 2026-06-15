@@ -1104,7 +1104,13 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         refreshDiag.Items.Count(x => x.RecommendedAction.Equals("NeedsManualReview", StringComparison.OrdinalIgnoreCase)),
                         refreshDiag.Items.Count(x => x.ResolverStatus.Contains("Mismatch", StringComparison.OrdinalIgnoreCase)),
                         refreshDiag.Items.Count(x => x.RecommendedAction.Equals("RefreshFromCandidateExport", StringComparison.OrdinalIgnoreCase)),
-                        refreshDiag.Items.Count(x => x.Confidence.Equals("High", StringComparison.OrdinalIgnoreCase)));
+                        refreshDiag.Items.Count(x => x.Confidence.Equals("High", StringComparison.OrdinalIgnoreCase)),
+                        refreshDiag.Items.Count(x => x.FinalDecision.Equals("NoCandidate", StringComparison.OrdinalIgnoreCase)),
+                        refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedSemanticConflict", StringComparison.OrdinalIgnoreCase)),
+                        refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedLowConfidence", StringComparison.OrdinalIgnoreCase)),
+                        refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedUnstableAcrossSnapshots", StringComparison.OrdinalIgnoreCase)),
+                        refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateAcceptedPreviewOnly", StringComparison.OrdinalIgnoreCase)),
+                        refreshDiag.Items.Count(x => x.FinalDecision.Equals("LockedManualReview", StringComparison.OrdinalIgnoreCase)));
                     foreach (var item in refreshDiag.Items)
                     {
                         var status = item.ResolverStatus.Contains("Mismatch", StringComparison.OrdinalIgnoreCase) ? "Mismatch"
@@ -1114,12 +1120,21 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         var action = item.RecommendedAction.Equals("RefreshFromCandidateExport", StringComparison.OrdinalIgnoreCase) ? "RefreshPreview"
                             : item.RecommendedAction.Equals("KeepMonitoring", StringComparison.OrdinalIgnoreCase) ? "NoOp"
                             : "ManualReview";
-                        var fp = $"{item.GroupKey}|{status}|{item.BestCandidateGroupKey}|{item.BestCandidateScore}|{item.OverlapRatio}|{string.Join(',', item.MissingMarketIds)}|{string.Join(',', item.AddedMarketIds)}|{string.Join(',', item.RemovedMarketIds)}|{item.Confidence}|{action}";
+                        var candidateForLog = string.IsNullOrWhiteSpace(item.BestCandidateGroupKey) ? "None" : item.BestCandidateGroupKey;
+                        var fp = $"{item.GroupKey}|{status}|{candidateForLog}|{item.BestCandidateScore}|{item.OverlapRatio}|{string.Join(',', item.MissingMarketIds)}|{string.Join(',', item.MissingTokenIds)}|{string.Join(',', item.AddedMarketIds)}|{string.Join(',', item.AddedTokenIds)}|{string.Join(',', item.RemovedMarketIds)}|{string.Join(',', item.RemovedTokenIds)}|{item.Confidence}|{action}|{item.FinalDecision}";
                         if (ShouldQuietLog("allowlist-refresh", "ALLOWLIST_REFRESH_DIAG", fp, LogImportance.Normal, groupKey: item.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
-                            Console.WriteLine($"[ALLOWLIST_REFRESH_DIAG] Group={item.GroupKey} Status={status} ConfiguredLegs={item.ConfiguredLegCount} BestCandidate={item.BestCandidateGroupKey} Score={item.BestCandidateScore:0.##} Overlap={item.OverlapRatio:0.##} MissingMarketIds=[{string.Join(',', item.MissingMarketIds)}] AddedMarketIds=[{string.Join(',', item.AddedMarketIds)}] RemovedMarketIds=[{string.Join(',', item.RemovedMarketIds)}] Confidence={item.Confidence} Action={action} AutoApply=false");
+                            Console.WriteLine($"[ALLOWLIST_REFRESH_DIAG] Group={item.GroupKey} Status={status} ConfiguredLegs={item.ConfiguredLegCount} BestCandidate={candidateForLog} Score={item.BestCandidateScore:0.##} Overlap={item.OverlapRatio:0.##} MissingMarketIds=[{string.Join(',', item.MissingMarketIds)}] MissingTokenIds=[{string.Join(',', item.MissingTokenIds)}] AddedMarketIds=[{string.Join(',', item.AddedMarketIds)}] AddedTokenIds=[{string.Join(',', item.AddedTokenIds)}] RemovedMarketIds=[{string.Join(',', item.RemovedMarketIds)}] RemovedTokenIds=[{string.Join(',', item.RemovedTokenIds)}] Confidence={item.Confidence} Action={action} AutoApply=false");
                         var semanticConflict = AllowlistRepairService.DetectRefreshSemanticConflict(item.GroupKey, item.BestCandidateGroupKey);
-                        if (!string.IsNullOrWhiteSpace(semanticConflict) && ShouldQuietLog("allowlist-refresh", "ALLOWLIST_REFRESH_SEMANTIC_CONFLICT", $"{item.GroupKey}|{item.BestCandidateGroupKey}|{semanticConflict}", LogImportance.Normal, groupKey: item.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
-                            Console.WriteLine($"[ALLOWLIST_REFRESH_SEMANTIC_CONFLICT] Group={item.GroupKey} Candidate={item.BestCandidateGroupKey} Conflict={semanticConflict} Action=ManualReview AutoApply=false");
+                        if (string.IsNullOrWhiteSpace(semanticConflict)
+                            && item.GroupKey.Equals(item.BestCandidateGroupKey, StringComparison.OrdinalIgnoreCase)
+                            && (item.AddedMarketIds.Count > 0 || item.RemovedMarketIds.Count > 0 || item.AddedTokenIds.Count > 0 || item.RemovedTokenIds.Count > 0))
+                            semanticConflict = "MarketSetMismatch";
+                        if (!string.IsNullOrWhiteSpace(semanticConflict) && ShouldQuietLog("allowlist-refresh", "ALLOWLIST_REFRESH_SEMANTIC_CONFLICT", $"{item.GroupKey}|{candidateForLog}|{semanticConflict}", LogImportance.Normal, groupKey: item.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
+                            Console.WriteLine($"[ALLOWLIST_REFRESH_SEMANTIC_CONFLICT] Group={item.GroupKey} Candidate={candidateForLog} Conflict={semanticConflict} Action=ManualReview AutoApply=false");
+                        if (ShouldQuietLog("allowlist-refresh", "ALLOWLIST_REFRESH_FINAL_DECISION", $"{item.GroupKey}|{candidateForLog}|{item.FinalDecision}|{item.Confidence}|{item.Reason}", LogImportance.Normal, groupKey: item.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
+                            Console.WriteLine($"[ALLOWLIST_REFRESH_FINAL_DECISION] Group={item.GroupKey} Decision={item.FinalDecision} BestCandidate={candidateForLog} Score={item.BestCandidateScore:0.##} Confidence={item.Confidence} Reason={item.Reason} AutoApply=false");
+                        if (item.GroupKey.Equals("winner:2026 women s us open|kind:generic", StringComparison.OrdinalIgnoreCase))
+                            Console.WriteLine($"[ALLOWLIST_REFRESH_ACTION_EXPLAINED] Group={item.GroupKey} CurrentStatus={item.ResolverStatus} BestCandidate={candidateForLog} CandidateScore={item.BestCandidateScore:0.##} Confidence={item.Confidence} AddedMarketIds=[{string.Join(',', item.AddedMarketIds)}] RemovedMarketIds=[{string.Join(',', item.RemovedMarketIds)}] AddedTokenIds=[{string.Join(',', item.AddedTokenIds)}] RemovedTokenIds=[{string.Join(',', item.RemovedTokenIds)}] FinalDecision={item.FinalDecision} Reason={item.Reason} AutoApply=false");
                     }
                     var patchableCount = patchPreview.Summary.PatchableHighConfidence + patchPreview.Summary.PatchableMediumConfidence;
                     var quarantinedCount = patchPreview.Summary.Quarantined;

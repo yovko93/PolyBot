@@ -110,8 +110,11 @@ public sealed class AllowlistRepairService
     public static string DetectRefreshSemanticConflict(string groupKey, string candidateGroupKey)
     {
         static bool HasToken(string value, string token) => Regex.IsMatch(value ?? string.Empty, $"(^|[^a-z0-9]){Regex.Escape(token)}([^a-z0-9]|$)", RegexOptions.IgnoreCase);
+        static string NormalizeKey(string value) => Regex.Replace(value.ToLowerInvariant().Replace("’", " ").Replace("'", " "), @"[^a-z0-9]+", " ").Trim();
         var group = groupKey ?? string.Empty;
         var candidate = candidateGroupKey ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(candidate) || NormalizeKey(group).Equals(NormalizeKey(candidate), StringComparison.OrdinalIgnoreCase))
+            return string.Empty;
         if ((HasToken(group, "nba") && HasToken(candidate, "wnba")) || (HasToken(group, "wnba") && HasToken(candidate, "nba")))
             return "LeagueMismatch";
         var groupWomen = HasToken(group, "women") || HasToken(group, "womens") || HasToken(group, "wnba");
@@ -119,6 +122,29 @@ public sealed class AllowlistRepairService
         if (groupWomen != candWomen && (HasToken(group, "finals") || HasToken(candidate, "finals") || HasToken(group, "open") || HasToken(candidate, "open")))
             return "MensWomensMismatch";
         return string.Empty;
+    }
+
+
+    public static bool IsNumericMarketId(string id) => !string.IsNullOrWhiteSpace(id) && id.All(char.IsDigit);
+    public static bool IsTokenOrConditionId(string id) => !string.IsNullOrWhiteSpace(id) && !IsNumericMarketId(id);
+
+    public static string BuildRefreshFinalDecision(AllowlistRefreshDiagnosticsItem item)
+    {
+        if (item.Reason.Contains("ManualLock", StringComparison.OrdinalIgnoreCase) || item.Confidence.Equals("Unsafe", StringComparison.OrdinalIgnoreCase))
+            return "LockedManualReview";
+        if (string.IsNullOrWhiteSpace(item.BestCandidateGroupKey))
+            return "NoCandidate";
+        var sameGroupMarketSetMismatch = item.GroupKey.Equals(item.BestCandidateGroupKey, StringComparison.OrdinalIgnoreCase)
+            && (item.AddedMarketIds.Count > 0 || item.RemovedMarketIds.Count > 0 || item.AddedTokenIds.Count > 0 || item.RemovedTokenIds.Count > 0);
+        if (!string.IsNullOrWhiteSpace(DetectRefreshSemanticConflict(item.GroupKey, item.BestCandidateGroupKey)) || sameGroupMarketSetMismatch)
+            return "CandidateRejectedSemanticConflict";
+        if (item.Confidence.Equals("Low", StringComparison.OrdinalIgnoreCase))
+            return "CandidateRejectedLowConfidence";
+        if (item.RecommendedAction.Equals(nameof(AllowlistRepairRecommendedAction.RefreshFromCandidateExport), StringComparison.OrdinalIgnoreCase))
+            return "CandidateAcceptedPreviewOnly";
+        if (item.Reason.Contains("not stable", StringComparison.OrdinalIgnoreCase) || item.Reason.Contains("Consecutive", StringComparison.OrdinalIgnoreCase) || item.Reason.Contains("stable candidate", StringComparison.OrdinalIgnoreCase))
+            return "CandidateRejectedUnstableAcrossSnapshots";
+        return "CandidateRejectedLowConfidence";
     }
 
     public AllowlistRefreshDiagnosticsExport BuildRefreshDiagnostics(AllowlistRepairReport report, IReadOnlyList<VerifiedMultiOutcomeGroupConfig> configuredGroups)
@@ -132,8 +158,14 @@ public sealed class AllowlistRepairService
                 var configuredIds = cfg?.MarketIds ?? Array.Empty<string>();
                 var tokenIds = cfg?.ConditionIds ?? Array.Empty<string>();
                 var match = g.RepairMatch;
-                var matched = match is null ? Array.Empty<string>() : configuredIds.Except(match.RemovedMarketIds, StringComparer.OrdinalIgnoreCase).ToArray();
-                return new AllowlistRefreshDiagnosticsItem(
+                var matched = match is null ? Array.Empty<string>() : configuredIds.Except(match.RemovedMarketIds.Where(IsNumericMarketId), StringComparer.OrdinalIgnoreCase).ToArray();
+                var missingMarketIds = g.MissingMarketIds.Where(IsNumericMarketId).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                var missingTokenIds = g.MissingMarketIds.Where(IsTokenOrConditionId).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                var addedMarketIds = (match?.AddedMarketIds ?? Array.Empty<string>()).Where(IsNumericMarketId).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                var addedTokenIds = (match?.AddedMarketIds ?? Array.Empty<string>()).Where(IsTokenOrConditionId).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                var removedMarketIds = (match?.RemovedMarketIds ?? Array.Empty<string>()).Where(IsNumericMarketId).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                var removedTokenIds = (match?.RemovedMarketIds ?? Array.Empty<string>()).Where(IsTokenOrConditionId).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                var item = new AllowlistRefreshDiagnosticsItem(
                     g.GroupKey,
                     configuredIds,
                     tokenIds,
@@ -143,16 +175,21 @@ public sealed class AllowlistRepairService
                     match?.CandidateGroupKey ?? string.Empty,
                     match?.Score ?? 0m,
                     matched,
-                    g.MissingMarketIds,
-                    match?.AddedMarketIds ?? Array.Empty<string>(),
-                    match?.RemovedMarketIds ?? Array.Empty<string>(),
+                    missingMarketIds,
+                    missingTokenIds,
+                    addedMarketIds,
+                    addedTokenIds,
+                    removedMarketIds,
+                    removedTokenIds,
                     match?.MarketOverlap ?? 0m,
                     match?.TitleSimilarity ?? 0m,
                     match is not null && KindMatches(g.GroupKey, match.CandidateGroupKey),
                     g.Reason,
                     g.RecommendedAction,
                     g.RepairConfidence,
+                    string.Empty,
                     false);
+                return item with { FinalDecision = BuildRefreshFinalDecision(item) };
             })
             .ToArray();
         return new AllowlistRefreshDiagnosticsExport(DateTime.UtcNow, report.SnapshotId, false, items);

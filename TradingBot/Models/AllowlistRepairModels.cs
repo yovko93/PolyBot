@@ -169,14 +169,18 @@ public sealed record AllowlistRefreshDiagnosticsItem(
     decimal BestCandidateScore,
     IReadOnlyList<string> MatchedMarketIds,
     IReadOnlyList<string> MissingMarketIds,
+    IReadOnlyList<string> MissingTokenIds,
     IReadOnlyList<string> AddedMarketIds,
+    IReadOnlyList<string> AddedTokenIds,
     IReadOnlyList<string> RemovedMarketIds,
+    IReadOnlyList<string> RemovedTokenIds,
     decimal OverlapRatio,
     decimal TitleSimilarity,
     bool CategoryKindMatch,
     string Reason,
     string RecommendedAction,
     string Confidence,
+    string FinalDecision,
     bool AutoApplyAllowed);
 
 public sealed record AllowlistRepairSuggestedConfig(

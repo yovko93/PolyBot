@@ -234,6 +234,24 @@ public class OrderBookBatchTests
         Assert.Equal("LeagueMismatch", conflict);
     }
 
+
+    [Fact]
+    public void Same_group_candidate_does_not_emit_mens_womens_conflict()
+    {
+        var conflict = AllowlistRepairService.DetectRefreshSemanticConflict("winner:2026 women s us open|kind:generic", "winner:2026 women s us open|kind:generic");
+
+        Assert.Equal(string.Empty, conflict);
+    }
+
+    [Fact]
+    public void Allowlist_refresh_id_split_separates_market_ids_from_token_ids()
+    {
+        var ids = new[] { "1088680", "0xdaba123", "condition-id" };
+
+        Assert.Equal(new[] { "1088680" }, ids.Where(AllowlistRepairService.IsNumericMarketId).ToArray());
+        Assert.Equal(new[] { "0xdaba123", "condition-id" }, ids.Where(AllowlistRepairService.IsTokenOrConditionId).ToArray());
+    }
+
     private static HttpResponseMessage Json(HttpStatusCode status, string body)
         => new(status) { Content = new StringContent(body) };
 
