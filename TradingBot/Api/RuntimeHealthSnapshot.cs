@@ -245,7 +245,7 @@ public static class RuntimeHealthTrendTracker
             var now = DateTime.UtcNow;
             Samples.Add((now, snapshot.ProcessMemoryMb, snapshot.BatchBookBadRequests, snapshot.BatchBookInvalidTokens, snapshot.BatchBookSkippedQuarantinedTokens));
             Trim(now, options.SoakTrendWindowMinutes);
-            return AnalyzeNoLock(options);
+            return AnalyzeNoLock(options, snapshot);
         }
     }
 
@@ -305,7 +305,7 @@ public static class RuntimeHealthTrendTracker
         Samples.RemoveAll(x => x.TimestampUtc < cutoff);
     }
 
-    private static RuntimeHealthTrend AnalyzeNoLock(TradingBot.Options.RuntimeHealthOptions options)
+    private static RuntimeHealthTrend AnalyzeNoLock(TradingBot.Options.RuntimeHealthOptions options, RuntimeHealthSnapshot? currentSnapshot = null)
     {
         if (Samples.Count == 0) return new RuntimeHealthTrend(0, 0, 0, 0, true, 0);
         var min = Samples.Min(x => x.ProcessMb);
@@ -316,10 +316,10 @@ public static class RuntimeHealthTrendTracker
         var oneHourCutoff = last.TimestampUtc - TimeSpan.FromHours(1);
         var hourBase = Samples.FirstOrDefault(x => x.TimestampUtc >= oneHourCutoff);
         if (hourBase.TimestampUtc == default) hourBase = first;
-        var useStartupCounts = snapshot.Uptime < TimeSpan.FromHours(1);
-        var badDeltaLastHour = useStartupCounts ? snapshot.BatchBookBadRequests : Math.Max(0, last.BatchBadRequests - hourBase.BatchBadRequests);
-        var invalidDeltaLastHour = useStartupCounts ? snapshot.BatchBookInvalidTokens : Math.Max(0, last.BatchInvalidTokens - hourBase.BatchInvalidTokens);
-        var skippedDeltaLastHour = useStartupCounts ? snapshot.BatchBookSkippedQuarantinedTokens : Math.Max(0, last.SkippedQuarantinedTokens - hourBase.SkippedQuarantinedTokens);
+        var useStartupCounts = currentSnapshot is not null && currentSnapshot.Uptime < TimeSpan.FromHours(1);
+        var badDeltaLastHour = useStartupCounts ? currentSnapshot!.BatchBookBadRequests : Math.Max(0, last.BatchBadRequests - hourBase.BatchBadRequests);
+        var invalidDeltaLastHour = useStartupCounts ? currentSnapshot!.BatchBookInvalidTokens : Math.Max(0, last.BatchInvalidTokens - hourBase.BatchInvalidTokens);
+        var skippedDeltaLastHour = useStartupCounts ? currentSnapshot!.BatchBookSkippedQuarantinedTokens : Math.Max(0, last.SkippedQuarantinedTokens - hourBase.SkippedQuarantinedTokens);
         var minutes = Math.Max(0.001, (last.TimestampUtc - first.TimestampUtc).TotalMinutes);
         var slope = (last.ProcessMb - first.ProcessMb) / minutes;
         var stable = Math.Abs(slope) <= Math.Max(0, options.StableMemorySlopeMbPerMinute)
