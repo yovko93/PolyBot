@@ -106,6 +106,21 @@ public sealed class AllowlistRepairService
     }
 
 
+
+    public static string DetectRefreshSemanticConflict(string groupKey, string candidateGroupKey)
+    {
+        static bool HasToken(string value, string token) => Regex.IsMatch(value ?? string.Empty, $"(^|[^a-z0-9]){Regex.Escape(token)}([^a-z0-9]|$)", RegexOptions.IgnoreCase);
+        var group = groupKey ?? string.Empty;
+        var candidate = candidateGroupKey ?? string.Empty;
+        if ((HasToken(group, "nba") && HasToken(candidate, "wnba")) || (HasToken(group, "wnba") && HasToken(candidate, "nba")))
+            return "LeagueMismatch";
+        var groupWomen = HasToken(group, "women") || HasToken(group, "womens") || HasToken(group, "wnba");
+        var candWomen = HasToken(candidate, "women") || HasToken(candidate, "womens") || HasToken(candidate, "wnba");
+        if (groupWomen != candWomen && (HasToken(group, "finals") || HasToken(candidate, "finals") || HasToken(group, "open") || HasToken(candidate, "open")))
+            return "MensWomensMismatch";
+        return string.Empty;
+    }
+
     public AllowlistRefreshDiagnosticsExport BuildRefreshDiagnostics(AllowlistRepairReport report, IReadOnlyList<VerifiedMultiOutcomeGroupConfig> configuredGroups)
     {
         var byKey = configuredGroups.ToDictionary(x => x.GroupKey, StringComparer.OrdinalIgnoreCase);
@@ -1284,6 +1299,9 @@ public sealed class VerifiedAllowlistGroupHealthClassifier
                 {
                     var preview = options.RefreshPreview ?? new AllowlistRefreshPreviewOptions();
                     var kindMatch = KindMatches(cfg.GroupKey, match.Match.Diagnostics.CandidateGroupKey);
+                    var semanticConflict = AllowlistRepairService.DetectRefreshSemanticConflict(cfg.GroupKey, match.Match.Diagnostics.CandidateGroupKey);
+                    if (!string.IsNullOrWhiteSpace(semanticConflict))
+                        return Result(cfg, AllowlistRepairHealthCategory.NeedsRefresh, AllowlistRepairRecommendedAction.NeedsManualReview, "Low", $"Refresh semantic conflict: {semanticConflict}. AutoApply=false.", missingMarketIds, missingNoAskIds, refreshed: template, repairMatch: match.Match.Diagnostics with { Confidence = "Low" }, misses: match.ConsecutiveMisses);
                     var consecutive = Math.Max(1, match.Match.ConsecutiveMatches);
                     var stableEnough = consecutive >= Math.Max(1, preview.RequiredConsecutiveMatches);
                     var overlapOk = match.Match.Diagnostics.MarketOverlap >= preview.MinOverlapRatio;

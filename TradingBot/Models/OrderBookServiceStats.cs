@@ -25,5 +25,10 @@ public record OrderBookServiceStats(
     long BatchBookSkippedQuarantinedTokens = 0,
     long BatchBookSkippedMarketsWithQuarantinedTokens = 0,
     long BatchBookRepeatedInvalidTokenAfterQuarantine = 0,
-    int OrderbookUnavailableMarkets = 0
+    int OrderbookUnavailableMarkets = 0,
+    int InvalidTokenQuarantineActive = 0,
+    long InvalidTokenQuarantineAdded = 0,
+    long InvalidTokenQuarantineExpired = 0,
+    long BatchBookRequestsAvoidedByQuarantine = 0,
+    long MarketsSkippedByInvalidTokenQuarantine = 0
 );

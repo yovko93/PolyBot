@@ -95,6 +95,7 @@ public class TradingBotOptions
     public RuntimeMemoryOptions RuntimeMemory { get; set; } = new();
     public CacheOptions Caches { get; set; } = new();
     public OrderBookOptions OrderBook { get; set; } = new();
+    public SoakOptions Soak { get; set; } = new();
     public Dictionary<string, OpportunityStrategyConfig> Strategies { get; set; } = StrategyDefaults();
 
     private static Dictionary<string, OpportunityStrategyConfig> StrategyDefaults() => new(StringComparer.OrdinalIgnoreCase)
@@ -180,7 +181,10 @@ public class OrderBookOptions
     public bool LogInvalidBatchPayloadSamples { get; set; } = true;
     public int MaxInvalidPayloadSamplesToLog { get; set; } = 5;
     public int InvalidTokenQuarantineMinutes { get; set; } = 720;
+    public int InvalidTokenQuarantineTtlMinutes { get; set; } = 360;
     public int MaxInvalidTokensPerCycle { get; set; } = 50;
+    public int MaxInvalidTokenSingleRetriesPerCycle { get; set; } = 1;
+    public int MaxBatchSplitRetriesPerCycle { get; set; } = 20;
     public bool DropMarketsWithQuarantinedTokens { get; set; } = true;
     public bool SkipQuarantinedTokensBeforeBatch { get; set; } = true;
     public bool PersistInvalidTokenQuarantineDuringRun { get; set; } = true;
@@ -189,6 +193,14 @@ public class OrderBookOptions
     public int MaxBadRequestsPerHourForStable { get; set; } = 20;
     public int MaxRepeatedInvalidTokenAfterQuarantine { get; set; } = 0;
 }
+public class SoakOptions
+{
+    public int MaxBatchBookBadRequestsPerHour { get; set; } = 5;
+    public int MaxBatchBookInvalidTokensPerHour { get; set; } = 5;
+    public double MaxBatchBookBadRequestRate { get; set; } = 0.005;
+    public int MaxOrderbookUnavailableMarkets { get; set; } = 25;
+}
+
 public class MarketDiscoveryOptions
 {
     public int RequestTimeoutMs { get; set; } = 15000;

@@ -35,6 +35,10 @@ public class OrderBookService : IOrderBookProvider
     private long _batchSkippedQuarantinedTokens;
     private long _batchSkippedMarketsWithQuarantinedTokens;
     private long _batchRepeatedInvalidTokenAfterQuarantine;
+    private long _invalidTokenQuarantineAdded;
+    private long _invalidTokenQuarantineExpired;
+    private long _batchRequestsAvoidedByQuarantine;
+    private long _marketsSkippedByInvalidTokenQuarantine;
     private readonly HttpClient _http;
     private readonly object _cacheLock = new();
 
@@ -50,6 +54,8 @@ public class OrderBookService : IOrderBookProvider
     public int MaxInvalidPayloadSamplesToLog { get; set; } = 5;
     public TimeSpan InvalidTokenQuarantineTtl { get; set; } = TimeSpan.FromMinutes(360);
     public int MaxInvalidTokensPerCycle { get; set; } = 50;
+    public int MaxInvalidTokenSingleRetriesPerCycle { get; set; } = 1;
+    public int MaxBatchSplitRetriesPerCycle { get; set; } = 20;
     public bool DropMarketsWithQuarantinedTokens { get; set; } = true;
     public bool SkipQuarantinedTokensBeforeBatch { get; set; } = true;
     public int MaxInvalidTokenCacheEntries { get; set; } = 5000;
@@ -67,6 +73,9 @@ public class OrderBookService : IOrderBookProvider
     private readonly Dictionary<string, string> _tokenMarketIds = new(StringComparer.Ordinal);
     private readonly HashSet<string> _orderbookUnavailableMarkets = new(StringComparer.OrdinalIgnoreCase);
     private readonly Queue<(DateTime Time, string EventName, string Sample)> _batchErrorSamples = new();
+    private readonly HashSet<string> _knownInvalidTokensThisCycle = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _singleTokenRetriesThisCycle = new(StringComparer.Ordinal);
+    private int _batchSplitRetriesThisCycle;
 
     private TimeSpan _cacheTtl = TimeSpan.FromSeconds(60);
     private int _maxCacheEntries = 5000;
@@ -91,8 +100,10 @@ public class OrderBookService : IOrderBookProvider
         SplitBatchOnBadRequest = options.SplitBatchOnBadRequest;
         LogInvalidBatchPayloadSamples = options.LogInvalidBatchPayloadSamples;
         MaxInvalidPayloadSamplesToLog = Math.Max(0, options.MaxInvalidPayloadSamplesToLog);
-        InvalidTokenQuarantineTtl = TimeSpan.FromMinutes(Math.Max(1, options.InvalidTokenQuarantineMinutes));
+        InvalidTokenQuarantineTtl = TimeSpan.FromMinutes(Math.Max(1, options.InvalidTokenQuarantineTtlMinutes > 0 ? options.InvalidTokenQuarantineTtlMinutes : options.InvalidTokenQuarantineMinutes));
         MaxInvalidTokensPerCycle = Math.Max(1, options.MaxInvalidTokensPerCycle);
+        MaxInvalidTokenSingleRetriesPerCycle = Math.Max(0, options.MaxInvalidTokenSingleRetriesPerCycle);
+        MaxBatchSplitRetriesPerCycle = Math.Max(0, options.MaxBatchSplitRetriesPerCycle);
         DropMarketsWithQuarantinedTokens = options.DropMarketsWithQuarantinedTokens;
         SkipQuarantinedTokensBeforeBatch = options.SkipQuarantinedTokensBeforeBatch;
         ExportInvalidTokenQuarantine = options.ExportInvalidTokenQuarantine;
@@ -177,11 +188,24 @@ public class OrderBookService : IOrderBookProvider
     List<Market> markets,
     CancellationToken ct = default)
     {
+        var quarantinedMarketTokens = DropMarketsWithQuarantinedTokens
+            ? markets
+                .Where(m => m != null && m.clobTokenIds != null && m.clobTokenIds.Any(IsTokenQuarantined))
+                .SelectMany(m => m.clobTokenIds.Where(IsTokenQuarantined))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray()
+            : Array.Empty<string>();
         var skippedMarketsWithQuarantine = DropMarketsWithQuarantinedTokens
             ? markets.Count(m => m != null && m.clobTokenIds != null && m.clobTokenIds.Any(IsTokenQuarantined))
             : 0;
         if (skippedMarketsWithQuarantine > 0)
+        {
             Interlocked.Add(ref _batchSkippedMarketsWithQuarantinedTokens, skippedMarketsWithQuarantine);
+            Interlocked.Add(ref _marketsSkippedByInvalidTokenQuarantine, skippedMarketsWithQuarantine);
+            Interlocked.Add(ref _batchRequestsAvoidedByQuarantine, skippedMarketsWithQuarantine);
+        }
+        if (quarantinedMarketTokens.Length > 0)
+            Interlocked.Add(ref _batchSkippedQuarantinedTokens, quarantinedMarketTokens.Length);
 
         var validMarkets = markets
             .Where(m =>
@@ -197,6 +221,7 @@ public class OrderBookService : IOrderBookProvider
         var tokenIds = validMarkets
             .SelectMany(m => m.clobTokenIds)
             .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Where(x => !SkipQuarantinedTokensBeforeBatch || !IsTokenQuarantined(x))
             .Distinct()
             .ToList();
 
@@ -296,7 +321,12 @@ public class OrderBookService : IOrderBookProvider
             BatchBookSkippedQuarantinedTokens: Interlocked.Read(ref _batchSkippedQuarantinedTokens),
             BatchBookSkippedMarketsWithQuarantinedTokens: Interlocked.Read(ref _batchSkippedMarketsWithQuarantinedTokens),
             BatchBookRepeatedInvalidTokenAfterQuarantine: Interlocked.Read(ref _batchRepeatedInvalidTokenAfterQuarantine),
-            OrderbookUnavailableMarkets: OrderbookUnavailableMarketCount
+            OrderbookUnavailableMarkets: OrderbookUnavailableMarketCount,
+            InvalidTokenQuarantineActive: QuarantinedTokenCount,
+            InvalidTokenQuarantineAdded: Interlocked.Read(ref _invalidTokenQuarantineAdded),
+            InvalidTokenQuarantineExpired: Interlocked.Read(ref _invalidTokenQuarantineExpired),
+            BatchBookRequestsAvoidedByQuarantine: Interlocked.Read(ref _batchRequestsAvoidedByQuarantine),
+            MarketsSkippedByInvalidTokenQuarantine: Interlocked.Read(ref _marketsSkippedByInvalidTokenQuarantine)
         );
     }
 
@@ -322,6 +352,8 @@ public class OrderBookService : IOrderBookProvider
         Interlocked.Exchange(ref _batchSkippedMarketsWithQuarantinedTokens, 0);
         Interlocked.Exchange(ref _batchSkippedQuarantinedTokens, 0);
         Interlocked.Exchange(ref _batchSingleTokenQuarantined, 0);
+        Interlocked.Exchange(ref _batchRequestsAvoidedByQuarantine, 0);
+        Interlocked.Exchange(ref _marketsSkippedByInvalidTokenQuarantine, 0);
         Interlocked.Exchange(ref _batchSingleTokenFailures, 0);
         Interlocked.Exchange(ref _batchSplitRetryFailed, 0);
         Interlocked.Exchange(ref _batchSplitRetrySucceeded, 0);
@@ -567,7 +599,12 @@ public class OrderBookService : IOrderBookProvider
         CancellationToken ct,
         int depth = 0)
     {
-        if (batch.Count == 0) return BatchPostResult.Success(0);
+        batch = FilterKnownInvalidTokens(batch).ToArray();
+        if (batch.Count == 0)
+        {
+            Interlocked.Increment(ref _batchRequestsAvoidedByQuarantine);
+            return BatchPostResult.Success(0);
+        }
 
         try
         {
@@ -583,21 +620,32 @@ public class OrderBookService : IOrderBookProvider
                 Interlocked.Increment(ref _httpErrors);
                 Interlocked.Increment(ref _batchBadRequests);
                 ExportBatchBookBadRequestDiagnostic(batch, json, depth, quarantineApplied: false);
-                if (SplitBatchOnBadRequest && batch.Count > 1)
+                if (SplitBatchOnBadRequest && batch.Count > 1 && depth == 0 && TryReserveSplitRetry())
                     return await SplitAndRetryBadRequestAsync(batch, bodyFactory, result, ct, depth, json);
 
                 if (batch.Count == 1)
                 {
-                    Interlocked.Increment(ref _batchInvalidTokens);
-                    Interlocked.Increment(ref _batchSingleTokenFailures);
-                    QuarantineInvalidToken(batch[0], "SingleTokenBadRequest");
-                    Interlocked.Increment(ref _batchSingleTokenQuarantined);
-                    if (ShouldLogBatchDiagnostic("BATCH_BOOK_INVALID_TOKEN_SUPPRESSED", batch[0], batch.Count))
-                        Console.WriteLine($"[BATCH_BOOK_INVALID_TOKEN_SUPPRESSED] TokenId={batch[0]} Reason=SingleTokenBadRequest");
+                    var token = batch[0];
+                    if (CanRetrySingleToken(token))
+                    {
+                        Interlocked.Increment(ref _batchInvalidTokens);
+                        Interlocked.Increment(ref _batchSingleTokenFailures);
+                        QuarantineInvalidToken(token, "SingleTokenBadRequest");
+                        Interlocked.Increment(ref _batchSingleTokenQuarantined);
+                    }
+                    else
+                    {
+                        Interlocked.Increment(ref _batchRequestsAvoidedByQuarantine);
+                    }
+                    if (ShouldLogBatchDiagnostic("BATCH_BOOK_INVALID_TOKEN_SUPPRESSED", token, batch.Count))
+                        Console.WriteLine($"[BATCH_BOOK_INVALID_TOKEN_SUPPRESSED] TokenId={token} Reason=SingleTokenBadRequest");
                 }
-                else if (ShouldLogBatchDiagnostic("BATCH_BOOK_ERROR", $"badrequest:size:{batch.Count}", batch.Count))
+                else
                 {
-                    Console.WriteLine($"[BATCH_BOOK_ERROR] Status=400 BatchSize={batch.Count} RetryStrategy=None");
+                    var isolated = await IsolateInvalidTokensAsync(batch, bodyFactory, result, ct, depth + 1);
+                    if (isolated.BadRequest || isolated.FailedTokens > 0) return isolated;
+                    if (ShouldLogBatchDiagnostic("BATCH_BOOK_ERROR", $"badrequest:size:{batch.Count}", batch.Count))
+                        Console.WriteLine($"[BATCH_BOOK_ERROR] Status=400 BatchSize={batch.Count} RetryStrategy=TokenIsolation");
                 }
 
                 return BatchPostResult.FromBadRequest(0, batch.Count);
@@ -649,6 +697,78 @@ public class OrderBookService : IOrderBookProvider
                 Console.WriteLine($"[BATCH_BOOK_ERROR] BatchSize={batch.Count} Message={Short(ex.Message)}");
             return BatchPostResult.Failed(0);
         }
+    }
+
+
+    private IReadOnlyList<string> FilterKnownInvalidTokens(IEnumerable<string> tokens)
+    {
+        var filtered = new List<string>();
+        var skipped = 0;
+        lock (_cacheLock)
+        {
+            foreach (var token in tokens.Select(NormalizeTokenId).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>())
+            {
+                if (_knownInvalidTokensThisCycle.Contains(token) || _invalidTokenQuarantine.ContainsKey(token))
+                {
+                    skipped++;
+                    continue;
+                }
+                filtered.Add(token);
+            }
+        }
+        if (skipped > 0)
+        {
+            Interlocked.Add(ref _batchSkippedQuarantinedTokens, skipped);
+            Interlocked.Add(ref _batchRequestsAvoidedByQuarantine, skipped);
+        }
+        return filtered;
+    }
+
+    private bool TryReserveSplitRetry()
+    {
+        lock (_cacheLock)
+        {
+            if (_batchSplitRetriesThisCycle >= Math.Max(0, MaxBatchSplitRetriesPerCycle))
+                return false;
+            _batchSplitRetriesThisCycle++;
+            return true;
+        }
+    }
+
+    private bool CanRetrySingleToken(string token)
+    {
+        lock (_cacheLock)
+        {
+            if (_knownInvalidTokensThisCycle.Contains(token) || _invalidTokenQuarantine.ContainsKey(token))
+                return false;
+            if (_knownInvalidTokensThisCycle.Count >= Math.Max(1, MaxInvalidTokensPerCycle))
+                return false;
+            _singleTokenRetriesThisCycle.TryGetValue(token, out var count);
+            if (count >= Math.Max(0, MaxInvalidTokenSingleRetriesPerCycle))
+                return false;
+            _singleTokenRetriesThisCycle[token] = count + 1;
+            return true;
+        }
+    }
+
+    private async Task<BatchPostResult> IsolateInvalidTokensAsync(
+        IReadOnlyList<string> batch,
+        Func<IEnumerable<string>, object> bodyFactory,
+        Dictionary<string, ClobOrderBook> result,
+        CancellationToken ct,
+        int depth)
+    {
+        var loadedBefore = result.Count;
+        var failed = 0;
+        foreach (var token in FilterKnownInvalidTokens(batch))
+        {
+            Interlocked.Increment(ref _batchRequests);
+            var single = await TryPostBooksBatchAsync(new[] { token }, bodyFactory, result, ct, depth);
+            if (single.BadRequest || single.FailedTokens > 0) failed++;
+            if (IsTokenQuarantined(token)) continue;
+        }
+        var loaded = result.Count - loadedBefore;
+        return failed > 0 ? BatchPostResult.FromBadRequest(loaded, failed) : BatchPostResult.Success(loaded);
     }
 
     private async Task<BatchPostResult> SplitAndRetryBadRequestAsync(
@@ -781,6 +901,12 @@ public class OrderBookService : IOrderBookProvider
      CancellationToken ct = default)
     {
         TrimInvalidTokenQuarantine();
+        lock (_cacheLock)
+        {
+            _knownInvalidTokensThisCycle.Clear();
+            _singleTokenRetriesThisCycle.Clear();
+            _batchSplitRetriesThisCycle = 0;
+        }
         var tokenArray = tokenIds.ToArray();
         var beforeSkipped = QuarantinedTokenCount;
         var validation = ValidateBatchPayload(tokenArray, int.MaxValue);
@@ -794,6 +920,9 @@ public class OrderBookService : IOrderBookProvider
             if (ShouldLogBatchDiagnostic("BATCH_BOOK_PAYLOAD_DIAG", $"n:{validation.NullsRemoved}|d:{validation.DuplicatesRemoved}|i:{validation.InvalidFormatRemoved}|q:{validation.QuarantinedRemoved}|{sampleHash}", validation.TokenIds.Count))
                 Console.WriteLine($"[BATCH_BOOK_PAYLOAD_DIAG] BatchSize={validation.TokenIds.Count} DistinctTokenIds={validation.TokenIds.Count} NullsRemoved={validation.NullsRemoved} DuplicatesRemoved={validation.DuplicatesRemoved} InvalidFormatRemoved={validation.InvalidFormatRemoved} QuarantinedRemoved={validation.QuarantinedRemoved}");
         }
+
+        if (validation.QuarantinedRemoved > 0)
+            Interlocked.Add(ref _batchRequestsAvoidedByQuarantine, validation.QuarantinedRemoved);
 
         if (validation.TokenIds.Count == 0)
             return result;
@@ -809,8 +938,13 @@ public class OrderBookService : IOrderBookProvider
 
         foreach (var batch in validation.TokenIds.Chunk(batchSize))
         {
+            var batchArray = FilterKnownInvalidTokens(batch).ToArray();
+            if (batchArray.Length == 0)
+            {
+                Interlocked.Increment(ref _batchRequestsAvoidedByQuarantine);
+                continue;
+            }
             Interlocked.Increment(ref _batchRequests);
-            var batchArray = batch.ToArray();
 
             var primary = await TryPostBooksBatchAsync(
                 batchArray,
@@ -906,7 +1040,9 @@ public class OrderBookService : IOrderBookProvider
         {
             var now = DateTime.UtcNow;
             if (_invalidTokenQuarantine.ContainsKey(token)) Interlocked.Increment(ref _batchRepeatedInvalidTokenAfterQuarantine);
+            else Interlocked.Increment(ref _invalidTokenQuarantineAdded);
             _invalidTokenQuarantine[token] = now.Add(InvalidTokenQuarantineTtl);
+            _knownInvalidTokensThisCycle.Add(token);
             marketId = _tokenMarketIds.TryGetValue(token, out var m) ? m : "";
             if (!string.IsNullOrWhiteSpace(marketId)) _orderbookUnavailableMarkets.Add(marketId);
             TrimInvalidTokenQuarantineLocked(now);
@@ -933,11 +1069,15 @@ public class OrderBookService : IOrderBookProvider
     private void TrimInvalidTokenQuarantineLocked(DateTime now)
     {
         foreach (var key in _invalidTokenQuarantine.Where(x => x.Value <= now).Select(x => x.Key).ToList())
+        {
             _invalidTokenQuarantine.Remove(key);
+            Interlocked.Increment(ref _invalidTokenQuarantineExpired);
+        }
         while (_invalidTokenQuarantine.Count > Math.Max(1, MaxInvalidTokenCacheEntries))
         {
             var oldest = _invalidTokenQuarantine.OrderBy(x => x.Value).First().Key;
             _invalidTokenQuarantine.Remove(oldest);
+            Interlocked.Increment(ref _invalidTokenQuarantineExpired);
         }
     }
 

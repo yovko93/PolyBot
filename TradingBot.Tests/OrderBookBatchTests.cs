@@ -3,6 +3,7 @@ using Newtonsoft.Json.Linq;
 using TradingBot.Api;
 using TradingBot.Models;
 using TradingBot.Services;
+using TradingBot.Services.MultiOutcome;
 using Xunit;
 
 namespace TradingBot.Tests;
@@ -191,6 +192,46 @@ public class OrderBookBatchTests
         Assert.True(stats.BatchBookSingleTokenFailures >= 1);
         Assert.True(stats.BatchBookSingleTokenQuarantined >= 1);
         Assert.True(stats.BatchRetrySuccesses >= 1);
+    }
+
+
+    [Fact]
+    public void Quarantined_tokens_are_removed_before_batch_request()
+    {
+        var svc = new OrderBookService(new HttpClient(new BatchHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)))) { ExportInvalidTokenQuarantine = false };
+        svc.QuarantineInvalidToken("999", "test");
+
+        var validation = svc.ValidateBatchPayload(new[] { "1", "999", "2" });
+
+        Assert.Equal(new[] { "1", "2" }, validation.TokenIds);
+        Assert.Equal(1, validation.QuarantinedRemoved);
+        Assert.True(svc.GetStats().BatchBookSkippedQuarantinedTokens >= 1);
+    }
+
+    [Fact]
+    public async Task Known_invalid_token_is_not_retried_in_same_scan_cycle()
+    {
+        var seen = new List<string>();
+        var svc = new OrderBookService(new HttpClient(new BatchHandler(req =>
+        {
+            var ids = ReadTokenIds(req);
+            seen.AddRange(ids);
+            if (ids.Contains("999")) return Json(HttpStatusCode.BadRequest, "{\"error\":\"bad\"}");
+            return Json(HttpStatusCode.OK, BookJson(ids));
+        }))) { MaxBatchBookRequestSize = 3, SplitBatchOnBadRequest = true, ExportInvalidTokenQuarantine = false, QuietLogGate = new QuietLogGate() };
+
+        await svc.GetOrderBooksBatchAsync(new[] { "1", "999", "2", "999" });
+
+        Assert.True(svc.IsTokenQuarantined("999"));
+        Assert.Equal(2, seen.Count(x => x == "999"));
+    }
+
+    [Fact]
+    public void Nba_finals_does_not_semantically_match_wnba_finals()
+    {
+        var conflict = AllowlistRepairService.DetectRefreshSemanticConflict("winner:2026 nba finals|kind:generic", "winner:2026 wnba finals|kind:generic");
+
+        Assert.Equal("LeagueMismatch", conflict);
     }
 
     private static HttpResponseMessage Json(HttpStatusCode status, string body)

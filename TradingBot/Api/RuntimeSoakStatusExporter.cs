@@ -66,9 +66,12 @@ public static class RuntimeSoakStatusExporter
             strategies = health.StrategyCounters,
             strategyCompact = string.Join(",", health.StrategyCounters.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value.Mode}:scan={x.Value.Scanned}:books={x.Value.Books}:paper={x.Value.PaperOpened}:faults={x.Value.Faults}")),
             verifiedPricingUnavailableGroups = 0,
-            orderbookStable = (health.BatchBookRequests <= 0 ? 0d : (double)health.BatchBookBadRequests / health.BatchBookRequests) <= options.OrderBook.MaxBadRequestRateForStable
-                && trend.BatchBookBadRequestsDeltaLastHour <= options.OrderBook.MaxBadRequestsPerHourForStable
-                && health.BatchBookRepeatedInvalidTokenAfterQuarantine <= options.OrderBook.MaxRepeatedInvalidTokenAfterQuarantine,
+            orderbookStable = (health.BatchBookRequests <= 0 ? 0d : (double)health.BatchBookBadRequests / health.BatchBookRequests) <= options.Soak.MaxBatchBookBadRequestRate
+                && trend.BatchBookBadRequestsDeltaLastHour <= options.Soak.MaxBatchBookBadRequestsPerHour
+                && trend.BatchBookInvalidTokensDeltaLastHour <= options.Soak.MaxBatchBookInvalidTokensPerHour
+                && health.BatchBookRepeatedInvalidTokenAfterQuarantine <= options.OrderBook.MaxRepeatedInvalidTokenAfterQuarantine
+                && health.BatchBookSplitRetryFailed <= options.OrderBook.MaxBatchSplitRetriesPerCycle
+                && health.OrderbookUnavailableMarkets <= options.Soak.MaxOrderbookUnavailableMarkets,
             invalidTokenQuarantine = state.OrderBookServiceStats.QuarantinedTokens,
             memoryWarnings = Math.Max(state.MemoryWarnings, logs.Count(x => x.Message.Contains("[MEMORY_WARNING]", StringComparison.OrdinalIgnoreCase))),
             memoryCriticals = Math.Max(state.MemoryCriticals, logs.Count(x => x.Message.Contains("[MEMORY_CRITICAL]", StringComparison.OrdinalIgnoreCase))),
