@@ -286,15 +286,26 @@ public class BotRuntimeState
         Interlocked.Exchange(ref _allowlistRefreshFinalLowConfidence, finalLowConfidence);
         Interlocked.Exchange(ref _allowlistRefreshFinalUnstable, finalUnstable);
         Interlocked.Exchange(ref _allowlistRefreshFinalPreviewOnly, finalPreviewOnly);
-        Interlocked.Exchange(ref _allowlistRefreshFinalLockedManualReview, finalLockedManualReview);
+        SetMax(ref _allowlistRefreshFinalLockedManualReview, finalLockedManualReview);
         Interlocked.Exchange(ref _allowlistRefreshActionExplainedSuppressed, actionExplainedSuppressed);
-        Interlocked.Exchange(ref _allowlistRefreshUnstableGroups, unstableGroups);
-        Interlocked.Exchange(ref _allowlistRefreshActionFlipFlops, actionFlipFlops);
+        SetMax(ref _allowlistRefreshUnstableGroups, unstableGroups);
+        SetMax(ref _allowlistRefreshActionFlipFlops, actionFlipFlops);
         Interlocked.Exchange(ref _allowlistBrokenConfig, brokenConfig);
         Interlocked.Exchange(ref _allowlistDisabled, disabled);
         Interlocked.Exchange(ref _allowlistIgnored, ignored);
         Interlocked.Exchange(ref _allowlistClassificationTotal, classificationTotal);
         Interlocked.Exchange(ref _allowlistClassificationValid, classificationValid ? 1 : 0);
+    }
+
+    private static void SetMax(ref int location, int value)
+    {
+        var current = Volatile.Read(ref location);
+        while (value > current)
+        {
+            var observed = Interlocked.CompareExchange(ref location, value, current);
+            if (observed == current) return;
+            current = observed;
+        }
     }
 
     public IReadOnlyDictionary<string,int> GetRuntimeCollectionCounts() => new Dictionary<string,int>

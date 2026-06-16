@@ -470,6 +470,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var emittedAllowlistRefreshActionExplanations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     var emittedAllowlistRefreshSemanticConflicts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     var emittedAllowlistRefreshMarketSetMismatches = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var emittedAllowlistUnstableManualReviewLocks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     var lastProfileComparisonFingerprint = string.Empty;
     var mismatchFingerprintByGroup = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
     QuietLogPolicy QuietPolicy(int? everyNCycles = null, int? maxPerHour = null) => new(
@@ -1118,6 +1119,11 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         .GroupBy(x => x.GroupKey, StringComparer.OrdinalIgnoreCase)
                         .Select(x => x.First())
                         .ToArray();
+                    var repairReportGroupKeys = repairReport.Groups.Select(x => x.GroupKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var activeUnstableLocks = allowlistRepairService.GetUnstableManualReviewLocks()
+                        .Where(x => repairReportGroupKeys.Contains(x.GroupKey))
+                        .ToArray();
+                    var activeUnstableLockKeys = activeUnstableLocks.Select(x => x.GroupKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
                     state.SetAllowlistRefreshCounters(
                         repairReport.Summary.NeedsRefresh,
                         summary.ReviewOnly,
@@ -1129,10 +1135,11 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedLowConfidence", StringComparison.OrdinalIgnoreCase)),
                         refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedUnstableAcrossSnapshots", StringComparison.OrdinalIgnoreCase)),
                         refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateAcceptedPreviewOnly", StringComparison.OrdinalIgnoreCase)),
-                        refreshDiag.Items.Count(x => x.FinalDecision.Equals("LockedManualReview", StringComparison.OrdinalIgnoreCase)),
+                        refreshDiag.Items.Count(x => x.FinalDecision.Equals("LockedManualReview", StringComparison.OrdinalIgnoreCase))
+                            + activeUnstableLockKeys.Count(x => refreshDiag.Items.All(item => !item.GroupKey.Equals(x, StringComparison.OrdinalIgnoreCase))),
                         0,
-                        unstableSummaries.Length,
-                        unstableSummaries.Length,
+                        Math.Max(unstableSummaries.Length, activeUnstableLocks.Count),
+                        Math.Max(unstableSummaries.Length, activeUnstableLocks.Count),
                         summary.Healthy,
                         summary.MonitoringOnly,
                         summary.NeedsPricingPrune,
@@ -1192,6 +1199,17 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         if (emittedAllowlistRefreshFinalDecisions.Add($"unstable|{unstableKey}"))
                             Console.WriteLine($"[ALLOWLIST_REFRESH_UNSTABLE_GROUP] Group={unstable.GroupKey} ObservedDecisions=[{string.Join(',', unstable.ObservedDecisions)}] ObservedActions=[{string.Join(',', unstable.ObservedActions)}] SnapshotsObserved={unstable.SnapshotsObserved} FinalDecision=LockedManualReview Reason=ActionFlipFlopDuringSoak AutoApply=false");
                     }
+                    foreach (var manualLock in activeUnstableLocks)
+                    {
+                        if (emittedAllowlistUnstableManualReviewLocks.Add(manualLock.GroupKey))
+                        {
+                            Console.WriteLine($"[ALLOWLIST_UNSTABLE_MANUAL_REVIEW_LOCKED] Group={manualLock.GroupKey} Reason={manualLock.Reason} ObservedDecisions=[{string.Join(',', manualLock.ObservedDecisions)}] ObservedActions=[{string.Join(',', manualLock.ObservedActions)}] FirstDetectedSnapshot={manualLock.FirstDetectedSnapshotId} AutoApply=false");
+                        }
+                        else if (ShouldQuietLog("allowlist-refresh", "ALLOWLIST_UNSTABLE_MANUAL_REVIEW_LOCK_ACTIVE", $"{manualLock.GroupKey}|{manualLock.LastSeenSnapshotId}|{manualLock.Reason}", LogImportance.Normal, groupKey: manualLock.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
+                        {
+                            Console.WriteLine($"[ALLOWLIST_UNSTABLE_MANUAL_REVIEW_LOCK_ACTIVE] Group={manualLock.GroupKey} Reason={manualLock.Reason} HealthCategory=ReviewOnly RecommendedAction=NeedsManualReview AutoApply=false");
+                        }
+                    }
                     if (actionExplainedSuppressedThisCycle > 0)
                     {
                         state.SetAllowlistRefreshCounters(
@@ -1205,10 +1223,11 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedLowConfidence", StringComparison.OrdinalIgnoreCase)),
                             refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedUnstableAcrossSnapshots", StringComparison.OrdinalIgnoreCase)),
                             refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateAcceptedPreviewOnly", StringComparison.OrdinalIgnoreCase)),
-                            refreshDiag.Items.Count(x => x.FinalDecision.Equals("LockedManualReview", StringComparison.OrdinalIgnoreCase)),
+                            refreshDiag.Items.Count(x => x.FinalDecision.Equals("LockedManualReview", StringComparison.OrdinalIgnoreCase))
+                                + activeUnstableLockKeys.Count(x => refreshDiag.Items.All(item => !item.GroupKey.Equals(x, StringComparison.OrdinalIgnoreCase))),
                             actionExplainedSuppressedThisCycle,
-                            unstableSummaries.Length,
-                            unstableSummaries.Length,
+                            Math.Max(unstableSummaries.Length, activeUnstableLocks.Count),
+                            Math.Max(unstableSummaries.Length, activeUnstableLocks.Count),
                             summary.Healthy,
                             summary.MonitoringOnly,
                             summary.NeedsPricingPrune,

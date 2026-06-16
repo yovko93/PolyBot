@@ -165,6 +165,16 @@ public sealed record AllowlistRefreshInstabilitySummary(
     bool IsUnstable,
     string Reason);
 
+public sealed record AllowlistUnstableManualReviewLockSnapshot(
+    string GroupKey,
+    string FirstDetectedSnapshotId,
+    DateTime FirstDetectedAtUtc,
+    string Reason,
+    IReadOnlyList<string> ObservedDecisions,
+    IReadOnlyList<string> ObservedActions,
+    string LastSeenSnapshotId,
+    DateTime LastSeenAtUtc);
+
 public sealed record AllowlistRefreshDiagnosticsExport(
     DateTime Timestamp,
     string SnapshotId,

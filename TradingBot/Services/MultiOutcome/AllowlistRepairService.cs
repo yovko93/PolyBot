@@ -30,6 +30,8 @@ public sealed class AllowlistRepairService
     private int _repairHistoryDuplicateWarnings;
     private const int MaxAllowlistInstabilitySnapshotsPerGroup = 5;
     private readonly Dictionary<string, List<AllowlistInstabilityEntry>> _allowlistInstabilityLedger = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, AllowlistUnstableManualReviewLock> _unstableManualReviewLocks = new(StringComparer.OrdinalIgnoreCase);
+    private string _activeRepairSnapshotId = string.Empty;
 
     public AllowlistRepairService(AllowlistRepairLockProvider? lockProvider = null)
     {
@@ -53,6 +55,7 @@ public sealed class AllowlistRepairService
             LoadRepairHistoryIfPresent(contentRootPath, options, loggingOptions ?? new MultiOutcomeLoggingOptions());
             if (_lastReport is not null && (_lastSnapshotId == candidateSnapshot.SnapshotId || candidateSnapshot.IsRollingFallback))
                 return _lastReport;
+            _activeRepairSnapshotId = candidateSnapshot.SnapshotId;
 
             var resolvedByGroup = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(resolvedGroups, x => x.GroupKey, "AllowlistRepair.ResolvedGroups", DuplicateGroupKeyPolicy.KeepLatest);
             var pricingByGroup = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(
@@ -1124,6 +1127,18 @@ public sealed class AllowlistRepairService
     {
         lock (_gate)
         {
+            if (_unstableManualReviewLocks.TryGetValue(groupKey, out var manualLock))
+            {
+                IReadOnlyList<AllowlistInstabilityEntry> lockedEntries = _allowlistInstabilityLedger.TryGetValue(groupKey, out var lockedList) ? lockedList : Array.Empty<AllowlistInstabilityEntry>();
+                return new AllowlistRefreshInstabilitySummary(
+                    groupKey,
+                    manualLock.ObservedDecisions,
+                    manualLock.ObservedActions,
+                    lockedEntries.Count,
+                    true,
+                    manualLock.Reason);
+            }
+
             IReadOnlyList<AllowlistInstabilityEntry> entries = _allowlistInstabilityLedger.TryGetValue(groupKey, out var list) ? list : Array.Empty<AllowlistInstabilityEntry>();
             return new AllowlistRefreshInstabilitySummary(
                 groupKey,
@@ -1135,8 +1150,31 @@ public sealed class AllowlistRepairService
         }
     }
 
+    public IReadOnlyList<AllowlistUnstableManualReviewLockSnapshot> GetUnstableManualReviewLocks()
+    {
+        lock (_gate)
+        {
+            return _unstableManualReviewLocks.Values
+                .OrderBy(x => x.GroupKey, StringComparer.OrdinalIgnoreCase)
+                .Select(x => new AllowlistUnstableManualReviewLockSnapshot(
+                    x.GroupKey,
+                    x.FirstDetectedSnapshotId,
+                    x.FirstDetectedAtUtc,
+                    x.Reason,
+                    x.ObservedDecisions,
+                    x.ObservedActions,
+                    x.LastSeenSnapshotId,
+                    x.LastSeenAtUtc))
+                .ToArray();
+        }
+    }
+
     private AllowlistRepairClassification ApplyRepairStatusOverride(VerifiedMultiOutcomeGroupConfig cfg, AllowlistRepairClassification classification)
     {
+        classification = ApplyAllowlistInstabilityLedger(cfg, classification);
+        if (classification.Reason.Equals("ActionFlipFlopDuringSoak", StringComparison.OrdinalIgnoreCase))
+            return classification;
+
         if (TryGetLockedGroup(cfg.GroupKey, out var locked) && !locked.AllowPatchPreview)
         {
             return classification with
@@ -1149,8 +1187,6 @@ public sealed class AllowlistRepairService
                 SuggestedRefreshedTemplate = null
             };
         }
-
-        classification = ApplyAllowlistInstabilityLedger(cfg, classification);
 
         if (_repairHistoryStatus.TryGetValue(cfg.GroupKey, out var status) && (status.OscillationDetected || status.Quarantined || status.Locked))
         {
@@ -1199,13 +1235,30 @@ public sealed class AllowlistRepairService
         }
         entries.Add(entry);
         if (entries.Count > MaxAllowlistInstabilitySnapshotsPerGroup) entries.RemoveRange(0, entries.Count - MaxAllowlistInstabilitySnapshotsPerGroup);
+        if (_unstableManualReviewLocks.TryGetValue(cfg.GroupKey, out var existingLock))
+            return ApplyUnstableManualReviewLock(existingLock with { LastSeenSnapshotId = _activeRepairSnapshotId, LastSeenAtUtc = DateTime.UtcNow }, classification);
         if (!IsInstabilityFlipFlop(entries)) return classification;
+        var createdLock = new AllowlistUnstableManualReviewLock(
+            cfg.GroupKey,
+            _activeRepairSnapshotId,
+            DateTime.UtcNow,
+            "ActionFlipFlopDuringSoak",
+            entries.Select(x => x.FinalDecision).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            entries.Select(x => x.ObservedAction).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            _activeRepairSnapshotId,
+            DateTime.UtcNow);
+        return ApplyUnstableManualReviewLock(createdLock, classification);
+    }
+
+    private AllowlistRepairClassification ApplyUnstableManualReviewLock(AllowlistUnstableManualReviewLock manualLock, AllowlistRepairClassification classification)
+    {
+        _unstableManualReviewLocks[manualLock.GroupKey] = manualLock;
         return classification with
         {
-            HealthCategory = "ReviewOnly",
+            HealthCategory = nameof(AllowlistRepairHealthCategory.ReviewOnly),
             RecommendedAction = nameof(AllowlistRepairRecommendedAction.NeedsManualReview),
             RepairConfidence = "Low",
-            Reason = "ActionFlipFlopDuringSoak",
+            Reason = manualLock.Reason,
             SuggestedPrunedTemplate = null,
             SuggestedRefreshedTemplate = null
         };
@@ -1227,6 +1280,7 @@ public sealed class AllowlistRepairService
         => value is "NoCandidate" or "CandidateRejectedUnstableAcrossSnapshots" or "VerifiedGroupMarketMismatch" or "DisableMissingMarkets" or "NeedsManualReview" or "BrokenConfig";
 
     private sealed record AllowlistInstabilityEntry(string GroupKey, string ObservedAction, string BestCandidate, decimal BestCandidateScore, decimal Overlap, IReadOnlyList<string> MissingMarketIds, IReadOnlyList<string> AddedMarketIds, IReadOnlyList<string> RemovedMarketIds, string FinalDecision, string HealthCategory);
+    private sealed record AllowlistUnstableManualReviewLock(string GroupKey, string FirstDetectedSnapshotId, DateTime FirstDetectedAtUtc, string Reason, IReadOnlyList<string> ObservedDecisions, IReadOnlyList<string> ObservedActions, string LastSeenSnapshotId, DateTime LastSeenAtUtc);
 
     private ActionVersionState VersionAction(string groupKey, string currentAction, string snapshotId, DateTime now, int consecutiveSnapshotMisses)
     {
