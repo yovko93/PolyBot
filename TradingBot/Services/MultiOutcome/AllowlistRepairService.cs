@@ -571,11 +571,11 @@ public sealed class AllowlistRepairService
         _repairHistoryStatus[patch.GroupKey] = status;
 
         if (status.OscillationDetected && !string.IsNullOrWhiteSpace(status.PreviousAction) && !string.IsNullOrWhiteSpace(status.CurrentAction))
-            Console.WriteLine($"[ALLOWLIST_REPAIR_OSCILLATION_DETECTED] Group={patch.GroupKey} MarketIds=[{string.Join(',', status.OscillatingMarketIds)}] Previous={status.PreviousAction} Current={status.CurrentAction}");
+            Console.WriteLine($"[ALLOWLIST_REPAIR_OSCILLATION_DETECTED] Group={patch.GroupKey} MarketIds=[{string.Join(",", status.OscillatingMarketIds)}] Previous={status.PreviousAction} Current={status.CurrentAction}");
         if (status.Locked && !locked && _loggedRepairLockFingerprints.Add($"{patch.GroupKey}|{status.Reason}"))
             Console.WriteLine($"[ALLOWLIST_REPAIR_LOCKED] Group={patch.GroupKey} Reason={status.Reason}");
         if (status.Quarantined)
-            Console.WriteLine($"[ALLOWLIST_REPAIR_QUARANTINED] Group={patch.GroupKey} Reason={status.Reason} MarketIds=[{string.Join(',', status.OscillatingMarketIds)}]");
+            Console.WriteLine($"[ALLOWLIST_REPAIR_QUARANTINED] Group={patch.GroupKey} Reason={status.Reason} MarketIds=[{string.Join(",", status.OscillatingMarketIds)}]");
         if (options.DiagnosticsOnlyDuringSoak && IsNonCriticalRepairPatch(patch) && !status.Locked && !status.NoOp
             && _loggedDiagnosticsOnlySuppressions.Add($"{patch.GroupKey}|{patch.PatchType}|DiagnosticsOnlyDuringSoak"))
             Console.WriteLine($"[ALLOWLIST_REPAIR_PATCH_SUPPRESSED] Group={patch.GroupKey} Reason=DiagnosticsOnlyDuringSoak");
@@ -697,7 +697,7 @@ public sealed class AllowlistRepairService
         => diff?[property] is JsonArray arr ? arr.Select(x => x?.GetValue<string>()).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>().Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray() : [];
 
     private static string DiffHash(IReadOnlyList<string> added, IReadOnlyList<string> removed)
-        => StableHash($"add:{string.Join(',', added.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}|remove:{string.Join(',', removed.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}");
+        => StableHash($"add:{string.Join(",", added.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}|remove:{string.Join(",", removed.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))}");
 
     private void LoadRepairHistoryIfPresent(string? contentRootPath, AllowlistRepairOptions options, MultiOutcomeLoggingOptions loggingOptions)
     {
