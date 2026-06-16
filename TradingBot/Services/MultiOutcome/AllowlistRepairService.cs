@@ -28,6 +28,8 @@ public sealed class AllowlistRepairService
     private string _lastRepairHistoryValidationFingerprint = string.Empty;
     private int _repairHistoryValidationCycle;
     private int _repairHistoryDuplicateWarnings;
+    private const int MaxAllowlistInstabilitySnapshotsPerGroup = 5;
+    private readonly Dictionary<string, List<AllowlistInstabilityEntry>> _allowlistInstabilityLedger = new(StringComparer.OrdinalIgnoreCase);
 
     public AllowlistRepairService(AllowlistRepairLockProvider? lockProvider = null)
     {
@@ -130,7 +132,7 @@ public sealed class AllowlistRepairService
 
     public static string BuildRefreshFinalDecision(AllowlistRefreshDiagnosticsItem item)
     {
-        if (item.Reason.Contains("ManualLock", StringComparison.OrdinalIgnoreCase) || item.Confidence.Equals("Unsafe", StringComparison.OrdinalIgnoreCase))
+        if (item.Reason.Contains("ActionFlipFlopDuringSoak", StringComparison.OrdinalIgnoreCase) || item.Reason.Contains("ManualLock", StringComparison.OrdinalIgnoreCase) || item.Confidence.Equals("Unsafe", StringComparison.OrdinalIgnoreCase))
             return "LockedManualReview";
         if (string.IsNullOrWhiteSpace(item.BestCandidateGroupKey))
             return "NoCandidate";
@@ -1117,6 +1119,21 @@ public sealed class AllowlistRepairService
         return false;
     }
 
+    public AllowlistRefreshInstabilitySummary GetInstabilitySummary(string groupKey)
+    {
+        lock (_gate)
+        {
+            IReadOnlyList<AllowlistInstabilityEntry> entries = _allowlistInstabilityLedger.TryGetValue(groupKey, out var list) ? list : Array.Empty<AllowlistInstabilityEntry>();
+            return new AllowlistRefreshInstabilitySummary(
+                groupKey,
+                entries.Select(x => x.FinalDecision).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                entries.Select(x => x.ObservedAction).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                entries.Count,
+                IsInstabilityFlipFlop(entries),
+                IsInstabilityFlipFlop(entries) ? "ActionFlipFlopDuringSoak" : string.Empty);
+        }
+    }
+
     private AllowlistRepairClassification ApplyRepairStatusOverride(VerifiedMultiOutcomeGroupConfig cfg, AllowlistRepairClassification classification)
     {
         if (TryGetLockedGroup(cfg.GroupKey, out var locked) && !locked.AllowPatchPreview)
@@ -1131,6 +1148,8 @@ public sealed class AllowlistRepairService
                 SuggestedRefreshedTemplate = null
             };
         }
+
+        classification = ApplyAllowlistInstabilityLedger(cfg, classification);
 
         if (_repairHistoryStatus.TryGetValue(cfg.GroupKey, out var status) && (status.OscillationDetected || status.Quarantined || status.Locked))
         {
@@ -1147,6 +1166,66 @@ public sealed class AllowlistRepairService
 
         return classification;
     }
+
+
+    private AllowlistRepairClassification ApplyAllowlistInstabilityLedger(VerifiedMultiOutcomeGroupConfig cfg, AllowlistRepairClassification classification)
+    {
+        var match = classification.RepairMatch;
+        var finalDecision = classification.RecommendedAction switch
+        {
+            nameof(AllowlistRepairRecommendedAction.DisableMissingMarkets) => nameof(AllowlistRepairRecommendedAction.DisableMissingMarkets),
+            nameof(AllowlistRepairRecommendedAction.NeedsManualReview) when match is null => "NoCandidate",
+            nameof(AllowlistRepairRecommendedAction.NeedsManualReview) when classification.Reason.Contains("UnstableAcrossSnapshots", StringComparison.OrdinalIgnoreCase) => "CandidateRejectedUnstableAcrossSnapshots",
+            nameof(AllowlistRepairRecommendedAction.NeedsManualReview) => nameof(AllowlistRepairRecommendedAction.NeedsManualReview),
+            nameof(AllowlistRepairRecommendedAction.RefreshFromCandidateExport) => "CandidateAcceptedPreviewOnly",
+            _ => classification.RecommendedAction
+        };
+        var entry = new AllowlistInstabilityEntry(
+            cfg.GroupKey,
+            classification.RecommendedAction,
+            match?.CandidateGroupKey ?? string.Empty,
+            match?.Score ?? 0m,
+            match?.MarketOverlap ?? 0m,
+            classification.MissingMarketIds.Where(IsNumericMarketId).ToArray(),
+            match?.AddedMarketIds.Where(IsNumericMarketId).ToArray() ?? Array.Empty<string>(),
+            match?.RemovedMarketIds.Where(IsNumericMarketId).ToArray() ?? Array.Empty<string>(),
+            finalDecision,
+            classification.HealthCategory);
+        if (!_allowlistInstabilityLedger.TryGetValue(cfg.GroupKey, out var entries))
+        {
+            entries = new List<AllowlistInstabilityEntry>();
+            _allowlistInstabilityLedger[cfg.GroupKey] = entries;
+        }
+        entries.Add(entry);
+        if (entries.Count > MaxAllowlistInstabilitySnapshotsPerGroup) entries.RemoveRange(0, entries.Count - MaxAllowlistInstabilitySnapshotsPerGroup);
+        if (!IsInstabilityFlipFlop(entries)) return classification;
+        return classification with
+        {
+            HealthCategory = "ReviewOnly",
+            RecommendedAction = nameof(AllowlistRepairRecommendedAction.NeedsManualReview),
+            RepairConfidence = "Low",
+            Reason = "ActionFlipFlopDuringSoak",
+            SuggestedPrunedTemplate = null,
+            SuggestedRefreshedTemplate = null
+        };
+    }
+
+    private static bool IsInstabilityFlipFlop(IReadOnlyList<AllowlistInstabilityEntry> entries)
+    {
+        if (entries.Count < 2) return false;
+        var relevant = entries.Where(x => IsInstabilitySignal(x.FinalDecision) || IsInstabilitySignal(x.ObservedAction) || IsInstabilitySignal(x.HealthCategory)).ToArray();
+        if (relevant.Length < 2) return false;
+        var states = relevant
+            .Select(x => IsInstabilitySignal(x.FinalDecision) ? x.FinalDecision : IsInstabilitySignal(x.ObservedAction) ? x.ObservedAction : x.HealthCategory)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return states.Length > 1;
+    }
+
+    private static bool IsInstabilitySignal(string value)
+        => value is "NoCandidate" or "CandidateRejectedUnstableAcrossSnapshots" or "VerifiedGroupMarketMismatch" or "DisableMissingMarkets" or "NeedsManualReview" or "BrokenConfig";
+
+    private sealed record AllowlistInstabilityEntry(string GroupKey, string ObservedAction, string BestCandidate, decimal BestCandidateScore, decimal Overlap, IReadOnlyList<string> MissingMarketIds, IReadOnlyList<string> AddedMarketIds, IReadOnlyList<string> RemovedMarketIds, string FinalDecision, string HealthCategory);
 
     private ActionVersionState VersionAction(string groupKey, string currentAction, string snapshotId, DateTime now, int consecutiveSnapshotMisses)
     {

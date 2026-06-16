@@ -152,6 +152,15 @@ public sealed record AllowlistRepairGroup(
     string CopyInstructions);
 
 
+
+public sealed record AllowlistRefreshInstabilitySummary(
+    string GroupKey,
+    IReadOnlyList<string> ObservedDecisions,
+    IReadOnlyList<string> ObservedActions,
+    int SnapshotsObserved,
+    bool IsUnstable,
+    string Reason);
+
 public sealed record AllowlistRefreshDiagnosticsExport(
     DateTime Timestamp,
     string SnapshotId,

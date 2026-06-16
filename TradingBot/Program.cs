@@ -1103,6 +1103,13 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         Console.WriteLine($"[ALLOWLIST_REPAIR_REPORT] Groups={repairReport.ConfiguredGroups} Healthy={summary.Healthy} MonitoringOnly={summary.MonitoringOnly} NeedsPricingPrune={summary.NeedsPricingPrune} NeedsRefresh={summary.NeedsRefresh} BrokenConfig={summary.BrokenConfig} Disabled={summary.Disabled} Ignored={summary.Ignored} BrokenTotal={summary.Broken} Path={options.MultiOutcomeReview.ExportAllowlistRepairReportPath}");
 
                     var refreshDiag = allowlistRepairService.BuildRefreshDiagnostics(repairReport, allowlistedGroups);
+                    var actionExplainedSuppressedThisCycle = 0;
+                    var unstableSummaries = refreshDiag.Items
+                        .Select(x => allowlistRepairService.GetInstabilitySummary(x.GroupKey))
+                        .Where(x => x.IsUnstable)
+                        .GroupBy(x => x.GroupKey, StringComparer.OrdinalIgnoreCase)
+                        .Select(x => x.First())
+                        .ToArray();
                     state.SetAllowlistRefreshCounters(
                         repairReport.Summary.NeedsRefresh,
                         refreshDiag.Items.Count(x => x.RecommendedAction.Equals("NeedsManualReview", StringComparison.OrdinalIgnoreCase)),
@@ -1114,7 +1121,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedLowConfidence", StringComparison.OrdinalIgnoreCase)),
                         refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedUnstableAcrossSnapshots", StringComparison.OrdinalIgnoreCase)),
                         refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateAcceptedPreviewOnly", StringComparison.OrdinalIgnoreCase)),
-                        refreshDiag.Items.Count(x => x.FinalDecision.Equals("LockedManualReview", StringComparison.OrdinalIgnoreCase)));
+                        refreshDiag.Items.Count(x => x.FinalDecision.Equals("LockedManualReview", StringComparison.OrdinalIgnoreCase)),
+                        0,
+                        unstableSummaries.Length,
+                        unstableSummaries.Length);
                     foreach (var item in refreshDiag.Items)
                     {
                         var status = item.ResolverStatus.Contains("Mismatch", StringComparison.OrdinalIgnoreCase) ? "Mismatch"
@@ -1152,8 +1162,37 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         }
                         if (emittedAllowlistRefreshFinalDecisions.Add(decisionKey) && ShouldQuietLog("allowlist-refresh", "ALLOWLIST_REFRESH_FINAL_DECISION", decisionKey, LogImportance.Normal, groupKey: item.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
                             Console.WriteLine($"[ALLOWLIST_REFRESH_FINAL_DECISION] Group={item.GroupKey} Decision={item.FinalDecision} BestCandidate={candidateForLog} Score={item.BestCandidateScore:0.##} Confidence={item.Confidence} Reason={item.Reason} AutoApply=false");
-                        if (item.GroupKey.Equals("winner:2026 women s us open|kind:generic", StringComparison.OrdinalIgnoreCase) && emittedAllowlistRefreshActionExplanations.Add(decisionKey))
-                            Console.WriteLine($"[ALLOWLIST_REFRESH_ACTION_EXPLAINED] Group={item.GroupKey} CurrentStatus={item.ResolverStatus} BestCandidate={candidateForLog} CandidateScore={item.BestCandidateScore:0.##} Confidence={item.Confidence} AddedMarketIds=[{string.Join(',', item.AddedMarketIds)}] RemovedMarketIds=[{string.Join(',', item.RemovedMarketIds)}] AddedTokenIds=[{string.Join(',', item.AddedTokenIds)}] RemovedTokenIds=[{string.Join(',', item.RemovedTokenIds)}] FinalDecision={item.FinalDecision} Reason={item.Reason} AutoApply=false");
+                        if (item.GroupKey.Equals("winner:2026 women s us open|kind:generic", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (emittedAllowlistRefreshActionExplanations.Add(decisionKey))
+                                Console.WriteLine($"[ALLOWLIST_REFRESH_ACTION_EXPLAINED] Group={item.GroupKey} CurrentStatus={item.ResolverStatus} BestCandidate={candidateForLog} CandidateScore={item.BestCandidateScore:0.##} Confidence={item.Confidence} AddedMarketIds=[{string.Join(',', item.AddedMarketIds)}] RemovedMarketIds=[{string.Join(',', item.RemovedMarketIds)}] AddedTokenIds=[{string.Join(',', item.AddedTokenIds)}] RemovedTokenIds=[{string.Join(',', item.RemovedTokenIds)}] FinalDecision={item.FinalDecision} Reason={item.Reason} AutoApply=false");
+                            else
+                                actionExplainedSuppressedThisCycle++;
+                        }
+                    }
+                    foreach (var unstable in unstableSummaries)
+                    {
+                        var unstableKey = $"{repairReport.SnapshotId}|{unstable.GroupKey}|ActionFlipFlopDuringSoak";
+                        if (emittedAllowlistRefreshFinalDecisions.Add($"unstable|{unstableKey}"))
+                            Console.WriteLine($"[ALLOWLIST_REFRESH_UNSTABLE_GROUP] Group={unstable.GroupKey} ObservedDecisions=[{string.Join(',', unstable.ObservedDecisions)}] ObservedActions=[{string.Join(',', unstable.ObservedActions)}] SnapshotsObserved={unstable.SnapshotsObserved} FinalDecision=LockedManualReview Reason=ActionFlipFlopDuringSoak AutoApply=false");
+                    }
+                    if (actionExplainedSuppressedThisCycle > 0)
+                    {
+                        state.SetAllowlistRefreshCounters(
+                            repairReport.Summary.NeedsRefresh,
+                            refreshDiag.Items.Count(x => x.RecommendedAction.Equals("NeedsManualReview", StringComparison.OrdinalIgnoreCase)),
+                            refreshDiag.Items.Count(x => x.ResolverStatus.Contains("Mismatch", StringComparison.OrdinalIgnoreCase)),
+                            refreshDiag.Items.Count(x => x.RecommendedAction.Equals("RefreshFromCandidateExport", StringComparison.OrdinalIgnoreCase)),
+                            refreshDiag.Items.Count(x => x.Confidence.Equals("High", StringComparison.OrdinalIgnoreCase)),
+                            refreshDiag.Items.Count(x => x.FinalDecision.Equals("NoCandidate", StringComparison.OrdinalIgnoreCase)),
+                            refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedSemanticConflict", StringComparison.OrdinalIgnoreCase)),
+                            refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedLowConfidence", StringComparison.OrdinalIgnoreCase)),
+                            refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedUnstableAcrossSnapshots", StringComparison.OrdinalIgnoreCase)),
+                            refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateAcceptedPreviewOnly", StringComparison.OrdinalIgnoreCase)),
+                            refreshDiag.Items.Count(x => x.FinalDecision.Equals("LockedManualReview", StringComparison.OrdinalIgnoreCase)),
+                            actionExplainedSuppressedThisCycle,
+                            unstableSummaries.Length,
+                            unstableSummaries.Length);
                     }
                     var patchableCount = patchPreview.Summary.PatchableHighConfidence + patchPreview.Summary.PatchableMediumConfidence;
                     var quarantinedCount = patchPreview.Summary.Quarantined;
