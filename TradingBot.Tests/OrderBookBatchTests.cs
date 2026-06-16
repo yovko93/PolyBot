@@ -252,6 +252,80 @@ public class OrderBookBatchTests
         Assert.Equal(new[] { "0xdaba123", "condition-id" }, ids.Where(AllowlistRepairService.IsTokenOrConditionId).ToArray());
     }
 
+
+    [Fact]
+    public void Same_group_market_set_mismatch_with_unstable_reason_is_unstable_not_semantic_conflict()
+    {
+        var item = RefreshItem(
+            bestCandidate: "winner:2026 women s us open|kind:generic",
+            addedMarketIds: ["1088681"],
+            removedMarketIds: ["1088662", "1088680"],
+            reason: "UnstableAcrossSnapshots; ConsecutiveMatches=1/3; Overlap=0.33/0.75; TitleSimilarity=1.00/0.70; KindMatch=true",
+            confidence: "Low");
+
+        Assert.Equal("CandidateRejectedUnstableAcrossSnapshots", AllowlistRepairService.BuildRefreshFinalDecision(item));
+        Assert.Equal(string.Empty, AllowlistRepairService.DetectRefreshSemanticConflict(item.GroupKey, item.BestCandidateGroupKey));
+    }
+
+    [Fact]
+    public void Low_overlap_after_stability_passes_is_low_confidence()
+    {
+        var item = RefreshItem(
+            reason: "LowConfidence; ConsecutiveMatches=3/3; Overlap=0.33/0.75; TitleSimilarity=1.00/0.70; KindMatch=true",
+            confidence: "Low");
+
+        Assert.Equal("CandidateRejectedLowConfidence", AllowlistRepairService.BuildRefreshFinalDecision(item));
+    }
+
+    [Fact]
+    public void Hard_semantic_conflict_is_semantic_final_decision()
+    {
+        var item = RefreshItem(groupKey: "winner:2026 nba finals|kind:generic", bestCandidate: "winner:2026 wnba finals|kind:generic", reason: "Refresh semantic conflict: LeagueMismatch", confidence: "Low");
+
+        Assert.Equal("CandidateRejectedSemanticConflict", AllowlistRepairService.BuildRefreshFinalDecision(item));
+    }
+
+    [Fact]
+    public void Refresh_reason_does_not_duplicate_auto_apply_or_embed_conflicting_confidence()
+    {
+        var reason = "UnstableAcrossSnapshots; ConsecutiveMatches=1/3; Overlap=0.33/0.75; TitleSimilarity=1.00/0.70; KindMatch=true";
+
+        Assert.DoesNotContain("AutoApply=false. AutoApply=false", reason);
+        Assert.DoesNotContain("Confidence=High", reason);
+    }
+
+    private static AllowlistRefreshDiagnosticsItem RefreshItem(
+        string groupKey = "winner:2026 women s us open|kind:generic",
+        string bestCandidate = "winner:2026 women s us open|kind:generic",
+        string[]? addedMarketIds = null,
+        string[]? removedMarketIds = null,
+        string reason = "UnstableAcrossSnapshots; ConsecutiveMatches=1/3; Overlap=0.33/0.75; TitleSimilarity=1.00/0.70; KindMatch=true",
+        string confidence = "Low")
+        => new(
+            groupKey,
+            ["1088662", "1088680", "1088682"],
+            [],
+            3,
+            "VerifiedGroupMarketMismatch",
+            1,
+            bestCandidate,
+            0.9m,
+            ["1088682"],
+            [],
+            [],
+            addedMarketIds ?? ["1088681"],
+            [],
+            removedMarketIds ?? ["1088662", "1088680"],
+            [],
+            0.33m,
+            1m,
+            true,
+            reason,
+            "NeedsManualReview",
+            confidence,
+            string.Empty,
+            false);
+
     private static HttpResponseMessage Json(HttpStatusCode status, string body)
         => new(status) { Content = new StringContent(body) };
 

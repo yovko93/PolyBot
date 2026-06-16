@@ -466,6 +466,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var mismatchCycle = 0;
     var experimentalCandidateCycle = 0;
     var lastExperimentalFingerprintByGroup = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+    var emittedAllowlistRefreshFinalDecisions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var emittedAllowlistRefreshActionExplanations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var emittedAllowlistRefreshSemanticConflicts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var emittedAllowlistRefreshMarketSetMismatches = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     var lastProfileComparisonFingerprint = string.Empty;
     var mismatchFingerprintByGroup = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
     QuietLogPolicy QuietPolicy(int? everyNCycles = null, int? maxPerHour = null) => new(
@@ -1124,16 +1128,31 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         var fp = $"{item.GroupKey}|{status}|{candidateForLog}|{item.BestCandidateScore}|{item.OverlapRatio}|{string.Join(',', item.MissingMarketIds)}|{string.Join(',', item.MissingTokenIds)}|{string.Join(',', item.AddedMarketIds)}|{string.Join(',', item.AddedTokenIds)}|{string.Join(',', item.RemovedMarketIds)}|{string.Join(',', item.RemovedTokenIds)}|{item.Confidence}|{action}|{item.FinalDecision}";
                         if (ShouldQuietLog("allowlist-refresh", "ALLOWLIST_REFRESH_DIAG", fp, LogImportance.Normal, groupKey: item.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
                             Console.WriteLine($"[ALLOWLIST_REFRESH_DIAG] Group={item.GroupKey} Status={status} ConfiguredLegs={item.ConfiguredLegCount} BestCandidate={candidateForLog} Score={item.BestCandidateScore:0.##} Overlap={item.OverlapRatio:0.##} MissingMarketIds=[{string.Join(',', item.MissingMarketIds)}] MissingTokenIds=[{string.Join(',', item.MissingTokenIds)}] AddedMarketIds=[{string.Join(',', item.AddedMarketIds)}] AddedTokenIds=[{string.Join(',', item.AddedTokenIds)}] RemovedMarketIds=[{string.Join(',', item.RemovedMarketIds)}] RemovedTokenIds=[{string.Join(',', item.RemovedTokenIds)}] Confidence={item.Confidence} Action={action} AutoApply=false");
+                        var decisionKey = $"{repairReport.SnapshotId}|{item.GroupKey}|{candidateForLog}|{item.FinalDecision}";
                         var semanticConflict = AllowlistRepairService.DetectRefreshSemanticConflict(item.GroupKey, item.BestCandidateGroupKey);
-                        if (string.IsNullOrWhiteSpace(semanticConflict)
+                        var sameGroupMarketSetMismatch = string.IsNullOrWhiteSpace(semanticConflict)
                             && item.GroupKey.Equals(item.BestCandidateGroupKey, StringComparison.OrdinalIgnoreCase)
-                            && (item.AddedMarketIds.Count > 0 || item.RemovedMarketIds.Count > 0 || item.AddedTokenIds.Count > 0 || item.RemovedTokenIds.Count > 0))
-                            semanticConflict = "MarketSetMismatch";
-                        if (!string.IsNullOrWhiteSpace(semanticConflict) && ShouldQuietLog("allowlist-refresh", "ALLOWLIST_REFRESH_SEMANTIC_CONFLICT", $"{item.GroupKey}|{candidateForLog}|{semanticConflict}", LogImportance.Normal, groupKey: item.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
-                            Console.WriteLine($"[ALLOWLIST_REFRESH_SEMANTIC_CONFLICT] Group={item.GroupKey} Candidate={candidateForLog} Conflict={semanticConflict} Action=ManualReview AutoApply=false");
-                        if (ShouldQuietLog("allowlist-refresh", "ALLOWLIST_REFRESH_FINAL_DECISION", $"{item.GroupKey}|{candidateForLog}|{item.FinalDecision}|{item.Confidence}|{item.Reason}", LogImportance.Normal, groupKey: item.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
+                            && (item.AddedMarketIds.Count > 0 || item.RemovedMarketIds.Count > 0 || item.AddedTokenIds.Count > 0 || item.RemovedTokenIds.Count > 0);
+                        if (sameGroupMarketSetMismatch)
+                        {
+                            var candidateMarketIds = item.CurrentConfiguredMarketIds
+                                .Except(item.RemovedMarketIds, StringComparer.OrdinalIgnoreCase)
+                                .Concat(item.AddedMarketIds)
+                                .Distinct(StringComparer.OrdinalIgnoreCase)
+                                .ToArray();
+                            var marketMismatchKey = $"{decisionKey}|MarketSetMismatch";
+                            if (emittedAllowlistRefreshMarketSetMismatches.Add(marketMismatchKey) && ShouldQuietLog("allowlist-refresh", "ALLOWLIST_REFRESH_MARKET_SET_MISMATCH", marketMismatchKey, LogImportance.Normal, groupKey: item.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
+                                Console.WriteLine($"[ALLOWLIST_REFRESH_MARKET_SET_MISMATCH] Group={item.GroupKey} BestCandidate={candidateForLog} ConfiguredMarketIds=[{string.Join(',', item.CurrentConfiguredMarketIds)}] CandidateMarketIds=[{string.Join(',', candidateMarketIds)}] AddedMarketIds=[{string.Join(',', item.AddedMarketIds)}] RemovedMarketIds=[{string.Join(',', item.RemovedMarketIds)}] Overlap={item.OverlapRatio:0.##} Action=ManualReview AutoApply=false");
+                        }
+                        if (!string.IsNullOrWhiteSpace(semanticConflict))
+                        {
+                            var semanticKey = $"{decisionKey}|{semanticConflict}";
+                            if (emittedAllowlistRefreshSemanticConflicts.Add(semanticKey) && ShouldQuietLog("allowlist-refresh", "ALLOWLIST_REFRESH_SEMANTIC_CONFLICT", semanticKey, LogImportance.Normal, groupKey: item.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
+                                Console.WriteLine($"[ALLOWLIST_REFRESH_SEMANTIC_CONFLICT] Group={item.GroupKey} Candidate={candidateForLog} Conflict={semanticConflict} Action=ManualReview AutoApply=false");
+                        }
+                        if (emittedAllowlistRefreshFinalDecisions.Add(decisionKey) && ShouldQuietLog("allowlist-refresh", "ALLOWLIST_REFRESH_FINAL_DECISION", decisionKey, LogImportance.Normal, groupKey: item.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
                             Console.WriteLine($"[ALLOWLIST_REFRESH_FINAL_DECISION] Group={item.GroupKey} Decision={item.FinalDecision} BestCandidate={candidateForLog} Score={item.BestCandidateScore:0.##} Confidence={item.Confidence} Reason={item.Reason} AutoApply=false");
-                        if (item.GroupKey.Equals("winner:2026 women s us open|kind:generic", StringComparison.OrdinalIgnoreCase))
+                        if (item.GroupKey.Equals("winner:2026 women s us open|kind:generic", StringComparison.OrdinalIgnoreCase) && emittedAllowlistRefreshActionExplanations.Add(decisionKey))
                             Console.WriteLine($"[ALLOWLIST_REFRESH_ACTION_EXPLAINED] Group={item.GroupKey} CurrentStatus={item.ResolverStatus} BestCandidate={candidateForLog} CandidateScore={item.BestCandidateScore:0.##} Confidence={item.Confidence} AddedMarketIds=[{string.Join(',', item.AddedMarketIds)}] RemovedMarketIds=[{string.Join(',', item.RemovedMarketIds)}] AddedTokenIds=[{string.Join(',', item.AddedTokenIds)}] RemovedTokenIds=[{string.Join(',', item.RemovedTokenIds)}] FinalDecision={item.FinalDecision} Reason={item.Reason} AutoApply=false");
                     }
                     var patchableCount = patchPreview.Summary.PatchableHighConfidence + patchPreview.Summary.PatchableMediumConfidence;

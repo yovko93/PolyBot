@@ -134,16 +134,17 @@ public sealed class AllowlistRepairService
             return "LockedManualReview";
         if (string.IsNullOrWhiteSpace(item.BestCandidateGroupKey))
             return "NoCandidate";
-        var sameGroupMarketSetMismatch = item.GroupKey.Equals(item.BestCandidateGroupKey, StringComparison.OrdinalIgnoreCase)
-            && (item.AddedMarketIds.Count > 0 || item.RemovedMarketIds.Count > 0 || item.AddedTokenIds.Count > 0 || item.RemovedTokenIds.Count > 0);
-        if (!string.IsNullOrWhiteSpace(DetectRefreshSemanticConflict(item.GroupKey, item.BestCandidateGroupKey)) || sameGroupMarketSetMismatch)
+        if (!string.IsNullOrWhiteSpace(DetectRefreshSemanticConflict(item.GroupKey, item.BestCandidateGroupKey)))
             return "CandidateRejectedSemanticConflict";
-        if (item.Confidence.Equals("Low", StringComparison.OrdinalIgnoreCase))
+        if (item.Reason.StartsWith("UnstableAcrossSnapshots", StringComparison.OrdinalIgnoreCase)
+            || item.Reason.Contains("not stable", StringComparison.OrdinalIgnoreCase)
+            || item.Reason.Contains("Consecutive", StringComparison.OrdinalIgnoreCase))
+            return "CandidateRejectedUnstableAcrossSnapshots";
+        if (item.Reason.StartsWith("LowConfidence", StringComparison.OrdinalIgnoreCase)
+            || item.Confidence.Equals("Low", StringComparison.OrdinalIgnoreCase))
             return "CandidateRejectedLowConfidence";
         if (item.RecommendedAction.Equals(nameof(AllowlistRepairRecommendedAction.RefreshFromCandidateExport), StringComparison.OrdinalIgnoreCase))
             return "CandidateAcceptedPreviewOnly";
-        if (item.Reason.Contains("not stable", StringComparison.OrdinalIgnoreCase) || item.Reason.Contains("Consecutive", StringComparison.OrdinalIgnoreCase) || item.Reason.Contains("stable candidate", StringComparison.OrdinalIgnoreCase))
-            return "CandidateRejectedUnstableAcrossSnapshots";
         return "CandidateRejectedLowConfidence";
     }
 
@@ -1350,8 +1351,10 @@ public sealed class VerifiedAllowlistGroupHealthClassifier
                         return Result(cfg, AllowlistRepairHealthCategory.MonitoringOnly, AllowlistRepairRecommendedAction.KeepMonitoring, match.Match.Diagnostics.Confidence, "Stable candidate export matches current group; no repair patch is required.", missingMarketIds, missingNoAskIds, repairMatch: match.Match.Diagnostics, misses: match.ConsecutiveMisses);
                     if (previewReady)
                         return Result(cfg, AllowlistRepairHealthCategory.NeedsRefresh, AllowlistRepairRecommendedAction.RefreshFromCandidateExport, match.Match.Diagnostics.Confidence, "Market mismatch; refresh preview passed consecutive-match, overlap, title, kind and confidence gates. AutoApply=false; manual review required.", missingMarketIds, missingNoAskIds, refreshed: template, repairMatch: match.Match.Diagnostics, misses: match.ConsecutiveMisses);
-                    var gateReason = $"Refresh preview not stable: ConsecutiveMatches={consecutive}/{Math.Max(1, preview.RequiredConsecutiveMatches)} Overlap={match.Match.Diagnostics.MarketOverlap:0.##}/{preview.MinOverlapRatio:0.##} TitleSimilarity={match.Match.Diagnostics.TitleSimilarity:0.##}/{preview.MinTitleSimilarity:0.##} KindMatch={kindOk} Confidence={match.Match.Diagnostics.Confidence} AutoApply=false.";
-                    return Result(cfg, AllowlistRepairHealthCategory.NeedsRefresh, AllowlistRepairRecommendedAction.NeedsManualReview, "Low", gateReason, missingMarketIds, missingNoAskIds, refreshed: template, repairMatch: match.Match.Diagnostics, misses: match.ConsecutiveMisses);
+                    var gateReason = !stableEnough
+                        ? $"UnstableAcrossSnapshots; ConsecutiveMatches={consecutive}/{Math.Max(1, preview.RequiredConsecutiveMatches)}; Overlap={match.Match.Diagnostics.MarketOverlap:0.##}/{preview.MinOverlapRatio:0.##}; TitleSimilarity={match.Match.Diagnostics.TitleSimilarity:0.00}/{preview.MinTitleSimilarity:0.00}; KindMatch={kindOk.ToString().ToLowerInvariant()}"
+                        : $"LowConfidence; ConsecutiveMatches={consecutive}/{Math.Max(1, preview.RequiredConsecutiveMatches)}; Overlap={match.Match.Diagnostics.MarketOverlap:0.##}/{preview.MinOverlapRatio:0.##}; TitleSimilarity={match.Match.Diagnostics.TitleSimilarity:0.00}/{preview.MinTitleSimilarity:0.00}; KindMatch={kindOk.ToString().ToLowerInvariant()}";
+                    return Result(cfg, AllowlistRepairHealthCategory.NeedsRefresh, AllowlistRepairRecommendedAction.NeedsManualReview, "Low", gateReason, missingMarketIds, missingNoAskIds, refreshed: template, repairMatch: match.Match.Diagnostics with { Confidence = "Low" }, misses: match.ConsecutiveMisses);
                 }
             }
 
