@@ -46,9 +46,17 @@ public class BotRuntimeState
     private int _marketCacheCount;
     private int _exportQueueCount;
     private int _patchPreviewItemsCount;
+    private int _allowlistHealthy;
+    private int _allowlistMonitoringOnly;
+    private int _allowlistNeedsPricingPrune;
     private int _allowlistNeedsRefresh;
     private int _allowlistReviewOnly;
     private int _allowlistMismatch;
+    private int _allowlistBrokenConfig;
+    private int _allowlistDisabled;
+    private int _allowlistIgnored;
+    private int _allowlistClassificationTotal;
+    private int _allowlistClassificationValid;
     private int _allowlistRefreshPreviewCandidates;
     private int _allowlistRefreshHighConfidence;
     private int _allowlistRefreshFinalNoCandidate;
@@ -118,9 +126,17 @@ public class BotRuntimeState
     public int MarketCacheCount => Volatile.Read(ref _marketCacheCount);
     public int ExportQueueCount => Volatile.Read(ref _exportQueueCount);
     public int PatchPreviewItemsCount => Volatile.Read(ref _patchPreviewItemsCount);
+    public int AllowlistHealthy => Volatile.Read(ref _allowlistHealthy);
+    public int AllowlistMonitoringOnly => Volatile.Read(ref _allowlistMonitoringOnly);
+    public int AllowlistNeedsPricingPrune => Volatile.Read(ref _allowlistNeedsPricingPrune);
     public int AllowlistNeedsRefresh => Volatile.Read(ref _allowlistNeedsRefresh);
     public int AllowlistReviewOnly => Volatile.Read(ref _allowlistReviewOnly);
     public int AllowlistMismatch => Volatile.Read(ref _allowlistMismatch);
+    public int AllowlistBrokenConfig => Volatile.Read(ref _allowlistBrokenConfig);
+    public int AllowlistDisabled => Volatile.Read(ref _allowlistDisabled);
+    public int AllowlistIgnored => Volatile.Read(ref _allowlistIgnored);
+    public int AllowlistClassificationTotal => Volatile.Read(ref _allowlistClassificationTotal);
+    public bool AllowlistClassificationValid => Volatile.Read(ref _allowlistClassificationValid) == 1;
     public int AllowlistRefreshPreviewCandidates => Volatile.Read(ref _allowlistRefreshPreviewCandidates);
     public int AllowlistRefreshHighConfidence => Volatile.Read(ref _allowlistRefreshHighConfidence);
     public int AllowlistRefreshFinalNoCandidate => Volatile.Read(ref _allowlistRefreshFinalNoCandidate);
@@ -255,8 +271,11 @@ public class BotRuntimeState
         if (exportQueueCount is int eq) Interlocked.Exchange(ref _exportQueueCount, eq);
         if (patchPreviewItemsCount is int pp) Interlocked.Exchange(ref _patchPreviewItemsCount, pp);
     }
-    public void SetAllowlistRefreshCounters(int needsRefresh, int reviewOnly, int mismatch, int refreshPreviewCandidates, int highConfidence, int finalNoCandidate = 0, int finalSemanticConflict = 0, int finalLowConfidence = 0, int finalUnstable = 0, int finalPreviewOnly = 0, int finalLockedManualReview = 0, int actionExplainedSuppressed = 0, int unstableGroups = 0, int actionFlipFlops = 0)
+    public void SetAllowlistRefreshCounters(int needsRefresh, int reviewOnly, int mismatch, int refreshPreviewCandidates, int highConfidence, int finalNoCandidate = 0, int finalSemanticConflict = 0, int finalLowConfidence = 0, int finalUnstable = 0, int finalPreviewOnly = 0, int finalLockedManualReview = 0, int actionExplainedSuppressed = 0, int unstableGroups = 0, int actionFlipFlops = 0, int healthy = 0, int monitoringOnly = 0, int needsPricingPrune = 0, int brokenConfig = 0, int disabled = 0, int ignored = 0, int classificationTotal = 0, bool classificationValid = true)
     {
+        Interlocked.Exchange(ref _allowlistHealthy, healthy);
+        Interlocked.Exchange(ref _allowlistMonitoringOnly, monitoringOnly);
+        Interlocked.Exchange(ref _allowlistNeedsPricingPrune, needsPricingPrune);
         Interlocked.Exchange(ref _allowlistNeedsRefresh, needsRefresh);
         Interlocked.Exchange(ref _allowlistReviewOnly, reviewOnly);
         Interlocked.Exchange(ref _allowlistMismatch, mismatch);
@@ -271,6 +290,11 @@ public class BotRuntimeState
         Interlocked.Exchange(ref _allowlistRefreshActionExplainedSuppressed, actionExplainedSuppressed);
         Interlocked.Exchange(ref _allowlistRefreshUnstableGroups, unstableGroups);
         Interlocked.Exchange(ref _allowlistRefreshActionFlipFlops, actionFlipFlops);
+        Interlocked.Exchange(ref _allowlistBrokenConfig, brokenConfig);
+        Interlocked.Exchange(ref _allowlistDisabled, disabled);
+        Interlocked.Exchange(ref _allowlistIgnored, ignored);
+        Interlocked.Exchange(ref _allowlistClassificationTotal, classificationTotal);
+        Interlocked.Exchange(ref _allowlistClassificationValid, classificationValid ? 1 : 0);
     }
 
     public IReadOnlyDictionary<string,int> GetRuntimeCollectionCounts() => new Dictionary<string,int>

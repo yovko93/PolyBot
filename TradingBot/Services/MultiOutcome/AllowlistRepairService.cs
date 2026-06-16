@@ -95,6 +95,7 @@ public sealed class AllowlistRepairService
                 summary.Broken,
                 summary.NeedsRefresh,
                 summary.NeedsPricingPrune,
+                summary.ReviewOnly,
                 summary.BrokenConfig,
                 summary.Disabled,
                 summary.Ignored,
@@ -1255,11 +1256,12 @@ public sealed class AllowlistRepairService
         var monitoring = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.MonitoringOnly) || x.HealthCategory == nameof(AllowlistRepairHealthCategory.PricingUnavailable));
         var prune = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.NeedsPricingPrune));
         var refresh = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.NeedsRefresh));
+        var reviewOnly = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.ReviewOnly));
         var brokenConfig = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.BrokenConfig));
         var disabled = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.Disabled));
         var ignored = rows.Count(x => x.HealthCategory == nameof(AllowlistRepairHealthCategory.Ignored));
-        var invariant = configured == healthy + monitoring + prune + refresh + brokenConfig + disabled + ignored;
-        return new AllowlistRepairSummary(configured, healthy, monitoring, prune, refresh, brokenConfig, disabled, ignored, prune + refresh + brokenConfig, invariant);
+        var invariant = configured == healthy + monitoring + prune + refresh + reviewOnly + brokenConfig + disabled + ignored;
+        return new AllowlistRepairSummary(configured, healthy, monitoring, prune, refresh, reviewOnly, brokenConfig, disabled, ignored, prune + refresh + reviewOnly + brokenConfig, invariant);
     }
 
     private static AllowlistRepairCategoryCounts BuildCategoryCounts(IReadOnlyList<AllowlistRepairGroup> rows, AllowlistRepairSummary summary)
@@ -1268,6 +1270,7 @@ public sealed class AllowlistRepairService
             summary.MonitoringOnly,
             summary.NeedsPricingPrune,
             summary.NeedsRefresh,
+            summary.ReviewOnly,
             summary.BrokenConfig,
             summary.Disabled,
             summary.Ignored,
