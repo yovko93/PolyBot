@@ -1197,13 +1197,13 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     {
                         var unstableKey = $"{repairReport.SnapshotId}|{unstable.GroupKey}|ActionFlipFlopDuringSoak";
                         if (emittedAllowlistRefreshFinalDecisions.Add($"unstable|{unstableKey}"))
-                            Console.WriteLine($"[ALLOWLIST_REFRESH_UNSTABLE_GROUP] Group={unstable.GroupKey} ObservedDecisions=[{string.Join(',', unstable.ObservedDecisions)}] ObservedActions=[{string.Join(',', unstable.ObservedActions)}] SnapshotsObserved={unstable.SnapshotsObserved} FinalDecision=LockedManualReview Reason=ActionFlipFlopDuringSoak AutoApply=false");
+                            Console.WriteLine($"[ALLOWLIST_REFRESH_UNSTABLE_GROUP] Group={unstable.GroupKey} ObservedDecisions=[{string.Join(",", unstable.ObservedDecisions)}] ObservedActions=[{string.Join(",", unstable.ObservedActions)}] SnapshotsObserved={unstable.SnapshotsObserved} FinalDecision=LockedManualReview Reason=ActionFlipFlopDuringSoak AutoApply=false");
                     }
                     foreach (var manualLock in activeUnstableLocks)
                     {
                         if (emittedAllowlistUnstableManualReviewLocks.Add(manualLock.GroupKey))
                         {
-                            Console.WriteLine($"[ALLOWLIST_UNSTABLE_MANUAL_REVIEW_LOCKED] Group={manualLock.GroupKey} Reason={manualLock.Reason} ObservedDecisions=[{string.Join(',', manualLock.ObservedDecisions)}] ObservedActions=[{string.Join(',', manualLock.ObservedActions)}] FirstDetectedSnapshot={manualLock.FirstDetectedSnapshotId} AutoApply=false");
+                            Console.WriteLine($"[ALLOWLIST_UNSTABLE_MANUAL_REVIEW_LOCKED] Group={manualLock.GroupKey} Reason={manualLock.Reason} ObservedDecisions=[{string.Join(",", manualLock.ObservedDecisions)}] ObservedActions=[{string.Join(",", manualLock.ObservedActions)}] FirstDetectedSnapshot={manualLock.FirstDetectedSnapshotId} AutoApply=false");
                         }
                         else if (ShouldQuietLog("allowlist-refresh", "ALLOWLIST_UNSTABLE_MANUAL_REVIEW_LOCK_ACTIVE", $"{manualLock.GroupKey}|{manualLock.LastSeenSnapshotId}|{manualLock.Reason}", LogImportance.Normal, groupKey: manualLock.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
                         {
