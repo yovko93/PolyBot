@@ -197,6 +197,12 @@ public class OrderBookOptions
     public int MaxNewTokenQuarantinesPerHour { get; set; } = 200;
     public int MaxBatchBookBadRequestsPerCycle { get; set; } = 20;
     public int OrderbookCircuitBreakerCooldownMinutes { get; set; } = 15;
+    public int CircuitBreakerInitialCooldownMinutes { get; set; } = 15;
+    public int CircuitBreakerMaxCooldownMinutes { get; set; } = 120;
+    public int CircuitBreakerHalfOpenCanaryMarkets { get; set; } = 25;
+    public int CircuitBreakerHalfOpenMaxBadRequests { get; set; } = 0;
+    public int CircuitBreakerHalfOpenMaxTimeouts { get; set; } = 1;
+    public double CircuitBreakerCooldownBackoffMultiplier { get; set; } = 2;
     public int CircuitBreakerBadRequestsPerHourThreshold { get; set; } = 100;
     public int CircuitBreakerInvalidTokensPerHourThreshold { get; set; } = 100;
     public double CircuitBreakerBadRequestRateThreshold { get; set; } = 0.02;

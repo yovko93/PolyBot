@@ -12,6 +12,8 @@ using System.Text.Json;
 
 namespace TradingBot.Services;
 
+public enum OrderbookCircuitBreakerState { Closed, Open, HalfOpen }
+
 public class OrderBookService : IOrderBookProvider
 {
     private long _batchRequests;
@@ -44,6 +46,10 @@ public class OrderBookService : IOrderBookProvider
     private long _marketsSkippedByMarketOrderbookQuarantine;
     private long _batchRequestsAvoidedByMarketQuarantine;
     private long _orderbookCircuitBreakerOpenCount;
+    private long _orderbookCircuitBreakerHalfOpenAttempts;
+    private long _orderbookCircuitBreakerHalfOpenSucceeded;
+    private long _orderbookCircuitBreakerHalfOpenFailed;
+    private long _orderbookCircuitBreakerCooldownExtensions;
     private long _singleTokenIsolationBudgetExhausted;
     private long _batchBookBadRequestsPreventedEstimate;
     private readonly HttpClient _http;
@@ -67,6 +73,12 @@ public class OrderBookService : IOrderBookProvider
     public int MaxNewTokenQuarantinesPerHour { get; set; } = 200;
     public int MaxBatchBookBadRequestsPerCycle { get; set; } = 20;
     public TimeSpan OrderbookCircuitBreakerCooldown { get; set; } = TimeSpan.FromMinutes(15);
+    public TimeSpan CircuitBreakerInitialCooldown { get; set; } = TimeSpan.FromMinutes(15);
+    public TimeSpan CircuitBreakerMaxCooldown { get; set; } = TimeSpan.FromMinutes(120);
+    public int CircuitBreakerHalfOpenCanaryMarkets { get; set; } = 25;
+    public int CircuitBreakerHalfOpenMaxBadRequests { get; set; } = 0;
+    public int CircuitBreakerHalfOpenMaxTimeouts { get; set; } = 1;
+    public double CircuitBreakerCooldownBackoffMultiplier { get; set; } = 2;
     public int CircuitBreakerBadRequestsPerHourThreshold { get; set; } = 100;
     public int CircuitBreakerInvalidTokensPerHourThreshold { get; set; } = 100;
     public double CircuitBreakerBadRequestRateThreshold { get; set; } = 0.02;
@@ -99,6 +111,11 @@ public class OrderBookService : IOrderBookProvider
     private int _singleTokenIsolationsThisCycle;
     private int _batchBadRequestsThisCycle;
     private DateTime _circuitBreakerOpenUntilUtc = DateTime.MinValue;
+    private OrderbookCircuitBreakerState _circuitBreakerState = OrderbookCircuitBreakerState.Closed;
+    private TimeSpan _currentCircuitBreakerCooldown = TimeSpan.FromMinutes(15);
+    private string _circuitBreakerLastOpenReason = string.Empty;
+    private long _halfOpenBaselineBadRequests;
+    private long _halfOpenBaselineTimeouts;
     private readonly Queue<DateTime> _badRequestTimes = new();
     private readonly Queue<DateTime> _invalidTokenTimes = new();
     private bool _circuitBreakerLoggedOpen;
@@ -138,6 +155,13 @@ public class OrderBookService : IOrderBookProvider
         MaxNewTokenQuarantinesPerHour = Math.Max(1, options.MaxNewTokenQuarantinesPerHour);
         MaxBatchBookBadRequestsPerCycle = Math.Max(1, options.MaxBatchBookBadRequestsPerCycle);
         OrderbookCircuitBreakerCooldown = TimeSpan.FromMinutes(Math.Max(1, options.OrderbookCircuitBreakerCooldownMinutes));
+        CircuitBreakerInitialCooldown = TimeSpan.FromMinutes(Math.Max(1, options.CircuitBreakerInitialCooldownMinutes > 0 ? options.CircuitBreakerInitialCooldownMinutes : options.OrderbookCircuitBreakerCooldownMinutes));
+        CircuitBreakerMaxCooldown = TimeSpan.FromMinutes(Math.Max(1, options.CircuitBreakerMaxCooldownMinutes));
+        _currentCircuitBreakerCooldown = CircuitBreakerInitialCooldown;
+        CircuitBreakerHalfOpenCanaryMarkets = Math.Max(1, options.CircuitBreakerHalfOpenCanaryMarkets);
+        CircuitBreakerHalfOpenMaxBadRequests = Math.Max(0, options.CircuitBreakerHalfOpenMaxBadRequests);
+        CircuitBreakerHalfOpenMaxTimeouts = Math.Max(0, options.CircuitBreakerHalfOpenMaxTimeouts);
+        CircuitBreakerCooldownBackoffMultiplier = Math.Max(1.0, options.CircuitBreakerCooldownBackoffMultiplier);
         CircuitBreakerBadRequestsPerHourThreshold = Math.Max(1, options.CircuitBreakerBadRequestsPerHourThreshold);
         CircuitBreakerInvalidTokensPerHourThreshold = Math.Max(1, options.CircuitBreakerInvalidTokensPerHourThreshold);
         CircuitBreakerBadRequestRateThreshold = Math.Max(0.0001, options.CircuitBreakerBadRequestRateThreshold);
@@ -153,7 +177,7 @@ public class OrderBookService : IOrderBookProvider
         CancellationToken ct = default)
     {
         var snapshotCacheKey = market.id;
-        if (IsCircuitBreakerActive()) return null;
+        if (CircuitBreakerState != OrderbookCircuitBreakerState.Closed) return null;
         if (IsMarketOrderbookQuarantined(market.id)) return null;
 
         lock (_cacheLock)
@@ -230,10 +254,22 @@ public class OrderBookService : IOrderBookProvider
     List<Market> markets,
     CancellationToken ct = default)
     {
-        if (IsCircuitBreakerActive())
+        var breakerState = CircuitBreakerState;
+        if (breakerState == OrderbookCircuitBreakerState.Open)
         {
             Interlocked.Add(ref _batchBookBadRequestsPreventedEstimate, markets.Count);
             return;
+        }
+        if (breakerState == OrderbookCircuitBreakerState.HalfOpen)
+        {
+            Interlocked.Increment(ref _orderbookCircuitBreakerHalfOpenAttempts);
+            markets = markets
+                .Where(m => m != null && !IsMarketOrderbookQuarantined(m.id) && m.clobTokenIds != null && !m.clobTokenIds.Any(IsTokenQuarantined))
+                .Take(CircuitBreakerHalfOpenCanaryMarkets)
+                .ToList();
+            if (markets.Count == 0) return;
+            _halfOpenBaselineBadRequests = Interlocked.Read(ref _batchBadRequests);
+            _halfOpenBaselineTimeouts = Interlocked.Read(ref _batchTimeouts);
         }
         lock (_cacheLock) TrimMarketOrderbookQuarantineLocked(DateTime.UtcNow);
         var marketQuarantined = markets.Where(m => m != null && IsMarketOrderbookQuarantined(m.id)).ToArray();
@@ -285,6 +321,8 @@ public class OrderBookService : IOrderBookProvider
             return;
 
         var books = await GetOrderBooksBatchAsync(tokenIds, ct);
+        if (breakerState == OrderbookCircuitBreakerState.HalfOpen)
+            EvaluateHalfOpenCanaryResult();
 
         var now = DateTime.UtcNow;
         var snapshotsLoaded = 0;
@@ -393,17 +431,24 @@ public class OrderBookService : IOrderBookProvider
         }
     }
 
+    public OrderbookCircuitBreakerState CircuitBreakerState
+    {
+        get
+        {
+            lock (_cacheLock)
+            {
+                RefreshCircuitBreakerStateLocked(DateTime.UtcNow);
+                return _circuitBreakerState;
+            }
+        }
+    }
+
     private bool IsCircuitBreakerActive()
     {
         lock (_cacheLock)
         {
-            if (_circuitBreakerOpenUntilUtc > DateTime.UtcNow) return true;
-            if (_circuitBreakerLoggedOpen)
-            {
-                _circuitBreakerLoggedOpen = false;
-                Console.WriteLine("[ORDERBOOK_CIRCUIT_BREAKER_CLOSED]");
-            }
-            return false;
+            RefreshCircuitBreakerStateLocked(DateTime.UtcNow);
+            return _circuitBreakerState != OrderbookCircuitBreakerState.Closed;
         }
     }
 
@@ -416,19 +461,59 @@ public class OrderBookService : IOrderBookProvider
             _batchBadRequestsThisCycle++;
             TrimRollingQueuesLocked(now);
             var rate = _batchRequests <= 0 ? 0d : (double)_batchBadRequests / Math.Max(1, _batchRequests);
-            if (_badRequestTimes.Count > CircuitBreakerBadRequestsPerHourThreshold || _invalidTokenTimes.Count > CircuitBreakerInvalidTokensPerHourThreshold || rate > CircuitBreakerBadRequestRateThreshold || _orderbookUnavailableMarkets.Count > CircuitBreakerUnavailableMarketsThreshold || _batchBadRequestsThisCycle > MaxBatchBookBadRequestsPerCycle)
-                OpenCircuitBreakerLocked(now);
+            var shouldOpen = _badRequestTimes.Count >= Math.Min(CircuitBreakerBadRequestsPerHourThreshold, 50)
+                || _invalidTokenTimes.Count >= Math.Min(CircuitBreakerInvalidTokensPerHourThreshold, 50)
+                || (Interlocked.Read(ref _batchRequests) >= 50 && rate >= 0.05)
+                || _orderbookUnavailableMarkets.Count > CircuitBreakerUnavailableMarketsThreshold
+                || _batchBadRequestsThisCycle > MaxBatchBookBadRequestsPerCycle;
+            if (shouldOpen)
+                OpenCircuitBreakerLocked(now, "BadRequestThreshold");
         }
     }
 
-    private void OpenCircuitBreakerLocked(DateTime now)
+    private void OpenCircuitBreakerLocked(DateTime now, string reason)
     {
-        if (_circuitBreakerOpenUntilUtc <= now) Interlocked.Increment(ref _orderbookCircuitBreakerOpenCount);
-        _circuitBreakerOpenUntilUtc = now.Add(OrderbookCircuitBreakerCooldown);
+        if (_circuitBreakerState != OrderbookCircuitBreakerState.Open) Interlocked.Increment(ref _orderbookCircuitBreakerOpenCount);
+        else Interlocked.Increment(ref _orderbookCircuitBreakerCooldownExtensions);
+        _circuitBreakerState = OrderbookCircuitBreakerState.Open;
+        _circuitBreakerLastOpenReason = reason;
+        _circuitBreakerOpenUntilUtc = now.Add(_currentCircuitBreakerCooldown);
         if (!_circuitBreakerLoggedOpen)
         {
             _circuitBreakerLoggedOpen = true;
-            Console.WriteLine("[ORDERBOOK_CIRCUIT_BREAKER_OPENED]");
+            Console.WriteLine($"[ORDERBOOK_CIRCUIT_BREAKER_OPENED] Reason={reason} CooldownMinutes={(int)Math.Ceiling(_currentCircuitBreakerCooldown.TotalMinutes)}");
+        }
+    }
+
+    private void RefreshCircuitBreakerStateLocked(DateTime now)
+    {
+        if (_circuitBreakerState == OrderbookCircuitBreakerState.Open && _circuitBreakerOpenUntilUtc <= now)
+        {
+            _circuitBreakerState = OrderbookCircuitBreakerState.HalfOpen;
+            _circuitBreakerLoggedOpen = false;
+        }
+    }
+
+    private void EvaluateHalfOpenCanaryResult()
+    {
+        lock (_cacheLock)
+        {
+            if (_circuitBreakerState != OrderbookCircuitBreakerState.HalfOpen) return;
+            var badDelta = Interlocked.Read(ref _batchBadRequests) - _halfOpenBaselineBadRequests;
+            var timeoutDelta = Interlocked.Read(ref _batchTimeouts) - _halfOpenBaselineTimeouts;
+            if (badDelta > CircuitBreakerHalfOpenMaxBadRequests || timeoutDelta > CircuitBreakerHalfOpenMaxTimeouts)
+            {
+                Interlocked.Increment(ref _orderbookCircuitBreakerHalfOpenFailed);
+                var minutes = Math.Min(CircuitBreakerMaxCooldown.TotalMinutes, Math.Max(CircuitBreakerInitialCooldown.TotalMinutes, _currentCircuitBreakerCooldown.TotalMinutes * CircuitBreakerCooldownBackoffMultiplier));
+                if (minutes > _currentCircuitBreakerCooldown.TotalMinutes) Interlocked.Increment(ref _orderbookCircuitBreakerCooldownExtensions);
+                _currentCircuitBreakerCooldown = TimeSpan.FromMinutes(minutes);
+                OpenCircuitBreakerLocked(DateTime.UtcNow, "HalfOpenCanaryFailed");
+                return;
+            }
+            _circuitBreakerState = OrderbookCircuitBreakerState.Closed;
+            _currentCircuitBreakerCooldown = CircuitBreakerInitialCooldown;
+            Interlocked.Increment(ref _orderbookCircuitBreakerHalfOpenSucceeded);
+            Console.WriteLine("[ORDERBOOK_CIRCUIT_BREAKER_CLOSED]");
         }
     }
 
@@ -478,8 +563,14 @@ public class OrderBookService : IOrderBookProvider
             MarketsSkippedByMarketOrderbookQuarantine: Interlocked.Read(ref _marketsSkippedByMarketOrderbookQuarantine),
             BatchBookRequestsAvoidedByMarketQuarantine: Interlocked.Read(ref _batchRequestsAvoidedByMarketQuarantine),
             OrderbookCircuitBreakerActive: IsCircuitBreakerActive(),
+            OrderbookCircuitBreakerState: CircuitBreakerState.ToString(),
             OrderbookCircuitBreakerOpenCount: Interlocked.Read(ref _orderbookCircuitBreakerOpenCount),
             OrderbookCircuitBreakerCooldownRemainingSeconds: Math.Max(0, (long)(_circuitBreakerOpenUntilUtc - DateTime.UtcNow).TotalSeconds),
+            OrderbookCircuitBreakerHalfOpenAttempts: Interlocked.Read(ref _orderbookCircuitBreakerHalfOpenAttempts),
+            OrderbookCircuitBreakerHalfOpenSucceeded: Interlocked.Read(ref _orderbookCircuitBreakerHalfOpenSucceeded),
+            OrderbookCircuitBreakerHalfOpenFailed: Interlocked.Read(ref _orderbookCircuitBreakerHalfOpenFailed),
+            OrderbookCircuitBreakerCooldownExtensions: Interlocked.Read(ref _orderbookCircuitBreakerCooldownExtensions),
+            OrderbookCircuitBreakerLastOpenReason: _circuitBreakerLastOpenReason,
             SingleTokenIsolationBudgetExhausted: Interlocked.Read(ref _singleTokenIsolationBudgetExhausted),
             BatchBookBadRequestsPreventedEstimate: Interlocked.Read(ref _batchBookBadRequestsPreventedEstimate)
         );
@@ -927,6 +1018,7 @@ public class OrderBookService : IOrderBookProvider
                 Interlocked.Increment(ref _singleTokenIsolationBudgetExhausted);
                 Console.WriteLine("[ORDERBOOK_ISOLATION_BUDGET_EXHAUSTED]");
                 QuarantineMarketsForTokens(batch, "IsolationBudgetExceeded", "BatchBookPairBadRequest");
+                lock (_cacheLock) OpenCircuitBreakerLocked(DateTime.UtcNow, "IsolationBudgetExceeded");
                 return BatchPostResult.FromBadRequest(result.Count - loadedBefore, batch.Count);
             }
             Interlocked.Increment(ref _batchRequests);
@@ -1081,7 +1173,7 @@ public class OrderBookService : IOrderBookProvider
      CancellationToken ct = default)
     {
         TrimInvalidTokenQuarantine();
-        if (IsCircuitBreakerActive()) return new Dictionary<string, ClobOrderBook>();
+        if (CircuitBreakerState == OrderbookCircuitBreakerState.Open) return new Dictionary<string, ClobOrderBook>();
         lock (_cacheLock)
         {
             _knownInvalidTokensThisCycle.Clear();

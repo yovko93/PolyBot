@@ -37,8 +37,14 @@ public record OrderBookServiceStats(
     long MarketsSkippedByMarketOrderbookQuarantine = 0,
     long BatchBookRequestsAvoidedByMarketQuarantine = 0,
     bool OrderbookCircuitBreakerActive = false,
+    string OrderbookCircuitBreakerState = "Closed",
     long OrderbookCircuitBreakerOpenCount = 0,
     long OrderbookCircuitBreakerCooldownRemainingSeconds = 0,
+    long OrderbookCircuitBreakerHalfOpenAttempts = 0,
+    long OrderbookCircuitBreakerHalfOpenSucceeded = 0,
+    long OrderbookCircuitBreakerHalfOpenFailed = 0,
+    long OrderbookCircuitBreakerCooldownExtensions = 0,
+    string OrderbookCircuitBreakerLastOpenReason = "",
     long SingleTokenIsolationBudgetExhausted = 0,
     long BatchBookBadRequestsPreventedEstimate = 0
 );

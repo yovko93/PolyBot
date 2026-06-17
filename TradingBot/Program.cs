@@ -557,7 +557,12 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 var discoveryHealth = ScanLogSummaryService.DiscoveryHealth(lastDiscoverySummary, options.MarketDiscovery.MinHealthyActiveMarkets);
                 Console.WriteLine(discoveryHealth.ToLogLine());
                 if (discoveryHealth.Degraded)
-                    Console.WriteLine($"[DISCOVERY_DEGRADED_MODE] Reason=ActiveBelowExpectedMin Active={lastDiscoverySummary.ActiveMarketsAvailable} ExpectedMinActive={options.MarketDiscovery.MinHealthyActiveMarkets}");
+                {
+                    var degradedReason = lastDiscoverySummary.ActiveMarketsAvailable < options.MarketDiscovery.MinHealthyActiveMarkets
+                        ? (string.IsNullOrWhiteSpace(discoveryHealth.Reason) ? "ActiveBelowExpectedMin" : discoveryHealth.Reason.Contains("OperationCanceled", StringComparison.OrdinalIgnoreCase) ? $"{discoveryHealth.Reason};ActiveBelowExpectedMin" : "ActiveBelowExpectedMin")
+                        : (string.IsNullOrWhiteSpace(discoveryHealth.Reason) || discoveryHealth.Reason.Equals("ActiveBelowExpectedMin", StringComparison.OrdinalIgnoreCase) ? "DiscoveryOperationCanceled" : discoveryHealth.Reason);
+                    Console.WriteLine($"[DISCOVERY_DEGRADED_MODE] Reason={degradedReason} Active={lastDiscoverySummary.ActiveMarketsAvailable} ExpectedMinActive={options.MarketDiscovery.MinHealthyActiveMarkets}");
+                }
             }
 
             var configuredPoolLimit = options.UseAllDiscoveredMarkets ? options.MaxMarketsInPool : (options.MaxMarketsInPool > 0 ? options.MaxMarketsInPool : options.MarketScanLimit);
@@ -598,7 +603,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 null,
                 singleResult?.BestEdge,
                 null,
-                (int)(singleResult?.ExecutionReady ?? 0));
+                (int)(singleResult?.ExecutionReady ?? 0),
+                0,
+                (int)(singleResult?.SingleMarketCircuitBreakerSkippedMarkets ?? 0),
+                (int)(singleResult?.SingleMarketCircuitBreakerSkippedCycles ?? 0));
             var singleMarketFullSummary = singleMarketFullCycle.AddBatch(singleMarketFullCycleId, state.SingleMarketSnapshot.Summary, state.SingleMarketSnapshot.DataQualityRejectSamples);
             if (options.Diagnostics.OperationalQuietMode && singleMarketFullCycle.ShouldLog(singleMarketFullSummary, options.Logging, singleMarketFullCycleComplete, options.SingleMarketArb.LogCycleProgress))
                 Console.WriteLine(SingleMarketFullCycleSummaryAggregator.ToLogLine(singleMarketFullSummary));
@@ -651,6 +659,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var verifiedPricingBlockedByOrderbookUnavailable = 0;
                     var verifiedPricingBlockedByQuarantinedToken = 0;
                     var verifiedPricingBlockedByEmptyBook = 0;
+                    var verifiedPricingBlockedByCircuitBreakerActive = 0;
+                    var verifiedPricingBlockedByMarketOrderbookQuarantined = 0;
+                    var verifiedPricingBlockedByTokenQuarantined = 0;
                     var verifiedRejectedByMissingNoAsk = 0;
                     var verifiedRejectedByUnresolvedGroup = 0;
                     var verifiedRejectedByRisk = 0;
@@ -784,6 +795,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             var missingSkipReason = fetchFailureOnly ? "OrderbookFetchFailed" : missingReasonBreakdown.ContainsKey("MarketOrderbookQuarantined") ? "MissingNoAsk_MarketOrderbookQuarantined" : missingReasonBreakdown.ContainsKey("TokenQuarantined") ? "MissingNoAsk_TokenQuarantined" : missingReasonBreakdown.ContainsKey("CircuitBreakerActive") ? "MissingNoAsk_CircuitBreakerActive" : missingReasonBreakdown.ContainsKey("OrderbookUnavailable") ? "MissingNoAsk_OrderbookUnavailable" : missingReasonBreakdown.ContainsKey("InvalidToken") ? "InvalidToken" : missingReasonBreakdown.ContainsKey("EmptyBook") ? "MissingNoAsk_EmptyBook" : "MissingNoAsk";
                             verifiedPricingBlockedByMissingNoAsk++;
                             verifiedPricingBlockedByOrderbookUnavailable += missingReasonBreakdown.GetValueOrDefault("OrderbookFetchFailed") + missingReasonBreakdown.GetValueOrDefault("OrderbookUnavailable");
+                            verifiedPricingBlockedByCircuitBreakerActive += missingReasonBreakdown.GetValueOrDefault("CircuitBreakerActive");
+                            verifiedPricingBlockedByMarketOrderbookQuarantined += missingReasonBreakdown.GetValueOrDefault("MarketOrderbookQuarantined");
+                            verifiedPricingBlockedByTokenQuarantined += missingReasonBreakdown.GetValueOrDefault("TokenQuarantined") + missingReasonBreakdown.GetValueOrDefault("QuarantinedToken");
                             verifiedPricingBlockedByQuarantinedToken += missingReasonBreakdown.GetValueOrDefault("QuarantinedToken") + missingReasonBreakdown.GetValueOrDefault("TokenQuarantined") + missingReasonBreakdown.GetValueOrDefault("MarketOrderbookQuarantined");
                             verifiedPricingBlockedByEmptyBook += missingReasonBreakdown.GetValueOrDefault("EmptyBook");
                             if (ShouldQuietLog("multi-verified", "VERIFIED_STRATEGY_CLASSIFICATION", $"{g.GroupKey}|MissingNoAsk|{missingSkipReason}", LogImportance.Normal, "MissingNoAsk", groupKey: g.GroupKey, everyNCycles: options.Logging.LogVerifiedScanEveryNCycles, maxPerHour: options.Logging.MaxMultiVerifiedScanLogsPerHour))
@@ -1404,10 +1418,14 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     }
                     if (shouldLogProfileComparisonSummary)
                     {
-                        var bestCons = snapshot.BestByConservative?.ActiveProfileNetEdge ?? 0m;
-                        var bestPolySum = snapshot.VerifiedBaskets.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("PolymarketApprox", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue).DefaultIfEmpty(decimal.MinValue).Max();
-                        var bestRawSum = snapshot.VerifiedBaskets.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue).DefaultIfEmpty(decimal.MinValue).Max();
-                        Console.WriteLine($"[PROFILE_COMPARISON_SUMMARY] Verified={snapshot.VerifiedBaskets.Count} NearExecutable={snapshot.NearExecutableBaskets.Count} BestConservative={bestCons} BestPolymarketApprox={bestPolySum} BestRaw={bestRawSum}");
+                        var bestConsValue = snapshot.BestByConservative?.ActiveProfileNetEdge;
+                        var polyValues = snapshot.VerifiedBaskets.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("PolymarketApprox", StringComparison.OrdinalIgnoreCase))?.NetEdge).Where(x => x.HasValue).Select(x => x!.Value).ToArray();
+                        var rawValues = snapshot.VerifiedBaskets.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))?.NetEdge).Where(x => x.HasValue).Select(x => x!.Value).ToArray();
+                        var bestConsText = bestConsValue.HasValue ? bestConsValue.Value.ToString("0.####") : "N/A";
+                        var bestPolyText = polyValues.Length > 0 ? polyValues.Max().ToString("0.####") : "N/A";
+                        var bestRawText = rawValues.Length > 0 ? rawValues.Max().ToString("0.####") : "N/A";
+                        var profileReason = snapshot.VerifiedBaskets.Count == 0 || (polyValues.Length == 0 && rawValues.Length == 0 && !bestConsValue.HasValue) ? " Reason=NoPricedVerifiedGroups" : string.Empty;
+                        Console.WriteLine($"[PROFILE_COMPARISON_SUMMARY] Verified={snapshot.VerifiedBaskets.Count} NearExecutable={snapshot.NearExecutableBaskets.Count} BestConservative={bestConsText} BestPolymarketApprox={bestPolyText} BestRaw={bestRawText}{profileReason}");
                     }
                     var nearFingerprint = string.Join("|", snapshot.NearExecutableBaskets.OrderBy(x => x.GroupKey).Select(x => $"{x.GroupKey}:{EdgeBucket(x.ActiveProfileNetEdge, 0.002m)}:{EdgeBucket(x.CostReductionNeeded, 0.002m)}"));
                     var shouldLogNear = ShouldQuietLog("verified-basket", "NEAR_EXECUTABLE_VERIFIED_BASKET", nearFingerprint, LogImportance.Normal, nearFingerprint, everyNCycles: options.Logging.LogVerifiedBasketEveryNCycles, maxPerHour: options.Logging.MaxMultiVerifiedScanLogsPerHour);
@@ -1565,6 +1583,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         VerifiedPricingBlockedByOrderbookUnavailable: verifiedPricingBlockedByOrderbookUnavailable,
                         VerifiedPricingBlockedByQuarantinedToken: verifiedPricingBlockedByQuarantinedToken,
                         VerifiedPricingBlockedByEmptyBook: verifiedPricingBlockedByEmptyBook,
+                        VerifiedPricingBlockedByCircuitBreakerActive: verifiedPricingBlockedByCircuitBreakerActive,
+                        VerifiedPricingBlockedByMarketOrderbookQuarantined: verifiedPricingBlockedByMarketOrderbookQuarantined,
+                        VerifiedPricingBlockedByTokenQuarantined: verifiedPricingBlockedByTokenQuarantined,
                         VerifiedWouldOpenBlockedByFill: verifiedBlockedByFill,
                         VerifiedWouldOpenBlockedByDepth: verifiedBlockedByDepth,
                         VerifiedWouldOpenBlockedByUnknown: verifiedBlockedByUnknown),

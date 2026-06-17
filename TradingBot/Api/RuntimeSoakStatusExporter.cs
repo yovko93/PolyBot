@@ -12,6 +12,7 @@ public static class RuntimeSoakStatusExporter
         var trend = RuntimeHealthTrendTracker.Current(options.RuntimeHealth);
         var warmupMinutes = Math.Max(0, options.RuntimeHealth.WarmupMinutes);
         var warmupComplete = warmupMinutes <= 0 || health.Uptime >= TimeSpan.FromMinutes(warmupMinutes);
+        var verifiedPricingUnavailableGroups = health.StrategyCounters.TryGetValue("VerifiedMultiOutcome", out var verifiedCounter) ? verifiedCounter.VerifiedPricingBlockedByCircuitBreakerActive + verifiedCounter.VerifiedPricingBlockedByMarketOrderbookQuarantined + verifiedCounter.VerifiedPricingBlockedByTokenQuarantined + verifiedCounter.VerifiedPricingBlockedByOrderbookUnavailable : 0;
         var payload = new
         {
             timestamp = DateTime.UtcNow,
@@ -63,6 +64,8 @@ public static class RuntimeSoakStatusExporter
             quarantinedTokens = state.OrderBookServiceStats.QuarantinedTokens,
             skippedQuarantinedTokensLastHour = trend.SkippedQuarantinedTokensLastHour,
             orderbookUnavailableMarkets = health.OrderbookUnavailableMarkets,
+            orderbookCircuitBreakerState = health.OrderbookCircuitBreakerState,
+            orderbookCircuitBreakerActive = health.OrderbookCircuitBreakerActive,
             allowlistHealthy = health.AllowlistHealthy,
             allowlistMonitoringOnly = health.AllowlistMonitoringOnly,
             allowlistNeedsPricingPrune = health.AllowlistNeedsPricingPrune,
@@ -81,8 +84,9 @@ public static class RuntimeSoakStatusExporter
             allowlistRefreshAutoApply = health.AllowlistRefreshAutoApply,
             strategies = health.StrategyCounters,
             strategyCompact = string.Join(",", health.StrategyCounters.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value.Mode}:scan={x.Value.Scanned}:books={x.Value.Books}:paper={x.Value.PaperOpened}:faults={x.Value.Faults}")),
-            verifiedPricingUnavailableGroups = 0,
-            orderbookStable = (health.BatchBookRequests <= 0 ? 0d : (double)health.BatchBookBadRequests / health.BatchBookRequests) <= options.Soak.MaxBatchBookBadRequestRate
+            verifiedPricingUnavailableGroups,
+            orderbookStable = health.OrderbookCircuitBreakerState == "Closed"
+                && (health.BatchBookRequests <= 0 ? 0d : (double)health.BatchBookBadRequests / health.BatchBookRequests) <= options.Soak.MaxBatchBookBadRequestRate
                 && trend.BatchBookBadRequestsDeltaLastHour <= options.Soak.MaxBatchBookBadRequestsPerHour
                 && trend.BatchBookInvalidTokensDeltaLastHour <= options.Soak.MaxBatchBookInvalidTokensPerHour
                 && health.BatchBookRepeatedInvalidTokenAfterQuarantine <= options.OrderBook.MaxRepeatedInvalidTokenAfterQuarantine
