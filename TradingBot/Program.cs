@@ -702,12 +702,27 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         var resolvedNoAsks = new List<ResolvedNoAsk>();
                         foreach (var m in markets.Take(options.MultiOutcomeArbitrage.MaxVerifiedGroupOrderbookRequestsPerCycle))
                         {
-                            var s = await orderbookService.GetBinarySnapshotAsync(m, stoppingToken);
                             var tokens = VerifiedGroupPricingService.ResolveBinaryTokens(m);
+                            if (orderbookService.GetStats().OrderbookCircuitBreakerActive)
+                            {
+                                resolvedNoAsks.Add(ResolvedNoAsk.Fail(m.id, m.conditionId, tokens.NoTokenId, "CircuitBreakerActive"));
+                                continue;
+                            }
+                            if (orderbookService.IsMarketOrderbookQuarantined(m.id))
+                            {
+                                resolvedNoAsks.Add(ResolvedNoAsk.Fail(m.id, m.conditionId, tokens.NoTokenId, "MarketOrderbookQuarantined"));
+                                continue;
+                            }
+                            var s = await orderbookService.GetBinarySnapshotAsync(m, stoppingToken);
                             if ((tokens.YesTokenId is not null && orderbookService.IsTokenQuarantined(tokens.YesTokenId)) || (tokens.NoTokenId is not null && orderbookService.IsTokenQuarantined(tokens.NoTokenId)))
-                                resolvedNoAsks.Add(ResolvedNoAsk.Fail(m.id, m.conditionId, tokens.NoTokenId, "QuarantinedToken"));
+                                resolvedNoAsks.Add(ResolvedNoAsk.Fail(m.id, m.conditionId, tokens.NoTokenId, "TokenQuarantined"));
                             else
-                                resolvedNoAsks.Add(VerifiedGroupPricingService.ResolveNoAsk(m, s, DateTime.UtcNow, options.MultiOutcomeArbitrage.VerifiedGroupOrderbookMaxAgeMs));
+                            {
+                                var resolved = VerifiedGroupPricingService.ResolveNoAsk(m, s, DateTime.UtcNow, options.MultiOutcomeArbitrage.VerifiedGroupOrderbookMaxAgeMs);
+                                if (resolved.FailureReason == "OrderbookFetchFailed") resolved = resolved with { FailureReason = "OrderbookUnavailable" };
+                                if (resolved.FailureReason == "EmptyBook") resolved = resolved with { FailureReason = "EmptyBook" };
+                                resolvedNoAsks.Add(resolved);
+                            }
                         }
                         var missingNoAskLegs = resolvedNoAsks.Where(x => !x.NoAsk.HasValue).ToList();
                         var noAskResolvedCount = resolvedNoAsks.Count - missingNoAskLegs.Count;
@@ -766,10 +781,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 pruneDryRun
                             });
                             if (shouldLogPricing && suggestion is not null) Console.WriteLine($"[VERIFIED_GROUP_PRICING_SUGGESTION] Group={g.GroupKey} MissingNoAsk={missingNoAskLegs.Count} SuggestedPrunedLegs={suggestedMarketIds.Length}");
-                            var missingSkipReason = fetchFailureOnly ? "OrderbookFetchFailed" : missingReasonBreakdown.ContainsKey("QuarantinedToken") ? "QuarantinedToken" : missingReasonBreakdown.ContainsKey("InvalidToken") ? "InvalidToken" : missingReasonBreakdown.ContainsKey("EmptyBook") ? "EmptyBook" : "MissingNoAsk";
+                            var missingSkipReason = fetchFailureOnly ? "OrderbookFetchFailed" : missingReasonBreakdown.ContainsKey("MarketOrderbookQuarantined") ? "MissingNoAsk_MarketOrderbookQuarantined" : missingReasonBreakdown.ContainsKey("TokenQuarantined") ? "MissingNoAsk_TokenQuarantined" : missingReasonBreakdown.ContainsKey("CircuitBreakerActive") ? "MissingNoAsk_CircuitBreakerActive" : missingReasonBreakdown.ContainsKey("OrderbookUnavailable") ? "MissingNoAsk_OrderbookUnavailable" : missingReasonBreakdown.ContainsKey("InvalidToken") ? "InvalidToken" : missingReasonBreakdown.ContainsKey("EmptyBook") ? "MissingNoAsk_EmptyBook" : "MissingNoAsk";
                             verifiedPricingBlockedByMissingNoAsk++;
-                            verifiedPricingBlockedByOrderbookUnavailable += missingReasonBreakdown.GetValueOrDefault("OrderbookFetchFailed");
-                            verifiedPricingBlockedByQuarantinedToken += missingReasonBreakdown.GetValueOrDefault("QuarantinedToken");
+                            verifiedPricingBlockedByOrderbookUnavailable += missingReasonBreakdown.GetValueOrDefault("OrderbookFetchFailed") + missingReasonBreakdown.GetValueOrDefault("OrderbookUnavailable");
+                            verifiedPricingBlockedByQuarantinedToken += missingReasonBreakdown.GetValueOrDefault("QuarantinedToken") + missingReasonBreakdown.GetValueOrDefault("TokenQuarantined") + missingReasonBreakdown.GetValueOrDefault("MarketOrderbookQuarantined");
                             verifiedPricingBlockedByEmptyBook += missingReasonBreakdown.GetValueOrDefault("EmptyBook");
                             if (ShouldQuietLog("multi-verified", "VERIFIED_STRATEGY_CLASSIFICATION", $"{g.GroupKey}|MissingNoAsk|{missingSkipReason}", LogImportance.Normal, "MissingNoAsk", groupKey: g.GroupKey, everyNCycles: options.Logging.LogVerifiedScanEveryNCycles, maxPerHour: options.Logging.MaxMultiVerifiedScanLogsPerHour))
                                 Console.WriteLine($"[VERIFIED_STRATEGY_CLASSIFICATION] Group={g.GroupKey} ActiveNet=0 RawNet=0 AlternateProfileNet=0 ConservativeNet=0 CostProfile=Unknown Classification=MissingNoAsk WouldOpenIfPaperEligible=false PaperEligible=false Reason={missingSkipReason}");

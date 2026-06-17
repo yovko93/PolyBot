@@ -273,6 +273,13 @@ public class SingleMarketOrderBookArbEngine
             Console.WriteLine($"[SINGLE_MARKET_FILL_SIMULATION_PASSED] MarketId={book.MarketId} Qty={quantity:0.####} FullyFillableQty={fill.FullyFillableQty:0.####} SimulatedCost={fill.SimulatedCost:0.####}");
             RecordHighValue(BuildDto(book, market.conditionId, SingleMarketArbState.FillSimulationPassed, yes, no, rawCost, fill.AdjustedEdgePerShare, fill.ExpectedProfit, quantity, fill.SimulatedCost, "Passed", "Passed", "NotOpened", null, st.EdgeScans, st.ExecutionScans), "SingleMarketFillSimulationPassed");
 
+            if (_orderBooks is OrderBookService obs && obs.GetStats().OrderbookCircuitBreakerActive)
+            {
+                diagnostics.AddReject("OrderbookCircuitBreakerActive");
+                Console.WriteLine($"[SINGLE_MARKET_PAPER_OPEN_BLOCKED] MarketId={book.MarketId} Reason=OrderbookCircuitBreakerActive");
+                return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,"OrderbookCircuitBreakerActive",null);
+            }
+
             if (!paper.TryMarkSingleMarketOpenInFlight(book.MarketId, StrategyName, out var ttlSeconds))
             {
                 return SuppressExecution(book, market.conditionId, diagnostics, adjustedCost, yes, no, rawCost, edge, expected, quantity, st.EdgeScans, st.ExecutionScans, "InFlightDuplicate");

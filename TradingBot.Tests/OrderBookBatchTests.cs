@@ -294,6 +294,97 @@ public class OrderBookBatchTests
         Assert.DoesNotContain("Confidence=High", reason);
     }
 
+
+    [Fact]
+    public async Task Both_tokens_quarantined_creates_market_orderbook_quarantine()
+    {
+        var svc = new OrderBookService(new HttpClient(new BatchHandler(_ => Json(HttpStatusCode.OK, "[]")))) { ExportInvalidTokenQuarantine = false };
+        var market = new Market { id = "m-q", question = "q", outcomes = ["Yes", "No"], clobTokenIds = ["101", "102"] };
+
+        await svc.PrefetchBinarySnapshotsAsync([market]);
+        svc.QuarantineInvalidToken("101");
+        svc.QuarantineInvalidToken("102");
+
+        Assert.True(svc.IsMarketOrderbookQuarantined("m-q"));
+        Assert.Equal(1, svc.GetStats().MarketOrderbookQuarantineActive);
+    }
+
+    [Fact]
+    public async Task Market_orderbook_quarantine_skips_future_prefetch_requests()
+    {
+        var calls = 0;
+        var svc = new OrderBookService(new HttpClient(new BatchHandler(req => { calls++; return Json(HttpStatusCode.OK, BookJson(ReadTokenIds(req))); }))) { ExportInvalidTokenQuarantine = false };
+        var market = new Market { id = "m-skip", question = "q", outcomes = ["Yes", "No"], clobTokenIds = ["201", "202"] };
+
+        svc.QuarantineMarketOrderbook("m-skip", "201", "202", "test");
+        await svc.PrefetchBinarySnapshotsAsync([market]);
+
+        Assert.Equal(0, calls);
+        Assert.True(svc.GetStats().MarketsSkippedByMarketOrderbookQuarantine >= 1);
+    }
+
+    [Fact]
+    public void Verified_pricing_can_emit_market_orderbook_quarantined_reason()
+    {
+        var market = new Market { id = "m-price", conditionId = "c", outcomes = ["Yes", "No"], clobTokenIds = ["301", "302"] };
+        var missing = ResolvedNoAsk.Fail(market.id, market.conditionId, "302", "MarketOrderbookQuarantined");
+
+        Assert.Null(missing.NoAsk);
+        Assert.Equal("MarketOrderbookQuarantined", missing.FailureReason);
+    }
+
+    [Fact]
+    public async Task Single_token_isolation_budget_quarantines_markets_and_emits_counter()
+    {
+        var svc = new OrderBookService(new HttpClient(new BatchHandler(_ => Json(HttpStatusCode.BadRequest, "{\"error\":\"bad\"}"))))
+        { MaxBatchBookRequestSize = 4, SplitBatchOnBadRequest = false, MaxSingleTokenIsolationsPerCycle = 1, ExportInvalidTokenQuarantine = false, QuietLogGate = new QuietLogGate() };
+        var markets = new List<Market>
+        {
+            new() { id = "m-budget", question = "q", outcomes = ["Yes", "No"], clobTokenIds = ["401", "402"] }
+        };
+
+        await svc.PrefetchBinarySnapshotsAsync(markets);
+
+        var stats = svc.GetStats();
+        Assert.True(stats.SingleTokenIsolationBudgetExhausted >= 1);
+        Assert.True(svc.IsMarketOrderbookQuarantined("m-budget"));
+    }
+
+    [Fact]
+    public async Task Circuit_breaker_opens_and_pauses_new_orderbook_calls()
+    {
+        var calls = 0;
+        var svc = new OrderBookService(new HttpClient(new BatchHandler(_ => { calls++; return Json(HttpStatusCode.BadRequest, "{\"error\":\"bad\"}"); })))
+        { MaxBatchBookRequestSize = 1, SplitBatchOnBadRequest = false, MaxBatchBookBadRequestsPerCycle = 1, ExportInvalidTokenQuarantine = false, QuietLogGate = new QuietLogGate() };
+
+        await svc.GetOrderBooksBatchAsync(["501", "502"]);
+        var afterOpen = calls;
+        await svc.GetOrderBooksBatchAsync(["503"]);
+
+        Assert.True(svc.GetStats().OrderbookCircuitBreakerActive);
+        Assert.Equal(afterOpen, calls);
+    }
+
+    [Fact]
+    public void RuntimeHealth_includes_market_quarantine_and_circuit_breaker_counters()
+    {
+        var state = new BotRuntimeState();
+        state.SetOrderBookServiceStats(new OrderBookServiceStats(0, 0, 0, 0, 0, 0, 0, 0, 0,
+            MarketOrderbookQuarantineActive: 2,
+            MarketOrderbookQuarantineAdded: 3,
+            OrderbookCircuitBreakerActive: true,
+            OrderbookCircuitBreakerOpenCount: 1,
+            SingleTokenIsolationBudgetExhausted: 4));
+
+        var health = RuntimeHealthSnapshot.From(state);
+        var line = RuntimeHealthTrendTracker.ToSoakStatusLogLine(health, new RuntimeHealthTrend(0,0,0,0,true,1), new TradingBot.Options.TradingBotOptions(), state);
+
+        Assert.Equal(2, health.MarketOrderbookQuarantineActive);
+        Assert.True(health.OrderbookCircuitBreakerActive);
+        Assert.Contains("MarketOrderbookQuarantineActive=2", line);
+        Assert.Contains("OrderbookCircuitBreakerActive=true", line);
+    }
+
     private static AllowlistRefreshDiagnosticsItem RefreshItem(
         string groupKey = "winner:2026 women s us open|kind:generic",
         string bestCandidate = "winner:2026 women s us open|kind:generic",
