@@ -121,6 +121,7 @@ public class OrderBookService : IOrderBookProvider
     public string ExportDirectory { get; set; } = Path.Combine(AppContext.BaseDirectory, "exports");
     public TradingBot.Options.MultiOutcomeLoggingOptions Logging { get; set; } = new();
     public QuietLogGate? QuietLogGate { get; set; }
+    public Action<OrderBookServiceStats>? StatsUpdated { get; set; }
 
     private readonly Dictionary<string, (DateTime Time, ClobOrderBook? Book)> _bookCache = new();
     private readonly Dictionary<string, (DateTime Time, BinaryOrderBookSnapshot? Snapshot)> _snapshotCache = new();
@@ -523,6 +524,7 @@ public class OrderBookService : IOrderBookProvider
             _orderbookEligibility.MarkIneligible(marketId, reason, source, until);
         }
         Console.WriteLine($"[MARKET_ORDERBOOK_QUARANTINED] MarketId={marketId} Reason={reason} Source={source} TtlMinutes={(int)Math.Round(MarketOrderbookQuarantineTtl.TotalMinutes)}");
+        PublishStats();
     }
 
     private void TrimMarketOrderbookQuarantineLocked(DateTime now)
@@ -639,6 +641,7 @@ public class OrderBookService : IOrderBookProvider
             _circuitBreakerLoggedOpen = true;
             Console.WriteLine($"[ORDERBOOK_CIRCUIT_BREAKER_OPENED] Reason={reason} CooldownMinutes={(int)Math.Ceiling(_currentCircuitBreakerCooldown.TotalMinutes)}");
         }
+        PublishStats();
     }
 
     private void RefreshCircuitBreakerStateLocked(DateTime now)
@@ -692,6 +695,12 @@ public class OrderBookService : IOrderBookProvider
         var cutoff = now.AddHours(-1);
         while (_badRequestTimes.Count > 0 && _badRequestTimes.Peek() < cutoff) _badRequestTimes.Dequeue();
         while (_invalidTokenTimes.Count > 0 && _invalidTokenTimes.Peek() < cutoff) _invalidTokenTimes.Dequeue();
+    }
+
+    private void PublishStats()
+    {
+        try { StatsUpdated?.Invoke(GetStats()); }
+        catch { }
     }
 
     public OrderBookServiceStats GetStats()
@@ -1063,6 +1072,7 @@ public class OrderBookService : IOrderBookProvider
                 Interlocked.Increment(ref _batchBadRequests);
                 RecordModeBadRequest();
                 RecordBadRequestAndMaybeOpenCircuit();
+                PublishStats();
                 ExportBatchBookBadRequestDiagnostic(batch, json, depth, quarantineApplied: false);
                 if (SplitBatchOnBadRequest && batch.Count > 1 && depth == 0 && TryReserveSplitRetry())
                 {
@@ -1574,6 +1584,7 @@ public class OrderBookService : IOrderBookProvider
             TrimInvalidTokenQuarantineLocked(now);
         }
         Console.WriteLine($"[BATCH_BOOK_TOKEN_QUARANTINED] TokenId={token} MarketId={marketId} Reason={reason} TtlMinutes={(int)Math.Round(InvalidTokenQuarantineTtl.TotalMinutes)}");
+        PublishStats();
         if (ExportInvalidTokenQuarantine) ExportInvalidTokenQuarantineSnapshot();
     }
 

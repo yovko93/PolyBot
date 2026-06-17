@@ -16,6 +16,11 @@ public static class RuntimeSoakStatusExporter
         var payload = new
         {
             timestamp = DateTime.UtcNow,
+            processRunId = health.ProcessRunId,
+            startedAtUtc = health.StartedAtUtc,
+            scannerInstanceId = health.ScannerInstanceId,
+            diagnosticsCounterMismatchCount = health.DiagnosticsCounterMismatchCount,
+            diagnosticsCounterMismatchLastReason = health.DiagnosticsCounterMismatchLastReason,
             uptime = health.Uptime,
             processMemoryMb = health.ProcessMemoryMb,
             gcMemoryMb = health.GcTotalMemoryMb,

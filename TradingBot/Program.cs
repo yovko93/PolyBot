@@ -235,7 +235,7 @@ app.MapPost("/api/bot/controls/resume", async (BotRuntimeState s, IHubContext<Bo
 });
 app.MapGet("/api/bot/logs/recent", (BotRuntimeState s, int? limit) => s.Logs().TakeLast(Math.Clamp(limit ?? 300, 1, 1000)).ToArray());
 app.MapGet("/api/bot/equity", (BotRuntimeState s, int? limit) => s.Equity().TakeLast(Math.Clamp(limit ?? 500, 1, 1000)).ToArray());
-app.MapGet("/api/bot/runtime-health", (BotRuntimeState s, QuietLogGate q, IOptions<TradingBotOptions> o) => { s.SetQuietLogGateStats(q.Snapshot()); return Results.Ok(RuntimeHealthSnapshot.From(s, o.Value)); });
+app.MapGet("/api/bot/runtime-health", (BotRuntimeState s, QuietLogGate q, IOptions<TradingBotOptions> o) => { s.SetQuietLogGateStats(q.Snapshot()); if (ProcessRunContext.ValidateOrderbookCounters(s.OrderBookServiceStats) is string mismatchReason) Console.WriteLine(ProcessRunContext.FormatMismatchLog(mismatchReason, s.OrderBookServiceStats)); return Results.Ok(RuntimeHealthSnapshot.From(s, o.Value)); });
 app.MapHub<BotHub>("/hubs/bot");
 
 var apiTask = app.RunAsync(listenUrl);
@@ -247,7 +247,9 @@ foreach (var strategyEntry in options.Strategies.Where(x => x.Value.Enabled && x
     state.RecordStrategyResult(new OpportunityStrategyScanResult(strategyEntry.Key, strategyEntry.Value.Mode));
 quietLogGate.ConfigureBounds(options.RuntimeMemory.MaxQuietLogGateEntries, TimeSpan.FromMinutes(options.RuntimeMemory.QuietLogGateTtlMinutes));
 
+state.ClearTransientLogBuffers();
 Console.SetOut(new MultiTextWriter(originalOut, msg => logger.LogInfo("console", msg)));
+Console.WriteLine($"[LOG_BUFFER_RESET] ProcessRunId={ProcessRunContext.ProcessRunId} Reason=FreshProcessStart");
 logger.LogSuccess("startup", $"Bot API listening on {listenUrl}");
 logger.LogSuccess("startup", $"ExecutionMode={options.ExecutionMode}; EnablePaperTrading={options.EnablePaperTrading}; EnableLiveExecution={options.EnableLiveExecution}");
 logger.LogInfo("startup", $"[CONFIG] Scanner Mode={options.Mode} MarketScanLimit={options.MarketScanLimit} MaxMarketsToDiscover={options.MaxMarketsToDiscover} ScanBatchSize={options.ScanBatchSize} MaxOrderbooksPerCycle={options.MaxOrderbooksPerCycle} MaxConcurrentOrderbookRequests={options.MaxConcurrentOrderbookRequests} LogEmptyOpportunityCycles={options.LogEmptyOpportunityCycles}");
@@ -289,6 +291,8 @@ _ = Task.Run(async () =>
         void LogRuntimeHealthAndSoakStatus()
         {
             state.SetQuietLogGateStats(quietLogGate.Snapshot());
+            if (ProcessRunContext.ValidateOrderbookCounters(state.OrderBookServiceStats) is string mismatchReason)
+                Console.WriteLine(ProcessRunContext.FormatMismatchLog(mismatchReason, state.OrderBookServiceStats));
             var health = RuntimeHealthSnapshot.From(state, options);
             var trend = RuntimeHealthTrendTracker.RecordAndAnalyze(health, options.RuntimeHealth);
             Console.WriteLine(health.ToLogLine());
@@ -338,7 +342,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
 {
     var scannerInstanceId = Guid.NewGuid().ToString("N");
     var scannerStartedAt = DateTime.UtcNow;
-    Console.WriteLine($"[SCANNER] Background scanner started InstanceId={scannerInstanceId}");
+    Console.WriteLine($"[SCANNER] Background scanner started InstanceId={scannerInstanceId} ScannerInstanceId={ProcessRunContext.ScannerInstanceId}");
     var scannerState = new ScannerStateMachine();
     scannerState.TryStart(Console.WriteLine);
     var scannerErrors = new ScannerExceptionReporter(contentRootPath, options);
@@ -374,6 +378,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
 
     var marketService = new MarketDataService(http);
     var orderbookService = new OrderBookService(http) { DisableSingleBookHttpFallback = true, LogPrefetchDetails = options.LogPrefetchDetails, LogBookCacheMissDetails = options.Logging.LogBookCacheMissDetails, BookCacheMissSampleSize = options.Logging.BookCacheMissSampleSize, ExportDirectory = Path.Combine(contentRootPath, "exports") };
+    orderbookService.StatsUpdated = state.SetOrderBookServiceStats;
     orderbookService.ConfigureCache(TimeSpan.FromMinutes(Math.Max(1, options.RuntimeMemory.OrderbookCacheTtlMinutes)), Math.Min(options.Caches.MaxOrderbookCacheEntries, options.RuntimeMemory.MaxOrderbookCacheEntries));
     orderbookService.ConfigureBatchOptions(options.OrderBook, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate);
     orderbookService.MaxInvalidTokenCacheEntries = Math.Max(1, options.RuntimeMemory.MaxInvalidTokenCacheEntries);
@@ -2236,7 +2241,8 @@ public class MultiTextWriter(TextWriter original, Action<string> mirror) : TextW
     public override void WriteLine(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return;
-        original.WriteLine(value);
-        mirror(value);
+        var enriched = ProcessRunContext.EnrichLogLine(value);
+        original.WriteLine(enriched);
+        mirror(enriched);
     }
 }
