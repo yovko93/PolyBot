@@ -285,7 +285,7 @@ _ = Task.Run(async () =>
     if (!options.RuntimeHealth.Enabled) return;
     try
     {
-        DateTime lastSoakStatusLoggedAt = DateTime.UtcNow;
+        DateTime lastSoakStatusLoggedAt = DateTime.MinValue;
         void LogRuntimeHealthAndSoakStatus()
         {
             state.SetQuietLogGateStats(quietLogGate.Snapshot());
@@ -1499,12 +1499,15 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         multiOutcomeReport.GroupsDetected);
                     var bestConservativeNet = snapshot.BestByConservative?.ActiveProfileNetEdge;
                     decimal? bestExperimentalNet = ScanLogSummaryService.BestExperimentalNet(snapshot.ExperimentalCandidates);
-                    var bestAlternateProfileNet = ScanLogSummaryService.BestAlternateProfileNet(snapshot.VerifiedBaskets, "PolymarketApprox") ?? decimal.MinValue;
-                    var bestRaw = snapshot.VerifiedBaskets.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue).DefaultIfEmpty(decimal.MinValue).Max();
+                    var bestAlternateProfileNetValue = ScanLogSummaryService.BestAlternateProfileNet(snapshot.VerifiedBaskets, "PolymarketApprox");
+                    var bestRawValues = snapshot.VerifiedBaskets.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))?.NetEdge).Where(x => x.HasValue).Select(x => x!.Value).ToArray();
+                    decimal? bestRawValue = bestRawValues.Length > 0 ? bestRawValues.Max() : null;
+                    var bestAlternateProfileText = bestAlternateProfileNetValue.HasValue ? bestAlternateProfileNetValue.Value.ToString("0.####") : "N/A";
+                    var bestRawText = bestRawValue.HasValue ? bestRawValue.Value.ToString("0.####") : "N/A";
                     var unresolved = Math.Max(0, multiOutcomeValidator.LoadedAllowlistCount - verifiedResolved);
                     verifiedScanCycle++;
                     var bestExperimentalText = bestExperimentalNet.HasValue ? bestExperimentalNet.Value.ToString("0.####") : "N/A";
-                    var verifiedScanFingerprint = $"{multiOutcomeValidator.LoadedAllowlistCount}|{verifiedResolved}|{unresolved}|{verifiedEvaluated}|{activeExecutable}|{experimentalCandidates}|{diagnosticsOnlyPositive}|{paperOpenedCount}|{suppressedDuplicateCount}|{verifiedMismatch}|{bestConservativeNet}|{bestExperimentalText}|{bestAlternateProfileNet}|{bestRaw}";
+                    var verifiedScanFingerprint = $"{multiOutcomeValidator.LoadedAllowlistCount}|{verifiedResolved}|{unresolved}|{verifiedEvaluated}|{activeExecutable}|{experimentalCandidates}|{diagnosticsOnlyPositive}|{paperOpenedCount}|{suppressedDuplicateCount}|{verifiedMismatch}|{bestConservativeNet}|{bestExperimentalText}|{bestAlternateProfileText}|{bestRawText}";
                     var repairByGroupKey = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(repairReport.Groups, x => x.GroupKey, "Scanner.RepairReport.Groups", DuplicateGroupKeyPolicy.KeepMostRestrictive);
                     var unresolvedDiagnosticsForSampling = ScanLogSummaryService.BuildUnresolvedDiagnostics(allowlistedGroups, resolved, repairByGroupKey, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
                     var unresolvedSampleDecisions = unresolvedDiagnosticsForSampling
@@ -1533,7 +1536,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         : $"{verifiedScanFingerprint}|{unresolvedCounts.BrokenConfig}|{unresolvedCounts.NeedsRefresh}|{unresolvedCounts.ReviewOnly}|{unresolvedCounts.MonitoringOnly}|{unresolvedCounts.Other}|{unresolvedCounts.SamplesShown}|{unresolvedCounts.Suppressed}";
                     var verifiedImportance = paperOpenedCount > 0 ? LogImportance.Critical : activeExecutable > 0 ? LogImportance.Important : LogImportance.Normal;
                     var shouldLogVerifiedScan = ShouldQuietLog("multi-verified", "MULTI_VERIFIED_SCAN", verifiedScanFingerprint, verifiedImportance, verifiedScanFingerprint, everyNCycles: options.Logging.LogVerifiedScanEveryNCycles, maxPerHour: options.Logging.MaxMultiVerifiedScanLogsPerHour);
-                    if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} BrokenConfigCount={unresolvedCounts.BrokenConfig} NeedsRefreshCount={unresolvedCounts.NeedsRefresh} ReviewOnlyCount={unresolvedCounts.ReviewOnly} MonitoringOnlyUnresolvedCount={unresolvedCounts.MonitoringOnly} OtherUnresolvedCount={unresolvedCounts.Other} UnresolvedSamplesShown={unresolvedCounts.SamplesShown} SuppressedUnresolvedSamples={unresolvedCounts.Suppressed} UnresolvedTotal={unresolvedCounts.Total} Evaluated={verifiedEvaluated} ActiveExecutable={activeExecutable} ExperimentalCandidates={experimentalCandidates} DiagnosticsOnlyPositive={diagnosticsOnlyPositive} PaperOpened={paperOpenedCount} SuppressedDuplicate={suppressedDuplicateCount} Mismatch={verifiedMismatch} BestActiveNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestExperimentalNet={bestExperimentalText} BestAlternateProfileNet={bestAlternateProfileNet} BestRaw={bestRaw}");
+                    if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} BrokenConfigCount={unresolvedCounts.BrokenConfig} NeedsRefreshCount={unresolvedCounts.NeedsRefresh} ReviewOnlyCount={unresolvedCounts.ReviewOnly} MonitoringOnlyUnresolvedCount={unresolvedCounts.MonitoringOnly} OtherUnresolvedCount={unresolvedCounts.Other} UnresolvedSamplesShown={unresolvedCounts.SamplesShown} SuppressedUnresolvedSamples={unresolvedCounts.Suppressed} UnresolvedTotal={unresolvedCounts.Total} Evaluated={verifiedEvaluated} ActiveExecutable={activeExecutable} ExperimentalCandidates={experimentalCandidates} DiagnosticsOnlyPositive={diagnosticsOnlyPositive} PaperOpened={paperOpenedCount} SuppressedDuplicate={suppressedDuplicateCount} Mismatch={verifiedMismatch} BestActiveNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestExperimentalNet={bestExperimentalText} BestAlternateProfileNet={bestAlternateProfileText} BestRaw={bestRawText}");
                     var verifiedRejectedByReason = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
                     foreach (var reasonGroup in groupDiagnostics.Concat(pricingDiagnostics.Select(x => new VerifiedGroupDiagnosticDto(x.GroupKey, x.Legs, x.Legs, 0, "Pricing", x.SkipReason, x.NetEdge, x.SkipReason.Contains("MissingNoAsk", StringComparison.OrdinalIgnoreCase) ? 1 : 0, 0, Array.Empty<string>(), Array.Empty<string>())))
                         .Where(x => !string.IsNullOrWhiteSpace(x.SkipReason) && !x.SkipReason.Equals("None", StringComparison.OrdinalIgnoreCase))
@@ -1549,9 +1552,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     if (experimentalCandidates > 0) verifiedRejectedByReason["ExperimentalProfileCandidate"] = experimentalCandidates;
                     var verifiedTopSkip = verifiedRejectedByReason.OrderByDescending(x => x.Value).ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase).FirstOrDefault();
                     decimal? verifiedBestStrategyEdge = bestConservativeNet
-                        ?? (bestAlternateProfileNet == decimal.MinValue
-                            ? (bestRaw == decimal.MinValue ? (decimal?)null : bestRaw)
-                            : bestAlternateProfileNet);
+                        ?? bestAlternateProfileNetValue
+                        ?? bestRawValue;
                     strategyOrchestrator.RecordExternalResult(new OpportunityStrategyScanResult(
                         "VerifiedMultiOutcome",
                         StrategyMode.DiagnosticsOnly,

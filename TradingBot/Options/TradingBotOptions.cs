@@ -203,6 +203,9 @@ public class OrderBookOptions
     public int CircuitBreakerHalfOpenMaxBadRequests { get; set; } = 0;
     public int CircuitBreakerHalfOpenMaxTimeouts { get; set; } = 1;
     public double CircuitBreakerCooldownBackoffMultiplier { get; set; } = 2;
+    public int RecoveryDurationMinutes { get; set; } = 5;
+    public int RecoveryMaxMarketsPerCycle { get; set; } = 100;
+    public int RecoveryMaxBatchSize { get; set; } = 25;
     public int CircuitBreakerBadRequestsPerHourThreshold { get; set; } = 100;
     public int CircuitBreakerInvalidTokensPerHourThreshold { get; set; } = 100;
     public double CircuitBreakerBadRequestRateThreshold { get; set; } = 0.02;

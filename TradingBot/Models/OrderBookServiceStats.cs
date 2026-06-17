@@ -45,6 +45,12 @@ public record OrderBookServiceStats(
     long OrderbookCircuitBreakerHalfOpenFailed = 0,
     long OrderbookCircuitBreakerCooldownExtensions = 0,
     string OrderbookCircuitBreakerLastOpenReason = "",
+    DateTime? OrderbookCircuitBreakerRecoveringSinceUtc = null,
+    long OrderbookCircuitBreakerRecoveryRemainingSeconds = 0,
+    long OrderbookCircuitBreakerReopenedAfterClose = 0,
+    long OrderbookRequestsBlockedByCircuitBreaker = 0,
+    long OrderbookPostCloseBadRequests = 0,
+    long OrderbookPostCloseInvalidTokens = 0,
     long SingleTokenIsolationBudgetExhausted = 0,
     long BatchBookBadRequestsPreventedEstimate = 0
 );
