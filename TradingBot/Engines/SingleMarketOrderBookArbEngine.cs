@@ -125,10 +125,18 @@ public class SingleMarketOrderBookArbEngine
         try
         {
             if (!_options.Enabled) return SingleMarketScanResult.Empty;
-            if (_orderBooks is OrderBookService orderBookServiceForMarket && orderBookServiceForMarket.GetStats().OrderbookCircuitBreakerActive)
+            if (_orderBooks is OrderBookService orderBookServiceForMarket)
             {
-                diagnostics.AddReject("SingleMarketSkippedByCircuitBreaker");
-                return new SingleMarketScanResult(false, false, false, false, null, market.question, null, "SingleMarketSkippedByCircuitBreaker", null);
+                if (orderBookServiceForMarket.GetStats().OrderbookCircuitBreakerActive)
+                {
+                    diagnostics.AddReject("SingleMarketSkippedByCircuitBreaker");
+                    return new SingleMarketScanResult(false, false, false, false, null, market.question, null, "SingleMarketSkippedByCircuitBreaker", null);
+                }
+                if (orderBookServiceForMarket.IsMarketOrderbookQuarantined(market.id))
+                {
+                    diagnostics.AddReject("SingleMarketSkippedByMarketOrderbookQuarantine");
+                    return new SingleMarketScanResult(false, false, false, false, null, market.question, null, "SingleMarketSkippedByMarketOrderbookQuarantine", null);
+                }
             }
             diagnostics.IncrementScanned();
             var now = DateTime.UtcNow;

@@ -319,8 +319,10 @@ public class OrderBookBatchTests
         svc.QuarantineMarketOrderbook("m-skip", "201", "202", "test");
         await svc.PrefetchBinarySnapshotsAsync([market]);
 
-        Assert.Equal(before.BatchBookNormalRequests, after.BatchBookNormalRequests);
-        Assert.True(svc.GetStats().MarketsSkippedByMarketOrderbookQuarantine >= 1);
+        var stats = svc.GetStats();
+        Assert.Equal(0, calls);
+        Assert.True(stats.MarketsSkippedByMarketOrderbookQuarantine >= 1);
+        Assert.True(stats.BatchBookRequestsAvoidedByMarketQuarantine >= 1);
     }
 
     [Fact]
@@ -422,6 +424,28 @@ public class OrderBookBatchTests
         Assert.Equal("RecoveringBadRequest", stats.OrderbookCircuitBreakerLastOpenReason);
         Assert.True(stats.OrderbookRecoveryFailedCount >= 1);
         Assert.True(stats.OrderbookRecoveryBadRequests >= 1);
+    }
+
+
+    [Fact]
+    public async Task Half_open_no_eligible_markets_records_failure_reason()
+    {
+        var calls = 0;
+        var svc = new OrderBookService(new HttpClient(new BatchHandler(req => { calls++; return Json(HttpStatusCode.OK, BookJson(ReadTokenIds(req))); })))
+        { MaxBatchBookRequestSize = 2, SplitBatchOnBadRequest = false, QuietLogGate = new QuietLogGate(), CircuitBreakerHalfOpenCanaryMarkets = 1 };
+        SetPrivate(svc, "_currentCircuitBreakerCooldown", TimeSpan.FromMilliseconds(1));
+        await ForceOpenAsync(svc);
+        await Task.Delay(5);
+        var callsBefore = calls;
+        svc.QuarantineMarketOrderbook("m-halfopen-skip", "1001", "1002", "test");
+
+        await svc.PrefetchBinarySnapshotsAsync([new() { id = "m-halfopen-skip", question = "q", outcomes = ["Yes", "No"], clobTokenIds = ["1001", "1002"] }]);
+
+        var stats = svc.GetStats();
+        Assert.Equal("Open", stats.OrderbookCircuitBreakerState);
+        Assert.Equal("NoEligibleMarkets", stats.OrderbookCircuitBreakerLastHalfOpenFailureReason);
+        Assert.True(stats.MarketsSkippedByMarketOrderbookQuarantine >= 1);
+        Assert.Equal(callsBefore, calls);
     }
 
     [Fact]
