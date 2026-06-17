@@ -1423,9 +1423,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         var rawValues = snapshot.VerifiedBaskets.Select(gx => gx.ProfileResults.FirstOrDefault(p => p.ProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase))?.NetEdge).Where(x => x.HasValue).Select(x => x!.Value).ToArray();
                         var bestConsText = bestConsValue.HasValue ? bestConsValue.Value.ToString("0.####") : "N/A";
                         var bestPolyText = polyValues.Length > 0 ? polyValues.Max().ToString("0.####") : "N/A";
-                        var bestRawText = rawValues.Length > 0 ? rawValues.Max().ToString("0.####") : "N/A";
+                        var profileBestRawText = rawValues.Length > 0 ? rawValues.Max().ToString("0.####") : "N/A";
                         var profileReason = snapshot.VerifiedBaskets.Count == 0 || (polyValues.Length == 0 && rawValues.Length == 0 && !bestConsValue.HasValue) ? " Reason=NoPricedVerifiedGroups" : string.Empty;
-                        Console.WriteLine($"[PROFILE_COMPARISON_SUMMARY] Verified={snapshot.VerifiedBaskets.Count} NearExecutable={snapshot.NearExecutableBaskets.Count} BestConservative={bestConsText} BestPolymarketApprox={bestPolyText} BestRaw={bestRawText}{profileReason}");
+                        Console.WriteLine($"[PROFILE_COMPARISON_SUMMARY] Verified={snapshot.VerifiedBaskets.Count} NearExecutable={snapshot.NearExecutableBaskets.Count} BestConservative={bestConsText} BestPolymarketApprox={bestPolyText} BestRaw={profileBestRawText}{profileReason}");
                     }
                     var nearFingerprint = string.Join("|", snapshot.NearExecutableBaskets.OrderBy(x => x.GroupKey).Select(x => $"{x.GroupKey}:{EdgeBucket(x.ActiveProfileNetEdge, 0.002m)}:{EdgeBucket(x.CostReductionNeeded, 0.002m)}"));
                     var shouldLogNear = ShouldQuietLog("verified-basket", "NEAR_EXECUTABLE_VERIFIED_BASKET", nearFingerprint, LogImportance.Normal, nearFingerprint, everyNCycles: options.Logging.LogVerifiedBasketEveryNCycles, maxPerHour: options.Logging.MaxMultiVerifiedScanLogsPerHour);
