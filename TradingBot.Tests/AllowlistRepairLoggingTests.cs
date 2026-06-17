@@ -648,18 +648,21 @@ public class AllowlistRepairLoggingTests
     }
 
     [Fact]
-    public void Allowlist_duplicate_primary_category_group_is_reported_but_final_category_is_single()
+    public void Allowlist_raw_category_conflict_is_resolved_without_final_duplicate()
     {
         var summary = ScanLogSummaryService.AllowlistPrimaryClassification([Config("g")],
             [PrimaryRepair("g", "MonitoringOnly", "PruneMissingNoAskLegs", missingNoAsk: ["m1"])]);
 
-        var duplicate = Assert.Single(summary.DuplicateGroups);
-        Assert.Equal("g", duplicate.GroupKey);
-        Assert.Equal("NeedsPricingPrune", duplicate.FinalPrimaryCategory);
-        Assert.Contains("MonitoringOnly", duplicate.PrimaryCategories);
-        Assert.Contains("NeedsPricingPrune", duplicate.PrimaryCategories);
+        var conflict = Assert.Single(summary.ResolvedConflictGroups);
+        Assert.Equal("g", conflict.GroupKey);
+        Assert.Equal("NeedsPricingPrune", conflict.FinalPrimaryCategory);
+        Assert.Equal("NeedsPricingPruneOverridesMonitoringOnly", conflict.FinalReason);
+        Assert.Contains("MonitoringOnly", conflict.RawCategoryCandidates);
+        Assert.Contains("NeedsPricingPrune", conflict.RawCategoryCandidates);
+        Assert.Empty(summary.DuplicateFinalPrimaryCategoryGroups);
+        Assert.Equal(0, summary.DuplicateFinalPrimaryCategoryGroupCount);
         Assert.Equal(1, summary.PrimaryCategorySum);
-        Assert.False(summary.Valid);
+        Assert.True(summary.Valid);
     }
 
     [Fact]
@@ -671,6 +674,8 @@ public class AllowlistRepairLoggingTests
         Assert.Equal(1, summary.ReviewOnly);
         Assert.Equal(0, summary.BrokenConfig);
         Assert.Equal("ReviewOnly", Assert.Single(summary.Groups).FinalPrimaryCategory);
+        Assert.Equal(0, summary.DuplicateFinalPrimaryCategoryGroupCount);
+        Assert.True(summary.Valid);
     }
 
     [Fact]
@@ -682,6 +687,8 @@ public class AllowlistRepairLoggingTests
         Assert.Equal(1, summary.NeedsPricingPrune);
         Assert.Equal(0, summary.MonitoringOnly);
         Assert.Equal("NeedsPricingPrune", Assert.Single(summary.Groups).FinalPrimaryCategory);
+        Assert.Equal(0, summary.DuplicateFinalPrimaryCategoryGroupCount);
+        Assert.True(summary.Valid);
     }
 
     [Fact]
@@ -693,6 +700,9 @@ public class AllowlistRepairLoggingTests
         Assert.Equal(1, summary.ReviewOnly);
         Assert.Equal(0, summary.NeedsRefresh);
         Assert.Equal("ReviewOnly", Assert.Single(summary.Groups).FinalPrimaryCategory);
+        Assert.Equal("ReviewOnlyOverridesNeedsRefresh", Assert.Single(summary.ResolvedConflictGroups).FinalReason);
+        Assert.Equal(0, summary.DuplicateFinalPrimaryCategoryGroupCount);
+        Assert.True(summary.Valid);
     }
 
     [Fact]

@@ -45,8 +45,9 @@ public sealed record VerifiedUnresolvedGroupDiagnostic(
 public sealed record AllowlistPrimaryClassificationGroup(
     string GroupKey,
     string FinalPrimaryCategory,
-    IReadOnlyList<string> PrimaryCategories,
-    IReadOnlyList<string> Reasons);
+    string FinalReason,
+    IReadOnlyList<string> RawCategoryCandidates,
+    IReadOnlyList<string> SecondaryReasons);
 
 public sealed record AllowlistPrimaryClassificationSummary(
     int Configured,
@@ -62,9 +63,11 @@ public sealed record AllowlistPrimaryClassificationSummary(
     bool Valid,
     IReadOnlyList<AllowlistPrimaryClassificationGroup> Groups,
     IReadOnlyList<string> MissingGroups,
-    IReadOnlyList<AllowlistPrimaryClassificationGroup> DuplicateGroups)
+    IReadOnlyList<AllowlistPrimaryClassificationGroup> DuplicateFinalPrimaryCategoryGroups,
+    IReadOnlyList<AllowlistPrimaryClassificationGroup> ResolvedConflictGroups)
 {
-    public int DuplicatePrimaryCategoryGroupCount => DuplicateGroups.Count;
+    public int DuplicateFinalPrimaryCategoryGroupCount => DuplicateFinalPrimaryCategoryGroups.Count;
+    public int DuplicatePrimaryCategoryGroupCount => DuplicateFinalPrimaryCategoryGroupCount;
     public int MissingPrimaryCategoryGroupCount => MissingGroups.Count;
 }
 
@@ -217,10 +220,16 @@ public static class ScanLogSummaryService
                 missing.Add(cfg.GroupKey);
                 continue;
             }
-            groups.Add(new AllowlistPrimaryClassificationGroup(cfg.GroupKey, final, candidates, reasons));
+            var finalReason = FinalReason(final, candidates);
+            var secondaryReasons = reasons
+                .Concat(candidates.Where(x => !x.Equals(final, StringComparison.OrdinalIgnoreCase)).Select(x => $"RawCategoryCandidate:{x}"))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            groups.Add(new AllowlistPrimaryClassificationGroup(cfg.GroupKey, final, finalReason, candidates, secondaryReasons));
         }
 
-        var duplicates = groups.Where(x => x.PrimaryCategories.Count > 1).ToArray();
+        var duplicateFinalGroups = Array.Empty<AllowlistPrimaryClassificationGroup>();
+        var resolvedConflicts = groups.Where(x => x.RawCategoryCandidates.Count > 1).ToArray();
         var healthy = groups.Count(x => x.FinalPrimaryCategory.Equals("Healthy", StringComparison.OrdinalIgnoreCase));
         var monitoring = groups.Count(x => x.FinalPrimaryCategory.Equals("MonitoringOnly", StringComparison.OrdinalIgnoreCase));
         var prune = groups.Count(x => x.FinalPrimaryCategory.Equals("NeedsPricingPrune", StringComparison.OrdinalIgnoreCase));
@@ -230,7 +239,7 @@ public static class ScanLogSummaryService
         var disabled = groups.Count(x => x.FinalPrimaryCategory.Equals("Disabled", StringComparison.OrdinalIgnoreCase));
         var ignored = groups.Count(x => x.FinalPrimaryCategory.Equals("Ignored", StringComparison.OrdinalIgnoreCase));
         var sum = healthy + monitoring + prune + refresh + review + broken + disabled + ignored;
-        return new AllowlistPrimaryClassificationSummary(configuredGroups.Count, healthy, monitoring, prune, refresh, review, broken, disabled, ignored, sum, sum == configuredGroups.Count && duplicates.Length == 0 && missing.Count == 0, groups, missing, duplicates);
+        return new AllowlistPrimaryClassificationSummary(configuredGroups.Count, healthy, monitoring, prune, refresh, review, broken, disabled, ignored, sum, sum == configuredGroups.Count && duplicateFinalGroups.Length == 0 && missing.Count == 0, groups, missing, duplicateFinalGroups, resolvedConflicts);
     }
 
     private static IEnumerable<string> CandidatePrimaryCategories(VerifiedMultiOutcomeGroupConfig cfg, AllowlistRepairGroup? repair)
@@ -273,10 +282,19 @@ public static class ScanLogSummaryService
     private static string FinalPrimaryCategory(IReadOnlyList<string> candidates)
     {
         if (candidates.Count == 0) return string.Empty;
-        foreach (var category in new[] { "Disabled", "Ignored", "ReviewOnly", "NeedsPricingPrune", "NeedsRefresh", "BrokenConfig", "MonitoringOnly", "Healthy" })
+        foreach (var category in new[] { "Disabled", "Ignored", "ReviewOnly", "NeedsPricingPrune", "BrokenConfig", "NeedsRefresh", "MonitoringOnly", "Healthy" })
             if (candidates.Contains(category, StringComparer.OrdinalIgnoreCase)) return category;
         return string.Empty;
     }
+
+    private static string FinalReason(string finalCategory, IReadOnlyList<string> rawCandidates)
+        => finalCategory switch
+        {
+            "ReviewOnly" when rawCandidates.Contains("NeedsRefresh", StringComparer.OrdinalIgnoreCase) => "ReviewOnlyOverridesNeedsRefresh",
+            "ReviewOnly" when rawCandidates.Contains("BrokenConfig", StringComparer.OrdinalIgnoreCase) => "ReviewOnlyOverridesBrokenConfig",
+            "NeedsPricingPrune" when rawCandidates.Contains("MonitoringOnly", StringComparer.OrdinalIgnoreCase) => "NeedsPricingPruneOverridesMonitoringOnly",
+            _ => rawCandidates.Count > 1 ? $"{finalCategory}Precedence" : finalCategory
+        };
 
     public static VerifiedUnresolvedCategoryCounts UnresolvedCategoryCounts(IReadOnlyList<VerifiedUnresolvedGroupDiagnostic> groups)
     {

@@ -1108,17 +1108,18 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     allowlistHealthCycle++;
                     var classificationTotal = finalClassification.PrimaryCategorySum;
                     var classificationValid = finalClassification.Valid;
-                    foreach (var duplicate in finalClassification.DuplicateGroups)
-                    {
-                        Console.WriteLine($"[ALLOWLIST_CLASSIFICATION_DUPLICATE] Group={duplicate.GroupKey} PrimaryCategories=[{string.Join(",", duplicate.PrimaryCategories)}] FinalPrimaryCategory={duplicate.FinalPrimaryCategory} Reasons=[{string.Join(",", duplicate.Reasons)}] Action=UseFinalPrimaryCategoryOnly");
-                    }
                     var allowlistFingerprint = $"{finalClassification.Configured}|{healthyCount}|{brokenCount}|{disabledCount}|{ignoredCount}|{needsRefreshCount}|{finalClassification.NeedsPricingPrune}|{finalClassification.NeedsRefresh}|{finalClassification.ReviewOnly}|{finalClassification.BrokenConfig}|{classificationTotal}|{classificationValid}";
                     var shouldLogAllowlist = !options.Logging.LogAllowlistHealthOnChangeOnly || allowlistFingerprint != lastAllowlistHealthFingerprint || (options.Logging.LogAllowlistHealthEveryNCycles > 0 && allowlistHealthCycle % options.Logging.LogAllowlistHealthEveryNCycles == 0);
                     lastAllowlistHealthFingerprint = allowlistFingerprint;
-                    if (shouldLogAllowlist) Console.WriteLine($"[ALLOWLIST_HEALTH] Configured={finalClassification.Configured} Healthy={finalClassification.Healthy} MonitoringOnly={finalClassification.MonitoringOnly} NeedsPricingPrune={finalClassification.NeedsPricingPrune} NeedsRefresh={finalClassification.NeedsRefresh} ReviewOnly={finalClassification.ReviewOnly} BrokenConfig={finalClassification.BrokenConfig} Disabled={finalClassification.Disabled} Ignored={finalClassification.Ignored} BrokenTotal={brokenCount} ClassificationTotal={classificationTotal} ClassificationValid={classificationValid.ToString().ToLowerInvariant()}");
-                    if (!classificationValid)
+                    if (shouldLogAllowlist)
                     {
-                        Console.WriteLine($"[ALLOWLIST_CLASSIFICATION_ERROR] Configured={finalClassification.Configured} PrimaryCategorySum={classificationTotal} MissingPrimaryCategoryGroupCount={finalClassification.MissingPrimaryCategoryGroupCount} DuplicatePrimaryCategoryGroupCount={finalClassification.DuplicatePrimaryCategoryGroupCount} DuplicateGroups=[{string.Join(",", finalClassification.DuplicateGroups.Select(x => x.GroupKey).Take(20))}] MissingGroups=[{string.Join(",", finalClassification.MissingGroups.Take(20))}]");
+                        Console.WriteLine($"[ALLOWLIST_HEALTH] Configured={finalClassification.Configured} Healthy={finalClassification.Healthy} MonitoringOnly={finalClassification.MonitoringOnly} NeedsPricingPrune={finalClassification.NeedsPricingPrune} NeedsRefresh={finalClassification.NeedsRefresh} ReviewOnly={finalClassification.ReviewOnly} BrokenConfig={finalClassification.BrokenConfig} Disabled={finalClassification.Disabled} Ignored={finalClassification.Ignored} BrokenTotal={brokenCount} ClassificationTotal={classificationTotal} ClassificationValid={classificationValid.ToString().ToLowerInvariant()}");
+                        foreach (var conflict in finalClassification.ResolvedConflictGroups.Take(20))
+                            Console.WriteLine($"[ALLOWLIST_CLASSIFICATION_CONFLICT_RESOLVED] Group={conflict.GroupKey} RawCategoryCandidates=[{string.Join(",", conflict.RawCategoryCandidates)}] FinalPrimaryCategory={conflict.FinalPrimaryCategory} Resolution={conflict.FinalReason}");
+                        foreach (var duplicate in finalClassification.DuplicateFinalPrimaryCategoryGroups.Take(20))
+                            Console.WriteLine($"[ALLOWLIST_CLASSIFICATION_DUPLICATE] Group={duplicate.GroupKey} FinalPrimaryCategories=[{duplicate.FinalPrimaryCategory}] RawCategoryCandidates=[{string.Join(",", duplicate.RawCategoryCandidates)}] FinalPrimaryCategory={duplicate.FinalPrimaryCategory} Reasons=[{string.Join(",", duplicate.SecondaryReasons)}] Action=UseFinalPrimaryCategoryOnly");
+                        if (!classificationValid)
+                            Console.WriteLine($"[ALLOWLIST_CLASSIFICATION_ERROR] Configured={finalClassification.Configured} PrimaryCategorySum={classificationTotal} MissingPrimaryCategoryGroupCount={finalClassification.MissingPrimaryCategoryGroupCount} DuplicateFinalPrimaryCategoryGroupCount={finalClassification.DuplicateFinalPrimaryCategoryGroupCount} DuplicateGroups=[{string.Join(",", finalClassification.DuplicateFinalPrimaryCategoryGroups.Select(x => x.GroupKey).Take(20))}] MissingGroups=[{string.Join(",", finalClassification.MissingGroups.Take(20))}]");
                     }
                     foreach (var remaining in repairReport.Groups.Where(x => x.RecommendedAction == "PruneMissingNoAskLegs" && x.MissingNoAskMarketIds.Count > 0))
                     {
