@@ -9,6 +9,7 @@ public enum AllowlistRepairHealthCategory
     PricingUnavailable,
     NeedsPricingPrune,
     NeedsRefresh,
+    ReviewOnly,
     BrokenConfig,
     Disabled,
     Ignored
@@ -68,6 +69,7 @@ public sealed record AllowlistRepairCategoryCounts(
     int MonitoringOnly,
     int NeedsPricingPrune,
     int NeedsRefresh,
+    int ReviewOnly,
     int BrokenConfig,
     int Disabled,
     int Ignored,
@@ -83,6 +85,7 @@ public sealed record AllowlistRepairSummary(
     int MonitoringOnly,
     int NeedsPricingPrune,
     int NeedsRefresh,
+    int ReviewOnly,
     int BrokenConfig,
     int Disabled,
     int Ignored,
@@ -110,6 +113,7 @@ public sealed record AllowlistRepairReport(
     int Broken,
     int NeedsRefresh,
     int NeedsPricingPrune,
+    int ReviewOnly,
     int BrokenConfig,
     int Disabled,
     int Ignored,
@@ -150,6 +154,57 @@ public sealed record AllowlistRepairGroup(
     IReadOnlyList<string> Notes,
     string ExpectedResultAfterManualApply,
     string CopyInstructions);
+
+
+
+public sealed record AllowlistRefreshInstabilitySummary(
+    string GroupKey,
+    IReadOnlyList<string> ObservedDecisions,
+    IReadOnlyList<string> ObservedActions,
+    int SnapshotsObserved,
+    bool IsUnstable,
+    string Reason);
+
+public sealed record AllowlistUnstableManualReviewLockSnapshot(
+    string GroupKey,
+    string FirstDetectedSnapshotId,
+    DateTime FirstDetectedAtUtc,
+    string Reason,
+    IReadOnlyList<string> ObservedDecisions,
+    IReadOnlyList<string> ObservedActions,
+    string LastSeenSnapshotId,
+    DateTime LastSeenAtUtc);
+
+public sealed record AllowlistRefreshDiagnosticsExport(
+    DateTime Timestamp,
+    string SnapshotId,
+    bool AutoApplyAllowed,
+    IReadOnlyList<AllowlistRefreshDiagnosticsItem> Items);
+
+public sealed record AllowlistRefreshDiagnosticsItem(
+    string GroupKey,
+    IReadOnlyList<string> CurrentConfiguredMarketIds,
+    IReadOnlyList<string> CurrentConfiguredTokenIds,
+    int ConfiguredLegCount,
+    string ResolverStatus,
+    int DiscoveredCandidateMatches,
+    string BestCandidateGroupKey,
+    decimal BestCandidateScore,
+    IReadOnlyList<string> MatchedMarketIds,
+    IReadOnlyList<string> MissingMarketIds,
+    IReadOnlyList<string> MissingTokenIds,
+    IReadOnlyList<string> AddedMarketIds,
+    IReadOnlyList<string> AddedTokenIds,
+    IReadOnlyList<string> RemovedMarketIds,
+    IReadOnlyList<string> RemovedTokenIds,
+    decimal OverlapRatio,
+    decimal TitleSimilarity,
+    bool CategoryKindMatch,
+    string Reason,
+    string RecommendedAction,
+    string Confidence,
+    string FinalDecision,
+    bool AutoApplyAllowed);
 
 public sealed record AllowlistRepairSuggestedConfig(
     string SnapshotId,

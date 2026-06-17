@@ -80,6 +80,34 @@ public sealed record RuntimeHealthSnapshot(
     long BatchBookSkippedMarketsWithQuarantinedTokens,
     long BatchBookRepeatedInvalidTokenAfterQuarantine,
     int OrderbookUnavailableMarkets,
+    int InvalidTokenQuarantineActive,
+    long InvalidTokenQuarantineAdded,
+    long InvalidTokenQuarantineExpired,
+    long BatchBookRequestsAvoidedByQuarantine,
+    long MarketsSkippedByInvalidTokenQuarantine,
+    int AllowlistHealthy,
+    int AllowlistMonitoringOnly,
+    int AllowlistNeedsPricingPrune,
+    int AllowlistNeedsRefresh,
+    int AllowlistReviewOnly,
+    int AllowlistMismatch,
+    int AllowlistBrokenConfig,
+    int AllowlistDisabled,
+    int AllowlistIgnored,
+    int AllowlistClassificationTotal,
+    bool AllowlistClassificationValid,
+    int AllowlistRefreshPreviewCandidates,
+    int AllowlistRefreshHighConfidence,
+    int AllowlistRefreshFinalNoCandidate,
+    int AllowlistRefreshFinalSemanticConflict,
+    int AllowlistRefreshFinalLowConfidence,
+    int AllowlistRefreshFinalUnstable,
+    int AllowlistRefreshFinalPreviewOnly,
+    int AllowlistRefreshFinalLockedManualReview,
+    int AllowlistRefreshActionExplainedSuppressed,
+    int AllowlistRefreshUnstableGroups,
+    int AllowlistRefreshActionFlipFlops,
+    bool AllowlistRefreshAutoApply,
     IReadOnlyDictionary<string, TradingBot.Services.StrategyRuntimeCounterSnapshot> StrategyCounters)
 {
     public string ToLogLine()
@@ -93,7 +121,7 @@ public sealed record RuntimeHealthSnapshot(
         var strategyExecutionReady = string.Join(",", StrategyCounters.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value.ExecutionReady}"));
         var strategyPaperOpened = string.Join(",", StrategyCounters.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value.PaperOpened}"));
         var strategyRejectedByReason = string.Join(",", StrategyCounters.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:[{FormatRejectedReasons(x.Value.RejectedByReason)}]"));
-        return $"[RUNTIME_HEALTH] ProcessMb={ProcessMemoryMb} GcMb={GcTotalMemoryMb} WorkingSetMb={WorkingSetMb} Logs={RecentLogsCount} ScannerHistory={ScannerHistoryCount} CandidateSnapshots={CandidateSnapshotCount} RepairHistory={RepairHistoryCount} ExecutionAudit={ExecutionAuditCount} SignalRBuffer={SignalREventBufferCount} OrderbookCache={OrderbookCacheCount} MarketCache={MarketCacheCount} PatchPreviewItems={PatchPreviewItemsCount} SingleMarketOpportunities={SingleMarketOpportunitiesCount} SingleMarketNearMisses={SingleMarketNearMissesCount} SingleMarketDataQualitySamples={SingleMarketDataQualitySamplesCount} SingleMarketExecutions={SingleMarketExecutionsCount} PaperPhase={PaperPhase} PaperOpenPositions={PaperOpenPositions} PaperClosedPositions={PaperClosedPositions} PaperSettlements={PaperSettlements} PaperRealizedPnl={PaperRealizedPnl} PaperLocked={PaperLocked} PaperCash={PaperCash} PaperEquity={PaperEquity} PaperTotalExposure={PaperTotalExposure} PaperOpenCountLastHour={PaperOpenCountLastHour} PaperPretradeRejects={PaperPretradeRejects} PaperDuplicateSuppressions={PaperDuplicateSuppressions} PaperOpenPositionKeys={string.Join("|", PaperOpenPositionKeys)} PaperOpenMarketIdsCount={PaperOpenMarketIdsCount} PaperOpenMarketIdsSample={string.Join("|", PaperOpenMarketIdsSample)} PaperInFlightOpens={PaperInFlightOpens} PaperDuplicateDedupeEntries={PaperDuplicateDedupeEntries} PaperStaleDedupeEntriesCleared={PaperStaleDedupeEntriesCleared} PaperSettlementRejects={PaperSettlementRejects} PaperDuplicateSettlementSuppressions={PaperDuplicateSettlementSuppressions} PaperLifecycleEvents={PaperLifecycleEvents} PaperOpenEvents={PaperOpenEvents} PaperCloseEvents={PaperCloseEvents} LiveTradingBlocked={LiveTradingBlockedCount} PaperExecutions={PaperExecutionsCount} SigningAttempts={SigningAttempts} DuplicateGroupKeyWarnings={DuplicateGroupKeyWarnings} QuietSuppressed={QuietSuppressedTotal} EmittedLogs={EmittedLogs} LogGateCache={LogGateCacheSize} QuietSuppressedByCategory={{{suppressed}}} EmittedByCategory={{{emitted}}} BatchBookRequests={BatchBookRequests} BatchBookBadRequests={BatchBookBadRequests} BatchBookTimeouts={BatchBookTimeouts} BatchBookRetrySuccesses={BatchBookRetrySuccesses} BatchBookInvalidTokens={BatchBookInvalidTokens} BatchBookSuppressedErrors={BatchBookSuppressedErrors} BatchBookSplitRetriesAttempted={BatchBookSplitRetriesAttempted} BatchBookSplitRetrySucceeded={BatchBookSplitRetrySucceeded} BatchBookSplitRetryFailed={BatchBookSplitRetryFailed} BatchBookSingleTokenFailures={BatchBookSingleTokenFailures} BatchBookSingleTokenQuarantined={BatchBookSingleTokenQuarantined} BatchBookSkippedQuarantinedTokens={BatchBookSkippedQuarantinedTokens} BatchBookSkippedMarketsWithQuarantinedTokens={BatchBookSkippedMarketsWithQuarantinedTokens} OrderbookUnavailableMarkets={OrderbookUnavailableMarkets} Strategies={{{strategies}}} StrategyScanCounts={{{strategyScanCounts}}} StrategyCandidates={{{strategyCandidates}}} StrategyPositiveEdges={{{strategyPositiveEdges}}} StrategyExecutionReady={{{strategyExecutionReady}}} StrategyPaperOpened={{{strategyPaperOpened}}} StrategyRejectedByReason={{{strategyRejectedByReason}}} Uptime={Uptime}";
+        return $"[RUNTIME_HEALTH] ProcessMb={ProcessMemoryMb} GcMb={GcTotalMemoryMb} WorkingSetMb={WorkingSetMb} Logs={RecentLogsCount} ScannerHistory={ScannerHistoryCount} CandidateSnapshots={CandidateSnapshotCount} RepairHistory={RepairHistoryCount} ExecutionAudit={ExecutionAuditCount} SignalRBuffer={SignalREventBufferCount} OrderbookCache={OrderbookCacheCount} MarketCache={MarketCacheCount} PatchPreviewItems={PatchPreviewItemsCount} SingleMarketOpportunities={SingleMarketOpportunitiesCount} SingleMarketNearMisses={SingleMarketNearMissesCount} SingleMarketDataQualitySamples={SingleMarketDataQualitySamplesCount} SingleMarketExecutions={SingleMarketExecutionsCount} PaperPhase={PaperPhase} PaperOpenPositions={PaperOpenPositions} PaperClosedPositions={PaperClosedPositions} PaperSettlements={PaperSettlements} PaperRealizedPnl={PaperRealizedPnl} PaperLocked={PaperLocked} PaperCash={PaperCash} PaperEquity={PaperEquity} PaperTotalExposure={PaperTotalExposure} PaperOpenCountLastHour={PaperOpenCountLastHour} PaperPretradeRejects={PaperPretradeRejects} PaperDuplicateSuppressions={PaperDuplicateSuppressions} PaperOpenPositionKeys={string.Join("|", PaperOpenPositionKeys)} PaperOpenMarketIdsCount={PaperOpenMarketIdsCount} PaperOpenMarketIdsSample={string.Join("|", PaperOpenMarketIdsSample)} PaperInFlightOpens={PaperInFlightOpens} PaperDuplicateDedupeEntries={PaperDuplicateDedupeEntries} PaperStaleDedupeEntriesCleared={PaperStaleDedupeEntriesCleared} PaperSettlementRejects={PaperSettlementRejects} PaperDuplicateSettlementSuppressions={PaperDuplicateSettlementSuppressions} PaperLifecycleEvents={PaperLifecycleEvents} PaperOpenEvents={PaperOpenEvents} PaperCloseEvents={PaperCloseEvents} LiveTradingBlocked={LiveTradingBlockedCount} PaperExecutions={PaperExecutionsCount} SigningAttempts={SigningAttempts} DuplicateGroupKeyWarnings={DuplicateGroupKeyWarnings} QuietSuppressed={QuietSuppressedTotal} EmittedLogs={EmittedLogs} LogGateCache={LogGateCacheSize} QuietSuppressedByCategory={{{suppressed}}} EmittedByCategory={{{emitted}}} BatchBookRequests={BatchBookRequests} BatchBookBadRequests={BatchBookBadRequests} BatchBookTimeouts={BatchBookTimeouts} BatchBookRetrySuccesses={BatchBookRetrySuccesses} BatchBookInvalidTokens={BatchBookInvalidTokens} BatchBookSuppressedErrors={BatchBookSuppressedErrors} BatchBookSplitRetriesAttempted={BatchBookSplitRetriesAttempted} BatchBookSplitRetrySucceeded={BatchBookSplitRetrySucceeded} BatchBookSplitRetryFailed={BatchBookSplitRetryFailed} BatchBookSingleTokenFailures={BatchBookSingleTokenFailures} BatchBookSingleTokenQuarantined={BatchBookSingleTokenQuarantined} BatchBookSkippedQuarantinedTokens={BatchBookSkippedQuarantinedTokens} BatchBookSkippedMarketsWithQuarantinedTokens={BatchBookSkippedMarketsWithQuarantinedTokens} OrderbookUnavailableMarkets={OrderbookUnavailableMarkets} InvalidTokenQuarantineActive={InvalidTokenQuarantineActive} InvalidTokenQuarantineAdded={InvalidTokenQuarantineAdded} InvalidTokenQuarantineExpired={InvalidTokenQuarantineExpired} BatchBookRequestsAvoidedByQuarantine={BatchBookRequestsAvoidedByQuarantine} MarketsSkippedByInvalidTokenQuarantine={MarketsSkippedByInvalidTokenQuarantine} AllowlistHealthy={AllowlistHealthy} AllowlistMonitoringOnly={AllowlistMonitoringOnly} AllowlistNeedsPricingPrune={AllowlistNeedsPricingPrune} AllowlistNeedsRefresh={AllowlistNeedsRefresh} AllowlistReviewOnly={AllowlistReviewOnly} AllowlistMismatch={AllowlistMismatch} AllowlistBrokenConfig={AllowlistBrokenConfig} AllowlistDisabled={AllowlistDisabled} AllowlistIgnored={AllowlistIgnored} AllowlistClassificationTotal={AllowlistClassificationTotal} AllowlistClassificationValid={AllowlistClassificationValid.ToString().ToLowerInvariant()} AllowlistRefreshPreviewCandidates={AllowlistRefreshPreviewCandidates} AllowlistRefreshHighConfidence={AllowlistRefreshHighConfidence} AllowlistRefreshFinalNoCandidate={AllowlistRefreshFinalNoCandidate} AllowlistRefreshFinalSemanticConflict={AllowlistRefreshFinalSemanticConflict} AllowlistRefreshFinalLowConfidence={AllowlistRefreshFinalLowConfidence} AllowlistRefreshFinalUnstable={AllowlistRefreshFinalUnstable} AllowlistRefreshFinalPreviewOnly={AllowlistRefreshFinalPreviewOnly} AllowlistRefreshFinalLockedManualReview={AllowlistRefreshFinalLockedManualReview} AllowlistRefreshActionExplainedSuppressed={AllowlistRefreshActionExplainedSuppressed} AllowlistRefreshUnstableGroups={AllowlistRefreshUnstableGroups} AllowlistRefreshActionFlipFlops={AllowlistRefreshActionFlipFlops} AllowlistRefreshAutoApply={AllowlistRefreshAutoApply.ToString().ToLowerInvariant()} Strategies={{{strategies}}} StrategyScanCounts={{{strategyScanCounts}}} StrategyCandidates={{{strategyCandidates}}} StrategyPositiveEdges={{{strategyPositiveEdges}}} StrategyExecutionReady={{{strategyExecutionReady}}} StrategyPaperOpened={{{strategyPaperOpened}}} StrategyRejectedByReason={{{strategyRejectedByReason}}} Uptime={Uptime}";
     }
 
 
@@ -196,6 +224,34 @@ public sealed record RuntimeHealthSnapshot(
             BatchBookSkippedMarketsWithQuarantinedTokens: state.OrderBookServiceStats.BatchBookSkippedMarketsWithQuarantinedTokens,
             BatchBookRepeatedInvalidTokenAfterQuarantine: state.OrderBookServiceStats.BatchBookRepeatedInvalidTokenAfterQuarantine,
             OrderbookUnavailableMarkets: state.OrderBookServiceStats.OrderbookUnavailableMarkets,
+            InvalidTokenQuarantineActive: state.OrderBookServiceStats.InvalidTokenQuarantineActive,
+            InvalidTokenQuarantineAdded: state.OrderBookServiceStats.InvalidTokenQuarantineAdded,
+            InvalidTokenQuarantineExpired: state.OrderBookServiceStats.InvalidTokenQuarantineExpired,
+            BatchBookRequestsAvoidedByQuarantine: state.OrderBookServiceStats.BatchBookRequestsAvoidedByQuarantine,
+            MarketsSkippedByInvalidTokenQuarantine: state.OrderBookServiceStats.MarketsSkippedByInvalidTokenQuarantine,
+            AllowlistHealthy: state.AllowlistHealthy,
+            AllowlistMonitoringOnly: state.AllowlistMonitoringOnly,
+            AllowlistNeedsPricingPrune: state.AllowlistNeedsPricingPrune,
+            AllowlistNeedsRefresh: state.AllowlistNeedsRefresh,
+            AllowlistReviewOnly: state.AllowlistReviewOnly,
+            AllowlistMismatch: state.AllowlistMismatch,
+            AllowlistBrokenConfig: state.AllowlistBrokenConfig,
+            AllowlistDisabled: state.AllowlistDisabled,
+            AllowlistIgnored: state.AllowlistIgnored,
+            AllowlistClassificationTotal: state.AllowlistClassificationTotal,
+            AllowlistClassificationValid: state.AllowlistClassificationValid,
+            AllowlistRefreshPreviewCandidates: state.AllowlistRefreshPreviewCandidates,
+            AllowlistRefreshHighConfidence: state.AllowlistRefreshHighConfidence,
+            AllowlistRefreshFinalNoCandidate: state.AllowlistRefreshFinalNoCandidate,
+            AllowlistRefreshFinalSemanticConflict: state.AllowlistRefreshFinalSemanticConflict,
+            AllowlistRefreshFinalLowConfidence: state.AllowlistRefreshFinalLowConfidence,
+            AllowlistRefreshFinalUnstable: state.AllowlistRefreshFinalUnstable,
+            AllowlistRefreshFinalPreviewOnly: state.AllowlistRefreshFinalPreviewOnly,
+            AllowlistRefreshFinalLockedManualReview: state.AllowlistRefreshFinalLockedManualReview,
+            AllowlistRefreshActionExplainedSuppressed: state.AllowlistRefreshActionExplainedSuppressed,
+            AllowlistRefreshUnstableGroups: state.AllowlistRefreshUnstableGroups,
+            AllowlistRefreshActionFlipFlops: state.AllowlistRefreshActionFlipFlops,
+            AllowlistRefreshAutoApply: options?.AllowlistRepair.RefreshPreview.AutoApply ?? false,
             StrategyCounters: state.StrategyCountersSnapshot());
     }
 }
@@ -223,7 +279,7 @@ public static class RuntimeHealthTrendTracker
             var now = DateTime.UtcNow;
             Samples.Add((now, snapshot.ProcessMemoryMb, snapshot.BatchBookBadRequests, snapshot.BatchBookInvalidTokens, snapshot.BatchBookSkippedQuarantinedTokens));
             Trim(now, options.SoakTrendWindowMinutes);
-            return AnalyzeNoLock(options);
+            return AnalyzeNoLock(options, snapshot);
         }
     }
 
@@ -252,12 +308,17 @@ public static class RuntimeHealthTrendTracker
     {
         var logVolumeStable = options is null || IsLogVolumeStable(health, options);
         var batchRate = health.BatchBookRequests <= 0 ? 0d : (double)health.BatchBookBadRequests / health.BatchBookRequests;
-        var orderbookStable = options is null || (batchRate <= options.OrderBook.MaxBadRequestRateForStable && trend.BatchBookBadRequestsDeltaLastHour <= options.OrderBook.MaxBadRequestsPerHourForStable && health.BatchBookRepeatedInvalidTokenAfterQuarantine <= options.OrderBook.MaxRepeatedInvalidTokenAfterQuarantine);
+        var orderbookStable = options is null || (batchRate <= options.Soak.MaxBatchBookBadRequestRate
+            && trend.BatchBookBadRequestsDeltaLastHour <= options.Soak.MaxBatchBookBadRequestsPerHour
+            && trend.BatchBookInvalidTokensDeltaLastHour <= options.Soak.MaxBatchBookInvalidTokensPerHour
+            && health.BatchBookRepeatedInvalidTokenAfterQuarantine <= options.OrderBook.MaxRepeatedInvalidTokenAfterQuarantine
+            && health.BatchBookSplitRetryFailed <= options.OrderBook.MaxBatchSplitRetriesPerCycle
+            && health.OrderbookUnavailableMarkets <= options.Soak.MaxOrderbookUnavailableMarkets);
         var warmupMinutes = options?.RuntimeHealth.WarmupMinutes ?? 0;
         var warmupComplete = warmupMinutes <= 0 || health.Uptime >= TimeSpan.FromMinutes(warmupMinutes);
         var memoryStable = warmupComplete && trend.IsMemoryStable && (state?.MemoryCriticals ?? 0) == 0;
         var strategyStatus = string.Join(",", health.StrategyCounters.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => FormatStrategySoakStatus(x.Key, x.Value)));
-        return $"[SOAK_STATUS] Uptime={health.Uptime} ProcessMb={health.ProcessMemoryMb} DeltaMb={trend.MemoryDeltaMbWindow:0.##} SlopeMbPerMin={trend.MemorySlopeMbPerMinute:0.##} WarmupMinutes={Math.Max(0, warmupMinutes)} WarmupComplete={warmupComplete.ToString().ToLowerInvariant()} Logs={health.RecentLogsCount} ExecutionAudit={health.ExecutionAuditCount} SignalR={health.SignalREventBufferCount} PaperOpened={health.PaperExecutionsCount} PaperOpenPositions={health.PaperOpenPositions} PaperInFlightOpens={health.PaperInFlightOpens} PaperDuplicateSuppressions={health.PaperDuplicateSuppressions} PaperStaleDedupeEntriesCleared={health.PaperStaleDedupeEntriesCleared} PaperClosed={health.PaperClosedPositions} PaperExposure={health.PaperTotalExposure:0.####} PaperRealizedPnl={health.PaperRealizedPnl:0.####} PaperLocked={health.PaperLocked:0.####} LiveTradingBlocked={health.LiveTradingBlockedCount} QuietSuppressed={health.QuietSuppressedTotal} BatchBookRequests={health.BatchBookRequests} BatchBookBadRequests={health.BatchBookBadRequests} BatchBookTimeouts={health.BatchBookTimeouts} BatchBookRetrySuccesses={health.BatchBookRetrySuccesses} BatchBookInvalidTokens={health.BatchBookInvalidTokens} BatchBookSuppressedErrors={health.BatchBookSuppressedErrors} BatchBookSplitRetriesAttempted={health.BatchBookSplitRetriesAttempted} BatchBookSplitRetrySucceeded={health.BatchBookSplitRetrySucceeded} BatchBookSplitRetryFailed={health.BatchBookSplitRetryFailed} BatchBookSingleTokenFailures={health.BatchBookSingleTokenFailures} BatchBookSingleTokenQuarantined={health.BatchBookSingleTokenQuarantined} BatchBookSkippedQuarantinedTokens={health.BatchBookSkippedQuarantinedTokens} BatchBookSkippedMarketsWithQuarantinedTokens={health.BatchBookSkippedMarketsWithQuarantinedTokens} BatchBookBadRequestRate={batchRate:0.####} BatchBookBadRequestsDeltaLastHour={trend.BatchBookBadRequestsDeltaLastHour} BatchBookInvalidTokensDeltaLastHour={trend.BatchBookInvalidTokensDeltaLastHour} QuarantinedTokens={state?.OrderBookServiceStats.QuarantinedTokens ?? 0} SkippedQuarantinedTokensLastHour={trend.SkippedQuarantinedTokensLastHour} OrderbookUnavailableMarkets={health.OrderbookUnavailableMarkets} VerifiedPricingUnavailableGroups=0 InvalidTokenQuarantine={state?.OrderBookServiceStats.QuarantinedTokens ?? 0} OrderbookCache={health.OrderbookCacheCount} QuietLogGateCache={health.LogGateCacheSize} MemoryWarnings={state?.MemoryWarnings ?? 0} MemoryCriticals={state?.MemoryCriticals ?? 0} ScannerPausedByMemoryGuard={(state?.ScannerPausedByMemoryGuard ?? false).ToString().ToLowerInvariant()} MemoryStable={memoryStable.ToString().ToLowerInvariant()} LogVolumeStable={logVolumeStable.ToString().ToLowerInvariant()} OrderbookStable={orderbookStable.ToString().ToLowerInvariant()} Strategies={{{strategyStatus}}}";
+        return $"[SOAK_STATUS] Uptime={health.Uptime} ProcessMb={health.ProcessMemoryMb} DeltaMb={trend.MemoryDeltaMbWindow:0.##} SlopeMbPerMin={trend.MemorySlopeMbPerMinute:0.##} WarmupMinutes={Math.Max(0, warmupMinutes)} WarmupComplete={warmupComplete.ToString().ToLowerInvariant()} Logs={health.RecentLogsCount} ExecutionAudit={health.ExecutionAuditCount} SignalR={health.SignalREventBufferCount} PaperOpened={health.PaperExecutionsCount} PaperOpenPositions={health.PaperOpenPositions} PaperInFlightOpens={health.PaperInFlightOpens} PaperDuplicateSuppressions={health.PaperDuplicateSuppressions} PaperStaleDedupeEntriesCleared={health.PaperStaleDedupeEntriesCleared} PaperClosed={health.PaperClosedPositions} PaperExposure={health.PaperTotalExposure:0.####} PaperRealizedPnl={health.PaperRealizedPnl:0.####} PaperLocked={health.PaperLocked:0.####} LiveTradingBlocked={health.LiveTradingBlockedCount} QuietSuppressed={health.QuietSuppressedTotal} BatchBookRequests={health.BatchBookRequests} BatchBookBadRequests={health.BatchBookBadRequests} BatchBookTimeouts={health.BatchBookTimeouts} BatchBookRetrySuccesses={health.BatchBookRetrySuccesses} BatchBookInvalidTokens={health.BatchBookInvalidTokens} BatchBookSuppressedErrors={health.BatchBookSuppressedErrors} BatchBookSplitRetriesAttempted={health.BatchBookSplitRetriesAttempted} BatchBookSplitRetrySucceeded={health.BatchBookSplitRetrySucceeded} BatchBookSplitRetryFailed={health.BatchBookSplitRetryFailed} BatchBookSingleTokenFailures={health.BatchBookSingleTokenFailures} BatchBookSingleTokenQuarantined={health.BatchBookSingleTokenQuarantined} BatchBookSkippedQuarantinedTokens={health.BatchBookSkippedQuarantinedTokens} BatchBookSkippedMarketsWithQuarantinedTokens={health.BatchBookSkippedMarketsWithQuarantinedTokens} BatchBookBadRequestRate={batchRate:0.####} BatchBookBadRequestsDeltaLastHour={trend.BatchBookBadRequestsDeltaLastHour} BatchBookInvalidTokensDeltaLastHour={trend.BatchBookInvalidTokensDeltaLastHour} QuarantinedTokens={state?.OrderBookServiceStats.QuarantinedTokens ?? 0} SkippedQuarantinedTokensLastHour={trend.SkippedQuarantinedTokensLastHour} OrderbookUnavailableMarkets={health.OrderbookUnavailableMarkets} InvalidTokenQuarantineActive={health.InvalidTokenQuarantineActive} InvalidTokenQuarantineAdded={health.InvalidTokenQuarantineAdded} InvalidTokenQuarantineExpired={health.InvalidTokenQuarantineExpired} BatchBookRequestsAvoidedByQuarantine={health.BatchBookRequestsAvoidedByQuarantine} MarketsSkippedByInvalidTokenQuarantine={health.MarketsSkippedByInvalidTokenQuarantine} AllowlistHealthy={health.AllowlistHealthy} AllowlistMonitoringOnly={health.AllowlistMonitoringOnly} AllowlistNeedsPricingPrune={health.AllowlistNeedsPricingPrune} AllowlistNeedsRefresh={health.AllowlistNeedsRefresh} AllowlistReviewOnly={health.AllowlistReviewOnly} AllowlistMismatch={health.AllowlistMismatch} AllowlistBrokenConfig={health.AllowlistBrokenConfig} AllowlistDisabled={health.AllowlistDisabled} AllowlistIgnored={health.AllowlistIgnored} AllowlistClassificationTotal={health.AllowlistClassificationTotal} AllowlistClassificationValid={health.AllowlistClassificationValid.ToString().ToLowerInvariant()} AllowlistRefreshPreviewCandidates={health.AllowlistRefreshPreviewCandidates} AllowlistRefreshHighConfidence={health.AllowlistRefreshHighConfidence} AllowlistRefreshFinalNoCandidate={health.AllowlistRefreshFinalNoCandidate} AllowlistRefreshFinalSemanticConflict={health.AllowlistRefreshFinalSemanticConflict} AllowlistRefreshFinalLowConfidence={health.AllowlistRefreshFinalLowConfidence} AllowlistRefreshFinalUnstable={health.AllowlistRefreshFinalUnstable} AllowlistRefreshFinalPreviewOnly={health.AllowlistRefreshFinalPreviewOnly} AllowlistRefreshFinalLockedManualReview={health.AllowlistRefreshFinalLockedManualReview} AllowlistRefreshActionExplainedSuppressed={health.AllowlistRefreshActionExplainedSuppressed} AllowlistRefreshUnstableGroups={health.AllowlistRefreshUnstableGroups} AllowlistRefreshActionFlipFlops={health.AllowlistRefreshActionFlipFlops} AllowlistRefreshAutoApply={health.AllowlistRefreshAutoApply.ToString().ToLowerInvariant()} VerifiedPricingUnavailableGroups=0 InvalidTokenQuarantine={state?.OrderBookServiceStats.QuarantinedTokens ?? 0} OrderbookCache={health.OrderbookCacheCount} QuietLogGateCache={health.LogGateCacheSize} MemoryWarnings={state?.MemoryWarnings ?? 0} MemoryCriticals={state?.MemoryCriticals ?? 0} ScannerPausedByMemoryGuard={(state?.ScannerPausedByMemoryGuard ?? false).ToString().ToLowerInvariant()} MemoryStable={memoryStable.ToString().ToLowerInvariant()} LogVolumeStable={logVolumeStable.ToString().ToLowerInvariant()} OrderbookStable={orderbookStable.ToString().ToLowerInvariant()} Strategies={{{strategyStatus}}}";
     }
 
     private static string FormatStrategySoakStatus(string key, TradingBot.Services.StrategyRuntimeCounterSnapshot value)
@@ -278,7 +339,7 @@ public static class RuntimeHealthTrendTracker
         Samples.RemoveAll(x => x.TimestampUtc < cutoff);
     }
 
-    private static RuntimeHealthTrend AnalyzeNoLock(TradingBot.Options.RuntimeHealthOptions options)
+    private static RuntimeHealthTrend AnalyzeNoLock(TradingBot.Options.RuntimeHealthOptions options, RuntimeHealthSnapshot? currentSnapshot = null)
     {
         if (Samples.Count == 0) return new RuntimeHealthTrend(0, 0, 0, 0, true, 0);
         var min = Samples.Min(x => x.ProcessMb);
@@ -289,9 +350,10 @@ public static class RuntimeHealthTrendTracker
         var oneHourCutoff = last.TimestampUtc - TimeSpan.FromHours(1);
         var hourBase = Samples.FirstOrDefault(x => x.TimestampUtc >= oneHourCutoff);
         if (hourBase.TimestampUtc == default) hourBase = first;
-        var badDeltaLastHour = Math.Max(0, last.BatchBadRequests - hourBase.BatchBadRequests);
-        var invalidDeltaLastHour = Math.Max(0, last.BatchInvalidTokens - hourBase.BatchInvalidTokens);
-        var skippedDeltaLastHour = Math.Max(0, last.SkippedQuarantinedTokens - hourBase.SkippedQuarantinedTokens);
+        var useStartupCounts = currentSnapshot is not null && currentSnapshot.Uptime < TimeSpan.FromHours(1);
+        var badDeltaLastHour = useStartupCounts ? currentSnapshot!.BatchBookBadRequests : Math.Max(0, last.BatchBadRequests - hourBase.BatchBadRequests);
+        var invalidDeltaLastHour = useStartupCounts ? currentSnapshot!.BatchBookInvalidTokens : Math.Max(0, last.BatchInvalidTokens - hourBase.BatchInvalidTokens);
+        var skippedDeltaLastHour = useStartupCounts ? currentSnapshot!.BatchBookSkippedQuarantinedTokens : Math.Max(0, last.SkippedQuarantinedTokens - hourBase.SkippedQuarantinedTokens);
         var minutes = Math.Max(0.001, (last.TimestampUtc - first.TimestampUtc).TotalMinutes);
         var slope = (last.ProcessMb - first.ProcessMb) / minutes;
         var stable = Math.Abs(slope) <= Math.Max(0, options.StableMemorySlopeMbPerMinute)

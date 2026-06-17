@@ -377,8 +377,8 @@ public class AllowlistRepairSafetyTests
             [],
             "Manual review required.",
             "Review only.");
-        var summary = new AllowlistRepairSummary(1, 0, 0, 0, 1, 0, 0, 0, 1, true);
-        var counts = new AllowlistRepairCategoryCounts(0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1);
+        var summary = new AllowlistRepairSummary(1, 0, 0, 0, 1, 0, 0, 0, 0, 1, true);
+        var counts = new AllowlistRepairCategoryCounts(0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1, 1);
         return new AllowlistRepairReport(
             snapshotId,
             DateTime.UtcNow,
@@ -391,6 +391,7 @@ public class AllowlistRepairSafetyTests
             0,
             1,
             1,
+            0,
             0,
             0,
             0,

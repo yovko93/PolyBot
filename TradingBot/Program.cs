@@ -466,6 +466,11 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var mismatchCycle = 0;
     var experimentalCandidateCycle = 0;
     var lastExperimentalFingerprintByGroup = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+    var emittedAllowlistRefreshFinalDecisions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var emittedAllowlistRefreshActionExplanations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var emittedAllowlistRefreshSemanticConflicts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var emittedAllowlistRefreshMarketSetMismatches = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var emittedAllowlistUnstableManualReviewLocks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     var lastProfileComparisonFingerprint = string.Empty;
     var mismatchFingerprintByGroup = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
     QuietLogPolicy QuietPolicy(int? everyNCycles = null, int? maxPerHour = null) => new(
@@ -1034,6 +1039,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         options.AllowlistRepair.DiscoveryPartialDiagnosticsOnly = !lastDiscoverySummary.DiscoveryHealthy && lastDiscoverySummary.ActiveMarketsAvailable < options.MarketDiscovery.MinHealthyActiveMarkets;
                         var repairExports = allowlistRepairService.Export(repairReportPath, repairSuggestedPath, allowlistedGroups, resolved, verifiedPricingExport, boundedCandidates, options.AllowlistRepair, contentRootPath, options.Logging);
                         repairReport = repairExports.Report;
+                        var refreshDiagnosticsPath = Path.Combine(contentRootPath, "exports/verified-allowlist-refresh-diagnostics-latest.json");
+                        allowlistRepairService.ExportRefreshDiagnostics(refreshDiagnosticsPath, repairReport, allowlistedGroups);
                         patchPreview = allowlistRepairService.ExportPatchPreview(patchPreviewPath, patchedPreviewPath, patchedPreviewMetadataPath, repairReport, allowlistedGroups, contentRootPath).PatchPreview;
                     }
                     catch (Exception ex)
@@ -1067,11 +1074,19 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var disabledCount = summary.Disabled; var ignoredCount = summary.Ignored;
                     var needsRefreshCount = summary.NeedsRefresh;
                     allowlistHealthCycle++;
-                    var allowlistFingerprint = $"{summary.ConfiguredGroups}|{healthyCount}|{brokenCount}|{disabledCount}|{ignoredCount}|{needsRefreshCount}|{summary.NeedsPricingPrune}|{summary.NeedsRefresh}|{summary.BrokenConfig}";
+                    var classificationTotal = summary.Healthy + summary.MonitoringOnly + summary.NeedsPricingPrune + summary.NeedsRefresh + summary.ReviewOnly + summary.BrokenConfig + summary.Disabled + summary.Ignored;
+                    var classifiedGroups = allowlistHealth.Where(x => !string.IsNullOrWhiteSpace(x.healthCategory)).Select(x => x.groupKey).ToArray();
+                    var duplicateGroups = classifiedGroups.GroupBy(x => x, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1).Select(g => g.Key).ToArray();
+                    var missingGroups = allowlistedGroups.Select(x => x.GroupKey).Except(classifiedGroups, StringComparer.OrdinalIgnoreCase).ToArray();
+                    var classificationValid = classificationTotal == summary.ConfiguredGroups && duplicateGroups.Length == 0 && missingGroups.Length == 0;
+                    var allowlistFingerprint = $"{summary.ConfiguredGroups}|{healthyCount}|{brokenCount}|{disabledCount}|{ignoredCount}|{needsRefreshCount}|{summary.NeedsPricingPrune}|{summary.NeedsRefresh}|{summary.ReviewOnly}|{summary.BrokenConfig}|{classificationTotal}|{classificationValid}";
                     var shouldLogAllowlist = !options.Logging.LogAllowlistHealthOnChangeOnly || allowlistFingerprint != lastAllowlistHealthFingerprint || (options.Logging.LogAllowlistHealthEveryNCycles > 0 && allowlistHealthCycle % options.Logging.LogAllowlistHealthEveryNCycles == 0);
                     lastAllowlistHealthFingerprint = allowlistFingerprint;
-                    if (shouldLogAllowlist) Console.WriteLine($"[ALLOWLIST_HEALTH] Configured={summary.ConfiguredGroups} Healthy={summary.Healthy} MonitoringOnly={summary.MonitoringOnly} NeedsPricingPrune={summary.NeedsPricingPrune} NeedsRefresh={summary.NeedsRefresh} BrokenConfig={summary.BrokenConfig} Disabled={summary.Disabled} Ignored={summary.Ignored} BrokenTotal={summary.Broken}");
-                    if (!summary.InvariantOk) Console.WriteLine($"[ALLOWLIST_CLASSIFICATION_ERROR] Configured={summary.ConfiguredGroups} Healthy={summary.Healthy} MonitoringOnly={summary.MonitoringOnly} NeedsPricingPrune={summary.NeedsPricingPrune} NeedsRefresh={summary.NeedsRefresh} BrokenConfig={summary.BrokenConfig} Disabled={summary.Disabled} Ignored={summary.Ignored}");
+                    if (shouldLogAllowlist) Console.WriteLine($"[ALLOWLIST_HEALTH] Configured={summary.ConfiguredGroups} Healthy={summary.Healthy} MonitoringOnly={summary.MonitoringOnly} NeedsPricingPrune={summary.NeedsPricingPrune} NeedsRefresh={summary.NeedsRefresh} ReviewOnly={summary.ReviewOnly} BrokenConfig={summary.BrokenConfig} Disabled={summary.Disabled} Ignored={summary.Ignored} BrokenTotal={summary.Broken} ClassificationTotal={classificationTotal} ClassificationValid={classificationValid.ToString().ToLowerInvariant()}");
+                    if (!classificationValid)
+                    {
+                        Console.WriteLine($"[ALLOWLIST_CLASSIFICATION_ERROR] Configured={summary.ConfiguredGroups} ClassificationTotal={classificationTotal} MissingCount={missingGroups.Length} DuplicateCount={duplicateGroups.Length} MissingGroups=[{string.Join(",", missingGroups.Take(5))}] DuplicateGroups=[{string.Join(",", duplicateGroups.Take(5))}] Healthy={summary.Healthy} MonitoringOnly={summary.MonitoringOnly} NeedsPricingPrune={summary.NeedsPricingPrune} NeedsRefresh={summary.NeedsRefresh} ReviewOnly={summary.ReviewOnly} BrokenConfig={summary.BrokenConfig} Disabled={summary.Disabled} Ignored={summary.Ignored}");
+                    }
                     foreach (var remaining in repairReport.Groups.Where(x => x.RecommendedAction == "PruneMissingNoAskLegs" && x.MissingNoAskMarketIds.Count > 0))
                     {
                         var missingIds = string.Join(",", remaining.MissingNoAskMarketIds);
@@ -1079,7 +1094,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         if (logThrottle.ShouldLog($"ALLOWLIST_CONFIG_REPAIR_REMAINING:{remaining.GroupKey}", remainingFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, options.Logging.LogAllowlistRepairEveryNCycles))
                             Console.WriteLine($"[ALLOWLIST_CONFIG_REPAIR_REMAINING] Group={remaining.GroupKey} Action=PruneMissingNoAskLegs MissingMarketIds=[{missingIds}]");
                     }
-                    var healthPath = Path.Combine(contentRootPath, "exports/verified-allowlist-health-latest.json"); Directory.CreateDirectory(Path.GetDirectoryName(healthPath)!); File.WriteAllText(healthPath, System.Text.Json.JsonSerializer.Serialize(new { configured = summary.ConfiguredGroups, healthy = summary.Healthy, monitoringOnly = summary.MonitoringOnly, needsPricingPrune = summary.NeedsPricingPrune, needsRefresh = summary.NeedsRefresh, brokenConfig = summary.BrokenConfig, disabled = summary.Disabled, ignored = summary.Ignored, brokenTotal = summary.Broken, invariantResult = summary.InvariantOk, categoryCounts = repairReport.CategoryCounts, groups = allowlistHealth }, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
+                    var healthPath = Path.Combine(contentRootPath, "exports/verified-allowlist-health-latest.json"); Directory.CreateDirectory(Path.GetDirectoryName(healthPath)!); File.WriteAllText(healthPath, System.Text.Json.JsonSerializer.Serialize(new { configured = summary.ConfiguredGroups, healthy = summary.Healthy, monitoringOnly = summary.MonitoringOnly, needsPricingPrune = summary.NeedsPricingPrune, needsRefresh = summary.NeedsRefresh, reviewOnly = summary.ReviewOnly, brokenConfig = summary.BrokenConfig, disabled = summary.Disabled, ignored = summary.Ignored, brokenTotal = summary.Broken, classificationTotal, classificationValid, invariantResult = classificationValid, categoryCounts = repairReport.CategoryCounts, groups = allowlistHealth }, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
                     var cleanup = new { metadata = new { generatedAtUtc = DateTime.UtcNow, note = "suggested only" }, groups = allowlistRepairService.BuildSuggestedConfig(repairReport).Groups };
                     var cleanupPath = Path.Combine(contentRootPath, "exports/verified-allowlist-cleanup-suggested.json"); File.WriteAllText(cleanupPath, System.Text.Json.JsonSerializer.Serialize(cleanup, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
                     var repairLogEveryNCycles = options.Logging.SuppressRepeatedRepairSnapshotLogs && !options.Diagnostics.DebuggerSafeMode ? 0 : options.Logging.LogAllowlistRepairEveryNCycles;
@@ -1091,16 +1106,143 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_SNAPSHOT", repairSnapshotFingerprint, LogImportance.Normal, everyNCycles: repairLogEveryNCycles))
                         Console.WriteLine($"[ALLOWLIST_REPAIR_SNAPSHOT] Id={repairReport.SnapshotId} CandidateGroups={repairReport.Snapshot.CandidateGroupsCount} VerifiedGroups={repairReport.Snapshot.VerifiedGroupsCount} Source={repairReport.Snapshot.Source}");
                     var repairReportFingerprint = options.Logging.SuppressRepeatedRepairSnapshotLogs
-                        ? $"{summary.ConfiguredGroups}|{summary.Healthy}|{summary.MonitoringOnly}|{summary.NeedsPricingPrune}|{summary.NeedsRefresh}|{summary.BrokenConfig}|{summary.Disabled}|{summary.Ignored}|{string.Join(";", repairReport.Groups.Select(x => $"{x.GroupKey}:{x.HealthCategory}:{x.RecommendedAction}:{x.RepairConfidence}"))}"
-                        : $"{repairReport.SnapshotId}|{summary.ConfiguredGroups}|{summary.Healthy}|{summary.MonitoringOnly}|{summary.NeedsPricingPrune}|{summary.NeedsRefresh}|{summary.BrokenConfig}|{summary.Disabled}|{summary.Ignored}|{string.Join(";", repairReport.Groups.Select(x => $"{x.GroupKey}:{x.HealthCategory}:{x.RecommendedAction}:{x.RepairConfidence}:{x.ActionVersion}"))}";
+                        ? $"{summary.ConfiguredGroups}|{summary.Healthy}|{summary.MonitoringOnly}|{summary.NeedsPricingPrune}|{summary.NeedsRefresh}|{summary.ReviewOnly}|{summary.BrokenConfig}|{summary.Disabled}|{summary.Ignored}|{string.Join(";", repairReport.Groups.Select(x => $"{x.GroupKey}:{x.HealthCategory}:{x.RecommendedAction}:{x.RepairConfidence}"))}"
+                        : $"{repairReport.SnapshotId}|{summary.ConfiguredGroups}|{summary.Healthy}|{summary.MonitoringOnly}|{summary.NeedsPricingPrune}|{summary.NeedsRefresh}|{summary.ReviewOnly}|{summary.BrokenConfig}|{summary.Disabled}|{summary.Ignored}|{string.Join(";", repairReport.Groups.Select(x => $"{x.GroupKey}:{x.HealthCategory}:{x.RecommendedAction}:{x.RepairConfidence}:{x.ActionVersion}"))}";
                     if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_REPORT", repairReportFingerprint, LogImportance.Normal, everyNCycles: repairLogEveryNCycles))
-                        Console.WriteLine($"[ALLOWLIST_REPAIR_REPORT] Groups={repairReport.ConfiguredGroups} Healthy={summary.Healthy} MonitoringOnly={summary.MonitoringOnly} NeedsPricingPrune={summary.NeedsPricingPrune} NeedsRefresh={summary.NeedsRefresh} BrokenConfig={summary.BrokenConfig} Disabled={summary.Disabled} Ignored={summary.Ignored} BrokenTotal={summary.Broken} Path={options.MultiOutcomeReview.ExportAllowlistRepairReportPath}");
+                        Console.WriteLine($"[ALLOWLIST_REPAIR_REPORT] Groups={repairReport.ConfiguredGroups} Healthy={summary.Healthy} MonitoringOnly={summary.MonitoringOnly} NeedsPricingPrune={summary.NeedsPricingPrune} NeedsRefresh={summary.NeedsRefresh} ReviewOnly={summary.ReviewOnly} BrokenConfig={summary.BrokenConfig} Disabled={summary.Disabled} Ignored={summary.Ignored} BrokenTotal={summary.Broken} Path={options.MultiOutcomeReview.ExportAllowlistRepairReportPath}");
+
+                    var refreshDiag = allowlistRepairService.BuildRefreshDiagnostics(repairReport, allowlistedGroups);
+                    var actionExplainedSuppressedThisCycle = 0;
+                    var unstableSummaries = refreshDiag.Items
+                        .Select(x => allowlistRepairService.GetInstabilitySummary(x.GroupKey))
+                        .Where(x => x.IsUnstable)
+                        .GroupBy(x => x.GroupKey, StringComparer.OrdinalIgnoreCase)
+                        .Select(x => x.First())
+                        .ToArray();
+                    var repairReportGroupKeys = repairReport.Groups.Select(x => x.GroupKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var activeUnstableLocks = allowlistRepairService.GetUnstableManualReviewLocks()
+                        .Where(x => repairReportGroupKeys.Contains(x.GroupKey))
+                        .ToArray();
+                    var activeUnstableLockKeys = activeUnstableLocks.Select(x => x.GroupKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    state.SetAllowlistRefreshCounters(
+                        repairReport.Summary.NeedsRefresh,
+                        summary.ReviewOnly,
+                        refreshDiag.Items.Count(x => x.ResolverStatus.Contains("Mismatch", StringComparison.OrdinalIgnoreCase)),
+                        refreshDiag.Items.Count(x => x.RecommendedAction.Equals("RefreshFromCandidateExport", StringComparison.OrdinalIgnoreCase)),
+                        refreshDiag.Items.Count(x => x.Confidence.Equals("High", StringComparison.OrdinalIgnoreCase)),
+                        refreshDiag.Items.Count(x => x.FinalDecision.Equals("NoCandidate", StringComparison.OrdinalIgnoreCase)),
+                        refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedSemanticConflict", StringComparison.OrdinalIgnoreCase)),
+                        refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedLowConfidence", StringComparison.OrdinalIgnoreCase)),
+                        refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedUnstableAcrossSnapshots", StringComparison.OrdinalIgnoreCase)),
+                        refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateAcceptedPreviewOnly", StringComparison.OrdinalIgnoreCase)),
+                        refreshDiag.Items.Count(x => x.FinalDecision.Equals("LockedManualReview", StringComparison.OrdinalIgnoreCase))
+                            + activeUnstableLockKeys.Where(x => refreshDiag.Items.All(item => !item.GroupKey.Equals(x, StringComparison.OrdinalIgnoreCase))).Count(),
+                        0,
+                        Math.Max(unstableSummaries.Length, activeUnstableLocks.Length),
+                        Math.Max(unstableSummaries.Length, activeUnstableLocks.Length),
+                        summary.Healthy,
+                        summary.MonitoringOnly,
+                        summary.NeedsPricingPrune,
+                        summary.BrokenConfig,
+                        summary.Disabled,
+                        summary.Ignored,
+                        classificationTotal,
+                        classificationValid);
+                    foreach (var item in refreshDiag.Items)
+                    {
+                        var status = item.ResolverStatus.Contains("Mismatch", StringComparison.OrdinalIgnoreCase) ? "Mismatch"
+                            : item.ResolverStatus.Contains("NotFound", StringComparison.OrdinalIgnoreCase) ? "NotFound"
+                            : item.RecommendedAction.Equals("NeedsManualReview", StringComparison.OrdinalIgnoreCase) ? "ReviewOnly"
+                            : "NeedsRefresh";
+                        var action = item.RecommendedAction.Equals("RefreshFromCandidateExport", StringComparison.OrdinalIgnoreCase) ? "RefreshPreview"
+                            : item.RecommendedAction.Equals("KeepMonitoring", StringComparison.OrdinalIgnoreCase) ? "NoOp"
+                            : "ManualReview";
+                        var candidateForLog = string.IsNullOrWhiteSpace(item.BestCandidateGroupKey) ? "None" : item.BestCandidateGroupKey;
+                        var fp = $"{item.GroupKey}|{status}|{candidateForLog}|{item.BestCandidateScore}|{item.OverlapRatio}|{string.Join(",", item.MissingMarketIds)}|{string.Join(",", item.MissingTokenIds)}|{string.Join(",", item.AddedMarketIds)}|{string.Join(",", item.AddedTokenIds)}|{string.Join(",", item.RemovedMarketIds)}|{string.Join(",", item.RemovedTokenIds)}|{item.Confidence}|{action}|{item.FinalDecision}";
+                        if (ShouldQuietLog("allowlist-refresh", "ALLOWLIST_REFRESH_DIAG", fp, LogImportance.Normal, groupKey: item.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
+                            Console.WriteLine($"[ALLOWLIST_REFRESH_DIAG] Group={item.GroupKey} Status={status} ConfiguredLegs={item.ConfiguredLegCount} BestCandidate={candidateForLog} Score={item.BestCandidateScore:0.##} Overlap={item.OverlapRatio:0.##} MissingMarketIds=[{string.Join(",", item.MissingMarketIds)}] MissingTokenIds=[{string.Join(",", item.MissingTokenIds)}] AddedMarketIds=[{string.Join(",", item.AddedMarketIds)}] AddedTokenIds=[{string.Join(",", item.AddedTokenIds)}] RemovedMarketIds=[{string.Join(",", item.RemovedMarketIds)}] RemovedTokenIds=[{string.Join(",", item.RemovedTokenIds)}] Confidence={item.Confidence} Action={action} AutoApply=false");
+                        var decisionKey = $"{repairReport.SnapshotId}|{item.GroupKey}|{candidateForLog}|{item.FinalDecision}";
+                        var semanticConflict = AllowlistRepairService.DetectRefreshSemanticConflict(item.GroupKey, item.BestCandidateGroupKey);
+                        var sameGroupMarketSetMismatch = string.IsNullOrWhiteSpace(semanticConflict)
+                            && item.GroupKey.Equals(item.BestCandidateGroupKey, StringComparison.OrdinalIgnoreCase)
+                            && (item.AddedMarketIds.Count > 0 || item.RemovedMarketIds.Count > 0 || item.AddedTokenIds.Count > 0 || item.RemovedTokenIds.Count > 0);
+                        if (sameGroupMarketSetMismatch)
+                        {
+                            var candidateMarketIds = item.CurrentConfiguredMarketIds
+                                .Except(item.RemovedMarketIds, StringComparer.OrdinalIgnoreCase)
+                                .Concat(item.AddedMarketIds)
+                                .Distinct(StringComparer.OrdinalIgnoreCase)
+                                .ToArray();
+                            var marketMismatchKey = $"{decisionKey}|MarketSetMismatch";
+                            if (emittedAllowlistRefreshMarketSetMismatches.Add(marketMismatchKey) && ShouldQuietLog("allowlist-refresh", "ALLOWLIST_REFRESH_MARKET_SET_MISMATCH", marketMismatchKey, LogImportance.Normal, groupKey: item.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
+                                Console.WriteLine($"[ALLOWLIST_REFRESH_MARKET_SET_MISMATCH] Group={item.GroupKey} BestCandidate={candidateForLog} ConfiguredMarketIds=[{string.Join(",", item.CurrentConfiguredMarketIds)}] CandidateMarketIds=[{string.Join(",", candidateMarketIds)}] AddedMarketIds=[{string.Join(",", item.AddedMarketIds)}] RemovedMarketIds=[{string.Join(",", item.RemovedMarketIds)}] Overlap={item.OverlapRatio:0.##} Action=ManualReview AutoApply=false");
+                        }
+                        if (!string.IsNullOrWhiteSpace(semanticConflict))
+                        {
+                            var semanticKey = $"{decisionKey}|{semanticConflict}";
+                            if (emittedAllowlistRefreshSemanticConflicts.Add(semanticKey) && ShouldQuietLog("allowlist-refresh", "ALLOWLIST_REFRESH_SEMANTIC_CONFLICT", semanticKey, LogImportance.Normal, groupKey: item.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
+                                Console.WriteLine($"[ALLOWLIST_REFRESH_SEMANTIC_CONFLICT] Group={item.GroupKey} Candidate={candidateForLog} Conflict={semanticConflict} Action=ManualReview AutoApply=false");
+                        }
+                        if (emittedAllowlistRefreshFinalDecisions.Add(decisionKey) && ShouldQuietLog("allowlist-refresh", "ALLOWLIST_REFRESH_FINAL_DECISION", decisionKey, LogImportance.Normal, groupKey: item.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
+                            Console.WriteLine($"[ALLOWLIST_REFRESH_FINAL_DECISION] Group={item.GroupKey} Decision={item.FinalDecision} BestCandidate={candidateForLog} Score={item.BestCandidateScore:0.##} Confidence={item.Confidence} Reason={item.Reason} AutoApply=false");
+                        if (item.GroupKey.Equals("winner:2026 women s us open|kind:generic", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (emittedAllowlistRefreshActionExplanations.Add(decisionKey))
+                                Console.WriteLine($"[ALLOWLIST_REFRESH_ACTION_EXPLAINED] Group={item.GroupKey} CurrentStatus={item.ResolverStatus} BestCandidate={candidateForLog} CandidateScore={item.BestCandidateScore:0.##} Confidence={item.Confidence} AddedMarketIds=[{string.Join(",", item.AddedMarketIds)}] RemovedMarketIds=[{string.Join(",", item.RemovedMarketIds)}] AddedTokenIds=[{string.Join(",", item.AddedTokenIds)}] RemovedTokenIds=[{string.Join(",", item.RemovedTokenIds)}] FinalDecision={item.FinalDecision} Reason={item.Reason} AutoApply=false");
+                            else
+                                actionExplainedSuppressedThisCycle++;
+                        }
+                    }
+                    foreach (var unstable in unstableSummaries)
+                    {
+                        var unstableKey = $"{repairReport.SnapshotId}|{unstable.GroupKey}|ActionFlipFlopDuringSoak";
+                        if (emittedAllowlistRefreshFinalDecisions.Add($"unstable|{unstableKey}"))
+                            Console.WriteLine($"[ALLOWLIST_REFRESH_UNSTABLE_GROUP] Group={unstable.GroupKey} ObservedDecisions=[{string.Join(",", unstable.ObservedDecisions)}] ObservedActions=[{string.Join(",", unstable.ObservedActions)}] SnapshotsObserved={unstable.SnapshotsObserved} FinalDecision=LockedManualReview Reason=ActionFlipFlopDuringSoak AutoApply=false");
+                    }
+                    foreach (var manualLock in activeUnstableLocks)
+                    {
+                        if (emittedAllowlistUnstableManualReviewLocks.Add(manualLock.GroupKey))
+                        {
+                            Console.WriteLine($"[ALLOWLIST_UNSTABLE_MANUAL_REVIEW_LOCKED] Group={manualLock.GroupKey} Reason={manualLock.Reason} ObservedDecisions=[{string.Join(",", manualLock.ObservedDecisions)}] ObservedActions=[{string.Join(",", manualLock.ObservedActions)}] FirstDetectedSnapshot={manualLock.FirstDetectedSnapshotId} AutoApply=false");
+                        }
+                        else if (ShouldQuietLog("allowlist-refresh", "ALLOWLIST_UNSTABLE_MANUAL_REVIEW_LOCK_ACTIVE", $"{manualLock.GroupKey}|{manualLock.LastSeenSnapshotId}|{manualLock.Reason}", LogImportance.Normal, groupKey: manualLock.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
+                        {
+                            Console.WriteLine($"[ALLOWLIST_UNSTABLE_MANUAL_REVIEW_LOCK_ACTIVE] Group={manualLock.GroupKey} Reason={manualLock.Reason} HealthCategory=ReviewOnly RecommendedAction=NeedsManualReview AutoApply=false");
+                        }
+                    }
+                    if (actionExplainedSuppressedThisCycle > 0)
+                    {
+                        state.SetAllowlistRefreshCounters(
+                            repairReport.Summary.NeedsRefresh,
+                            summary.ReviewOnly,
+                            refreshDiag.Items.Count(x => x.ResolverStatus.Contains("Mismatch", StringComparison.OrdinalIgnoreCase)),
+                            refreshDiag.Items.Count(x => x.RecommendedAction.Equals("RefreshFromCandidateExport", StringComparison.OrdinalIgnoreCase)),
+                            refreshDiag.Items.Count(x => x.Confidence.Equals("High", StringComparison.OrdinalIgnoreCase)),
+                            refreshDiag.Items.Count(x => x.FinalDecision.Equals("NoCandidate", StringComparison.OrdinalIgnoreCase)),
+                            refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedSemanticConflict", StringComparison.OrdinalIgnoreCase)),
+                            refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedLowConfidence", StringComparison.OrdinalIgnoreCase)),
+                            refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedUnstableAcrossSnapshots", StringComparison.OrdinalIgnoreCase)),
+                            refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateAcceptedPreviewOnly", StringComparison.OrdinalIgnoreCase)),
+                            refreshDiag.Items.Count(x => x.FinalDecision.Equals("LockedManualReview", StringComparison.OrdinalIgnoreCase))
+                                + activeUnstableLockKeys.Where(x => refreshDiag.Items.All(item => !item.GroupKey.Equals(x, StringComparison.OrdinalIgnoreCase))).Count(),
+                            actionExplainedSuppressedThisCycle,
+                            Math.Max(unstableSummaries.Length, activeUnstableLocks.Length),
+                            Math.Max(unstableSummaries.Length, activeUnstableLocks.Length),
+                            summary.Healthy,
+                            summary.MonitoringOnly,
+                            summary.NeedsPricingPrune,
+                            summary.BrokenConfig,
+                            summary.Disabled,
+                            summary.Ignored,
+                            classificationTotal,
+                            classificationValid);
+                    }
                     var patchableCount = patchPreview.Summary.PatchableHighConfidence + patchPreview.Summary.PatchableMediumConfidence;
                     var quarantinedCount = patchPreview.Summary.Quarantined;
                     var noOpCount = patchPreview.Summary.NoOp;
                     var lockedCount = patchPreview.Summary.Locked;
                     var reviewOnlyCount = patchPreview.Patches.Count - patchableCount;
-                    var patchPreviewFingerprint = $"{patchableCount}|{reviewOnlyCount}|{quarantinedCount}|{noOpCount}|{lockedCount}|{string.Join(";", patchPreview.Patches.Select(x => $"{x.GroupKey}:{x.PatchType}:{x.Confidence}:{string.Join(',', x.RiskNotes)}"))}";
+                    var patchPreviewFingerprint = $"{patchableCount}|{reviewOnlyCount}|{quarantinedCount}|{noOpCount}|{lockedCount}|{string.Join(";", patchPreview.Patches.Select(x => $"{x.GroupKey}:{x.PatchType}:{x.Confidence}:{string.Join(",", x.RiskNotes)}"))}";
                     if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_PATCH_PREVIEW", patchPreviewFingerprint, LogImportance.Normal, everyNCycles: repairLogEveryNCycles))
                         Console.WriteLine($"[ALLOWLIST_REPAIR_PATCH_PREVIEW] Snapshot={patchPreview.SnapshotId} Patchable={patchableCount} ReviewOnly={reviewOnlyCount} Quarantined={quarantinedCount} NoOp={noOpCount} Locked={lockedCount} Output=exports/verified-allowlist-repair-patch-preview-latest.json");
                     var patchedPreviewValidation = patchPreview.PatchedPreviewValidation;
@@ -1158,6 +1300,13 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             else if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_ACTION_CHANGED", directionFingerprint, LogImportance.Normal, groupKey: repair.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
                             {
                                 Console.WriteLine($"[ALLOWLIST_REPAIR_ACTION_CHANGED] Group={repair.GroupKey} From={repair.PreviousAction} To={repair.CurrentAction} Reason={repair.ReasonForChange} ConsecutiveSnapshotMisses={repair.ConsecutiveMatchMisses}");
+                                if (repair.GroupKey.Equals("winner:2026 nba finals|kind:generic", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    var m = repair.RepairMatch;
+                                    var bestCandidateScore = m?.Score ?? 0m;
+                                    var bestCandidateOverlap = m?.MarketOverlap ?? 0m;
+                                    Console.WriteLine($"[ALLOWLIST_REFRESH_ACTION_EXPLAINED] Group={repair.GroupKey} PreviousAction={repair.PreviousAction} NewAction={repair.CurrentAction} Reason={repair.ReasonForChange} ConsecutiveMisses={repair.ConsecutiveMatchMisses} RequiredForRefresh={options.AllowlistRepair.RefreshPreview.RequiredConsecutiveMatches} BestCandidateScore={bestCandidateScore:0.##} BestCandidateOverlap={bestCandidateOverlap:0.##} MissingMarketIds=[{string.Join(",", repair.MissingMarketIds)}] CandidateMarketIds=[{string.Join(",", m?.AddedMarketIds ?? Array.Empty<string>())}]");
+                                }
                             }
                         }
                         if (repair.RepairMatch is not null)
@@ -1178,7 +1327,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             }
                             else
                             {
-                                var matchFingerprint = $"{repair.GroupKey}|{m.CandidateGroupKey}|{m.Score}|{m.Confidence}|{string.Join(',', m.AddedMarketIds)}|{string.Join(',', m.RemovedMarketIds)}";
+                                var matchFingerprint = $"{repair.GroupKey}|{m.CandidateGroupKey}|{m.Score}|{m.Confidence}|{string.Join(",", m.AddedMarketIds)}|{string.Join(",", m.RemovedMarketIds)}";
                                 if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_MATCH", matchFingerprint, LogImportance.Normal, groupKey: repair.GroupKey, everyNCycles: repairLogEveryNCycles, maxPerHour: repairSuggestionMaxPerHour))
                                     Console.WriteLine($"[ALLOWLIST_REPAIR_MATCH] Group={repair.GroupKey} Candidate={m.CandidateGroupKey} Score={m.Score:0.##} Confidence={m.Confidence} Added={m.AddedMarketIds.Count} Removed={m.RemovedMarketIds.Count}");
                             }
@@ -1666,8 +1815,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
 static AllowlistRepairReport BuildEmptyAllowlistRepairReport(int configuredGroups, string reason)
 {
     var snapshotId = $"repair-error-{DateTime.UtcNow:yyyyMMddHHmmss}";
-    var summary = new AllowlistRepairSummary(configuredGroups, 0, 0, 0, 0, 0, 0, 0, 0, configuredGroups == 0);
-    var counts = new AllowlistRepairCategoryCounts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    var summary = new AllowlistRepairSummary(configuredGroups, 0, 0, 0, 0, 0, 0, 0, 0, 0, configuredGroups == 0);
+    var counts = new AllowlistRepairCategoryCounts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     return new AllowlistRepairReport(
         snapshotId,
         DateTime.UtcNow,
@@ -1676,6 +1825,7 @@ static AllowlistRepairReport BuildEmptyAllowlistRepairReport(int configuredGroup
         summary.InvariantOk,
         new AllowlistRepairSnapshot(snapshotId, DateTime.UtcNow, snapshotId, string.Empty, 0, configuredGroups, "RepairError", Array.Empty<AllowlistRepairGroup>()),
         configuredGroups,
+        0,
         0,
         0,
         0,

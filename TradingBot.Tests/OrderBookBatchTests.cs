@@ -3,6 +3,7 @@ using Newtonsoft.Json.Linq;
 using TradingBot.Api;
 using TradingBot.Models;
 using TradingBot.Services;
+using TradingBot.Services.MultiOutcome;
 using Xunit;
 
 namespace TradingBot.Tests;
@@ -192,6 +193,138 @@ public class OrderBookBatchTests
         Assert.True(stats.BatchBookSingleTokenQuarantined >= 1);
         Assert.True(stats.BatchRetrySuccesses >= 1);
     }
+
+
+    [Fact]
+    public void Quarantined_tokens_are_removed_before_batch_request()
+    {
+        var svc = new OrderBookService(new HttpClient(new BatchHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)))) { ExportInvalidTokenQuarantine = false };
+        svc.QuarantineInvalidToken("999", "test");
+
+        var validation = svc.ValidateBatchPayload(new[] { "1", "999", "2" });
+
+        Assert.Equal(new[] { "1", "2" }, validation.TokenIds);
+        Assert.Equal(1, validation.QuarantinedRemoved);
+        Assert.True(svc.GetStats().BatchBookSkippedQuarantinedTokens >= 1);
+    }
+
+    [Fact]
+    public async Task Known_invalid_token_is_not_retried_in_same_scan_cycle()
+    {
+        var seen = new List<string>();
+        var svc = new OrderBookService(new HttpClient(new BatchHandler(req =>
+        {
+            var ids = ReadTokenIds(req);
+            seen.AddRange(ids);
+            if (ids.Contains("999")) return Json(HttpStatusCode.BadRequest, "{\"error\":\"bad\"}");
+            return Json(HttpStatusCode.OK, BookJson(ids));
+        }))) { MaxBatchBookRequestSize = 3, SplitBatchOnBadRequest = true, ExportInvalidTokenQuarantine = false, QuietLogGate = new QuietLogGate() };
+
+        await svc.GetOrderBooksBatchAsync(new[] { "1", "999", "2", "999" });
+
+        Assert.True(svc.IsTokenQuarantined("999"));
+        Assert.Equal(2, seen.Count(x => x == "999"));
+    }
+
+    [Fact]
+    public void Nba_finals_does_not_semantically_match_wnba_finals()
+    {
+        var conflict = AllowlistRepairService.DetectRefreshSemanticConflict("winner:2026 nba finals|kind:generic", "winner:2026 wnba finals|kind:generic");
+
+        Assert.Equal("LeagueMismatch", conflict);
+    }
+
+
+    [Fact]
+    public void Same_group_candidate_does_not_emit_mens_womens_conflict()
+    {
+        var conflict = AllowlistRepairService.DetectRefreshSemanticConflict("winner:2026 women s us open|kind:generic", "winner:2026 women s us open|kind:generic");
+
+        Assert.Equal(string.Empty, conflict);
+    }
+
+    [Fact]
+    public void Allowlist_refresh_id_split_separates_market_ids_from_token_ids()
+    {
+        var ids = new[] { "1088680", "0xdaba123", "condition-id" };
+
+        Assert.Equal(new[] { "1088680" }, ids.Where(AllowlistRepairService.IsNumericMarketId).ToArray());
+        Assert.Equal(new[] { "0xdaba123", "condition-id" }, ids.Where(AllowlistRepairService.IsTokenOrConditionId).ToArray());
+    }
+
+
+    [Fact]
+    public void Same_group_market_set_mismatch_with_unstable_reason_is_unstable_not_semantic_conflict()
+    {
+        var item = RefreshItem(
+            bestCandidate: "winner:2026 women s us open|kind:generic",
+            addedMarketIds: ["1088681"],
+            removedMarketIds: ["1088662", "1088680"],
+            reason: "UnstableAcrossSnapshots; ConsecutiveMatches=1/3; Overlap=0.33/0.75; TitleSimilarity=1.00/0.70; KindMatch=true",
+            confidence: "Low");
+
+        Assert.Equal("CandidateRejectedUnstableAcrossSnapshots", AllowlistRepairService.BuildRefreshFinalDecision(item));
+        Assert.Equal(string.Empty, AllowlistRepairService.DetectRefreshSemanticConflict(item.GroupKey, item.BestCandidateGroupKey));
+    }
+
+    [Fact]
+    public void Low_overlap_after_stability_passes_is_low_confidence()
+    {
+        var item = RefreshItem(
+            reason: "LowConfidence; ConsecutiveMatches=3/3; Overlap=0.33/0.75; TitleSimilarity=1.00/0.70; KindMatch=true",
+            confidence: "Low");
+
+        Assert.Equal("CandidateRejectedLowConfidence", AllowlistRepairService.BuildRefreshFinalDecision(item));
+    }
+
+    [Fact]
+    public void Hard_semantic_conflict_is_semantic_final_decision()
+    {
+        var item = RefreshItem(groupKey: "winner:2026 nba finals|kind:generic", bestCandidate: "winner:2026 wnba finals|kind:generic", reason: "Refresh semantic conflict: LeagueMismatch", confidence: "Low");
+
+        Assert.Equal("CandidateRejectedSemanticConflict", AllowlistRepairService.BuildRefreshFinalDecision(item));
+    }
+
+    [Fact]
+    public void Refresh_reason_does_not_duplicate_auto_apply_or_embed_conflicting_confidence()
+    {
+        var reason = "UnstableAcrossSnapshots; ConsecutiveMatches=1/3; Overlap=0.33/0.75; TitleSimilarity=1.00/0.70; KindMatch=true";
+
+        Assert.DoesNotContain("AutoApply=false. AutoApply=false", reason);
+        Assert.DoesNotContain("Confidence=High", reason);
+    }
+
+    private static AllowlistRefreshDiagnosticsItem RefreshItem(
+        string groupKey = "winner:2026 women s us open|kind:generic",
+        string bestCandidate = "winner:2026 women s us open|kind:generic",
+        string[]? addedMarketIds = null,
+        string[]? removedMarketIds = null,
+        string reason = "UnstableAcrossSnapshots; ConsecutiveMatches=1/3; Overlap=0.33/0.75; TitleSimilarity=1.00/0.70; KindMatch=true",
+        string confidence = "Low")
+        => new(
+            groupKey,
+            ["1088662", "1088680", "1088682"],
+            [],
+            3,
+            "VerifiedGroupMarketMismatch",
+            1,
+            bestCandidate,
+            0.9m,
+            ["1088682"],
+            [],
+            [],
+            addedMarketIds ?? ["1088681"],
+            [],
+            removedMarketIds ?? ["1088662", "1088680"],
+            [],
+            0.33m,
+            1m,
+            true,
+            reason,
+            "NeedsManualReview",
+            confidence,
+            string.Empty,
+            false);
 
     private static HttpResponseMessage Json(HttpStatusCode status, string body)
         => new(status) { Content = new StringContent(body) };
