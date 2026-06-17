@@ -62,7 +62,12 @@ public sealed record OpportunityStrategyScanResult(
     int VerifiedPricingBlockedByEmptyBook = 0,
     int VerifiedWouldOpenBlockedByFill = 0,
     int VerifiedWouldOpenBlockedByDepth = 0,
-    int VerifiedWouldOpenBlockedByUnknown = 0)
+    int VerifiedWouldOpenBlockedByUnknown = 0,
+    int VerifiedPricingBlockedByCircuitBreakerActive = 0,
+    int VerifiedPricingBlockedByMarketOrderbookQuarantined = 0,
+    int VerifiedPricingBlockedByTokenQuarantined = 0,
+    int SingleMarketCircuitBreakerSkippedMarkets = 0,
+    int SingleMarketCircuitBreakerSkippedCycles = 0)
 {
     public static OpportunityStrategyScanResult Disabled(string strategyName) => new(strategyName, StrategyMode.Disabled);
 }
@@ -311,6 +316,11 @@ public sealed class StrategyRuntimeCounters
     private long _verifiedWouldOpenBlockedByFill;
     private long _verifiedWouldOpenBlockedByDepth;
     private long _verifiedWouldOpenBlockedByUnknown;
+    private long _verifiedPricingBlockedByCircuitBreakerActive;
+    private long _verifiedPricingBlockedByMarketOrderbookQuarantined;
+    private long _verifiedPricingBlockedByTokenQuarantined;
+    private long _singleMarketCircuitBreakerSkippedMarkets;
+    private long _singleMarketCircuitBreakerSkippedCycles;
     private readonly object _reasonGate = new();
     private readonly Dictionary<string, long> _rejectedByReason = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _bestEdgeGate = new();
@@ -356,6 +366,11 @@ public sealed class StrategyRuntimeCounters
         Interlocked.Add(ref _verifiedWouldOpenBlockedByFill, result.VerifiedWouldOpenBlockedByFill);
         Interlocked.Add(ref _verifiedWouldOpenBlockedByDepth, result.VerifiedWouldOpenBlockedByDepth);
         Interlocked.Add(ref _verifiedWouldOpenBlockedByUnknown, result.VerifiedWouldOpenBlockedByUnknown);
+        Interlocked.Add(ref _verifiedPricingBlockedByCircuitBreakerActive, result.VerifiedPricingBlockedByCircuitBreakerActive);
+        Interlocked.Add(ref _verifiedPricingBlockedByMarketOrderbookQuarantined, result.VerifiedPricingBlockedByMarketOrderbookQuarantined);
+        Interlocked.Add(ref _verifiedPricingBlockedByTokenQuarantined, result.VerifiedPricingBlockedByTokenQuarantined);
+        Interlocked.Add(ref _singleMarketCircuitBreakerSkippedMarkets, result.SingleMarketCircuitBreakerSkippedMarkets);
+        Interlocked.Add(ref _singleMarketCircuitBreakerSkippedCycles, result.SingleMarketCircuitBreakerSkippedCycles);
         if (result.BestEdge.HasValue)
         {
             lock (_bestEdgeGate)
@@ -413,7 +428,12 @@ public sealed class StrategyRuntimeCounters
         Interlocked.Read(ref _verifiedPricingBlockedByEmptyBook),
         Interlocked.Read(ref _verifiedWouldOpenBlockedByFill),
         Interlocked.Read(ref _verifiedWouldOpenBlockedByDepth),
-        Interlocked.Read(ref _verifiedWouldOpenBlockedByUnknown));
+        Interlocked.Read(ref _verifiedWouldOpenBlockedByUnknown),
+        Interlocked.Read(ref _verifiedPricingBlockedByCircuitBreakerActive),
+        Interlocked.Read(ref _verifiedPricingBlockedByMarketOrderbookQuarantined),
+        Interlocked.Read(ref _verifiedPricingBlockedByTokenQuarantined),
+        Interlocked.Read(ref _singleMarketCircuitBreakerSkippedMarkets),
+        Interlocked.Read(ref _singleMarketCircuitBreakerSkippedCycles));
 
     private decimal? BestEdgeSnapshot()
     {
@@ -464,4 +484,9 @@ public sealed record StrategyRuntimeCounterSnapshot(
     long VerifiedPricingBlockedByEmptyBook = 0,
     long VerifiedWouldOpenBlockedByFill = 0,
     long VerifiedWouldOpenBlockedByDepth = 0,
-    long VerifiedWouldOpenBlockedByUnknown = 0);
+    long VerifiedWouldOpenBlockedByUnknown = 0,
+    long VerifiedPricingBlockedByCircuitBreakerActive = 0,
+    long VerifiedPricingBlockedByMarketOrderbookQuarantined = 0,
+    long VerifiedPricingBlockedByTokenQuarantined = 0,
+    long SingleMarketCircuitBreakerSkippedMarkets = 0,
+    long SingleMarketCircuitBreakerSkippedCycles = 0);

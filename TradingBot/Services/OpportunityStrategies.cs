@@ -44,7 +44,9 @@ public sealed class SingleMarketBuyBothOpportunityStrategy : IOpportunityStrateg
             BestEdge: stats.BestEdgeSeen,
             TopSkipReason: topSkip.Key ?? "None",
             TopSkipCount: topSkip.Value,
-            RejectedByReason: rejectedByReason);
+            RejectedByReason: rejectedByReason,
+            SingleMarketCircuitBreakerSkippedMarkets: stats.CircuitBreakerSkippedMarkets,
+            SingleMarketCircuitBreakerSkippedCycles: stats.CircuitBreakerSkippedCycles);
     }
 }
 

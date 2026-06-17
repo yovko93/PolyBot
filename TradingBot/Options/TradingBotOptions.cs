@@ -192,6 +192,25 @@ public class OrderBookOptions
     public double MaxBadRequestRateForStable { get; set; } = 0.005;
     public int MaxBadRequestsPerHourForStable { get; set; } = 20;
     public int MaxRepeatedInvalidTokenAfterQuarantine { get; set; } = 0;
+    public int MaxSingleTokenIsolationsPerCycle { get; set; } = 50;
+    public int MaxSingleTokenIsolationsPerHour { get; set; } = 200;
+    public int MaxNewTokenQuarantinesPerHour { get; set; } = 200;
+    public int MaxBatchBookBadRequestsPerCycle { get; set; } = 20;
+    public int OrderbookCircuitBreakerCooldownMinutes { get; set; } = 15;
+    public int CircuitBreakerInitialCooldownMinutes { get; set; } = 15;
+    public int CircuitBreakerMaxCooldownMinutes { get; set; } = 120;
+    public int CircuitBreakerHalfOpenCanaryMarkets { get; set; } = 25;
+    public int CircuitBreakerHalfOpenMaxBadRequests { get; set; } = 0;
+    public int CircuitBreakerHalfOpenMaxTimeouts { get; set; } = 1;
+    public double CircuitBreakerCooldownBackoffMultiplier { get; set; } = 2;
+    public int RecoveryDurationMinutes { get; set; } = 5;
+    public int RecoveryMaxMarketsPerCycle { get; set; } = 100;
+    public int RecoveryMaxBatchSize { get; set; } = 25;
+    public int CircuitBreakerBadRequestsPerHourThreshold { get; set; } = 100;
+    public int CircuitBreakerInvalidTokensPerHourThreshold { get; set; } = 100;
+    public double CircuitBreakerBadRequestRateThreshold { get; set; } = 0.02;
+    public int CircuitBreakerUnavailableMarketsThreshold { get; set; } = 500;
+    public int MarketOrderbookQuarantineTtlMinutes { get; set; } = 360;
 }
 public class SoakOptions
 {

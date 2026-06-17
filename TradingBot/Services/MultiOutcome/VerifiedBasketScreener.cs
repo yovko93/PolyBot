@@ -30,17 +30,17 @@ public sealed class VerifiedBasketScreener
         var bestProfile = results.OrderByDescending(x => x.NetEdge).First().ProfileName;
         var poly = results.FirstOrDefault(x => x.ProfileName.Equals("PolymarketApprox", StringComparison.OrdinalIgnoreCase));
         var raw = results.FirstOrDefault(x => x.ProfileName.Equals("RawOnly", StringComparison.OrdinalIgnoreCase));
-        var nearExecutable = formula.NetEdge <= 0m && (((poly?.NetEdge ?? decimal.MinValue) > 0m) || ((raw?.NetEdge ?? decimal.MinValue) > 0m) || breakdown.CostReductionNeeded <= 0.005m);
+        var nearExecutable = formula.NetEdge <= 0m && ((poly?.NetEdge > 0m) || (raw?.NetEdge > 0m) || breakdown.CostReductionNeeded <= 0.005m);
         var diagPositive = results.Where(x => x.DiagnosticsOnly && x.NetEdge > 0m).Select(x => x.ProfileName).ToArray();
         var recommendedAction = nearExecutable ? "NearExecutableReviewCosts"
             : formula.GrossEdge > 0m ? "Monitor"
             : formula.GrossEdge < 0m ? "DisableUntilBetterPricing"
             : "NotActionable";
-        var experimentalNet = poly?.NetEdge ?? decimal.MinValue;
-        var orderbook = results.FirstOrDefault(x => x.ProfileName.Equals("OrderbookOnly", StringComparison.OrdinalIgnoreCase))?.NetEdge ?? decimal.MinValue;
+        var experimentalNet = poly?.NetEdge ?? 0m;
+        var orderbook = results.FirstOrDefault(x => x.ProfileName.Equals("OrderbookOnly", StringComparison.OrdinalIgnoreCase))?.NetEdge;
         var status = formula.NetEdge > options.MinMultiOutcomeEdge ? ExecutionStatus.ExecutableUnderActiveProfile
             : experimentalNet > options.MinMultiOutcomeEdge ? ExecutionStatus.ExperimentalPaperCandidate
-            : ((raw?.NetEdge ?? decimal.MinValue) > options.MinMultiOutcomeEdge || orderbook > options.MinMultiOutcomeEdge) ? ExecutionStatus.DiagnosticsOnlyPositive
+            : ((raw?.NetEdge > options.MinMultiOutcomeEdge) || (orderbook > options.MinMultiOutcomeEdge)) ? ExecutionStatus.DiagnosticsOnlyPositive
             : nearExecutable ? ExecutionStatus.NearExecutable : ExecutionStatus.NotExecutable;
         return new ScreenResult(groupKey, legs.Count, formula.GuaranteedPayout, formula.NoAskSum, formula.GrossEdge, formula.NetEdge, formula.NetEdge > options.MinMultiOutcomeEdge ? 1m : 0m, formula.NetEdge, breakdown.DominantCostComponent, breakdown.Classification, bestProfile, results, quantityScenarios, "None", DateTime.UtcNow, breakdown.CostReductionNeeded, nearExecutable, recommendedAction, diagPositive, experimentalNet, status);
     }

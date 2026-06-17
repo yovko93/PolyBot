@@ -7,7 +7,7 @@ using TradingBot.Services;
 
 namespace TradingBot.Engines;
 
-public record SingleMarketScanStats(int Scanned,int BookOk,int BothAsks,int Candidates,int Executed,int PositiveEdgeFound,int NegativeEdgeSkipped,int ZeroEdgeSkipped, Dictionary<string,int>? SkipReasons = null, List<NearMissOpportunity>? NearMisses = null, decimal? BestEdgeSeen = null, decimal? WorstEdgeSeen = null, int ExecutionReady = 0, int FillPassed = 0);
+public record SingleMarketScanStats(int Scanned,int BookOk,int BothAsks,int Candidates,int Executed,int PositiveEdgeFound,int NegativeEdgeSkipped,int ZeroEdgeSkipped, Dictionary<string,int>? SkipReasons = null, List<NearMissOpportunity>? NearMisses = null, decimal? BestEdgeSeen = null, decimal? WorstEdgeSeen = null, int ExecutionReady = 0, int FillPassed = 0, int CircuitBreakerSkippedMarkets = 0, int CircuitBreakerSkippedCycles = 0);
 
 public class SingleMarketOrderBookArbEngine
 {
@@ -93,6 +93,12 @@ public class SingleMarketOrderBookArbEngine
         var scanId = Interlocked.Increment(ref _scanId);
         BeginDataQualityFullCycle(fullCycleId ?? scanId);
         var diagnostics = new SingleMarketCycleDiagnostics(scanId);
+        if (_orderBooks is OrderBookService orderBookService && orderBookService.GetStats().OrderbookCircuitBreakerActive)
+        {
+            var skipped = markets.Count;
+            var skippedReasons = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase) { ["SingleMarketSkippedByCircuitBreaker"] = skipped };
+            return new SingleMarketScanStats(0, 0, 0, 0, 0, 0, 0, 0, skippedReasons, CircuitBreakerSkippedMarkets: skipped, CircuitBreakerSkippedCycles: skipped > 0 ? 1 : 0);
+        }
         var tasks = markets.Select(market => ScanMarketAsync(market, paper, semaphore, diagnostics, ct));
         var results = await Task.WhenAll(tasks);
         var summary = BuildAndPublishSnapshot(diagnostics);
@@ -109,7 +115,8 @@ public class SingleMarketOrderBookArbEngine
             if (!string.IsNullOrWhiteSpace(r.SkipReason)) skipReasons[r.SkipReason!] = skipReasons.GetValueOrDefault(r.SkipReason!, 0) + 1;
             if (r.NearMiss != null) nearMisses.Add(r.NearMiss);
         }
-        return new SingleMarketScanStats(results.Length, results.Count(x => x.BookOk), results.Count(x => x.BothAsks), results.Count(x => x.Candidate), results.Count(x => x.Executed), results.Count(x => x.Candidate && x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value > 0m), results.Count(x => x.Candidate && x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value < 0m), results.Count(x => x.Candidate && x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value == 0m), skipReasons, nearMisses, edges.Count>0?edges.Max():null, edges.Count>0?edges.Min():null, diagnostics.ExecutionReady, diagnostics.FillPassed);
+        var circuitSkipped = results.Count(x => x.SkipReason == "SingleMarketSkippedByCircuitBreaker");
+        return new SingleMarketScanStats(Math.Max(0, results.Length - circuitSkipped), results.Count(x => x.BookOk), results.Count(x => x.BothAsks), results.Count(x => x.Candidate), results.Count(x => x.Executed), results.Count(x => x.Candidate && x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value > 0m), results.Count(x => x.Candidate && x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value < 0m), results.Count(x => x.Candidate && x.AdjustedCost.HasValue && 1m - x.AdjustedCost.Value == 0m), skipReasons, nearMisses, edges.Count>0?edges.Max():null, edges.Count>0?edges.Min():null, diagnostics.ExecutionReady, diagnostics.FillPassed, circuitSkipped, circuitSkipped > 0 ? 1 : 0);
     }
 
     private async Task<SingleMarketScanResult> ScanMarketAsync(Market market, PaperTradingEngine paper, SemaphoreSlim semaphore, SingleMarketCycleDiagnostics diagnostics, CancellationToken ct)
@@ -117,8 +124,13 @@ public class SingleMarketOrderBookArbEngine
         await semaphore.WaitAsync(ct);
         try
         {
-            diagnostics.IncrementScanned();
             if (!_options.Enabled) return SingleMarketScanResult.Empty;
+            if (_orderBooks is OrderBookService orderBookServiceForMarket && orderBookServiceForMarket.GetStats().OrderbookCircuitBreakerActive)
+            {
+                diagnostics.AddReject("SingleMarketSkippedByCircuitBreaker");
+                return new SingleMarketScanResult(false, false, false, false, null, market.question, null, "SingleMarketSkippedByCircuitBreaker", null);
+            }
+            diagnostics.IncrementScanned();
             var now = DateTime.UtcNow;
             var book = await _orderBooks.GetBinarySnapshotAsync(market, ct);
             if (book == null)
@@ -272,6 +284,13 @@ public class SingleMarketOrderBookArbEngine
             Console.WriteLine($"[PAPER_FILL_SIMULATION_PASSED] MarketId={book.MarketId} Qty={quantity:0.####} FullyFillableQty={fill.FullyFillableQty:0.####} SimulatedCost={fill.SimulatedCost:0.####}");
             Console.WriteLine($"[SINGLE_MARKET_FILL_SIMULATION_PASSED] MarketId={book.MarketId} Qty={quantity:0.####} FullyFillableQty={fill.FullyFillableQty:0.####} SimulatedCost={fill.SimulatedCost:0.####}");
             RecordHighValue(BuildDto(book, market.conditionId, SingleMarketArbState.FillSimulationPassed, yes, no, rawCost, fill.AdjustedEdgePerShare, fill.ExpectedProfit, quantity, fill.SimulatedCost, "Passed", "Passed", "NotOpened", null, st.EdgeScans, st.ExecutionScans), "SingleMarketFillSimulationPassed");
+
+            if (_orderBooks is OrderBookService orderBookServiceForPaper && orderBookServiceForPaper.GetStats().OrderbookCircuitBreakerActive)
+            {
+                diagnostics.AddReject("OrderbookCircuitBreakerActive");
+                Console.WriteLine($"[SINGLE_MARKET_PAPER_OPEN_BLOCKED] MarketId={book.MarketId} Reason=OrderbookCircuitBreakerActive");
+                return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,"OrderbookCircuitBreakerActive",null);
+            }
 
             if (!paper.TryMarkSingleMarketOpenInFlight(book.MarketId, StrategyName, out var ttlSeconds))
             {
