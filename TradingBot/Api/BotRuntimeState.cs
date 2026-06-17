@@ -150,6 +150,11 @@ public class BotRuntimeState
     public int AllowlistRefreshActionFlipFlops => Volatile.Read(ref _allowlistRefreshActionFlipFlops);
     public QuietLogGateStats QuietLogGateStats => _quietLogGateStats;
     public OrderBookServiceStats OrderBookServiceStats => _orderBookServiceStats;
+    public string ProcessRunId => ProcessRunContext.ProcessRunId;
+    public string ScannerInstanceId => ProcessRunContext.ScannerInstanceId;
+    public DateTime StartedAtUtc => ProcessRunContext.StartedAtUtc;
+    public long DiagnosticsCounterMismatchCount => ProcessRunContext.DiagnosticsCounterMismatchCount;
+    public string DiagnosticsCounterMismatchLastReason => ProcessRunContext.DiagnosticsCounterMismatchLastReason;
     public int SingleMarketOpportunitiesCount => _singleMarketOpportunities.Count;
     public int SingleMarketExecutionsCount => _singleMarketExecutions.Count;
     public int PaperOpenPositions => Status.OpenPositions;
@@ -220,6 +225,13 @@ public class BotRuntimeState
         Interlocked.Exchange(ref _paperCloseEvents, closeEvents);
     }
     public void ReplacePaperSettlements(IEnumerable<PaperSettlementRecord> items){while(_paperSettlements.TryDequeue(out _)){} foreach(var i in items.Take(500)) _paperSettlements.Enqueue(i); Trim(_paperSettlements,500);}
+    public void ClearTransientLogBuffers()
+    {
+        while (_logs.TryDequeue(out _)) { }
+        while (_signalREventBuffer.TryDequeue(out _)) { }
+        lock (_recentLogDedupe) _recentLogDedupe.Clear();
+    }
+
     public bool AddLog(TerminalLogEntryDto l)
     {
         if (!IsCriticalLog(l) && IsDuplicateRecentLog(l)) return false;

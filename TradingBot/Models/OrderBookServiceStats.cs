@@ -43,6 +43,10 @@ public record OrderBookServiceStats(
     long OrderbookCircuitBreakerHalfOpenAttempts = 0,
     long OrderbookCircuitBreakerHalfOpenSucceeded = 0,
     long OrderbookCircuitBreakerHalfOpenFailed = 0,
+    long BatchBookCanaryTimeouts = 0,
+    long BatchBookCanaryInvalidTokens = 0,
+    long BatchBookCanaryOrderbookUnavailable = 0,
+    string OrderbookCircuitBreakerLastHalfOpenFailureReason = "",
     long OrderbookCircuitBreakerCooldownExtensions = 0,
     string OrderbookCircuitBreakerLastOpenReason = "",
     DateTime? OrderbookCircuitBreakerRecoveringSinceUtc = null,
@@ -57,6 +61,16 @@ public record OrderBookServiceStats(
     long BatchBookCanaryBadRequests = 0,
     long BatchBookRecoveryRequests = 0,
     long BatchBookRecoveryBadRequests = 0,
+    long OrderbookRecoveryLimitedRequests = 0,
+    long OrderbookRecoveryLimitedMarkets = 0,
+    long OrderbookRecoveryBadRequests = 0,
+    long OrderbookRecoveryInvalidTokens = 0,
+    long OrderbookRecoverySucceededCount = 0,
+    long OrderbookRecoveryFailedCount = 0,
     long BatchBookNormalRequests = 0,
-    long BatchBookNormalBadRequests = 0
+    long BatchBookNormalBadRequests = 0,
+    long BatchBookNormalRequestsBeforeBreakerOpen = 0,
+    long BatchBookNormalBadRequestsBeforeBreakerOpen = 0,
+    long BatchBookNormalRequestsAfterBreakerOpen = 0,
+    long BatchBookNormalBadRequestsAfterBreakerOpen = 0
 );

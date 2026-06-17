@@ -60,10 +60,50 @@ public class RuntimeMemorySafetyTests
         Assert.Equal(1, health.SignalREventBufferCount);
         Assert.Equal(2, health.PaperPhase);
         Assert.Contains("[RUNTIME_HEALTH]", health.ToLogLine());
+        Assert.Contains("ProcessRunId=", health.ToLogLine());
         Assert.Contains("ProcessMb=", health.ToLogLine());
         Assert.Contains("PaperPhase=2", health.ToLogLine());
     }
 
+
+
+    [Fact]
+    public void Process_run_context_enriches_runtime_and_soak_logs()
+    {
+        var state = new BotRuntimeState(new RuntimeStateOptions { MaxRecentLogs = 10 });
+        var options = new TradingBotOptions { TradingMode = new TradingModeOptions { PaperPhase = 2 } };
+        var health = RuntimeHealthSnapshot.From(state, options);
+        var soak = RuntimeHealthTrendTracker.ToSoakStatusLogLine(health, new RuntimeHealthTrend(0, 0, 0, 0, true, 1), options, state);
+
+        Assert.False(string.IsNullOrWhiteSpace(health.ProcessRunId));
+        Assert.Contains($"ProcessRunId={health.ProcessRunId}", health.ToLogLine());
+        Assert.Contains($"ProcessRunId={health.ProcessRunId}", soak);
+        Assert.Equal(ProcessRunContext.ProcessRunId, health.ProcessRunId);
+    }
+
+    [Fact]
+    public void ClearTransientLogBuffers_removes_old_logs_and_signalr_events()
+    {
+        var state = new BotRuntimeState(new RuntimeStateOptions { MaxRecentLogs = 10, MaxSignalREventBuffer = 10 });
+        state.AddLog(new TerminalLogEntryDto("old", DateTime.UtcNow, "info", "test", "old", 1));
+        state.AddSignalREvent("old");
+
+        state.ClearTransientLogBuffers();
+
+        Assert.Empty(state.Logs());
+        Assert.Equal(0, state.SignalREventBufferCount);
+    }
+
+    [Fact]
+    public void Diagnostics_counter_mismatch_is_reported_when_observed_log_has_zero_counter()
+    {
+        ProcessRunContext.EnrichLogLine("[ORDERBOOK_CIRCUIT_BREAKER_OPENED] Reason=Test");
+        var reason = ProcessRunContext.ValidateOrderbookCounters(new OrderBookServiceStats(0, 0, 0, 0, 0, 0, 0, 0, 0));
+
+        Assert.NotNull(reason);
+        Assert.True(ProcessRunContext.DiagnosticsCounterMismatchCount > 0);
+        Assert.Contains("OrderbookCircuitBreakerOpenCount", ProcessRunContext.DiagnosticsCounterMismatchLastReason);
+    }
 
     [Fact]
     public void RuntimeHealth_ShouldLogAt_EmitsStartupAndConfiguredPeriodicOnly()

@@ -235,7 +235,7 @@ app.MapPost("/api/bot/controls/resume", async (BotRuntimeState s, IHubContext<Bo
 });
 app.MapGet("/api/bot/logs/recent", (BotRuntimeState s, int? limit) => s.Logs().TakeLast(Math.Clamp(limit ?? 300, 1, 1000)).ToArray());
 app.MapGet("/api/bot/equity", (BotRuntimeState s, int? limit) => s.Equity().TakeLast(Math.Clamp(limit ?? 500, 1, 1000)).ToArray());
-app.MapGet("/api/bot/runtime-health", (BotRuntimeState s, QuietLogGate q, IOptions<TradingBotOptions> o) => { s.SetQuietLogGateStats(q.Snapshot()); return Results.Ok(RuntimeHealthSnapshot.From(s, o.Value)); });
+app.MapGet("/api/bot/runtime-health", (BotRuntimeState s, QuietLogGate q, IOptions<TradingBotOptions> o) => { s.SetQuietLogGateStats(q.Snapshot()); if (ProcessRunContext.ValidateOrderbookCounters(s.OrderBookServiceStats) is string mismatchReason) Console.WriteLine(ProcessRunContext.FormatMismatchLog(mismatchReason, s.OrderBookServiceStats)); return Results.Ok(RuntimeHealthSnapshot.From(s, o.Value)); });
 app.MapHub<BotHub>("/hubs/bot");
 
 var apiTask = app.RunAsync(listenUrl);
@@ -247,7 +247,9 @@ foreach (var strategyEntry in options.Strategies.Where(x => x.Value.Enabled && x
     state.RecordStrategyResult(new OpportunityStrategyScanResult(strategyEntry.Key, strategyEntry.Value.Mode));
 quietLogGate.ConfigureBounds(options.RuntimeMemory.MaxQuietLogGateEntries, TimeSpan.FromMinutes(options.RuntimeMemory.QuietLogGateTtlMinutes));
 
+state.ClearTransientLogBuffers();
 Console.SetOut(new MultiTextWriter(originalOut, msg => logger.LogInfo("console", msg)));
+Console.WriteLine($"[LOG_BUFFER_RESET] ProcessRunId={ProcessRunContext.ProcessRunId} Reason=FreshProcessStart");
 logger.LogSuccess("startup", $"Bot API listening on {listenUrl}");
 logger.LogSuccess("startup", $"ExecutionMode={options.ExecutionMode}; EnablePaperTrading={options.EnablePaperTrading}; EnableLiveExecution={options.EnableLiveExecution}");
 logger.LogInfo("startup", $"[CONFIG] Scanner Mode={options.Mode} MarketScanLimit={options.MarketScanLimit} MaxMarketsToDiscover={options.MaxMarketsToDiscover} ScanBatchSize={options.ScanBatchSize} MaxOrderbooksPerCycle={options.MaxOrderbooksPerCycle} MaxConcurrentOrderbookRequests={options.MaxConcurrentOrderbookRequests} LogEmptyOpportunityCycles={options.LogEmptyOpportunityCycles}");
@@ -289,6 +291,8 @@ _ = Task.Run(async () =>
         void LogRuntimeHealthAndSoakStatus()
         {
             state.SetQuietLogGateStats(quietLogGate.Snapshot());
+            if (ProcessRunContext.ValidateOrderbookCounters(state.OrderBookServiceStats) is string mismatchReason)
+                Console.WriteLine(ProcessRunContext.FormatMismatchLog(mismatchReason, state.OrderBookServiceStats));
             var health = RuntimeHealthSnapshot.From(state, options);
             var trend = RuntimeHealthTrendTracker.RecordAndAnalyze(health, options.RuntimeHealth);
             Console.WriteLine(health.ToLogLine());
@@ -338,7 +342,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
 {
     var scannerInstanceId = Guid.NewGuid().ToString("N");
     var scannerStartedAt = DateTime.UtcNow;
-    Console.WriteLine($"[SCANNER] Background scanner started InstanceId={scannerInstanceId}");
+    Console.WriteLine($"[SCANNER] Background scanner started InstanceId={scannerInstanceId} ScannerInstanceId={ProcessRunContext.ScannerInstanceId}");
     var scannerState = new ScannerStateMachine();
     scannerState.TryStart(Console.WriteLine);
     var scannerErrors = new ScannerExceptionReporter(contentRootPath, options);
@@ -374,6 +378,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
 
     var marketService = new MarketDataService(http);
     var orderbookService = new OrderBookService(http) { DisableSingleBookHttpFallback = true, LogPrefetchDetails = options.LogPrefetchDetails, LogBookCacheMissDetails = options.Logging.LogBookCacheMissDetails, BookCacheMissSampleSize = options.Logging.BookCacheMissSampleSize, ExportDirectory = Path.Combine(contentRootPath, "exports") };
+    orderbookService.StatsUpdated = state.SetOrderBookServiceStats;
     orderbookService.ConfigureCache(TimeSpan.FromMinutes(Math.Max(1, options.RuntimeMemory.OrderbookCacheTtlMinutes)), Math.Min(options.Caches.MaxOrderbookCacheEntries, options.RuntimeMemory.MaxOrderbookCacheEntries));
     orderbookService.ConfigureBatchOptions(options.OrderBook, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate);
     orderbookService.MaxInvalidTokenCacheEntries = Math.Max(1, options.RuntimeMemory.MaxInvalidTokenCacheEntries);
@@ -1100,18 +1105,21 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var disabledCount = summary.Disabled; var ignoredCount = summary.Ignored;
                     var needsRefreshCount = summary.NeedsRefresh;
                     allowlistHealthCycle++;
-                    var classificationTotal = summary.Healthy + summary.MonitoringOnly + summary.NeedsPricingPrune + summary.NeedsRefresh + summary.ReviewOnly + summary.BrokenConfig + summary.Disabled + summary.Ignored;
+                    var circuitBreakerProtectsAllowlistForLog = orderbookService.GetStats().OrderbookCircuitBreakerActive;
+                    var loggedBrokenConfig = circuitBreakerProtectsAllowlistForLog ? 0 : summary.BrokenConfig;
+                    var loggedReviewOnly = summary.ReviewOnly + (summary.BrokenConfig - loggedBrokenConfig);
+                    var classificationTotal = summary.Healthy + summary.MonitoringOnly + summary.NeedsPricingPrune + summary.NeedsRefresh + loggedReviewOnly + loggedBrokenConfig + summary.Disabled + summary.Ignored;
                     var classifiedGroups = allowlistHealth.Where(x => !string.IsNullOrWhiteSpace(x.healthCategory)).Select(x => x.groupKey).ToArray();
                     var duplicateGroups = classifiedGroups.GroupBy(x => x, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1).Select(g => g.Key).ToArray();
                     var missingGroups = allowlistedGroups.Select(x => x.GroupKey).Except(classifiedGroups, StringComparer.OrdinalIgnoreCase).ToArray();
                     var classificationValid = classificationTotal == summary.ConfiguredGroups && duplicateGroups.Length == 0 && missingGroups.Length == 0;
-                    var allowlistFingerprint = $"{summary.ConfiguredGroups}|{healthyCount}|{brokenCount}|{disabledCount}|{ignoredCount}|{needsRefreshCount}|{summary.NeedsPricingPrune}|{summary.NeedsRefresh}|{summary.ReviewOnly}|{summary.BrokenConfig}|{classificationTotal}|{classificationValid}";
+                    var allowlistFingerprint = $"{summary.ConfiguredGroups}|{healthyCount}|{brokenCount}|{disabledCount}|{ignoredCount}|{needsRefreshCount}|{summary.NeedsPricingPrune}|{summary.NeedsRefresh}|{loggedReviewOnly}|{loggedBrokenConfig}|{classificationTotal}|{classificationValid}";
                     var shouldLogAllowlist = !options.Logging.LogAllowlistHealthOnChangeOnly || allowlistFingerprint != lastAllowlistHealthFingerprint || (options.Logging.LogAllowlistHealthEveryNCycles > 0 && allowlistHealthCycle % options.Logging.LogAllowlistHealthEveryNCycles == 0);
                     lastAllowlistHealthFingerprint = allowlistFingerprint;
-                    if (shouldLogAllowlist) Console.WriteLine($"[ALLOWLIST_HEALTH] Configured={summary.ConfiguredGroups} Healthy={summary.Healthy} MonitoringOnly={summary.MonitoringOnly} NeedsPricingPrune={summary.NeedsPricingPrune} NeedsRefresh={summary.NeedsRefresh} ReviewOnly={summary.ReviewOnly} BrokenConfig={summary.BrokenConfig} Disabled={summary.Disabled} Ignored={summary.Ignored} BrokenTotal={summary.Broken} ClassificationTotal={classificationTotal} ClassificationValid={classificationValid.ToString().ToLowerInvariant()}");
+                    if (shouldLogAllowlist) Console.WriteLine($"[ALLOWLIST_HEALTH] Configured={summary.ConfiguredGroups} Healthy={summary.Healthy} MonitoringOnly={summary.MonitoringOnly} NeedsPricingPrune={summary.NeedsPricingPrune} NeedsRefresh={summary.NeedsRefresh} ReviewOnly={loggedReviewOnly} BrokenConfig={loggedBrokenConfig} Disabled={summary.Disabled} Ignored={summary.Ignored} BrokenTotal={summary.Broken} ClassificationTotal={classificationTotal} ClassificationValid={classificationValid.ToString().ToLowerInvariant()}");
                     if (!classificationValid)
                     {
-                        Console.WriteLine($"[ALLOWLIST_CLASSIFICATION_ERROR] Configured={summary.ConfiguredGroups} ClassificationTotal={classificationTotal} MissingCount={missingGroups.Length} DuplicateCount={duplicateGroups.Length} MissingGroups=[{string.Join(",", missingGroups.Take(5))}] DuplicateGroups=[{string.Join(",", duplicateGroups.Take(5))}] Healthy={summary.Healthy} MonitoringOnly={summary.MonitoringOnly} NeedsPricingPrune={summary.NeedsPricingPrune} NeedsRefresh={summary.NeedsRefresh} ReviewOnly={summary.ReviewOnly} BrokenConfig={summary.BrokenConfig} Disabled={summary.Disabled} Ignored={summary.Ignored}");
+                        Console.WriteLine($"[ALLOWLIST_CLASSIFICATION_ERROR] Configured={summary.ConfiguredGroups} ClassificationTotal={classificationTotal} MissingCount={missingGroups.Length} DuplicateCount={duplicateGroups.Length} MissingGroups=[{string.Join(",", missingGroups.Take(5))}] DuplicateGroups=[{string.Join(",", duplicateGroups.Take(5))}] Healthy={summary.Healthy} MonitoringOnly={summary.MonitoringOnly} NeedsPricingPrune={summary.NeedsPricingPrune} NeedsRefresh={summary.NeedsRefresh} ReviewOnly={loggedReviewOnly} BrokenConfig={loggedBrokenConfig} Disabled={summary.Disabled} Ignored={summary.Ignored}");
                     }
                     foreach (var remaining in repairReport.Groups.Where(x => x.RecommendedAction == "PruneMissingNoAskLegs" && x.MissingNoAskMarketIds.Count > 0))
                     {
@@ -1120,7 +1128,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         if (logThrottle.ShouldLog($"ALLOWLIST_CONFIG_REPAIR_REMAINING:{remaining.GroupKey}", remainingFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, options.Logging.LogAllowlistRepairEveryNCycles))
                             Console.WriteLine($"[ALLOWLIST_CONFIG_REPAIR_REMAINING] Group={remaining.GroupKey} Action=PruneMissingNoAskLegs MissingMarketIds=[{missingIds}]");
                     }
-                    var healthPath = Path.Combine(contentRootPath, "exports/verified-allowlist-health-latest.json"); Directory.CreateDirectory(Path.GetDirectoryName(healthPath)!); File.WriteAllText(healthPath, System.Text.Json.JsonSerializer.Serialize(new { configured = summary.ConfiguredGroups, healthy = summary.Healthy, monitoringOnly = summary.MonitoringOnly, needsPricingPrune = summary.NeedsPricingPrune, needsRefresh = summary.NeedsRefresh, reviewOnly = summary.ReviewOnly, brokenConfig = summary.BrokenConfig, disabled = summary.Disabled, ignored = summary.Ignored, brokenTotal = summary.Broken, classificationTotal, classificationValid, invariantResult = classificationValid, categoryCounts = repairReport.CategoryCounts, groups = allowlistHealth }, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
+                    var healthPath = Path.Combine(contentRootPath, "exports/verified-allowlist-health-latest.json"); Directory.CreateDirectory(Path.GetDirectoryName(healthPath)!); File.WriteAllText(healthPath, System.Text.Json.JsonSerializer.Serialize(new { configured = summary.ConfiguredGroups, healthy = summary.Healthy, monitoringOnly = summary.MonitoringOnly, needsPricingPrune = summary.NeedsPricingPrune, needsRefresh = summary.NeedsRefresh, reviewOnly = loggedReviewOnly, brokenConfig = loggedBrokenConfig, disabled = summary.Disabled, ignored = summary.Ignored, brokenTotal = summary.Broken, classificationTotal, classificationValid, invariantResult = classificationValid, categoryCounts = repairReport.CategoryCounts, groups = allowlistHealth }, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
                     var cleanup = new { metadata = new { generatedAtUtc = DateTime.UtcNow, note = "suggested only" }, groups = allowlistRepairService.BuildSuggestedConfig(repairReport).Groups };
                     var cleanupPath = Path.Combine(contentRootPath, "exports/verified-allowlist-cleanup-suggested.json"); File.WriteAllText(cleanupPath, System.Text.Json.JsonSerializer.Serialize(cleanup, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
                     var repairLogEveryNCycles = options.Logging.SuppressRepeatedRepairSnapshotLogs && !options.Diagnostics.DebuggerSafeMode ? 0 : options.Logging.LogAllowlistRepairEveryNCycles;
@@ -1135,7 +1143,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         ? $"{summary.ConfiguredGroups}|{summary.Healthy}|{summary.MonitoringOnly}|{summary.NeedsPricingPrune}|{summary.NeedsRefresh}|{summary.ReviewOnly}|{summary.BrokenConfig}|{summary.Disabled}|{summary.Ignored}|{string.Join(";", repairReport.Groups.Select(x => $"{x.GroupKey}:{x.HealthCategory}:{x.RecommendedAction}:{x.RepairConfidence}"))}"
                         : $"{repairReport.SnapshotId}|{summary.ConfiguredGroups}|{summary.Healthy}|{summary.MonitoringOnly}|{summary.NeedsPricingPrune}|{summary.NeedsRefresh}|{summary.ReviewOnly}|{summary.BrokenConfig}|{summary.Disabled}|{summary.Ignored}|{string.Join(";", repairReport.Groups.Select(x => $"{x.GroupKey}:{x.HealthCategory}:{x.RecommendedAction}:{x.RepairConfidence}:{x.ActionVersion}"))}";
                     if (ShouldQuietLog("allowlist-repair", "ALLOWLIST_REPAIR_REPORT", repairReportFingerprint, LogImportance.Normal, everyNCycles: repairLogEveryNCycles))
-                        Console.WriteLine($"[ALLOWLIST_REPAIR_REPORT] Groups={repairReport.ConfiguredGroups} Healthy={summary.Healthy} MonitoringOnly={summary.MonitoringOnly} NeedsPricingPrune={summary.NeedsPricingPrune} NeedsRefresh={summary.NeedsRefresh} ReviewOnly={summary.ReviewOnly} BrokenConfig={summary.BrokenConfig} Disabled={summary.Disabled} Ignored={summary.Ignored} BrokenTotal={summary.Broken} Path={options.MultiOutcomeReview.ExportAllowlistRepairReportPath}");
+                        Console.WriteLine($"[ALLOWLIST_REPAIR_REPORT] Groups={repairReport.ConfiguredGroups} Healthy={summary.Healthy} MonitoringOnly={summary.MonitoringOnly} NeedsPricingPrune={summary.NeedsPricingPrune} NeedsRefresh={summary.NeedsRefresh} ReviewOnly={loggedReviewOnly} BrokenConfig={loggedBrokenConfig} Disabled={summary.Disabled} Ignored={summary.Ignored} BrokenTotal={summary.Broken} Path={options.MultiOutcomeReview.ExportAllowlistRepairReportPath}");
 
                     var refreshDiag = allowlistRepairService.BuildRefreshDiagnostics(repairReport, allowlistedGroups);
                     var actionExplainedSuppressedThisCycle = 0;
@@ -1152,9 +1160,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var activeUnstableLockKeys = activeUnstableLocks.Select(x => x.GroupKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
                     var finalLockedManualReviewCount = refreshDiag.Items.Count(x => x.FinalDecision.Equals("LockedManualReview", StringComparison.OrdinalIgnoreCase))
                         + activeUnstableLockKeys.Where(x => refreshDiag.Items.All(item => !item.GroupKey.Equals(x, StringComparison.OrdinalIgnoreCase))).Count();
-                    var circuitBreakerProtectsAllowlist = orderbookService.GetStats().OrderbookCircuitBreakerActive;
-                    var effectiveBrokenConfig = circuitBreakerProtectsAllowlist ? 0 : summary.BrokenConfig;
-                    var effectiveReviewOnly = Math.Max(summary.ReviewOnly + (summary.BrokenConfig - effectiveBrokenConfig), finalLockedManualReviewCount);
+                    var circuitBreakerProtectsAllowlist = circuitBreakerProtectsAllowlistForLog;
+                    var effectiveBrokenConfig = loggedBrokenConfig;
+                    var effectiveReviewOnly = Math.Max(loggedReviewOnly, finalLockedManualReviewCount);
                     state.SetAllowlistRefreshCounters(
                         repairReport.Summary.NeedsRefresh,
                         effectiveReviewOnly,
@@ -1536,16 +1544,18 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         : $"{verifiedScanFingerprint}|{unresolvedCounts.BrokenConfig}|{unresolvedCounts.NeedsRefresh}|{unresolvedCounts.ReviewOnly}|{unresolvedCounts.MonitoringOnly}|{unresolvedCounts.Other}|{unresolvedCounts.SamplesShown}|{unresolvedCounts.Suppressed}";
                     var verifiedImportance = paperOpenedCount > 0 ? LogImportance.Critical : activeExecutable > 0 ? LogImportance.Important : LogImportance.Normal;
                     var shouldLogVerifiedScan = ShouldQuietLog("multi-verified", "MULTI_VERIFIED_SCAN", verifiedScanFingerprint, verifiedImportance, verifiedScanFingerprint, everyNCycles: options.Logging.LogVerifiedScanEveryNCycles, maxPerHour: options.Logging.MaxMultiVerifiedScanLogsPerHour);
-                    if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} BrokenConfigCount={unresolvedCounts.BrokenConfig} NeedsRefreshCount={unresolvedCounts.NeedsRefresh} ReviewOnlyCount={unresolvedCounts.ReviewOnly} MonitoringOnlyUnresolvedCount={unresolvedCounts.MonitoringOnly} OtherUnresolvedCount={unresolvedCounts.Other} UnresolvedSamplesShown={unresolvedCounts.SamplesShown} SuppressedUnresolvedSamples={unresolvedCounts.Suppressed} UnresolvedTotal={unresolvedCounts.Total} Evaluated={verifiedEvaluated} ActiveExecutable={activeExecutable} ExperimentalCandidates={experimentalCandidates} DiagnosticsOnlyPositive={diagnosticsOnlyPositive} PaperOpened={paperOpenedCount} SuppressedDuplicate={suppressedDuplicateCount} Mismatch={verifiedMismatch} BestActiveNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestExperimentalNet={bestExperimentalText} BestAlternateProfileNet={bestAlternateProfileText} BestRaw={bestRawText}");
+                    var finalBrokenConfigCount = effectiveBrokenConfig;
+                    var finalReviewOnlyCount = effectiveReviewOnly;
+                    if (shouldLogVerifiedScan) Console.WriteLine($"[MULTI_VERIFIED_SCAN] Configured={multiOutcomeValidator.LoadedAllowlistCount} Resolved={verifiedResolved} Unresolved={unresolved} BrokenConfigCount={finalBrokenConfigCount} NeedsRefreshCount={unresolvedCounts.NeedsRefresh} ReviewOnlyCount={finalReviewOnlyCount} MonitoringOnlyUnresolvedCount={unresolvedCounts.MonitoringOnly} OtherUnresolvedCount={unresolvedCounts.Other} UnresolvedSamplesShown={unresolvedCounts.SamplesShown} SuppressedUnresolvedSamples={unresolvedCounts.Suppressed} UnresolvedTotal={unresolvedCounts.Total} Evaluated={verifiedEvaluated} ActiveExecutable={activeExecutable} ExperimentalCandidates={experimentalCandidates} DiagnosticsOnlyPositive={diagnosticsOnlyPositive} PaperOpened={paperOpenedCount} SuppressedDuplicate={suppressedDuplicateCount} Mismatch={verifiedMismatch} BestActiveNet={(bestConservativeNet.HasValue ? bestConservativeNet.Value : 0m)} BestExperimentalNet={bestExperimentalText} BestAlternateProfileNet={bestAlternateProfileText} BestRaw={bestRawText}");
                     var verifiedRejectedByReason = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
                     foreach (var reasonGroup in groupDiagnostics.Concat(pricingDiagnostics.Select(x => new VerifiedGroupDiagnosticDto(x.GroupKey, x.Legs, x.Legs, 0, "Pricing", x.SkipReason, x.NetEdge, x.SkipReason.Contains("MissingNoAsk", StringComparison.OrdinalIgnoreCase) ? 1 : 0, 0, Array.Empty<string>(), Array.Empty<string>())))
                         .Where(x => !string.IsNullOrWhiteSpace(x.SkipReason) && !x.SkipReason.Equals("None", StringComparison.OrdinalIgnoreCase))
                         .GroupBy(x => x.SkipReason, StringComparer.OrdinalIgnoreCase))
                         verifiedRejectedByReason[reasonGroup.Key] = reasonGroup.Count();
                     if (unresolved > 0) verifiedRejectedByReason["Unresolved"] = unresolved;
-                    if (unresolvedCounts.BrokenConfig > 0) verifiedRejectedByReason["BrokenConfig"] = unresolvedCounts.BrokenConfig;
+                    if (finalBrokenConfigCount > 0) verifiedRejectedByReason["BrokenConfig"] = finalBrokenConfigCount;
                     if (unresolvedCounts.NeedsRefresh > 0) verifiedRejectedByReason["NeedsRefresh"] = unresolvedCounts.NeedsRefresh;
-                    if (unresolvedCounts.ReviewOnly > 0) verifiedRejectedByReason["ReviewOnly"] = unresolvedCounts.ReviewOnly;
+                    if (finalReviewOnlyCount > 0) verifiedRejectedByReason["ReviewOnly"] = finalReviewOnlyCount;
                     if (verifiedWouldOpenIfPaperEligible > 0) verifiedRejectedByReason["DiagnosticsOnly"] = verifiedWouldOpenIfPaperEligible;
                     if (verifiedRawPositiveOnly > 0) verifiedRejectedByReason["RawPositiveOnly"] = verifiedRawPositiveOnly;
                     if (verifiedAlternatePositive > 0) verifiedRejectedByReason["AlternateProfilePositive"] = verifiedAlternatePositive;
@@ -2231,7 +2241,8 @@ public class MultiTextWriter(TextWriter original, Action<string> mirror) : TextW
     public override void WriteLine(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return;
-        original.WriteLine(value);
-        mirror(value);
+        var enriched = ProcessRunContext.EnrichLogLine(value);
+        original.WriteLine(enriched);
+        mirror(enriched);
     }
 }
