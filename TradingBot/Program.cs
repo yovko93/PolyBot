@@ -718,10 +718,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 resolvedNoAsks.Add(ResolvedNoAsk.Fail(m.id, m.conditionId, tokens.NoTokenId, "TokenQuarantined"));
                             else
                             {
-                                var resolved = VerifiedGroupPricingService.ResolveNoAsk(m, s, DateTime.UtcNow, options.MultiOutcomeArbitrage.VerifiedGroupOrderbookMaxAgeMs);
-                                if (resolved.FailureReason == "OrderbookFetchFailed") resolved = resolved with { FailureReason = "OrderbookUnavailable" };
-                                if (resolved.FailureReason == "EmptyBook") resolved = resolved with { FailureReason = "EmptyBook" };
-                                resolvedNoAsks.Add(resolved);
+                                var noAskResolution = VerifiedGroupPricingService.ResolveNoAsk(m, s, DateTime.UtcNow, options.MultiOutcomeArbitrage.VerifiedGroupOrderbookMaxAgeMs);
+                                if (noAskResolution.FailureReason == "OrderbookFetchFailed") noAskResolution = noAskResolution with { FailureReason = "OrderbookUnavailable" };
+                                if (noAskResolution.FailureReason == "EmptyBook") noAskResolution = noAskResolution with { FailureReason = "EmptyBook" };
+                                resolvedNoAsks.Add(noAskResolution);
                             }
                         }
                         var missingNoAskLegs = resolvedNoAsks.Where(x => !x.NoAsk.HasValue).ToList();
