@@ -41,6 +41,33 @@ public sealed record VerifiedUnresolvedGroupDiagnostic(
     bool SampleLogged,
     bool SuppressedInConsole);
 
+
+public sealed record AllowlistPrimaryClassificationGroup(
+    string GroupKey,
+    string FinalPrimaryCategory,
+    IReadOnlyList<string> PrimaryCategories,
+    IReadOnlyList<string> Reasons);
+
+public sealed record AllowlistPrimaryClassificationSummary(
+    int Configured,
+    int Healthy,
+    int MonitoringOnly,
+    int NeedsPricingPrune,
+    int NeedsRefresh,
+    int ReviewOnly,
+    int BrokenConfig,
+    int Disabled,
+    int Ignored,
+    int PrimaryCategorySum,
+    bool Valid,
+    IReadOnlyList<AllowlistPrimaryClassificationGroup> Groups,
+    IReadOnlyList<string> MissingGroups,
+    IReadOnlyList<AllowlistPrimaryClassificationGroup> DuplicateGroups)
+{
+    public int DuplicatePrimaryCategoryGroupCount => DuplicateGroups.Count;
+    public int MissingPrimaryCategoryGroupCount => MissingGroups.Count;
+}
+
 public sealed record VerifiedUnresolvedExport(DateTime Timestamp, int Total, VerifiedUnresolvedCategoryCounts CategoryCounts, IReadOnlyList<VerifiedUnresolvedGroupDiagnostic> Groups);
 
 public sealed record VerifiedUnresolvedExportRow(string GroupKey, string Reason, string ValidationStatus, string HealthCategory, string RecommendedAction, string RepairConfidence, bool IsSampleLogged, bool IsSuppressedInConsole);
@@ -168,6 +195,89 @@ public static class ScanLogSummaryService
     public static VerifiedUnresolvedSampleSummary UnresolvedSampleSummary(int total, int samplesShown, IReadOnlyList<string>? suppressedGroupKeys = null)
         => new(total, Math.Max(0, samplesShown), Math.Max(0, total - Math.Max(0, samplesShown)), suppressedGroupKeys ?? Array.Empty<string>());
 
+
+    public static AllowlistPrimaryClassificationSummary AllowlistPrimaryClassification(
+        IReadOnlyList<VerifiedMultiOutcomeGroupConfig> configuredGroups,
+        IReadOnlyList<AllowlistRepairGroup> repairGroups)
+    {
+        var repairByGroup = repairGroups
+            .GroupBy(x => x.GroupKey, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.Last(), StringComparer.OrdinalIgnoreCase);
+        var groups = new List<AllowlistPrimaryClassificationGroup>();
+        var missing = new List<string>();
+
+        foreach (var cfg in configuredGroups)
+        {
+            repairByGroup.TryGetValue(cfg.GroupKey, out var repair);
+            var candidates = CandidatePrimaryCategories(cfg, repair).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            var final = FinalPrimaryCategory(candidates);
+            var reasons = CandidateReasons(cfg, repair).ToArray();
+            if (string.IsNullOrWhiteSpace(final))
+            {
+                missing.Add(cfg.GroupKey);
+                continue;
+            }
+            groups.Add(new AllowlistPrimaryClassificationGroup(cfg.GroupKey, final, candidates, reasons));
+        }
+
+        var duplicates = groups.Where(x => x.PrimaryCategories.Count > 1).ToArray();
+        var healthy = groups.Count(x => x.FinalPrimaryCategory.Equals("Healthy", StringComparison.OrdinalIgnoreCase));
+        var monitoring = groups.Count(x => x.FinalPrimaryCategory.Equals("MonitoringOnly", StringComparison.OrdinalIgnoreCase));
+        var prune = groups.Count(x => x.FinalPrimaryCategory.Equals("NeedsPricingPrune", StringComparison.OrdinalIgnoreCase));
+        var refresh = groups.Count(x => x.FinalPrimaryCategory.Equals("NeedsRefresh", StringComparison.OrdinalIgnoreCase));
+        var review = groups.Count(x => x.FinalPrimaryCategory.Equals("ReviewOnly", StringComparison.OrdinalIgnoreCase));
+        var broken = groups.Count(x => x.FinalPrimaryCategory.Equals("BrokenConfig", StringComparison.OrdinalIgnoreCase));
+        var disabled = groups.Count(x => x.FinalPrimaryCategory.Equals("Disabled", StringComparison.OrdinalIgnoreCase));
+        var ignored = groups.Count(x => x.FinalPrimaryCategory.Equals("Ignored", StringComparison.OrdinalIgnoreCase));
+        var sum = healthy + monitoring + prune + refresh + review + broken + disabled + ignored;
+        return new AllowlistPrimaryClassificationSummary(configuredGroups.Count, healthy, monitoring, prune, refresh, review, broken, disabled, ignored, sum, sum == configuredGroups.Count && duplicates.Length == 0 && missing.Count == 0, groups, missing, duplicates);
+    }
+
+    private static IEnumerable<string> CandidatePrimaryCategories(VerifiedMultiOutcomeGroupConfig cfg, AllowlistRepairGroup? repair)
+    {
+        if (repair is null) yield break;
+        var health = repair.HealthCategory ?? string.Empty;
+        var action = repair.RecommendedAction ?? string.Empty;
+        var reason = repair.Reason ?? string.Empty;
+        if (health.Equals("PricingUnavailable", StringComparison.OrdinalIgnoreCase)) yield return "MonitoringOnly";
+        if (IsPrimaryCategory(health)) yield return health;
+        if (!cfg.Enabled) yield return "Disabled";
+        if (action.Equals("KeepMonitoring", StringComparison.OrdinalIgnoreCase)) yield return "MonitoringOnly";
+        if (action.Equals("PruneMissingNoAskLegs", StringComparison.OrdinalIgnoreCase)) yield return "NeedsPricingPrune";
+        if (action.Equals("RefreshFromCandidateExport", StringComparison.OrdinalIgnoreCase)) yield return "NeedsRefresh";
+        if (action.Equals("DisableMissingMarkets", StringComparison.OrdinalIgnoreCase)) yield return "BrokenConfig";
+        if (action.Equals("NeedsManualReview", StringComparison.OrdinalIgnoreCase) || reason.Contains("LockedManualReview", StringComparison.OrdinalIgnoreCase) || reason.Contains("ManualReview", StringComparison.OrdinalIgnoreCase) || reason.Contains("ManualLock", StringComparison.OrdinalIgnoreCase)) yield return "ReviewOnly";
+    }
+
+    private static IEnumerable<string> CandidateReasons(VerifiedMultiOutcomeGroupConfig cfg, AllowlistRepairGroup? repair)
+    {
+        if (!cfg.Enabled) yield return "DisabledConfig";
+        if (repair is null) { yield return "MissingRepairGroup"; yield break; }
+        if (!string.IsNullOrWhiteSpace(repair.HealthCategory)) yield return $"HealthCategory:{repair.HealthCategory}";
+        if (!string.IsNullOrWhiteSpace(repair.RecommendedAction)) yield return $"RecommendedAction:{repair.RecommendedAction}";
+        if (!string.IsNullOrWhiteSpace(repair.Reason)) yield return $"Reason:{repair.Reason}";
+        if (repair.MissingNoAskMarketIds.Count > 0) yield return "MissingNoAsk";
+        if (repair.MissingMarketIds.Count > 0) yield return "DisableMissingMarkets";
+    }
+
+    private static bool IsPrimaryCategory(string value)
+        => value.Equals("Healthy", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("MonitoringOnly", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("NeedsPricingPrune", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("NeedsRefresh", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("ReviewOnly", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("BrokenConfig", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("Disabled", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("Ignored", StringComparison.OrdinalIgnoreCase);
+
+    private static string FinalPrimaryCategory(IReadOnlyList<string> candidates)
+    {
+        if (candidates.Count == 0) return string.Empty;
+        foreach (var category in new[] { "Disabled", "Ignored", "ReviewOnly", "NeedsPricingPrune", "NeedsRefresh", "BrokenConfig", "MonitoringOnly", "Healthy" })
+            if (candidates.Contains(category, StringComparer.OrdinalIgnoreCase)) return category;
+        return string.Empty;
+    }
+
     public static VerifiedUnresolvedCategoryCounts UnresolvedCategoryCounts(IReadOnlyList<VerifiedUnresolvedGroupDiagnostic> groups)
     {
         var total = groups.Count;
@@ -284,11 +394,11 @@ public static class ScanLogSummaryService
 
     private static string NormalizeUnresolvedHealthCategory(string? healthCategory, string recommendedAction)
     {
-        if (recommendedAction.Equals("NeedsManualReview", StringComparison.OrdinalIgnoreCase)) return "ReviewOnly";
-        if (recommendedAction.Equals("DisableMissingMarkets", StringComparison.OrdinalIgnoreCase) || string.Equals(healthCategory, "BrokenConfig", StringComparison.OrdinalIgnoreCase)) return "BrokenConfig";
+        if (recommendedAction.Equals("NeedsManualReview", StringComparison.OrdinalIgnoreCase) || string.Equals(healthCategory, "ReviewOnly", StringComparison.OrdinalIgnoreCase)) return "ReviewOnly";
+        if (recommendedAction.Equals("PruneMissingNoAskLegs", StringComparison.OrdinalIgnoreCase) || string.Equals(healthCategory, "NeedsPricingPrune", StringComparison.OrdinalIgnoreCase)) return "NeedsPricingPrune";
         if (recommendedAction.Equals("RefreshFromCandidateExport", StringComparison.OrdinalIgnoreCase) || string.Equals(healthCategory, "NeedsRefresh", StringComparison.OrdinalIgnoreCase)) return "NeedsRefresh";
-        if (recommendedAction.Equals("KeepMonitoring", StringComparison.OrdinalIgnoreCase) || string.Equals(healthCategory, "MonitoringOnly", StringComparison.OrdinalIgnoreCase)) return "MonitoringOnly";
-        if (recommendedAction.Equals("PruneMissingNoAskLegs", StringComparison.OrdinalIgnoreCase) || string.Equals(healthCategory, "NeedsPricingPrune", StringComparison.OrdinalIgnoreCase)) return "ReviewOnly";
+        if (recommendedAction.Equals("DisableMissingMarkets", StringComparison.OrdinalIgnoreCase) || string.Equals(healthCategory, "BrokenConfig", StringComparison.OrdinalIgnoreCase)) return "BrokenConfig";
+        if (recommendedAction.Equals("KeepMonitoring", StringComparison.OrdinalIgnoreCase) || string.Equals(healthCategory, "MonitoringOnly", StringComparison.OrdinalIgnoreCase) || string.Equals(healthCategory, "PricingUnavailable", StringComparison.OrdinalIgnoreCase)) return "MonitoringOnly";
         return string.IsNullOrWhiteSpace(healthCategory) ? "Other" : healthCategory;
     }
 }

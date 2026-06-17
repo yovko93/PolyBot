@@ -626,4 +626,129 @@ public class AllowlistRepairLoggingTests
         [],
         "review",
         "copy");
+    [Fact]
+    public void Allowlist_primary_category_sum_equals_configured_when_each_group_has_one_final_category()
+    {
+        var configured = new[] { Config("healthy"), Config("monitor"), Config("refresh") };
+        var summary = ScanLogSummaryService.AllowlistPrimaryClassification(configured,
+            [PrimaryRepair("healthy", "Healthy", "Keep"), PrimaryRepair("monitor", "MonitoringOnly", "KeepMonitoring"), PrimaryRepair("refresh", "NeedsRefresh", "RefreshFromCandidateExport")]);
+
+        Assert.Equal(3, summary.PrimaryCategorySum);
+        Assert.True(summary.Valid);
+    }
+
+    [Fact]
+    public void Allowlist_classification_is_invalid_when_category_sum_does_not_equal_configured()
+    {
+        var summary = ScanLogSummaryService.AllowlistPrimaryClassification([Config("missing")], []);
+
+        Assert.Equal(0, summary.PrimaryCategorySum);
+        Assert.False(summary.Valid);
+        Assert.Equal(["missing"], summary.MissingGroups);
+    }
+
+    [Fact]
+    public void Allowlist_duplicate_primary_category_group_is_reported_but_final_category_is_single()
+    {
+        var summary = ScanLogSummaryService.AllowlistPrimaryClassification([Config("g")],
+            [PrimaryRepair("g", "MonitoringOnly", "PruneMissingNoAskLegs", missingNoAsk: ["m1"])]);
+
+        var duplicate = Assert.Single(summary.DuplicateGroups);
+        Assert.Equal("g", duplicate.GroupKey);
+        Assert.Equal("NeedsPricingPrune", duplicate.FinalPrimaryCategory);
+        Assert.Contains("MonitoringOnly", duplicate.PrimaryCategories);
+        Assert.Contains("NeedsPricingPrune", duplicate.PrimaryCategories);
+        Assert.Equal(1, summary.PrimaryCategorySum);
+        Assert.False(summary.Valid);
+    }
+
+    [Fact]
+    public void Locked_manual_review_and_broken_config_resolves_to_review_only()
+    {
+        var summary = ScanLogSummaryService.AllowlistPrimaryClassification([Config("g")],
+            [PrimaryRepair("g", "BrokenConfig", "NeedsManualReview", reason: "LockedManualReview DisableMissingMarkets")]);
+
+        Assert.Equal(1, summary.ReviewOnly);
+        Assert.Equal(0, summary.BrokenConfig);
+        Assert.Equal("ReviewOnly", Assert.Single(summary.Groups).FinalPrimaryCategory);
+    }
+
+    [Fact]
+    public void Needs_pricing_prune_and_monitoring_only_resolves_to_needs_pricing_prune()
+    {
+        var summary = ScanLogSummaryService.AllowlistPrimaryClassification([Config("g")],
+            [PrimaryRepair("g", "MonitoringOnly", "PruneMissingNoAskLegs", missingNoAsk: ["m1"])]);
+
+        Assert.Equal(1, summary.NeedsPricingPrune);
+        Assert.Equal(0, summary.MonitoringOnly);
+        Assert.Equal("NeedsPricingPrune", Assert.Single(summary.Groups).FinalPrimaryCategory);
+    }
+
+    [Fact]
+    public void Needs_refresh_and_review_lock_resolves_to_review_only()
+    {
+        var summary = ScanLogSummaryService.AllowlistPrimaryClassification([Config("g")],
+            [PrimaryRepair("g", "NeedsRefresh", "NeedsManualReview", reason: "ManualLock")]);
+
+        Assert.Equal(1, summary.ReviewOnly);
+        Assert.Equal(0, summary.NeedsRefresh);
+        Assert.Equal("ReviewOnly", Assert.Single(summary.Groups).FinalPrimaryCategory);
+    }
+
+    [Fact]
+    public void Verified_unresolved_reasons_use_final_primary_classification_precedence()
+    {
+        var diagnostics = ScanLogSummaryService.BuildUnresolvedDiagnostics(
+            [Config("g")],
+            [],
+            new Dictionary<string, AllowlistRepairGroup>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["g"] = PrimaryRepair("g", "NeedsRefresh", "NeedsManualReview", reason: "LockedManualReview")
+            },
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
+        var diagnostic = Assert.Single(diagnostics);
+        Assert.Equal("ReviewOnly", diagnostic.HealthCategory);
+        Assert.True(diagnostic.IsReviewOnly);
+        Assert.False(diagnostic.IsNeedsRefresh);
+    }
+
+    private static VerifiedMultiOutcomeGroupConfig Config(string groupKey, bool enabled = true)
+        => new(enabled, groupKey, groupKey, ["m1"], ["c1"], null, "Verified");
+
+    private static AllowlistRepairGroup PrimaryRepair(string groupKey, string healthCategory, string action, string reason = "Test", IReadOnlyList<string>? missingNoAsk = null)
+        => new(
+            "snapshot",
+            1,
+            null,
+            action,
+            DateTime.UtcNow,
+            "Test",
+            groupKey,
+            groupKey,
+            true,
+            healthCategory is "Healthy" or "MonitoringOnly" ? healthCategory : "NeedsRepair",
+            healthCategory,
+            healthCategory == "Healthy",
+            true,
+            1,
+            healthCategory == "Healthy" ? 1 : 0,
+            0,
+            [],
+            1,
+            missingNoAsk?.Count ?? 0,
+            missingNoAsk ?? [],
+            null,
+            missingNoAsk is { Count: > 0 } ? "MissingNoAsk" : null,
+            action,
+            "High",
+            reason,
+            null,
+            null,
+            null,
+            0,
+            [],
+            "Expected",
+            "Instructions");
+
 }
