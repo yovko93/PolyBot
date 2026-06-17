@@ -206,9 +206,9 @@ public class OrderBookOptions
     public int RecoveryDurationMinutes { get; set; } = 5;
     public int RecoveryMaxMarketsPerCycle { get; set; } = 100;
     public int RecoveryMaxBatchSize { get; set; } = 25;
-    public int CircuitBreakerBadRequestsPerHourThreshold { get; set; } = 100;
-    public int CircuitBreakerInvalidTokensPerHourThreshold { get; set; } = 100;
-    public double CircuitBreakerBadRequestRateThreshold { get; set; } = 0.02;
+    public int CircuitBreakerBadRequestsPerHourThreshold { get; set; } = 25;
+    public int CircuitBreakerInvalidTokensPerHourThreshold { get; set; } = 25;
+    public double CircuitBreakerBadRequestRateThreshold { get; set; } = 0.05;
     public int CircuitBreakerUnavailableMarketsThreshold { get; set; } = 500;
     public int MarketOrderbookQuarantineTtlMinutes { get; set; } = 360;
 }

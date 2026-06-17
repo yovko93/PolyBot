@@ -57,6 +57,12 @@ public record OrderBookServiceStats(
     long BatchBookCanaryBadRequests = 0,
     long BatchBookRecoveryRequests = 0,
     long BatchBookRecoveryBadRequests = 0,
+    long OrderbookRecoveryLimitedRequests = 0,
+    long OrderbookRecoveryLimitedMarkets = 0,
+    long OrderbookRecoveryBadRequests = 0,
+    long OrderbookRecoveryInvalidTokens = 0,
+    long OrderbookRecoverySucceededCount = 0,
+    long OrderbookRecoveryFailedCount = 0,
     long BatchBookNormalRequests = 0,
     long BatchBookNormalBadRequests = 0
 );

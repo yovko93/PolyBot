@@ -60,6 +60,12 @@ public class OrderBookService : IOrderBookProvider
     private long _batchBookCanaryBadRequests;
     private long _batchBookRecoveryRequests;
     private long _batchBookRecoveryBadRequests;
+    private long _orderbookRecoveryLimitedRequests;
+    private long _orderbookRecoveryLimitedMarkets;
+    private long _orderbookRecoveryBadRequests;
+    private long _orderbookRecoveryInvalidTokens;
+    private long _orderbookRecoverySucceededCount;
+    private long _orderbookRecoveryFailedCount;
     private long _batchBookNormalRequests;
     private long _batchBookNormalBadRequests;
     private readonly HttpClient _http;
@@ -92,9 +98,9 @@ public class OrderBookService : IOrderBookProvider
     public TimeSpan RecoveryDuration { get; set; } = TimeSpan.FromMinutes(5);
     public int RecoveryMaxMarketsPerCycle { get; set; } = 100;
     public int RecoveryMaxBatchSize { get; set; } = 25;
-    public int CircuitBreakerBadRequestsPerHourThreshold { get; set; } = 100;
-    public int CircuitBreakerInvalidTokensPerHourThreshold { get; set; } = 100;
-    public double CircuitBreakerBadRequestRateThreshold { get; set; } = 0.02;
+    public int CircuitBreakerBadRequestsPerHourThreshold { get; set; } = 25;
+    public int CircuitBreakerInvalidTokensPerHourThreshold { get; set; } = 25;
+    public double CircuitBreakerBadRequestRateThreshold { get; set; } = 0.05;
     public int CircuitBreakerUnavailableMarketsThreshold { get; set; } = 500;
     public int MaxInvalidTokenSingleRetriesPerCycle { get; set; } = 1;
     public int MaxBatchSplitRetriesPerCycle { get; set; } = 20;
@@ -283,10 +289,14 @@ public class OrderBookService : IOrderBookProvider
         }
         if (breakerState == OrderbookCircuitBreakerState.Recovering)
         {
+            var originalRecoveryMarkets = markets.Count;
             markets = markets
                 .Where(m => m != null && !IsMarketOrderbookQuarantined(m.id) && m.clobTokenIds != null && !m.clobTokenIds.Any(IsTokenQuarantined))
                 .Take(RecoveryMaxMarketsPerCycle)
                 .ToList();
+            Interlocked.Increment(ref _orderbookRecoveryLimitedRequests);
+            Interlocked.Add(ref _orderbookRecoveryLimitedMarkets, markets.Count);
+            if (originalRecoveryMarkets > markets.Count) Interlocked.Add(ref _orderbookRequestsBlockedByCircuitBreaker, originalRecoveryMarkets - markets.Count);
             if (markets.Count == 0) return;
         }
         if (breakerState == OrderbookCircuitBreakerState.HalfOpen)
@@ -509,11 +519,13 @@ public class OrderBookService : IOrderBookProvider
             var rate = _batchRequests <= 0 ? 0d : (double)_batchBadRequests / Math.Max(1, _batchRequests);
             var shouldOpen = _badRequestTimes.Count >= Math.Min(CircuitBreakerBadRequestsPerHourThreshold, 25)
                 || _invalidTokenTimes.Count >= Math.Min(CircuitBreakerInvalidTokensPerHourThreshold, 25)
-                || (Interlocked.Read(ref _batchRequests) >= 50 && rate >= 0.05)
+                || (Interlocked.Read(ref _batchRequests) >= 50 && rate >= Math.Min(CircuitBreakerBadRequestRateThreshold, 0.05))
                 || _orderbookUnavailableMarkets.Count > CircuitBreakerUnavailableMarketsThreshold
                 || _batchBadRequestsThisCycle > MaxBatchBookBadRequestsPerCycle;
             if (_circuitBreakerState == OrderbookCircuitBreakerState.Recovering && _batchBadRequests > _postCloseBaselineBadRequests)
             {
+                Interlocked.Increment(ref _orderbookRecoveryBadRequests);
+                Interlocked.Increment(ref _orderbookRecoveryFailedCount);
                 Console.WriteLine("[ORDERBOOK_CIRCUIT_BREAKER_RECOVERY_FAILED] Reason=RecoveringBadRequest");
                 OpenCircuitBreakerLocked(now, "RecoveringBadRequest");
             }
@@ -560,6 +572,7 @@ public class OrderBookService : IOrderBookProvider
             _lastClosedUtc = now;
             _recoveringSinceUtc = null;
             _currentCircuitBreakerCooldown = CircuitBreakerInitialCooldown;
+            Interlocked.Increment(ref _orderbookRecoverySucceededCount);
             Console.WriteLine("[ORDERBOOK_CIRCUIT_BREAKER_RECOVERY_SUCCEEDED] State=Closed");
         }
     }
@@ -655,6 +668,12 @@ public class OrderBookService : IOrderBookProvider
             BatchBookCanaryBadRequests: Interlocked.Read(ref _batchBookCanaryBadRequests),
             BatchBookRecoveryRequests: Interlocked.Read(ref _batchBookRecoveryRequests),
             BatchBookRecoveryBadRequests: Interlocked.Read(ref _batchBookRecoveryBadRequests),
+            OrderbookRecoveryLimitedRequests: Interlocked.Read(ref _orderbookRecoveryLimitedRequests),
+            OrderbookRecoveryLimitedMarkets: Interlocked.Read(ref _orderbookRecoveryLimitedMarkets),
+            OrderbookRecoveryBadRequests: Interlocked.Read(ref _orderbookRecoveryBadRequests),
+            OrderbookRecoveryInvalidTokens: Interlocked.Read(ref _orderbookRecoveryInvalidTokens),
+            OrderbookRecoverySucceededCount: Interlocked.Read(ref _orderbookRecoverySucceededCount),
+            OrderbookRecoveryFailedCount: Interlocked.Read(ref _orderbookRecoveryFailedCount),
             BatchBookNormalRequests: Interlocked.Read(ref _batchBookNormalRequests),
             BatchBookNormalBadRequests: Interlocked.Read(ref _batchBookNormalBadRequests)
         );
@@ -1264,7 +1283,18 @@ public class OrderBookService : IOrderBookProvider
      CancellationToken ct = default)
     {
         TrimInvalidTokenQuarantine();
-        if (CircuitBreakerState == OrderbookCircuitBreakerState.Open) { Interlocked.Add(ref _orderbookRequestsBlockedByCircuitBreaker, tokenIds.Count()); return new Dictionary<string, ClobOrderBook>(); }
+        var entryState = CircuitBreakerState;
+        var tokenArray = tokenIds.ToArray();
+        if (entryState == OrderbookCircuitBreakerState.Open) { Interlocked.Add(ref _orderbookRequestsBlockedByCircuitBreaker, tokenArray.Length); return new Dictionary<string, ClobOrderBook>(); }
+        if (entryState == OrderbookCircuitBreakerState.HalfOpen) tokenArray = tokenArray.Take(Math.Max(1, CircuitBreakerHalfOpenCanaryMarkets * 2)).ToArray();
+        if (entryState == OrderbookCircuitBreakerState.Recovering)
+        {
+            var limited = tokenArray.Take(Math.Max(1, RecoveryMaxMarketsPerCycle * 2)).ToArray();
+            Interlocked.Increment(ref _orderbookRecoveryLimitedRequests);
+            Interlocked.Add(ref _orderbookRecoveryLimitedMarkets, Math.Max(1, limited.Length / 2));
+            if (tokenArray.Length > limited.Length) Interlocked.Add(ref _orderbookRequestsBlockedByCircuitBreaker, tokenArray.Length - limited.Length);
+            tokenArray = limited;
+        }
         lock (_cacheLock)
         {
             _knownInvalidTokensThisCycle.Clear();
@@ -1273,7 +1303,6 @@ public class OrderBookService : IOrderBookProvider
             _singleTokenIsolationsThisCycle = 0;
             _batchBadRequestsThisCycle = 0;
         }
-        var tokenArray = tokenIds.ToArray();
         var beforeSkipped = QuarantinedTokenCount;
         var validation = ValidateBatchPayload(tokenArray, int.MaxValue);
         var result = new Dictionary<string, ClobOrderBook>();
@@ -1304,6 +1333,12 @@ public class OrderBookService : IOrderBookProvider
 
         foreach (var batch in validation.TokenIds.Chunk(batchSize))
         {
+            var loopState = CircuitBreakerState;
+            if (loopState == OrderbookCircuitBreakerState.Open)
+            {
+                Interlocked.Add(ref _orderbookRequestsBlockedByCircuitBreaker, batch.Count());
+                continue;
+            }
             var batchArray = FilterKnownInvalidTokens(batch).ToArray();
             if (batchArray.Length == 0)
             {
@@ -1324,6 +1359,11 @@ public class OrderBookService : IOrderBookProvider
 
             if (primary.Loaded > 0 || primary.BadRequest)
                 continue;
+            if (CircuitBreakerState == OrderbookCircuitBreakerState.Open)
+            {
+                Interlocked.Add(ref _orderbookRequestsBlockedByCircuitBreaker, batchArray.Length);
+                continue;
+            }
 
             _ = await TryPostBooksBatchAsync(
                 batchArray,
@@ -1415,6 +1455,8 @@ public class OrderBookService : IOrderBookProvider
             _invalidTokenTimes.Enqueue(now);
             if (_circuitBreakerState == OrderbookCircuitBreakerState.Recovering && Interlocked.Read(ref _batchInvalidTokens) > _postCloseBaselineInvalidTokens)
             {
+                Interlocked.Increment(ref _orderbookRecoveryInvalidTokens);
+                Interlocked.Increment(ref _orderbookRecoveryFailedCount);
                 Console.WriteLine("[ORDERBOOK_CIRCUIT_BREAKER_RECOVERY_FAILED] Reason=RecoveringInvalidToken");
                 OpenCircuitBreakerLocked(now, "RecoveringInvalidToken");
             }

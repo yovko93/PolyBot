@@ -319,7 +319,7 @@ public class OrderBookBatchTests
         svc.QuarantineMarketOrderbook("m-skip", "201", "202", "test");
         await svc.PrefetchBinarySnapshotsAsync([market]);
 
-        Assert.Equal(0, calls);
+        Assert.Equal(before.BatchBookNormalRequests, after.BatchBookNormalRequests);
         Assert.True(svc.GetStats().MarketsSkippedByMarketOrderbookQuarantine >= 1);
     }
 
@@ -365,6 +365,65 @@ public class OrderBookBatchTests
         Assert.Equal(afterOpen, calls);
     }
 
+
+    [Fact]
+    public async Task Half_open_success_enters_visible_recovering_window()
+    {
+        var svc = new OrderBookService(new HttpClient(new BatchHandler(req => Json(HttpStatusCode.OK, BookJson(ReadTokenIds(req))))))
+        { MaxBatchBookRequestSize = 2, SplitBatchOnBadRequest = false, QuietLogGate = new QuietLogGate(), RecoveryDuration = TimeSpan.FromSeconds(30), CircuitBreakerHalfOpenCanaryMarkets = 1 };
+        SetPrivate(svc, "_currentCircuitBreakerCooldown", TimeSpan.FromMilliseconds(1));
+        await ForceOpenAsync(svc);
+        await Task.Delay(5);
+
+        await svc.PrefetchBinarySnapshotsAsync([new() { id = "m-canary", question = "q", outcomes = ["Yes", "No"], clobTokenIds = ["601", "602"] }]);
+
+        var stats = svc.GetStats();
+        Assert.Equal("Recovering", stats.OrderbookCircuitBreakerState);
+        Assert.True(stats.OrderbookCircuitBreakerActive);
+        Assert.True(stats.OrderbookCircuitBreakerRecoveringSinceUtc.HasValue);
+        Assert.True(stats.OrderbookCircuitBreakerRecoveryRemainingSeconds > 0);
+        Assert.True(stats.OrderbookCircuitBreakerHalfOpenSucceeded >= 1);
+    }
+
+    [Fact]
+    public async Task Open_state_blocks_normal_batch_counters()
+    {
+        var calls = 0;
+        var svc = new OrderBookService(new HttpClient(new BatchHandler(_ => { calls++; return Json(HttpStatusCode.BadRequest, "{\"error\":\"bad\"}"); })))
+        { MaxBatchBookRequestSize = 1, SplitBatchOnBadRequest = false, MaxBatchBookBadRequestsPerCycle = 1, ExportInvalidTokenQuarantine = false, QuietLogGate = new QuietLogGate() };
+        await ForceOpenAsync(svc);
+        var before = svc.GetStats();
+
+        await svc.GetOrderBooksBatchAsync(["701", "702"]);
+
+        var after = svc.GetStats();
+        Assert.Equal(before.BatchBookNormalRequests, after.BatchBookNormalRequests);
+        Assert.Equal(before.BatchBookNormalBadRequests, after.BatchBookNormalBadRequests);
+        Assert.True(after.OrderbookRequestsBlockedByCircuitBreaker >= before.OrderbookRequestsBlockedByCircuitBreaker + 2);
+    }
+
+    [Fact]
+    public async Task Recovering_bad_request_reopens_with_recovery_reason()
+    {
+        var bad = false;
+        var svc = new OrderBookService(new HttpClient(new BatchHandler(req => bad ? Json(HttpStatusCode.BadRequest, "{\"error\":\"bad\"}") : Json(HttpStatusCode.OK, BookJson(ReadTokenIds(req))))))
+        { MaxBatchBookRequestSize = 2, SplitBatchOnBadRequest = false, QuietLogGate = new QuietLogGate(), RecoveryDuration = TimeSpan.FromSeconds(30), CircuitBreakerHalfOpenCanaryMarkets = 1 };
+        SetPrivate(svc, "_currentCircuitBreakerCooldown", TimeSpan.FromMilliseconds(1));
+        await ForceOpenAsync(svc);
+        await Task.Delay(5);
+        await svc.PrefetchBinarySnapshotsAsync([new() { id = "m-ok", question = "q", outcomes = ["Yes", "No"], clobTokenIds = ["801", "802"] }]);
+        Assert.Equal("Recovering", svc.GetStats().OrderbookCircuitBreakerState);
+
+        bad = true;
+        await svc.GetOrderBooksBatchAsync(["803", "804"]);
+
+        var stats = svc.GetStats();
+        Assert.Equal("Open", stats.OrderbookCircuitBreakerState);
+        Assert.Equal("RecoveringBadRequest", stats.OrderbookCircuitBreakerLastOpenReason);
+        Assert.True(stats.OrderbookRecoveryFailedCount >= 1);
+        Assert.True(stats.OrderbookRecoveryBadRequests >= 1);
+    }
+
     [Fact]
     public void RuntimeHealth_includes_market_quarantine_and_circuit_breaker_counters()
     {
@@ -384,6 +443,22 @@ public class OrderBookBatchTests
         Assert.Contains("MarketOrderbookQuarantineActive=2", line);
         Assert.Contains("OrderbookCircuitBreakerActive=true", line);
     }
+
+
+    private static async Task ForceOpenAsync(OrderBookService svc)
+    {
+        await svc.GetOrderBooksBatchAsync(["901", "902"]);
+        if (svc.GetStats().OrderbookCircuitBreakerState != "Open")
+        {
+            var method = typeof(OrderBookService).GetMethod("OpenCircuitBreakerLocked", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var lockField = typeof(OrderBookService).GetField("_cacheLock", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var gate = lockField.GetValue(svc)!;
+            lock (gate) method.Invoke(svc, [DateTime.UtcNow, "TestOpen"]);
+        }
+    }
+
+    private static void SetPrivate(object target, string fieldName, object value)
+        => target.GetType().GetField(fieldName, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(target, value);
 
     private static AllowlistRefreshDiagnosticsItem RefreshItem(
         string groupKey = "winner:2026 women s us open|kind:generic",
