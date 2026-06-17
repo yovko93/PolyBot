@@ -93,7 +93,7 @@ public class SingleMarketOrderBookArbEngine
         var scanId = Interlocked.Increment(ref _scanId);
         BeginDataQualityFullCycle(fullCycleId ?? scanId);
         var diagnostics = new SingleMarketCycleDiagnostics(scanId);
-        if (_orderBooks is OrderBookService obs && obs.GetStats().OrderbookCircuitBreakerActive)
+        if (_orderBooks is OrderBookService orderBookService && orderBookService.GetStats().OrderbookCircuitBreakerActive)
         {
             var skipped = markets.Count;
             var skippedReasons = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase) { ["SingleMarketSkippedByCircuitBreaker"] = skipped };
@@ -125,7 +125,7 @@ public class SingleMarketOrderBookArbEngine
         try
         {
             if (!_options.Enabled) return SingleMarketScanResult.Empty;
-            if (_orderBooks is OrderBookService obs && obs.GetStats().OrderbookCircuitBreakerActive)
+            if (_orderBooks is OrderBookService orderBookServiceForMarket && orderBookServiceForMarket.GetStats().OrderbookCircuitBreakerActive)
             {
                 diagnostics.AddReject("SingleMarketSkippedByCircuitBreaker");
                 return new SingleMarketScanResult(false, false, false, false, null, market.question, null, "SingleMarketSkippedByCircuitBreaker", null);
@@ -285,7 +285,7 @@ public class SingleMarketOrderBookArbEngine
             Console.WriteLine($"[SINGLE_MARKET_FILL_SIMULATION_PASSED] MarketId={book.MarketId} Qty={quantity:0.####} FullyFillableQty={fill.FullyFillableQty:0.####} SimulatedCost={fill.SimulatedCost:0.####}");
             RecordHighValue(BuildDto(book, market.conditionId, SingleMarketArbState.FillSimulationPassed, yes, no, rawCost, fill.AdjustedEdgePerShare, fill.ExpectedProfit, quantity, fill.SimulatedCost, "Passed", "Passed", "NotOpened", null, st.EdgeScans, st.ExecutionScans), "SingleMarketFillSimulationPassed");
 
-            if (_orderBooks is OrderBookService obs && obs.GetStats().OrderbookCircuitBreakerActive)
+            if (_orderBooks is OrderBookService orderBookServiceForPaper && orderBookServiceForPaper.GetStats().OrderbookCircuitBreakerActive)
             {
                 diagnostics.AddReject("OrderbookCircuitBreakerActive");
                 Console.WriteLine($"[SINGLE_MARKET_PAPER_OPEN_BLOCKED] MarketId={book.MarketId} Reason=OrderbookCircuitBreakerActive");
