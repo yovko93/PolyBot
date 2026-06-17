@@ -52,5 +52,11 @@ public record OrderBookServiceStats(
     long OrderbookPostCloseBadRequests = 0,
     long OrderbookPostCloseInvalidTokens = 0,
     long SingleTokenIsolationBudgetExhausted = 0,
-    long BatchBookBadRequestsPreventedEstimate = 0
+    long BatchBookBadRequestsPreventedEstimate = 0,
+    long BatchBookCanaryRequests = 0,
+    long BatchBookCanaryBadRequests = 0,
+    long BatchBookRecoveryRequests = 0,
+    long BatchBookRecoveryBadRequests = 0,
+    long BatchBookNormalRequests = 0,
+    long BatchBookNormalBadRequests = 0
 );

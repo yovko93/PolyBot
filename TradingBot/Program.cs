@@ -293,11 +293,8 @@ _ = Task.Run(async () =>
             var trend = RuntimeHealthTrendTracker.RecordAndAnalyze(health, options.RuntimeHealth);
             Console.WriteLine(health.ToLogLine());
             ExportRuntimeSoakStatus(state, options, app.Environment.ContentRootPath);
-            if (RuntimeHealthSnapshot.ShouldLogAt(DateTime.UtcNow, lastSoakStatusLoggedAt, options.RuntimeHealth.LogSoakStatusEveryMinutes))
-            {
-                lastSoakStatusLoggedAt = DateTime.UtcNow;
-                Console.WriteLine(RuntimeHealthTrendTracker.ToSoakStatusLogLine(health, trend, options, state));
-            }
+            lastSoakStatusLoggedAt = DateTime.UtcNow;
+            Console.WriteLine(RuntimeHealthTrendTracker.ToSoakStatusLogLine(health, trend, options, state));
         }
 
         if (options.RuntimeHealth.LogOnStartup)
@@ -1153,9 +1150,14 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         .Where(x => repairReportGroupKeys.Contains(x.GroupKey))
                         .ToArray();
                     var activeUnstableLockKeys = activeUnstableLocks.Select(x => x.GroupKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var finalLockedManualReviewCount = refreshDiag.Items.Count(x => x.FinalDecision.Equals("LockedManualReview", StringComparison.OrdinalIgnoreCase))
+                        + activeUnstableLockKeys.Where(x => refreshDiag.Items.All(item => !item.GroupKey.Equals(x, StringComparison.OrdinalIgnoreCase))).Count();
+                    var circuitBreakerProtectsAllowlist = orderbookService.GetStats().OrderbookCircuitBreakerActive;
+                    var effectiveBrokenConfig = circuitBreakerProtectsAllowlist ? 0 : summary.BrokenConfig;
+                    var effectiveReviewOnly = Math.Max(summary.ReviewOnly + (summary.BrokenConfig - effectiveBrokenConfig), finalLockedManualReviewCount);
                     state.SetAllowlistRefreshCounters(
                         repairReport.Summary.NeedsRefresh,
-                        summary.ReviewOnly,
+                        effectiveReviewOnly,
                         refreshDiag.Items.Count(x => x.ResolverStatus.Contains("Mismatch", StringComparison.OrdinalIgnoreCase)),
                         refreshDiag.Items.Count(x => x.RecommendedAction.Equals("RefreshFromCandidateExport", StringComparison.OrdinalIgnoreCase)),
                         refreshDiag.Items.Count(x => x.Confidence.Equals("High", StringComparison.OrdinalIgnoreCase)),
@@ -1164,15 +1166,14 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedLowConfidence", StringComparison.OrdinalIgnoreCase)),
                         refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedUnstableAcrossSnapshots", StringComparison.OrdinalIgnoreCase)),
                         refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateAcceptedPreviewOnly", StringComparison.OrdinalIgnoreCase)),
-                        refreshDiag.Items.Count(x => x.FinalDecision.Equals("LockedManualReview", StringComparison.OrdinalIgnoreCase))
-                            + activeUnstableLockKeys.Where(x => refreshDiag.Items.All(item => !item.GroupKey.Equals(x, StringComparison.OrdinalIgnoreCase))).Count(),
+                        finalLockedManualReviewCount,
                         0,
                         Math.Max(unstableSummaries.Length, activeUnstableLocks.Length),
                         Math.Max(unstableSummaries.Length, activeUnstableLocks.Length),
                         summary.Healthy,
                         summary.MonitoringOnly,
                         summary.NeedsPricingPrune,
-                        summary.BrokenConfig,
+                        effectiveBrokenConfig,
                         summary.Disabled,
                         summary.Ignored,
                         classificationTotal,
@@ -1243,7 +1244,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     {
                         state.SetAllowlistRefreshCounters(
                             repairReport.Summary.NeedsRefresh,
-                            summary.ReviewOnly,
+                            effectiveReviewOnly,
                             refreshDiag.Items.Count(x => x.ResolverStatus.Contains("Mismatch", StringComparison.OrdinalIgnoreCase)),
                             refreshDiag.Items.Count(x => x.RecommendedAction.Equals("RefreshFromCandidateExport", StringComparison.OrdinalIgnoreCase)),
                             refreshDiag.Items.Count(x => x.Confidence.Equals("High", StringComparison.OrdinalIgnoreCase)),
@@ -1252,15 +1253,14 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedLowConfidence", StringComparison.OrdinalIgnoreCase)),
                             refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateRejectedUnstableAcrossSnapshots", StringComparison.OrdinalIgnoreCase)),
                             refreshDiag.Items.Count(x => x.FinalDecision.Equals("CandidateAcceptedPreviewOnly", StringComparison.OrdinalIgnoreCase)),
-                            refreshDiag.Items.Count(x => x.FinalDecision.Equals("LockedManualReview", StringComparison.OrdinalIgnoreCase))
-                                + activeUnstableLockKeys.Where(x => refreshDiag.Items.All(item => !item.GroupKey.Equals(x, StringComparison.OrdinalIgnoreCase))).Count(),
+                            finalLockedManualReviewCount,
                             actionExplainedSuppressedThisCycle,
                             Math.Max(unstableSummaries.Length, activeUnstableLocks.Length),
                             Math.Max(unstableSummaries.Length, activeUnstableLocks.Length),
                             summary.Healthy,
                             summary.MonitoringOnly,
                             summary.NeedsPricingPrune,
-                            summary.BrokenConfig,
+                            effectiveBrokenConfig,
                             summary.Disabled,
                             summary.Ignored,
                             classificationTotal,
