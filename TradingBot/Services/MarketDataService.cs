@@ -1,4 +1,6 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
+using System.Security.Cryptography;
+using System.Text;
 using TradingBot.Models;
 using TradingBot.Options;
 
@@ -52,11 +54,14 @@ public class MarketDataService
         var pageSize = Math.Clamp(options.DiscoveryPageSize, 1, Math.Max(1, options.MarketDiscovery.MaxPageSize));
         var cap = Math.Max(1, options.AbsoluteMaxMarketsSafetyCap);
         var expectedMaxPages = Math.Max(1, (int)Math.Ceiling(cap / (double)Math.Max(1, pageSize)));
+        var gammaMaxSafeOffset = Math.Max(0, options.MarketDiscovery.GammaMaxSafeOffset);
+        var diagnostics = new DiscoveryDiagnosticsReport(DateTime.UtcNow, pageSize, gammaMaxSafeOffset, new List<DiscoverySourceReport>(), new List<DiscoveryBucketReport>());
         var endpoint = "gamma-api.polymarket.com/markets";
-        Console.WriteLine($"[DISCOVERY_PAGINATION_CONFIG] Limit={pageSize} MaxPages={expectedMaxPages} OffsetMode=offset Endpoint={endpoint}");
+        Console.WriteLine($"[DISCOVERY_PAGINATION_CONFIG] Limit={pageSize} MaxPages={expectedMaxPages} OffsetMode=offset Endpoint={endpoint} GammaMaxSafeOffset={gammaMaxSafeOffset}");
 
         var primaryBucket = new DiscoveryBucket("offset-primary-accepting", "true", "false", "false", "true", "volume24hr", "false");
         var primary = await FetchBucketAsync(primaryBucket, "Offset", logSummary: false);
+        diagnostics.Sources.Add(ToSourceReport("GammaOffset", primary, primary.FailureKind == "GammaOffsetPaginationRejected"));
         if (primary.FailureKind == "GammaOffsetPaginationRejected" && options.MarketDiscovery.AllowBootstrapFromPartitionedDiscovery)
         {
             var partitions = new[]
@@ -83,9 +88,24 @@ public class MarketDataService
             var skippedUnknownStatus = 0;
             var failed = 0;
             var lastFailure = "None";
-            foreach (var bucket in partitions)
+            var fingerprints = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var queue = new Queue<(DiscoveryBucket Bucket, int Depth)>(partitions.Select(x => (x, 0)));
+            var bucketsRun = 0;
+            var skippedDuplicateBuckets = 0;
+            while (queue.Count > 0)
             {
+                var (bucket, depth) = queue.Dequeue();
+                var fingerprint = QueryFingerprint(bucket, pageSize, 0);
+                if (fingerprints.TryGetValue(fingerprint, out var duplicateBucket))
+                {
+                    skippedDuplicateBuckets++;
+                    Console.WriteLine($"[DISCOVERY_PARTITION_DUPLICATE_QUERY] BucketA={duplicateBucket} BucketB={bucket.Name} QueryFingerprint={fingerprint} Action=SkipDuplicateBucket");
+                    continue;
+                }
+                fingerprints[fingerprint] = bucket.Name;
+                bucketsRun++;
                 var result = await FetchBucketAsync(bucket, "PartitionedOffset", logSummary: true);
+                diagnostics.Buckets.Add(new DiscoveryBucketReport(bucket.Name, result.PagesFetched, result.RawLoadedTotal, result.ActiveMarketsAvailable, result.Failed, result.Failed ? result.FailureKind : "None"));
                 pages += result.PagesFetched;
                 raw += result.RawLoadedTotal;
                 inactive += result.InactiveSkipped;
@@ -101,7 +121,17 @@ public class MarketDataService
                 {
                     failed++;
                     lastFailure = result.FailureKind;
+                    if ((result.FailureKind == "GammaOffsetPaginationRejected" || result.CappedIncomplete) && depth < 2)
+                    {
+                        foreach (var child in SplitBucket(bucket, depth + 1))
+                        {
+                            if (QueryFingerprint(child, pageSize, 0) == fingerprint) continue;
+                            Console.WriteLine($"[DISCOVERY_RECURSIVE_PARTITION_STARTED] ParentBucket={bucket.Name} Reason=BucketHitOffsetCap NextDimension={child.SplitDimension} Depth={depth + 1}");
+                            queue.Enqueue((child, depth + 1));
+                        }
+                    }
                 }
+                Console.WriteLine($"[DISCOVERY_RECURSIVE_PARTITION_RESULT] Bucket={bucket.Name} Depth={depth} Succeeded={(!result.Failed).ToString().ToLowerInvariant()} Active={result.ActiveMarketsAvailable} Failed={result.Failed.ToString().ToLowerInvariant()} FailureReason={(result.Failed ? result.FailureKind : "None")}");
                 foreach (var market in result.Markets)
                 {
                     var key = BuildDedupKey(market);
@@ -114,8 +144,10 @@ public class MarketDataService
                 }
             }
             var required = Math.Max(1, options.MarketDiscovery.MinimumPartitionedActiveMarkets);
-            var healthy = merged.Count >= required;
-            Console.WriteLine($"[DISCOVERY_PARTITION_SUMMARY] Buckets={partitions.Length} Succeeded={partitions.Length - failed} Failed={failed} UniqueMarkets={seen.Count} ActiveMarkets={merged.Count} DuplicateMarkets={duplicateMarkets} Healthy={healthy.ToString().ToLowerInvariant()}");
+            var healthy = merged.Count >= required && failed == 0;
+            Console.WriteLine($"[DISCOVERY_PARTITION_SUMMARY] Buckets={bucketsRun} SkippedDuplicateBuckets={skippedDuplicateBuckets} Succeeded={bucketsRun - failed} Failed={failed} UniqueMarkets={seen.Count} ActiveMarkets={merged.Count} DuplicateMarkets={duplicateMarkets} Healthy={healthy.ToString().ToLowerInvariant()}");
+            diagnostics.Sources.Add(new DiscoverySourceReport("GammaCursor", false, 0, "Unavailable", false, null, false, false));
+            diagnostics.Sources.Add(new DiscoverySourceReport("GammaPartitionedOffset", healthy, merged.Count, failed == 0 ? "None" : lastFailure, !healthy, healthy ? null : DateTime.UtcNow.AddMinutes(5), failed > 0, healthy));
             if (options.MarketDiscovery.DiagnosticsOnly)
             {
                 var recommendation = merged.Count >= options.MarketDiscovery.MinimumActiveMarketsForBootstrap ? "ConsiderUpdatingMinimumAfterManualReview" : "KeepBlocked";
@@ -142,7 +174,7 @@ public class MarketDataService
                 null,
                 healthy ? null : "Partitioned discovery did not reach configured bootstrap minimum.",
                 DateTime.UtcNow,
-                healthy || failed == 0,
+                healthy,
                 healthy ? null : (failed == 0 ? "BelowMinimumPartitionedActiveMarkets" : "PartitionedDiscoveryPartialFailure"),
                 healthy ? null : (failed == 0 ? null : lastFailure),
                 expectedMaxPages,
@@ -156,6 +188,7 @@ public class MarketDataService
                 0);
             if (!healthy)
                 Console.WriteLine($"[DISCOVERY_WARNING] Discovery incomplete. PagesFetched={pages} Raw={raw} Active={merged.Count} Reason={summary.StoppedReason ?? "Unknown"}");
+            WriteDiagnosticsReportIfEnabled(options, diagnostics, summary);
             return (merged, summary);
         }
 
@@ -195,6 +228,7 @@ public class MarketDataService
             false,
             0,
             0);
+        WriteDiagnosticsReportIfEnabled(options, diagnostics, primarySummary);
         return (primary.Markets, primarySummary);
 
         async Task<BucketResult> FetchBucketAsync(DiscoveryBucket bucket, string mode, bool logSummary)
@@ -222,6 +256,13 @@ public class MarketDataService
             for (var offset = 0; offset < cap;)
             {
                 if (ct.IsCancellationRequested) break;
+                if (offset > gammaMaxSafeOffset)
+                {
+                    stoppedReason = "GammaOffsetCapIncomplete";
+                    failureKind = "GammaOffsetPaginationRejected";
+                    Console.WriteLine($"[DISCOVERY_OFFSET_CAP_REACHED] Mode={mode} Bucket={bucket.Name} NextOffset={offset} GammaMaxSafeOffset={gammaMaxSafeOffset} Action=SplitOrBlock");
+                    break;
+                }
                 if (options.MaxMarketsToDiscover > 0 && allMarkets.Count >= options.MaxMarketsToDiscover) break;
                 var url =
                     "https://gamma-api.polymarket.com/markets" +
@@ -234,7 +275,7 @@ public class MarketDataService
                     $"&limit={pageSize}" +
                     $"&offset={offset}";
                 if (options.MarketDiscovery.DiagnosticsOnly)
-                    Console.WriteLine($"[DISCOVERY_REQUEST] Mode={mode} Bucket={bucket.Name} Page={pages + 1} Cursor=<none> Offset={offset} Limit={pageSize} EndpointName=PolymarketGammaMarkets Endpoint={endpoint} ActualLimitParam={pageSize} ActualOffsetParam={offset} ActualCursorParam=<none> ActualClosedParam={bucket.ClosedParam} ActualActiveParam={bucket.ActiveParam} ActualArchivedParam={bucket.ArchivedParam} ActualOrderParam={bucket.OrderParam} QueryShape=active,closed,archived,accepting_orders,order,ascending,limit,offset");
+                    Console.WriteLine($"[DISCOVERY_REQUEST] Mode={mode} BucketName={bucket.Name} Page={pages + 1} Cursor=<none> Offset={offset} Limit={pageSize} EndpointName=PolymarketGammaMarkets Endpoint={endpoint} ActualAcceptingOrdersParam={bucket.AcceptingOrdersParam ?? "<omitted>"} ActualAscendingParam={bucket.AscendingParam} ActualOrderParam={bucket.OrderParam} ActualActiveParam={bucket.ActiveParam} ActualClosedParam={bucket.ClosedParam} ActualArchivedParam={bucket.ArchivedParam} ActualLimitParam={pageSize} ActualOffsetParam={offset} QueryFingerprint={QueryFingerprint(bucket, pageSize, offset)} ActualCursorParam=<none> QueryShape=active,closed,archived,accepting_orders,order,ascending,limit,offset");
                 List<Market> batch;
                 try
                 {
@@ -247,7 +288,7 @@ public class MarketDataService
                         var gammaOffsetRejected = (int)response.StatusCode == 422 && offset > 0;
                         failureKind = gammaOffsetRejected ? "GammaOffsetPaginationRejected" : "RequestError";
                         stoppedReason = failureKind;
-                        Console.WriteLine($"[DISCOVERY_REQUEST_FAILED] Reason={failureKind} Mode={mode} Bucket={bucket.Name} Page={pages + 1} Cursor=<none> Offset={offset} Limit={pageSize} StatusCode={(int)response.StatusCode} EffectiveBackoffSeconds={Math.Max(1, effectiveBackoffSeconds ?? options.MarketDiscovery.RetryBackoffMs / 1000)} EndpointName=PolymarketGammaMarkets Endpoint={endpoint} ActualLimitParam={pageSize} ActualOffsetParam={offset} ActualCursorParam=<none> ActualClosedParam={bucket.ClosedParam} ActualActiveParam={bucket.ActiveParam} ActualArchivedParam={bucket.ArchivedParam} ActualOrderParam={bucket.OrderParam} QueryShape=active,closed,archived,accepting_orders,order,ascending,limit,offset Action=BackoffAndRetryFullDiscovery");
+                        Console.WriteLine($"[DISCOVERY_REQUEST_FAILED] Reason={failureKind} Mode={mode} BucketName={bucket.Name} Page={pages + 1} Cursor=<none> Offset={offset} Limit={pageSize} StatusCode={(int)response.StatusCode} EffectiveBackoffSeconds={Math.Max(1, effectiveBackoffSeconds ?? options.MarketDiscovery.RetryBackoffMs / 1000)} EndpointName=PolymarketGammaMarkets Endpoint={endpoint} ActualAcceptingOrdersParam={bucket.AcceptingOrdersParam ?? "<omitted>"} ActualAscendingParam={bucket.AscendingParam} ActualOrderParam={bucket.OrderParam} ActualActiveParam={bucket.ActiveParam} ActualClosedParam={bucket.ClosedParam} ActualArchivedParam={bucket.ArchivedParam} ActualLimitParam={pageSize} ActualOffsetParam={offset} QueryFingerprint={QueryFingerprint(bucket, pageSize, offset)} ActualCursorParam=<none> QueryShape=active,closed,archived,accepting_orders,order,ascending,limit,offset Action=BackoffAndRetryFullDiscovery");
                         break;
                     }
                     var json = await response.Content.ReadAsStringAsync(timeoutCts.Token);
@@ -321,13 +362,49 @@ public class MarketDataService
                 Console.WriteLine($"[DISCOVERY_WARNING] {lastWarning}");
             }
             if (logSummary)
-                Console.WriteLine($"[DISCOVERY_PARTITION_RESULT] Bucket={bucket.Name} PagesFetched={pages} Raw={rawLoadedTotal} Active={allMarkets.Count} Failed={failed.ToString().ToLowerInvariant()} FailureReason={(failed ? failureKind : "None")}");
-            return new BucketResult(allMarkets, pages, duplicates, skippedClosed + skippedArchived + skippedInactive + skippedMissingTokenIds + skippedMissingOutcomes + skippedPastEndDate + skippedInvalidShape + skippedUnknownStatus, allMarkets.Count, rawLoadedTotal, seen.Count, skippedClosed, skippedArchived, skippedInactive, skippedMissingTokenIds, skippedMissingOutcomes, skippedPastEndDate, skippedInvalidShape, skippedUnknownStatus, discoveryCompleted, stoppedReason, lastError, safetyCapReached, failureKind, failed, lastWarning);
+                Console.WriteLine($"[DISCOVERY_PARTITION_RESULT] BucketName={bucket.Name} PagesFetched={pages} Raw={rawLoadedTotal} Active={allMarkets.Count} Failed={failed.ToString().ToLowerInvariant()} BucketFailed={failed.ToString().ToLowerInvariant()} FailureReason={(failed ? failureKind : "None")} ActualAcceptingOrdersParam={bucket.AcceptingOrdersParam ?? "<omitted>"} ActualAscendingParam={bucket.AscendingParam} ActualOrderParam={bucket.OrderParam} ActualActiveParam={bucket.ActiveParam} ActualClosedParam={bucket.ClosedParam} ActualArchivedParam={bucket.ArchivedParam} ActualLimitParam={pageSize} ActualOffsetParam={Math.Max(0, pages * pageSize)} QueryFingerprint={QueryFingerprint(bucket, pageSize, 0)}");
+            return new BucketResult(allMarkets, pages, duplicates, skippedClosed + skippedArchived + skippedInactive + skippedMissingTokenIds + skippedMissingOutcomes + skippedPastEndDate + skippedInvalidShape + skippedUnknownStatus, allMarkets.Count, rawLoadedTotal, seen.Count, skippedClosed, skippedArchived, skippedInactive, skippedMissingTokenIds, skippedMissingOutcomes, skippedPastEndDate, skippedInvalidShape, skippedUnknownStatus, discoveryCompleted, stoppedReason, lastError, safetyCapReached, failureKind, failed, lastWarning, stoppedReason == "GammaOffsetCapIncomplete");
         }
     }
 
-    private sealed record DiscoveryBucket(string Name, string ActiveParam, string ClosedParam, string ArchivedParam, string? AcceptingOrdersParam, string OrderParam, string AscendingParam);
-    private sealed record BucketResult(List<Market> Markets, int PagesFetched, int DuplicatesRemoved, int InactiveSkipped, int ActiveMarketsAvailable, int RawLoadedTotal, int UniqueMarketsTotal, int SkippedClosed, int SkippedArchived, int SkippedInactive, int SkippedMissingTokenIds, int SkippedMissingOutcomes, int SkippedPastEndDate, int SkippedInvalidShape, int SkippedUnknownStatus, bool DiscoveryCompleted, string? StoppedReason, string? LastError, bool SafetyCapReached, string FailureKind, bool Failed, string? LastWarning);
+    private sealed record DiscoveryBucket(string Name, string ActiveParam, string ClosedParam, string ArchivedParam, string? AcceptingOrdersParam, string OrderParam, string AscendingParam, string SplitDimension = "Initial");
+    private sealed record BucketResult(List<Market> Markets, int PagesFetched, int DuplicatesRemoved, int InactiveSkipped, int ActiveMarketsAvailable, int RawLoadedTotal, int UniqueMarketsTotal, int SkippedClosed, int SkippedArchived, int SkippedInactive, int SkippedMissingTokenIds, int SkippedMissingOutcomes, int SkippedPastEndDate, int SkippedInvalidShape, int SkippedUnknownStatus, bool DiscoveryCompleted, string? StoppedReason, string? LastError, bool SafetyCapReached, string FailureKind, bool Failed, string? LastWarning, bool CappedIncomplete = false);
+    private sealed record DiscoverySourceReport(string SourceName, bool Healthy, int ActiveMarkets, string FailureKind, bool CanRetry, DateTime? RetryAfterUtc, bool IsPartial, bool IsSafeForScanner);
+    private sealed record DiscoveryBucketReport(string BucketName, int PagesFetched, int Raw, int Active, bool Failed, string FailureReason);
+    private sealed record DiscoveryDiagnosticsReport(DateTime CreatedAtUtc, int PageSize, int GammaMaxSafeOffset, List<DiscoverySourceReport> Sources, List<DiscoveryBucketReport> Buckets);
+
+    private static DiscoverySourceReport ToSourceReport(string sourceName, BucketResult result, bool canRetry) =>
+        new(sourceName, !result.Failed && result.Markets.Count > 0, result.Markets.Count, result.Failed ? result.FailureKind : "None", canRetry, canRetry ? DateTime.UtcNow.AddMinutes(5) : null, result.Failed || result.CappedIncomplete, !result.Failed);
+
+
+    private static IEnumerable<DiscoveryBucket> SplitBucket(DiscoveryBucket bucket, int depth)
+    {
+        if (bucket.AcceptingOrdersParam is null)
+        {
+            yield return bucket with { Name = $"{bucket.Name}-accepting-true", AcceptingOrdersParam = "true", SplitDimension = "accepting_orders" };
+            yield return bucket with { Name = $"{bucket.Name}-accepting-false", AcceptingOrdersParam = "false", SplitDimension = "accepting_orders" };
+            yield break;
+        }
+        yield return bucket with { Name = $"{bucket.Name}-active-false", ActiveParam = "false", SplitDimension = "active" };
+        yield return bucket with { Name = $"{bucket.Name}-closed-true", ClosedParam = "true", SplitDimension = "closed" };
+    }
+
+    private static void WriteDiagnosticsReportIfEnabled(TradingBotOptions options, DiscoveryDiagnosticsReport diagnostics, MarketDiscoverySummary summary)
+    {
+        if (!options.MarketDiscovery.DiagnosticsOnly) return;
+        diagnostics.Sources.Add(new DiscoverySourceReport("PersistedHealthySnapshot", false, 0, "NotEvaluatedHere", false, null, false, false));
+        diagnostics.Sources.Add(new DiscoverySourceReport("Blocked", !summary.DiscoveryHealthy, summary.ActiveMarketsAvailable, summary.DiscoveryLastFailureKind, false, null, true, false));
+        const string path = "exports/discovery-diagnostics-latest.json";
+        Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
+        File.WriteAllText(path, JsonConvert.SerializeObject(new { Summary = summary, diagnostics.CreatedAtUtc, diagnostics.PageSize, diagnostics.GammaMaxSafeOffset, diagnostics.Sources, diagnostics.Buckets }, Formatting.Indented));
+        Console.WriteLine($"[DISCOVERY_DIAGNOSTICS_EXPORTED] Path={path} Sources={diagnostics.Sources.Count} Buckets={diagnostics.Buckets.Count}");
+    }
+
+    private static string QueryFingerprint(DiscoveryBucket bucket, int limit, int offset)
+    {
+        var shape = $"active={bucket.ActiveParam}&closed={bucket.ClosedParam}&archived={bucket.ArchivedParam}&accepting_orders={bucket.AcceptingOrdersParam ?? "<omitted>"}&order={bucket.OrderParam}&ascending={bucket.AscendingParam}&limit={limit}&offset={offset}";
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(shape)))[..16].ToLowerInvariant();
+    }
 
     private static string Format(bool? value) => value.HasValue ? value.Value.ToString().ToLowerInvariant() : "null";
 
