@@ -642,7 +642,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             allowlistEvaluationSkippedReason: scannerPausedByDiscoveryGuard && discoveredMarkets.Count == 0 ? "DiscoveryBootstrapUnavailable" : string.Empty,
             allowlistClassificationBlockedByDiscovery: scannerPausedByDiscoveryGuard && discoveredMarkets.Count == 0,
             soakReadiness: scannerPausedByDiscoveryGuard && discoveredMarkets.Count == 0 ? "Blocked" : "Ready",
-            soakReadinessReason: scannerPausedByDiscoveryGuard && discoveredMarkets.Count == 0 ? "DiscoveryBootstrapUnavailable" : "None");
+            soakReadinessReason: scannerPausedByDiscoveryGuard && discoveredMarkets.Count == 0
+                ? (options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly ? "BlockedReducedUniverseDiagnosticsOnly" : "BlockedNoScannerSafeDiscoverySource")
+                : "None");
     }
 
     var basketStateByGroup = new Dictionary<string, VerifiedBasketState>(StringComparer.OrdinalIgnoreCase);
@@ -658,8 +660,15 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var preTradeResults = new List<VerifiedBasketPreTradeValidationResult>();
     var promotedVerifiedOpportunities = new List<VerifiedMultiOutcomeOpportunity>();
     Console.WriteLine($"[DISCOVERY_PERSISTED_SNAPSHOT_CONFIG] Enabled={options.MarketDiscovery.EnablePersistedHealthySnapshot.ToString().ToLowerInvariant()} Path={PersistedDiscoverySnapshotPath()} TtlMinutes={options.MarketDiscovery.PersistedSnapshotTtlMinutes} MinActiveMarkets={options.MarketDiscovery.MinPersistedSnapshotActiveMarkets}");
-    TryLoadPersistedHealthyDiscoverySnapshot();
+    var persistedSnapshotLoadedAtStartup = TryLoadPersistedHealthyDiscoverySnapshot();
+    Console.WriteLine($"[DISCOVERY_PERSISTED_SNAPSHOT_LOAD_RESULT] Loaded={persistedSnapshotLoadedAtStartup.ToString().ToLowerInvariant()} ActiveMarkets={discoveryPersistedSnapshotActiveMarkets} AgeSeconds={discoveryPersistedSnapshotAgeSeconds}");
     UpdateDiscoveryGuardRuntimeState();
+    if (options.MarketDiscovery.SourceAuditOnly)
+    {
+        Console.WriteLine("[DISCOVERY_SOURCE_AUDIT_ONLY] Enabled=true Action=ExportAuditAndExit Scanner=false Orderbooks=false Paper=false Live=false");
+        MarketDataService.ExportSourceAudit(options, contentRootPath);
+        return;
+    }
     Console.WriteLine($"[ALLOWLIST] Loaded verified multi-outcome groups: {multiOutcomeValidator.LoadedAllowlistCount}");
     var startupAllowlistValidation = ScanLogSummaryService.AllowlistConfigValidation(multiOutcomeValidator.GetAllowlistedGroups());
     Console.WriteLine(startupAllowlistValidation.ToLogLine());
@@ -742,6 +751,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     lastDiscoverySummary = attemptSummary;
                     lastHealthyDiscoveryMarkets = discoveredCandidateMarkets.ToList();
                     lastHealthyDiscoverySummary = attemptSummary;
+                    options.DiscoveryPartialDiagnosticsOnly = false;
                     lastHealthyDiscoveryAt = lastDiscoveryAt;
                     discoveryLastFailureReason = string.Empty;
                     discoveryLastFailureKind = "Unknown";
@@ -784,11 +794,22 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     }
                     else
                     {
-                        discoveredMarkets = new List<Market>();
-                        lastDiscoverySummary = attemptSummary;
-                        scannerPausedByDiscoveryGuard = true;
-                        discoveryGuardSkippedCycles++;
-                        Console.WriteLine($"[DISCOVERY_GUARD] Action=PauseScanner Reason=DiscoveryUnavailable PartialMarkets={discoveredCandidateMarkets.Count}");
+                        if (options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly && discoveredCandidateMarkets.Count > 0)
+                        {
+                            discoveredMarkets = discoveredCandidateMarkets;
+                            lastDiscoverySummary = attemptSummary;
+                            options.DiscoveryPartialDiagnosticsOnly = true;
+                            scannerPausedByDiscoveryGuard = false;
+                            Console.WriteLine($"[DISCOVERY_GUARD] Action=ReducedUniverseDiagnosticsOnly Reason=NoScannerSafeDiscoverySource PartialMarkets={discoveredCandidateMarkets.Count} PaperExecutionGloballyBlockedByDiscovery=true LiveTrading=false");
+                        }
+                        else
+                        {
+                            discoveredMarkets = new List<Market>();
+                            lastDiscoverySummary = attemptSummary;
+                            scannerPausedByDiscoveryGuard = true;
+                            discoveryGuardSkippedCycles++;
+                            Console.WriteLine($"[DISCOVERY_GUARD] Action=PauseScanner Reason=NoScannerSafeDiscoverySource PartialMarkets={discoveredCandidateMarkets.Count}");
+                        }
                     }
                 }
                 UpdateDiscoveryGuardRuntimeState();

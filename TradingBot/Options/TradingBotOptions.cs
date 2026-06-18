@@ -240,6 +240,8 @@ public class MarketDiscoveryOptions
     public int MinimumActiveMarketsForBootstrap { get; set; } = 8000;
     public bool AllowBootstrapFromPartitionedDiscovery { get; set; } = true;
     public int MinimumPartitionedActiveMarkets { get; set; } = 8000;
+    public bool SourceAuditOnly { get; set; } = false;
+    public bool AllowReducedUniverseDiagnosticsOnly { get; set; } = false;
 }
 
 
