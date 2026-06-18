@@ -90,6 +90,7 @@ public class TradingBotOptions
     public RuntimeStateOptions RuntimeState { get; set; } = new();
     public SingleMarketArbOptions SingleMarketArb { get; set; } = new();
     public MarketDiscoveryOptions MarketDiscovery { get; set; } = new();
+    public bool DiscoveryPartialDiagnosticsOnly { get; set; } = false;
     public MarketDiscoveryOptions Discovery { get => MarketDiscovery; set => MarketDiscovery = value ?? new(); }
     public SignalROptions SignalR { get; set; } = new();
     public RuntimeHealthOptions RuntimeHealth { get; set; } = new();
