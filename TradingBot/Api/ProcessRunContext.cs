@@ -10,6 +10,7 @@ public static class ProcessRunContext
     private static long _batchBookTokenQuarantinedLogs;
     private static long _marketOrderbookQuarantinedLogs;
     private static long _orderbookCircuitBreakerOpenedLogs;
+    private static long _readinessInvariantCorrectionLogs;
 
     public static string ProcessRunId { get; } = Guid.NewGuid().ToString("N");
     public static string ScannerInstanceId { get; } = Guid.NewGuid().ToString("N");
@@ -55,4 +56,13 @@ public static class ProcessRunContext
 
     public static string FormatMismatchLog(string reason, OrderBookServiceStats stats)
         => $"[DIAGNOSTICS_COUNTER_MISMATCH] ProcessRunId={ProcessRunId} Category=Orderbook ObservedLogs=BatchBookTokenQuarantined:{Interlocked.Read(ref _batchBookTokenQuarantinedLogs)},MarketOrderbookQuarantined:{Interlocked.Read(ref _marketOrderbookQuarantinedLogs)},CircuitBreakerOpened:{Interlocked.Read(ref _orderbookCircuitBreakerOpenedLogs)} Counters=BatchBookBadRequests:{stats.BatchBadRequests},BatchBookInvalidTokens:{stats.BatchInvalidTokens},BatchBookSingleTokenQuarantined:{stats.BatchBookSingleTokenQuarantined},MarketOrderbookQuarantineActive:{stats.MarketOrderbookQuarantineActive},MarketOrderbookQuarantineAdded:{stats.MarketOrderbookQuarantineAdded},OrderbookCircuitBreakerOpenCount:{stats.OrderbookCircuitBreakerOpenCount},OrderbookCircuitBreakerState:{stats.OrderbookCircuitBreakerState} Reason={reason} Action=FailDiagnostics";
+
+    public static void RecordReadinessInvariantCorrection(string reason)
+    {
+        Volatile.Write(ref _diagnosticsCounterMismatchLastReason, $"ReadinessInvariant:{reason}");
+        Interlocked.Increment(ref _diagnosticsCounterMismatchCount);
+        var logs = Interlocked.Increment(ref _readinessInvariantCorrectionLogs);
+        if (logs <= 5 || logs % 50 == 0)
+            Console.WriteLine($"[READINESS_INVARIANT_CORRECTED] ProcessRunId={ProcessRunId} Count={logs} Reason={reason}");
+    }
 }

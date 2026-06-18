@@ -381,12 +381,13 @@ public class MarketDataService
         Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
         File.WriteAllText(path, JsonConvert.SerializeObject(report, Formatting.Indented));
         var scannerSafeSources = sources.Count(x => x.SafeForScannerCandidate);
+        var recommendedAction = scannerSafeSources == 0 ? "KeepBlocked" : "ReviewScannerSafeCandidate";
         Console.WriteLine($"[DISCOVERY_SOURCE_AUDIT_WRITTEN] Path={path} Sources={sources.Length} ScannerSafeSources={scannerSafeSources}");
-        Console.WriteLine($"[DISCOVERY_SOURCE_AUDIT_SUMMARY] ScannerSafeSources={scannerSafeSources} RecommendedAction={(scannerSafeSources == 0 ? "KeepBlocked" : "ReviewScannerSafeCandidate")}");
-        return new DiscoverySourceAuditExportResult(path, sources.Length, scannerSafeSources);
+        Console.WriteLine($"[DISCOVERY_SOURCE_AUDIT_SUMMARY] ScannerSafeSources={scannerSafeSources} RecommendedAction={recommendedAction}");
+        return new DiscoverySourceAuditExportResult(path, sources.Length, scannerSafeSources, recommendedAction);
     }
 
-    public sealed record DiscoverySourceAuditExportResult(string Path, int Sources, int ScannerSafeSources);
+    public sealed record DiscoverySourceAuditExportResult(string Path, int Sources, int ScannerSafeSources, string RecommendedAction);
 
     private sealed record DiscoverySourceAuditEntry(string SourceName, string EndpointClientName, bool SupportsPagination, string PaginationMode, bool CanReturnTokenIds, bool CanReturnMarketIds, bool CanFilterActive, bool CanFilterClosedArchived, bool CanReturnAcceptingOrders, string EstimatedCompleteness, bool SafeForScannerCandidate, IReadOnlyList<string> MissingRequirements);
 

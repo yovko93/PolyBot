@@ -240,6 +240,32 @@ app.MapHub<BotHub>("/hubs/bot");
 
 var apiTask = app.RunAsync(listenUrl);
 var state = app.Services.GetRequiredService<BotRuntimeState>();
+state.SetDiscoveryGuardState(
+    discoveryHealthy: false,
+    discoveryStable: false,
+    usingLastHealthySnapshot: false,
+    lastHealthySnapshotAgeSeconds: 0,
+    partialAttemptCount: 0,
+    lastFailureReason: options.MarketDiscovery.SourceAuditOnly ? "DiscoveryMode=Blocked;DiscoveryBlockedReason=SourceAuditOnly" : "DiscoveryMode=Initializing",
+    scannerPausedByDiscoveryGuard: options.MarketDiscovery.SourceAuditOnly,
+    discoveryGuardSkippedCycles: 0,
+    discoveryGuardUsingLastHealthySnapshot: false,
+    discoveryGuardBlockedNewMarkets: 0,
+    longRunStable: false,
+    longRunBlockingReason: options.MarketDiscovery.SourceAuditOnly ? "SourceAuditOnly" : "DiscoveryInitializing",
+    orderbookRecoveredAfterDegradation: true,
+    lastDegradationUtc: null,
+    lastRecoveryUtc: null,
+    allowlistEvaluationSkipped: options.MarketDiscovery.SourceAuditOnly,
+    allowlistEvaluationSkippedReason: options.MarketDiscovery.SourceAuditOnly ? "SourceAuditOnly" : string.Empty,
+    allowlistClassificationBlockedByDiscovery: options.MarketDiscovery.SourceAuditOnly,
+    soakReadiness: "Blocked",
+    soakReadinessReason: options.MarketDiscovery.SourceAuditOnly ? "SourceAuditOnly" : "DiscoveryInitializing",
+    discoveryBlockedReason: options.MarketDiscovery.SourceAuditOnly ? "SourceAuditOnly" : "DiscoveryInitializing",
+    discoverySelectedSource: options.MarketDiscovery.SourceAuditOnly ? "Blocked" : "Unknown",
+    discoveryScannerSafeSourceAvailable: false,
+    discoverySourceAuditOnly: options.MarketDiscovery.SourceAuditOnly,
+    discoverySourceAuditRecommendedAction: options.MarketDiscovery.SourceAuditOnly ? "KeepBlocked" : string.Empty);
 var quietLogGate = app.Services.GetRequiredService<QuietLogGate>();
 var logger = app.Services.GetRequiredService<IBotUiLogger>();
 options = app.Services.GetRequiredService<IOptions<TradingBotOptions>>().Value;
@@ -474,6 +500,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var discoverySourceAuditExportWritten = false;
     var discoverySourceAuditExportPath = string.Empty;
     var discoveryScannerSafeSourceAvailable = false;
+    var discoverySourceAuditSources = 0;
+    var discoverySourceAuditScannerSafeSources = 0;
+    var discoverySourceAuditRecommendedAction = string.Empty;
     DateTime? lastDegradationUtc = null;
     DateTime? lastRecoveryUtc = null;
     var emptyCycles = 0;
@@ -663,7 +692,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             discoveryScannerSafeSourceAvailable: discoveryScannerSafeSourceAvailable,
             discoverySourceAuditOnly: options.MarketDiscovery.SourceAuditOnly,
             discoverySourceAuditExportWritten: discoverySourceAuditExportWritten,
-            discoverySourceAuditExportPath: discoverySourceAuditExportPath);
+            discoverySourceAuditExportPath: discoverySourceAuditExportPath,
+            discoverySourceAuditSources: discoverySourceAuditSources,
+            discoverySourceAuditScannerSafeSources: discoverySourceAuditScannerSafeSources,
+            discoverySourceAuditRecommendedAction: discoverySourceAuditRecommendedAction);
     }
 
     var basketStateByGroup = new Dictionary<string, VerifiedBasketState>(StringComparer.OrdinalIgnoreCase);
@@ -690,6 +722,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         discoverySourceAuditExportWritten = true;
         discoverySourceAuditExportPath = audit.Path;
         discoveryScannerSafeSourceAvailable = audit.ScannerSafeSources > 0;
+        discoverySourceAuditSources = audit.Sources;
+        discoverySourceAuditScannerSafeSources = audit.ScannerSafeSources;
+        discoverySourceAuditRecommendedAction = audit.RecommendedAction;
         UpdateDiscoveryGuardRuntimeState();
         Console.WriteLine(RuntimeHealthSnapshot.From(state, options).ToLogLine());
         Console.WriteLine(RuntimeHealthTrendTracker.ToSoakStatusLogLine(RuntimeHealthSnapshot.From(state, options), RuntimeHealthTrendTracker.Current(options.RuntimeHealth), options, state));
