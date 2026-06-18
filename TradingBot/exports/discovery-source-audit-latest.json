@@ -1,0 +1,73 @@
+{
+  "CreatedAtUtc": "2026-06-18T00:00:00Z",
+  "Mode": "DiscoverySourceAuditOnly",
+  "Scanner": "Disabled",
+  "Orderbooks": "Disabled",
+  "Paper": "Disabled",
+  "LiveTrading": "NotRequired",
+  "SourceSelectionOrder": [
+    "PersistedHealthySnapshot",
+    "AlternativeFullMarketSource",
+    "GammaOffset",
+    "GammaPartitionedOffset",
+    "Blocked"
+  ],
+  "Sources": [
+    {
+      "SourceName": "PersistedHealthySnapshot",
+      "EndpointClientName": "exports/discovery-last-healthy-snapshot.json",
+      "SupportsPagination": false,
+      "PaginationMode": "Unknown",
+      "CanReturnTokenIds": true,
+      "CanReturnMarketIds": true,
+      "CanFilterActive": true,
+      "CanFilterClosedArchived": true,
+      "CanReturnAcceptingOrders": true,
+      "EstimatedCompleteness": "Unknown",
+      "SafeForScannerCandidate": false,
+      "MissingRequirements": ["RequiresValidFreshSnapshot", "DiagnosticsOnlyUntilLoaded"]
+    },
+    {
+      "SourceName": "GammaOffset",
+      "EndpointClientName": "MarketDataService:PolymarketGammaMarkets",
+      "SupportsPagination": true,
+      "PaginationMode": "Offset",
+      "CanReturnTokenIds": true,
+      "CanReturnMarketIds": true,
+      "CanFilterActive": true,
+      "CanFilterClosedArchived": true,
+      "CanReturnAcceptingOrders": true,
+      "EstimatedCompleteness": "Partial",
+      "SafeForScannerCandidate": false,
+      "MissingRequirements": ["OffsetCapCanRejectBeforeFullUniverse", "MustPassFullHealthCriteria"]
+    },
+    {
+      "SourceName": "GammaPartitionedOffset",
+      "EndpointClientName": "MarketDataService:PolymarketGammaMarkets partitioned offset",
+      "SupportsPagination": true,
+      "PaginationMode": "Offset",
+      "CanReturnTokenIds": true,
+      "CanReturnMarketIds": true,
+      "CanFilterActive": true,
+      "CanFilterClosedArchived": true,
+      "CanReturnAcceptingOrders": true,
+      "EstimatedCompleteness": "Partial",
+      "SafeForScannerCandidate": false,
+      "MissingRequirements": ["PartitionDimensionsNotProvenComplete", "RecursivePartitioningFrozen"]
+    },
+    {
+      "SourceName": "KalshiMarketDataService",
+      "EndpointClientName": "KalshiMarketDataService:GetMarketsAsync",
+      "SupportsPagination": true,
+      "PaginationMode": "Cursor",
+      "CanReturnTokenIds": false,
+      "CanReturnMarketIds": true,
+      "CanFilterActive": true,
+      "CanFilterClosedArchived": false,
+      "CanReturnAcceptingOrders": false,
+      "EstimatedCompleteness": "Unknown",
+      "SafeForScannerCandidate": false,
+      "MissingRequirements": ["DifferentExchange", "CannotReturnPolymarketTokenIds", "NotScannerSafeForPolymarketOrderbooks"]
+    }
+  ]
+}

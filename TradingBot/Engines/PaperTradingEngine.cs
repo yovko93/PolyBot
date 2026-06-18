@@ -316,6 +316,12 @@ public class PaperTradingEngine
 
     public bool RecordArbitrage(ArbOpportunity opportunity)
     {
+        if (_botOptions.DiscoveryPartialDiagnosticsOnly)
+        {
+            _blockedCountsByReason["DiscoveryReducedUniverse"] = _blockedCountsByReason.TryGetValue("DiscoveryReducedUniverse", out var c) ? c + 1 : 1;
+            Console.WriteLine("[PAPER_OPEN_BLOCKED_BY_DISCOVERY] Reason=ReducedUniverseDiagnosticsOnly Strategy=SingleMarket");
+            return false;
+        }
         Console.WriteLine("[PAPER_ORDER_PLAN_CREATED] Strategy=SingleMarket MarketOrGroup=" + BuildTwoLegRiskGroupKey(opportunity));
         Console.WriteLine("[PAPER_FILL_SIMULATION_PASSED] Strategy=SingleMarket MarketOrGroup=" + BuildTwoLegRiskGroupKey(opportunity));
         var pretradeGroupKey = BuildTwoLegRiskGroupKey(opportunity);
