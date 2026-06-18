@@ -44,6 +44,8 @@ public class OrderBookService : IOrderBookProvider
     private long _marketOrderbookQuarantineAdded;
     private long _marketOrderbookQuarantineExpired;
     private long _marketsSkippedByMarketOrderbookQuarantine;
+    private long _quarantinedMarketsReintroducedBlocked;
+    private long _quarantinedTokensReintroducedBlocked;
     private long _batchRequestsAvoidedByMarketQuarantine;
     private long _orderbookCircuitBreakerOpenCount;
     private long _orderbookCircuitBreakerHalfOpenAttempts;
@@ -327,12 +329,14 @@ public class OrderBookService : IOrderBookProvider
             Interlocked.Add(ref _marketsSkippedByMarketOrderbookQuarantine, skippedMarketQuarantine);
             Interlocked.Add(ref _batchRequestsAvoidedByMarketQuarantine, skippedMarketQuarantine);
             Interlocked.Add(ref _batchBookBadRequestsPreventedEstimate, skippedMarketQuarantine);
+            Interlocked.Add(ref _quarantinedMarketsReintroducedBlocked, skippedMarketQuarantine);
         }
         if (skippedTokenQuarantine > 0)
         {
             Interlocked.Add(ref _batchSkippedMarketsWithQuarantinedTokens, skippedTokenQuarantine);
             Interlocked.Add(ref _marketsSkippedByInvalidTokenQuarantine, skippedTokenQuarantine);
             Interlocked.Add(ref _batchRequestsAvoidedByQuarantine, skippedTokenQuarantine);
+            Interlocked.Add(ref _quarantinedTokensReintroducedBlocked, skippedTokenQuarantine);
         }
         if (breakerState == OrderbookCircuitBreakerState.HalfOpen && remaining.Count == 0 && original.Count > 0)
         {
@@ -345,7 +349,7 @@ public class OrderBookService : IOrderBookProvider
         {
             var skippedCircuitBreaker = breakerState == OrderbookCircuitBreakerState.Open ? original.Count : cappedCount;
             if (ShouldLogBatchDiagnostic("BATCH_BOOK_SANITIZED", $"{original.Count}|{remaining.Count}|{skippedMarketQuarantine}|{skippedTokenQuarantine}|{skippedCircuitBreaker}", original.Count))
-                Console.WriteLine($"[BATCH_BOOK_SANITIZED] OriginalMarkets={original.Count} RemainingMarkets={remaining.Count} SkippedMarketQuarantine={skippedMarketQuarantine} SkippedTokenQuarantine={skippedTokenQuarantine} SkippedCircuitBreaker={skippedCircuitBreaker}");
+                Console.WriteLine($"[BATCH_BOOK_SANITIZED] OriginalMarkets={original.Count} RemainingMarkets={remaining.Count} SkippedDiscoveryPartialUntrusted=0 SkippedMarketQuarantine={skippedMarketQuarantine} SkippedTokenQuarantine={skippedTokenQuarantine} SkippedCircuitBreaker={skippedCircuitBreaker}");
         }
         return remaining;
     }
@@ -777,7 +781,9 @@ public class OrderBookService : IOrderBookProvider
             BatchBookNormalRequestsBeforeBreakerOpen: Interlocked.Read(ref _batchBookNormalRequestsBeforeBreakerOpen),
             BatchBookNormalBadRequestsBeforeBreakerOpen: Interlocked.Read(ref _batchBookNormalBadRequestsBeforeBreakerOpen),
             BatchBookNormalRequestsAfterBreakerOpen: Interlocked.Read(ref _batchBookNormalRequestsAfterBreakerOpen),
-            BatchBookNormalBadRequestsAfterBreakerOpen: Interlocked.Read(ref _batchBookNormalBadRequestsAfterBreakerOpen)
+            BatchBookNormalBadRequestsAfterBreakerOpen: Interlocked.Read(ref _batchBookNormalBadRequestsAfterBreakerOpen),
+            QuarantinedMarketsReintroducedBlocked: Interlocked.Read(ref _quarantinedMarketsReintroducedBlocked),
+            QuarantinedTokensReintroducedBlocked: Interlocked.Read(ref _quarantinedTokensReintroducedBlocked)
         );
     }
 
@@ -805,6 +811,8 @@ public class OrderBookService : IOrderBookProvider
         Interlocked.Exchange(ref _batchSingleTokenQuarantined, 0);
         Interlocked.Exchange(ref _batchRequestsAvoidedByQuarantine, 0);
         Interlocked.Exchange(ref _marketsSkippedByInvalidTokenQuarantine, 0);
+        Interlocked.Exchange(ref _quarantinedMarketsReintroducedBlocked, 0);
+        Interlocked.Exchange(ref _quarantinedTokensReintroducedBlocked, 0);
         Interlocked.Exchange(ref _batchSingleTokenFailures, 0);
         Interlocked.Exchange(ref _batchSplitRetryFailed, 0);
         Interlocked.Exchange(ref _batchSplitRetrySucceeded, 0);
