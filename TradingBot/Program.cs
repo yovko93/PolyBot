@@ -471,6 +471,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var discoveryPersistedSnapshotActiveMarkets = 0;
     var discoveryUsingLastHealthySnapshot = false;
     var scannerPausedByDiscoveryGuard = false;
+    var discoverySourceAuditExportWritten = false;
+    var discoverySourceAuditExportPath = string.Empty;
+    var discoveryScannerSafeSourceAvailable = false;
     DateTime? lastDegradationUtc = null;
     DateTime? lastRecoveryUtc = null;
     var emptyCycles = 0;
@@ -604,7 +607,19 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         var stats = orderbookService.GetStats();
         var now = DateTime.UtcNow;
         var ageSeconds = lastHealthyDiscoveryAt == default ? 0 : (int)Math.Max(0, (now - lastHealthyDiscoveryAt).TotalSeconds);
-        var discoveryStable = lastDiscoverySummary.DiscoveryHealthy || discoveryUsingLastHealthySnapshot;
+        var discoveryBootstrapHealthy = lastHealthyDiscoveryMarkets.Count >= options.MarketDiscovery.MinHealthyActiveMarkets;
+        discoveryScannerSafeSourceAvailable = discoveryUsingLastHealthySnapshot || (lastDiscoverySummary.DiscoveryHealthy && !string.Equals(discoveryMode, "Blocked", StringComparison.OrdinalIgnoreCase));
+        var discoveryBlocked = options.MarketDiscovery.SourceAuditOnly || !lastDiscoverySummary.DiscoveryHealthy || string.Equals(discoveryMode, "Blocked", StringComparison.OrdinalIgnoreCase) || !discoveryBootstrapHealthy || !discoveryScannerSafeSourceAvailable;
+        var discoveryBlockedReason = options.MarketDiscovery.SourceAuditOnly
+            ? "SourceAuditOnly"
+            : !discoveryScannerSafeSourceAvailable
+                ? "NoScannerSafeDiscoverySource"
+                : !discoveryBootstrapHealthy
+                    ? "DiscoveryBootstrapUnavailable"
+                    : "None";
+        var discoveryStable = !discoveryBlocked && (lastDiscoverySummary.DiscoveryHealthy || discoveryUsingLastHealthySnapshot);
+        var effectiveScannerPausedByDiscoveryGuard = scannerPausedByDiscoveryGuard || discoveryBlocked;
+        var allowlistSkippedByDiscovery = discoveryBlocked;
         var orderbookRecovered = stats.OrderbookCircuitBreakerState.Equals("Closed", StringComparison.OrdinalIgnoreCase) && stats.BatchBookNormalBadRequestsAfterBreakerOpen == 0;
         var longRunReasons = new List<string>();
         if (!discoveryStable) longRunReasons.Add("DiscoveryUnavailable");
@@ -618,7 +633,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             ageSeconds,
             discoveryPartialAttemptCount,
             ($"{discoveryLastFailureReason};DiscoveryLastFailureKind={discoveryLastFailureKind};DiscoveryMode={discoveryMode};DiscoveryFallbackAttempted={discoveryFallbackAttempted.ToString().ToLowerInvariant()};DiscoveryFallbackReason={discoveryFallbackReason};DiscoveryFallbackSucceeded={discoveryFallbackSucceeded.ToString().ToLowerInvariant()};DiscoveryFallbackActiveMarkets={discoveryFallbackActiveMarkets}"),
-            scannerPausedByDiscoveryGuard,
+            effectiveScannerPausedByDiscoveryGuard,
             discoveryGuardSkippedCycles,
             discoveryUsingLastHealthySnapshot,
             discoveryGuardBlockedNewMarkets,
@@ -627,7 +642,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             orderbookRecovered,
             lastDegradationUtc,
             lastRecoveryUtc,
-            discoveryBootstrapHealthy: lastHealthyDiscoveryMarkets.Count >= options.MarketDiscovery.MinHealthyActiveMarkets,
+            discoveryBootstrapHealthy: discoveryBootstrapHealthy,
             discoveryBootstrapRetryCount: discoveryBootstrapRetryCount,
             discoveryBootstrapLastAttemptUtc: discoveryBootstrapLastAttemptUtc,
             discoveryBootstrapNextRetryUtc: discoveryBootstrapNextRetryUtc,
@@ -638,13 +653,17 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             discoveryPersistedSnapshotLoaded: discoveryPersistedSnapshotLoaded,
             discoveryPersistedSnapshotAgeSeconds: discoveryPersistedSnapshotAgeSeconds,
             discoveryPersistedSnapshotActiveMarkets: discoveryPersistedSnapshotActiveMarkets,
-            allowlistEvaluationSkipped: scannerPausedByDiscoveryGuard && discoveredMarkets.Count == 0,
-            allowlistEvaluationSkippedReason: scannerPausedByDiscoveryGuard && discoveredMarkets.Count == 0 ? "DiscoveryBootstrapUnavailable" : string.Empty,
-            allowlistClassificationBlockedByDiscovery: scannerPausedByDiscoveryGuard && discoveredMarkets.Count == 0,
-            soakReadiness: scannerPausedByDiscoveryGuard && discoveredMarkets.Count == 0 ? "Blocked" : "Ready",
-            soakReadinessReason: scannerPausedByDiscoveryGuard && discoveredMarkets.Count == 0
-                ? (options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly ? "BlockedReducedUniverseDiagnosticsOnly" : "BlockedNoScannerSafeDiscoverySource")
-                : "None");
+            allowlistEvaluationSkipped: allowlistSkippedByDiscovery,
+            allowlistEvaluationSkippedReason: allowlistSkippedByDiscovery ? discoveryBlockedReason : string.Empty,
+            allowlistClassificationBlockedByDiscovery: allowlistSkippedByDiscovery,
+            soakReadiness: discoveryBlocked ? "Blocked" : "Ready",
+            soakReadinessReason: discoveryBlocked ? discoveryBlockedReason : "None",
+            discoveryBlockedReason: discoveryBlockedReason,
+            discoverySelectedSource: discoveryScannerSafeSourceAvailable ? (discoveryUsingLastHealthySnapshot ? "PersistedHealthySnapshot" : discoveryMode) : "Blocked",
+            discoveryScannerSafeSourceAvailable: discoveryScannerSafeSourceAvailable,
+            discoverySourceAuditOnly: options.MarketDiscovery.SourceAuditOnly,
+            discoverySourceAuditExportWritten: discoverySourceAuditExportWritten,
+            discoverySourceAuditExportPath: discoverySourceAuditExportPath);
     }
 
     var basketStateByGroup = new Dictionary<string, VerifiedBasketState>(StringComparer.OrdinalIgnoreCase);
@@ -662,11 +681,18 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     Console.WriteLine($"[DISCOVERY_PERSISTED_SNAPSHOT_CONFIG] Enabled={options.MarketDiscovery.EnablePersistedHealthySnapshot.ToString().ToLowerInvariant()} Path={PersistedDiscoverySnapshotPath()} TtlMinutes={options.MarketDiscovery.PersistedSnapshotTtlMinutes} MinActiveMarkets={options.MarketDiscovery.MinPersistedSnapshotActiveMarkets}");
     var persistedSnapshotLoadedAtStartup = TryLoadPersistedHealthyDiscoverySnapshot();
     Console.WriteLine($"[DISCOVERY_PERSISTED_SNAPSHOT_LOAD_RESULT] Loaded={persistedSnapshotLoadedAtStartup.ToString().ToLowerInvariant()} ActiveMarkets={discoveryPersistedSnapshotActiveMarkets} AgeSeconds={discoveryPersistedSnapshotAgeSeconds}");
+    if (options.MarketDiscovery.SourceAuditOnly && discoveryGuardSkippedCycles == 0) discoveryGuardSkippedCycles++;
     UpdateDiscoveryGuardRuntimeState();
     if (options.MarketDiscovery.SourceAuditOnly)
     {
         Console.WriteLine("[DISCOVERY_SOURCE_AUDIT_ONLY] Enabled=true Action=ExportAuditAndExit Scanner=false Orderbooks=false Paper=false Live=false");
-        MarketDataService.ExportSourceAudit(options, contentRootPath);
+        var audit = MarketDataService.ExportSourceAudit(options, contentRootPath);
+        discoverySourceAuditExportWritten = true;
+        discoverySourceAuditExportPath = audit.Path;
+        discoveryScannerSafeSourceAvailable = audit.ScannerSafeSources > 0;
+        UpdateDiscoveryGuardRuntimeState();
+        Console.WriteLine(RuntimeHealthSnapshot.From(state, options).ToLogLine());
+        Console.WriteLine(RuntimeHealthTrendTracker.ToSoakStatusLogLine(RuntimeHealthSnapshot.From(state, options), RuntimeHealthTrendTracker.Current(options.RuntimeHealth), options, state));
         return;
     }
     Console.WriteLine($"[ALLOWLIST] Loaded verified multi-outcome groups: {multiOutcomeValidator.LoadedAllowlistCount}");

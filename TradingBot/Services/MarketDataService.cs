@@ -367,7 +367,7 @@ public class MarketDataService
         }
     }
 
-    public static void ExportSourceAudit(TradingBotOptions options, string contentRootPath)
+    public static DiscoverySourceAuditExportResult ExportSourceAudit(TradingBotOptions options, string contentRootPath)
     {
         var sources = new[]
         {
@@ -380,8 +380,13 @@ public class MarketDataService
         var path = Path.Combine(contentRootPath, "exports/discovery-source-audit-latest.json");
         Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
         File.WriteAllText(path, JsonConvert.SerializeObject(report, Formatting.Indented));
-        Console.WriteLine($"[DISCOVERY_SOURCE_AUDIT_EXPORTED] Path={path} Sources={sources.Length} SafeCandidates={sources.Count(x => x.SafeForScannerCandidate)}");
+        var scannerSafeSources = sources.Count(x => x.SafeForScannerCandidate);
+        Console.WriteLine($"[DISCOVERY_SOURCE_AUDIT_WRITTEN] Path={path} Sources={sources.Length} ScannerSafeSources={scannerSafeSources}");
+        Console.WriteLine($"[DISCOVERY_SOURCE_AUDIT_SUMMARY] ScannerSafeSources={scannerSafeSources} RecommendedAction={(scannerSafeSources == 0 ? "KeepBlocked" : "ReviewScannerSafeCandidate")}");
+        return new DiscoverySourceAuditExportResult(path, sources.Length, scannerSafeSources);
     }
+
+    public sealed record DiscoverySourceAuditExportResult(string Path, int Sources, int ScannerSafeSources);
 
     private sealed record DiscoverySourceAuditEntry(string SourceName, string EndpointClientName, bool SupportsPagination, string PaginationMode, bool CanReturnTokenIds, bool CanReturnMarketIds, bool CanFilterActive, bool CanFilterClosedArchived, bool CanReturnAcceptingOrders, string EstimatedCompleteness, bool SafeForScannerCandidate, IReadOnlyList<string> MissingRequirements);
 

@@ -99,6 +99,12 @@ public class BotRuntimeState
     private int _allowlistClassificationBlockedByDiscovery;
     private string _soakReadiness = "Ready";
     private string _soakReadinessReason = "None";
+    private string _discoveryBlockedReason = "None";
+    private string _discoverySelectedSource = "Unknown";
+    private int _discoveryScannerSafeSourceAvailable;
+    private int _discoverySourceAuditOnly;
+    private int _discoverySourceAuditExportWritten;
+    private string _discoverySourceAuditExportPath = string.Empty;
     private QuietLogGateStats _quietLogGateStats = new(0, 0, new Dictionary<string, long>(), new Dictionary<string, long>(), 0, 0);
     private OrderBookServiceStats _orderBookServiceStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0);
     private int _paperPretradeRejects;
@@ -210,6 +216,12 @@ public class BotRuntimeState
     public bool AllowlistClassificationBlockedByDiscovery => Volatile.Read(ref _allowlistClassificationBlockedByDiscovery) == 1;
     public string SoakReadiness => _soakReadiness;
     public string SoakReadinessReason => _soakReadinessReason;
+    public string DiscoveryBlockedReason => _discoveryBlockedReason;
+    public string DiscoverySelectedSource => _discoverySelectedSource;
+    public bool DiscoveryScannerSafeSourceAvailable => Volatile.Read(ref _discoveryScannerSafeSourceAvailable) == 1;
+    public bool DiscoverySourceAuditOnly => Volatile.Read(ref _discoverySourceAuditOnly) == 1;
+    public bool DiscoverySourceAuditExportWritten => Volatile.Read(ref _discoverySourceAuditExportWritten) == 1;
+    public string DiscoverySourceAuditExportPath => _discoverySourceAuditExportPath;
     public QuietLogGateStats QuietLogGateStats => _quietLogGateStats;
     public OrderBookServiceStats OrderBookServiceStats => _orderBookServiceStats;
     public string ProcessRunId => ProcessRunContext.ProcessRunId;
@@ -345,7 +357,7 @@ public class BotRuntimeState
         if (exportQueueCount is int eq) Interlocked.Exchange(ref _exportQueueCount, eq);
         if (patchPreviewItemsCount is int pp) Interlocked.Exchange(ref _patchPreviewItemsCount, pp);
     }
-    public void SetDiscoveryGuardState(bool discoveryHealthy, bool discoveryStable, bool usingLastHealthySnapshot, int lastHealthySnapshotAgeSeconds, int partialAttemptCount, string? lastFailureReason, bool scannerPausedByDiscoveryGuard, int discoveryGuardSkippedCycles, bool discoveryGuardUsingLastHealthySnapshot, int discoveryGuardBlockedNewMarkets, bool longRunStable, string? longRunBlockingReason, bool orderbookRecoveredAfterDegradation, DateTime? lastDegradationUtc, DateTime? lastRecoveryUtc, bool discoveryBootstrapHealthy = false, int discoveryBootstrapRetryCount = 0, DateTime? discoveryBootstrapLastAttemptUtc = null, DateTime? discoveryBootstrapNextRetryUtc = null, int discoveryBootstrapBackoffSeconds = 0, string? discoveryBootstrapFailureReason = null, int discoveryRetryBackoffSeconds = 0, int discoveryRetriesSuppressedByBackoff = 0, bool discoveryPersistedSnapshotLoaded = false, int discoveryPersistedSnapshotAgeSeconds = 0, int discoveryPersistedSnapshotActiveMarkets = 0, bool allowlistEvaluationSkipped = false, string? allowlistEvaluationSkippedReason = null, bool allowlistClassificationBlockedByDiscovery = false, string? soakReadiness = null, string? soakReadinessReason = null)
+    public void SetDiscoveryGuardState(bool discoveryHealthy, bool discoveryStable, bool usingLastHealthySnapshot, int lastHealthySnapshotAgeSeconds, int partialAttemptCount, string? lastFailureReason, bool scannerPausedByDiscoveryGuard, int discoveryGuardSkippedCycles, bool discoveryGuardUsingLastHealthySnapshot, int discoveryGuardBlockedNewMarkets, bool longRunStable, string? longRunBlockingReason, bool orderbookRecoveredAfterDegradation, DateTime? lastDegradationUtc, DateTime? lastRecoveryUtc, bool discoveryBootstrapHealthy = false, int discoveryBootstrapRetryCount = 0, DateTime? discoveryBootstrapLastAttemptUtc = null, DateTime? discoveryBootstrapNextRetryUtc = null, int discoveryBootstrapBackoffSeconds = 0, string? discoveryBootstrapFailureReason = null, int discoveryRetryBackoffSeconds = 0, int discoveryRetriesSuppressedByBackoff = 0, bool discoveryPersistedSnapshotLoaded = false, int discoveryPersistedSnapshotAgeSeconds = 0, int discoveryPersistedSnapshotActiveMarkets = 0, bool allowlistEvaluationSkipped = false, string? allowlistEvaluationSkippedReason = null, bool allowlistClassificationBlockedByDiscovery = false, string? soakReadiness = null, string? soakReadinessReason = null, string? discoveryBlockedReason = null, string? discoverySelectedSource = null, bool discoveryScannerSafeSourceAvailable = false, bool discoverySourceAuditOnly = false, bool discoverySourceAuditExportWritten = false, string? discoverySourceAuditExportPath = null)
     {
         Interlocked.Exchange(ref _discoveryHealthy, discoveryHealthy ? 1 : 0);
         Interlocked.Exchange(ref _discoveryStable, discoveryStable ? 1 : 0);
@@ -378,6 +390,12 @@ public class BotRuntimeState
         Interlocked.Exchange(ref _allowlistClassificationBlockedByDiscovery, allowlistClassificationBlockedByDiscovery ? 1 : 0);
         _soakReadiness = soakReadiness ?? "Ready";
         _soakReadinessReason = soakReadinessReason ?? "None";
+        _discoveryBlockedReason = discoveryBlockedReason ?? "None";
+        _discoverySelectedSource = discoverySelectedSource ?? "Unknown";
+        Interlocked.Exchange(ref _discoveryScannerSafeSourceAvailable, discoveryScannerSafeSourceAvailable ? 1 : 0);
+        Interlocked.Exchange(ref _discoverySourceAuditOnly, discoverySourceAuditOnly ? 1 : 0);
+        Interlocked.Exchange(ref _discoverySourceAuditExportWritten, discoverySourceAuditExportWritten ? 1 : 0);
+        _discoverySourceAuditExportPath = discoverySourceAuditExportPath ?? string.Empty;
     }
 
     public void SetAllowlistRefreshCounters(int needsRefresh, int reviewOnly, int mismatch, int refreshPreviewCandidates, int highConfidence, int finalNoCandidate = 0, int finalSemanticConflict = 0, int finalLowConfidence = 0, int finalUnstable = 0, int finalPreviewOnly = 0, int finalLockedManualReview = 0, int actionExplainedSuppressed = 0, int unstableGroups = 0, int actionFlipFlops = 0, int healthy = 0, int monitoringOnly = 0, int needsPricingPrune = 0, int brokenConfig = 0, int disabled = 0, int ignored = 0, int classificationTotal = 0, bool classificationValid = true)
