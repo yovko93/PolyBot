@@ -235,6 +235,8 @@ public class MarketDiscoveryOptions
     public string PersistedSnapshotPath { get; set; } = "exports/discovery-last-healthy-snapshot.json";
     public int MaxPageSize { get; set; } = 100;
     public bool DiagnosticsOnly { get; set; } = false;
+    public bool AllowPartialBaselineExport { get; set; } = false;
+    public int GammaMaxSafeOffset { get; set; } = 2000;
     public int MinimumActiveMarketsForBootstrap { get; set; } = 8000;
     public bool AllowBootstrapFromPartitionedDiscovery { get; set; } = true;
     public int MinimumPartitionedActiveMarkets { get; set; } = 8000;
