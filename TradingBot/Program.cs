@@ -448,6 +448,17 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var discoveryStartedAt = default(DateTime);
     var discoveryCompletedAt = default(DateTime);
     var lastDiscoverySummary = new MarketDiscoverySummary();
+    var lastHealthyDiscoverySummary = new MarketDiscoverySummary();
+    var lastHealthyDiscoveryMarkets = new List<Market>();
+    var lastHealthyDiscoveryAt = default(DateTime);
+    var discoveryPartialAttemptCount = 0;
+    var discoveryGuardSkippedCycles = 0;
+    var discoveryGuardBlockedNewMarkets = 0;
+    var discoveryLastFailureReason = string.Empty;
+    var discoveryUsingLastHealthySnapshot = false;
+    var scannerPausedByDiscoveryGuard = false;
+    DateTime? lastDegradationUtc = null;
+    DateTime? lastRecoveryUtc = null;
     var emptyCycles = 0;
     var verifiedBasketCycle = 0;
     var verifiedPricingCycle = 0;
@@ -489,6 +500,37 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             new LogEventFingerprint(stableHash, bucketHash),
             importance,
             QuietPolicy(everyNCycles, maxPerHour));
+
+
+    void UpdateDiscoveryGuardRuntimeState()
+    {
+        var stats = orderbookService.GetStats();
+        var now = DateTime.UtcNow;
+        var ageSeconds = lastHealthyDiscoveryAt == default ? 0 : (int)Math.Max(0, (now - lastHealthyDiscoveryAt).TotalSeconds);
+        var discoveryStable = lastDiscoverySummary.DiscoveryHealthy || discoveryUsingLastHealthySnapshot;
+        var orderbookRecovered = stats.OrderbookCircuitBreakerState.Equals("Closed", StringComparison.OrdinalIgnoreCase) && stats.BatchBookNormalBadRequestsAfterBreakerOpen == 0;
+        var longRunReasons = new List<string>();
+        if (!discoveryStable) longRunReasons.Add("DiscoveryUnavailable");
+        if (stats.OrderbookCircuitBreakerActive && stats.OrderbookRecoverySucceededCount <= 0) longRunReasons.Add("OrderbookBreakerActive");
+        if (stats.BatchBookNormalBadRequestsAfterBreakerOpen > 0) longRunReasons.Add("PostBreakerBadRequests");
+        if (stats.InvalidTokenQuarantineActive + stats.MarketOrderbookQuarantineActive > Math.Max(25, options.OrderBook.CircuitBreakerInvalidTokensPerHourThreshold)) longRunReasons.Add("QuarantineStormActive");
+        state.SetDiscoveryGuardState(
+            lastDiscoverySummary.DiscoveryHealthy,
+            discoveryStable,
+            discoveryUsingLastHealthySnapshot,
+            ageSeconds,
+            discoveryPartialAttemptCount,
+            discoveryLastFailureReason,
+            scannerPausedByDiscoveryGuard,
+            discoveryGuardSkippedCycles,
+            discoveryUsingLastHealthySnapshot,
+            discoveryGuardBlockedNewMarkets,
+            longRunReasons.Count == 0,
+            longRunReasons.Count == 0 ? "None" : string.Join("|", longRunReasons),
+            orderbookRecovered,
+            lastDegradationUtc,
+            lastRecoveryUtc);
+    }
 
     var basketStateByGroup = new Dictionary<string, VerifiedBasketState>(StringComparer.OrdinalIgnoreCase);
     var stability = new VerifiedOpportunityStabilityTracker();
@@ -549,22 +591,68 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 SetScannerStage("Discovery", "MarketDataService");
                 discoveryStartedAt = DateTime.UtcNow;
                 var discovery = await marketService.GetMarketsAsync(options, stoppingToken);
-                discoveredMarkets = discovery.Markets.Where(m => m?.outcomes?.Count == 2 && m.clobTokenIds?.Count >= 2).Take(Math.Max(1, options.RuntimeMemory.MaxMarketCacheEntries)).ToList();
-                lastDiscoverySummary = discovery.Summary;
+                var discoveredCandidateMarkets = discovery.Markets.Where(m => m?.outcomes?.Count == 2 && m.clobTokenIds?.Count >= 2).Take(Math.Max(1, options.RuntimeMemory.MaxMarketCacheEntries)).ToList();
+                var attemptSummary = discovery.Summary;
+                var discoveryHealth = ScanLogSummaryService.DiscoveryHealth(attemptSummary, options.MarketDiscovery.MinHealthyActiveMarkets);
                 lastDiscoveryAt = DateTime.UtcNow;
                 discoveryCompletedAt = lastDiscoveryAt;
                 cyclesCompletedSinceDiscovery = 0;
+                discoveryUsingLastHealthySnapshot = false;
+                scannerPausedByDiscoveryGuard = false;
                 if (options.LogPrefetchSummary)
-                    Console.WriteLine($"[DISCOVERY] marketsDiscovered={lastDiscoverySummary.MarketsDiscovered}, pagesFetched={lastDiscoverySummary.PagesFetched}, duplicatesRemoved={lastDiscoverySummary.DuplicatesRemoved}, inactiveSkipped={lastDiscoverySummary.InactiveSkipped}, activeMarketsAvailable={lastDiscoverySummary.ActiveMarketsAvailable}, rawLoadedTotal={lastDiscoverySummary.RawLoadedTotal}, uniqueMarketsTotal={lastDiscoverySummary.UniqueMarketsTotal}, skippedClosed={lastDiscoverySummary.SkippedClosed}, skippedArchived={lastDiscoverySummary.SkippedArchived}, skippedMissingTokenIds={lastDiscoverySummary.SkippedMissingTokenIds}, skippedInvalidShape={lastDiscoverySummary.SkippedInvalidShape}");
-                var discoveryHealth = ScanLogSummaryService.DiscoveryHealth(lastDiscoverySummary, options.MarketDiscovery.MinHealthyActiveMarkets);
+                    Console.WriteLine($"[DISCOVERY] marketsDiscovered={attemptSummary.MarketsDiscovered}, pagesFetched={attemptSummary.PagesFetched}, duplicatesRemoved={attemptSummary.DuplicatesRemoved}, inactiveSkipped={attemptSummary.InactiveSkipped}, activeMarketsAvailable={attemptSummary.ActiveMarketsAvailable}, rawLoadedTotal={attemptSummary.RawLoadedTotal}, uniqueMarketsTotal={attemptSummary.UniqueMarketsTotal}, skippedClosed={attemptSummary.SkippedClosed}, skippedArchived={attemptSummary.SkippedArchived}, skippedMissingTokenIds={attemptSummary.SkippedMissingTokenIds}, skippedInvalidShape={attemptSummary.SkippedInvalidShape}");
                 Console.WriteLine(discoveryHealth.ToLogLine());
-                if (discoveryHealth.Degraded)
+                if (!discoveryHealth.Degraded)
                 {
-                    var degradedReason = lastDiscoverySummary.ActiveMarketsAvailable < options.MarketDiscovery.MinHealthyActiveMarkets
+                    discoveredMarkets = discoveredCandidateMarkets;
+                    lastDiscoverySummary = attemptSummary;
+                    lastHealthyDiscoveryMarkets = discoveredCandidateMarkets.ToList();
+                    lastHealthyDiscoverySummary = attemptSummary;
+                    lastHealthyDiscoveryAt = lastDiscoveryAt;
+                    discoveryLastFailureReason = string.Empty;
+                    lastRecoveryUtc = DateTime.UtcNow;
+                }
+                else
+                {
+                    discoveryPartialAttemptCount++;
+                    discoveryLastFailureReason = string.IsNullOrWhiteSpace(attemptSummary.LastDiscoveryError) ? discoveryHealth.Reason : attemptSummary.LastDiscoveryError!;
+                    lastDegradationUtc = DateTime.UtcNow;
+                    var degradedReason = attemptSummary.ActiveMarketsAvailable < options.MarketDiscovery.MinHealthyActiveMarkets
                         ? (string.IsNullOrWhiteSpace(discoveryHealth.Reason) ? "ActiveBelowExpectedMin" : discoveryHealth.Reason.Contains("OperationCanceled", StringComparison.OrdinalIgnoreCase) ? $"{discoveryHealth.Reason};ActiveBelowExpectedMin" : "ActiveBelowExpectedMin")
                         : (string.IsNullOrWhiteSpace(discoveryHealth.Reason) || discoveryHealth.Reason.Equals("ActiveBelowExpectedMin", StringComparison.OrdinalIgnoreCase) ? "DiscoveryOperationCanceled" : discoveryHealth.Reason);
-                    Console.WriteLine($"[DISCOVERY_DEGRADED_MODE] Reason={degradedReason} Active={lastDiscoverySummary.ActiveMarketsAvailable} ExpectedMinActive={options.MarketDiscovery.MinHealthyActiveMarkets}");
+                    Console.WriteLine($"[DISCOVERY_DEGRADED_MODE] Reason={degradedReason} Active={attemptSummary.ActiveMarketsAvailable} ExpectedMinActive={options.MarketDiscovery.MinHealthyActiveMarkets}");
+                    if (lastHealthyDiscoveryMarkets.Count > 0)
+                    {
+                        var healthyIds = lastHealthyDiscoveryMarkets.Select(m => m.id).Where(x => !string.IsNullOrWhiteSpace(x)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                        discoveryGuardBlockedNewMarkets += discoveredCandidateMarkets.Count(m => !healthyIds.Contains(m.id));
+                        discoveredMarkets = lastHealthyDiscoveryMarkets.ToList();
+                        lastDiscoverySummary = lastHealthyDiscoverySummary;
+                        discoveryUsingLastHealthySnapshot = true;
+                        Console.WriteLine($"[DISCOVERY_GUARD] Action=UseLastHealthySnapshot HealthyMarkets={discoveredMarkets.Count} PartialMarkets={discoveredCandidateMarkets.Count} BlockedNewMarkets={discoveryGuardBlockedNewMarkets} Reason={degradedReason}");
+                    }
+                    else
+                    {
+                        discoveredMarkets = new List<Market>();
+                        lastDiscoverySummary = attemptSummary;
+                        scannerPausedByDiscoveryGuard = true;
+                        discoveryGuardSkippedCycles++;
+                        Console.WriteLine($"[DISCOVERY_GUARD] Action=PauseScanner Reason=DiscoveryUnavailable PartialMarkets={discoveredCandidateMarkets.Count}");
+                    }
                 }
+                UpdateDiscoveryGuardRuntimeState();
+                if (discoveryHealth.Degraded)
+                {
+                    var postDegradationHealth = RuntimeHealthSnapshot.From(state, options);
+                    Console.WriteLine(RuntimeHealthTrendTracker.ToSoakStatusLogLine(postDegradationHealth, RuntimeHealthTrendTracker.Current(options.RuntimeHealth), options, state));
+                }
+            }
+
+            if (scannerPausedByDiscoveryGuard && discoveredMarkets.Count == 0)
+            {
+                UpdateDiscoveryGuardRuntimeState();
+                state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);
+                await Task.Delay(options.ScanIntervalMs, stoppingToken);
+                continue;
             }
 
             var configuredPoolLimit = options.UseAllDiscoveredMarkets ? options.MaxMarketsInPool : (options.MaxMarketsInPool > 0 ? options.MaxMarketsInPool : options.MarketScanLimit);
@@ -1778,6 +1866,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             }
             monitor.FlushCsv();
             SetScannerStage("ExportWrite", "SyncRuntimeState");
+            UpdateDiscoveryGuardRuntimeState();
             SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, filtered.Count, started, null, scanStats, filtering, lastDiscoverySummary, rollingOffset, options.ScanBatchSize, discoveredMarkets.Count, discoveryStartedAt, discoveryCompletedAt, emptyCycles, options.MarketScanLimit, effectiveMarketLimit, options.MaxMarketsToDiscover, options, poolLimitReason, multiOutcomeReport, contentRootPath);
             if (options.Caches.ClearOrderbookCacheAfterScan) orderbookService.ClearExpiredCache();
             state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);

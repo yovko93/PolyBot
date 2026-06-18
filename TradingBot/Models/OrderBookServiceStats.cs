@@ -72,5 +72,7 @@ public record OrderBookServiceStats(
     long BatchBookNormalRequestsBeforeBreakerOpen = 0,
     long BatchBookNormalBadRequestsBeforeBreakerOpen = 0,
     long BatchBookNormalRequestsAfterBreakerOpen = 0,
-    long BatchBookNormalBadRequestsAfterBreakerOpen = 0
+    long BatchBookNormalBadRequestsAfterBreakerOpen = 0,
+    long QuarantinedMarketsReintroducedBlocked = 0,
+    long QuarantinedTokensReintroducedBlocked = 0
 );
