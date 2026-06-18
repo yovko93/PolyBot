@@ -40,11 +40,11 @@ public class MarketDataService
         _http = http;
     }
 
-    public async Task<(List<Market> Markets, MarketDiscoverySummary Summary)> GetMarketsAsync(TradingBotOptions options, CancellationToken ct = default)
+    public async Task<(List<Market> Markets, MarketDiscoverySummary Summary)> GetMarketsAsync(TradingBotOptions options, CancellationToken ct = default, int? effectiveBackoffSeconds = null)
     {
         var allMarkets = new List<Market>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var pageSize = options.DiscoveryPageSize;
+        var pageSize = Math.Clamp(options.DiscoveryPageSize, 1, Math.Max(1, options.MarketDiscovery.MaxPageSize));
         var cap = Math.Max(1, options.AbsoluteMaxMarketsSafetyCap);
         var softLimit = options.MaxMarketsToDiscover;
         var pages = 0;
@@ -67,6 +67,16 @@ public class MarketDataService
         string? lastError = null;
         var expectedMaxPages = Math.Max(1, (int)Math.Ceiling(cap / (double)Math.Max(1, pageSize)));
         var safetyCapReached = false;
+        var endpointName = "PolymarketGammaMarkets";
+        var endpoint = "gamma-api.polymarket.com/markets";
+        var activeParam = "true";
+        var closedParam = "false";
+        var archivedParam = "false";
+        var acceptingOrdersParam = "true";
+        var orderParam = "volume24hr";
+        var ascendingParam = "false";
+        var cursorParam = "<none>";
+        Console.WriteLine($"[DISCOVERY_PAGINATION_CONFIG] Limit={pageSize} MaxPages={expectedMaxPages} OffsetMode=offset Endpoint={endpoint}");
         for (var offset = 0; offset < cap;)
         {
             if (ct.IsCancellationRequested) break;
@@ -74,14 +84,17 @@ public class MarketDataService
 
             var url =
                 "https://gamma-api.polymarket.com/markets" +
-                "?active=true" +
-                "&closed=false" +
-                "&archived=false" +
-                "&accepting_orders=true" +
-                "&order=volume24hr" +
-                "&ascending=false" +
+                $"?active={activeParam}" +
+                $"&closed={closedParam}" +
+                $"&archived={archivedParam}" +
+                $"&accepting_orders={acceptingOrdersParam}" +
+                $"&order={orderParam}" +
+                $"&ascending={ascendingParam}" +
                 $"&limit={pageSize}" +
                 $"&offset={offset}";
+
+            if (options.MarketDiscovery.DiagnosticsOnly)
+                Console.WriteLine($"[DISCOVERY_REQUEST] Page={pages + 1} Cursor={cursorParam} Offset={offset} Limit={pageSize} EndpointName={endpointName} Endpoint={endpoint} ActualLimitParam={pageSize} ActualOffsetParam={offset} ActualCursorParam={cursorParam} ActualClosedParam={closedParam} ActualActiveParam={activeParam} ActualArchivedParam={archivedParam} ActualOrderParam={orderParam} QueryShape=active,closed,archived,accepting_orders,order,ascending,limit,offset");
 
             List<Market> batch;
             batch = new List<Market>();
@@ -97,9 +110,9 @@ public class MarketDataService
                     {
                         lastError = $"Response status code does not indicate success: {(int)response.StatusCode}";
                         stoppedReason = "RequestError";
-                        Console.WriteLine($"[DISCOVERY_REQUEST_FAILED] Page={pages + 1} Cursor=<none> Offset={offset} StatusCode={(int)response.StatusCode} RetryBackoffSeconds={Math.Max(1, options.MarketDiscovery.RetryBackoffMs / 1000)} Action=BackoffAndRetryFullDiscovery Endpoint=gamma-api.polymarket.com/markets Limit={pageSize}");
-                        if (retry < options.MarketDiscovery.MaxRetriesPerPage) await Task.Delay(options.MarketDiscovery.RetryBackoffMs * (retry + 1), ct);
-                        continue;
+                        Console.WriteLine($"[DISCOVERY_REQUEST_FAILED] Page={pages + 1} Cursor={cursorParam} Offset={offset} Limit={pageSize} StatusCode={(int)response.StatusCode} EffectiveBackoffSeconds={Math.Max(1, effectiveBackoffSeconds ?? options.MarketDiscovery.RetryBackoffMs / 1000)} EndpointName={endpointName} Endpoint={endpoint} ActualLimitParam={pageSize} ActualOffsetParam={offset} ActualCursorParam={cursorParam} ActualClosedParam={closedParam} ActualActiveParam={activeParam} ActualArchivedParam={archivedParam} ActualOrderParam={orderParam} QueryShape=active,closed,archived,accepting_orders,order,ascending,limit,offset Action=BackoffAndRetryFullDiscovery");
+                        loaded = false;
+                        break;
                     }
                     var json = await response.Content.ReadAsStringAsync(timeoutCts.Token);
                     batch = JsonConvert.DeserializeObject<List<Market>>(json) ?? new List<Market>();
@@ -126,11 +139,9 @@ public class MarketDataService
 
             pages++;
             rawLoadedTotal += batch.Count;
-            if (options.LogDiscoveryPages)
+            if (options.LogDiscoveryPages || options.MarketDiscovery.DiagnosticsOnly)
                 Console.WriteLine($"[DISCOVERY] Page={pages} Limit={pageSize} Offset={offset} Cursor=<none> Count={batch.Count} RawTotal={rawLoadedTotal} UniqueTotal={seen.Count} ActiveTotal={allMarkets.Count} InactiveSkipped={skippedClosed + skippedArchived + skippedInactive + skippedMissingTokenIds + skippedMissingOutcomes + skippedPastEndDate + skippedInvalidShape + skippedUnknownStatus}");
             if (batch.Count == 0) { discoveryCompleted = true; break; }
-            var effectivePageSize = Math.Min(pageSize, batch.Count);
-
             foreach (var market in batch)
             {
                 if (market is null) continue;
@@ -175,7 +186,7 @@ public class MarketDataService
             }
 
             if (allMarkets.Count >= cap) { safetyCapReached = true; break; }
-            offset += Math.Max(1, effectivePageSize);
+            offset += Math.Max(1, pageSize);
         }
         if (!discoveryCompleted && string.IsNullOrWhiteSpace(stoppedReason) && (safetyCapReached || pages >= expectedMaxPages || rawLoadedTotal >= cap))
         {

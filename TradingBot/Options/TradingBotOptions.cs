@@ -232,6 +232,9 @@ public class MarketDiscoveryOptions
     public bool EnablePersistedHealthySnapshot { get; set; } = true;
     public int PersistedSnapshotTtlMinutes { get; set; } = 360;
     public int MinPersistedSnapshotActiveMarkets { get; set; } = 8000;
+    public string PersistedSnapshotPath { get; set; } = "exports/discovery-last-healthy-snapshot.json";
+    public int MaxPageSize { get; set; } = 100;
+    public bool DiagnosticsOnly { get; set; } = false;
 }
 
 
