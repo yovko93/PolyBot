@@ -455,6 +455,12 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var discoveryGuardSkippedCycles = 0;
     var discoveryGuardBlockedNewMarkets = 0;
     var discoveryLastFailureReason = string.Empty;
+    var discoveryLastFailureKind = "Unknown";
+    var discoveryMode = "Blocked";
+    var discoveryFallbackAttempted = false;
+    var discoveryFallbackReason = "None";
+    var discoveryFallbackSucceeded = false;
+    var discoveryFallbackActiveMarkets = 0;
     var discoveryBootstrapRetryCount = 0;
     DateTime? discoveryBootstrapLastAttemptUtc = null;
     DateTime? discoveryBootstrapNextRetryUtc = null;
@@ -611,7 +617,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             discoveryUsingLastHealthySnapshot,
             ageSeconds,
             discoveryPartialAttemptCount,
-            discoveryLastFailureReason,
+            ($"{discoveryLastFailureReason};DiscoveryLastFailureKind={discoveryLastFailureKind};DiscoveryMode={discoveryMode};DiscoveryFallbackAttempted={discoveryFallbackAttempted.ToString().ToLowerInvariant()};DiscoveryFallbackReason={discoveryFallbackReason};DiscoveryFallbackSucceeded={discoveryFallbackSucceeded.ToString().ToLowerInvariant()};DiscoveryFallbackActiveMarkets={discoveryFallbackActiveMarkets}"),
             scannerPausedByDiscoveryGuard,
             discoveryGuardSkippedCycles,
             discoveryUsingLastHealthySnapshot,
@@ -626,7 +632,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             discoveryBootstrapLastAttemptUtc: discoveryBootstrapLastAttemptUtc,
             discoveryBootstrapNextRetryUtc: discoveryBootstrapNextRetryUtc,
             discoveryBootstrapBackoffSeconds: discoveryBootstrapBackoffSeconds,
-            discoveryBootstrapFailureReason: discoveryLastFailureReason,
+            discoveryBootstrapFailureReason: $"{discoveryLastFailureReason};DiscoveryLastFailureKind={discoveryLastFailureKind};DiscoveryMode={discoveryMode}",
             discoveryRetryBackoffSeconds: discoveryBootstrapBackoffSeconds,
             discoveryRetriesSuppressedByBackoff: discoveryRetriesSuppressedByBackoff,
             discoveryPersistedSnapshotLoaded: discoveryPersistedSnapshotLoaded,
@@ -738,6 +744,12 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     lastHealthyDiscoverySummary = attemptSummary;
                     lastHealthyDiscoveryAt = lastDiscoveryAt;
                     discoveryLastFailureReason = string.Empty;
+                    discoveryLastFailureKind = "Unknown";
+                    discoveryMode = attemptSummary.DiscoveryMode;
+                    discoveryFallbackAttempted = attemptSummary.DiscoveryFallbackAttempted;
+                    discoveryFallbackReason = attemptSummary.DiscoveryFallbackReason;
+                    discoveryFallbackSucceeded = attemptSummary.DiscoveryFallbackSucceeded;
+                    discoveryFallbackActiveMarkets = attemptSummary.DiscoveryFallbackActiveMarkets;
                     lastRecoveryUtc = DateTime.UtcNow;
                     discoveryBootstrapBackoffSeconds = 15;
                     discoveryBootstrapNextRetryUtc = null;
@@ -748,6 +760,12 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     discoveryPartialAttemptCount++;
                     discoveryBootstrapRetryCount++;
                     discoveryLastFailureReason = string.IsNullOrWhiteSpace(attemptSummary.LastDiscoveryError) ? discoveryHealth.Reason : attemptSummary.LastDiscoveryError!;
+                    discoveryLastFailureKind = attemptSummary.DiscoveryLastFailureKind;
+                    discoveryMode = attemptSummary.DiscoveryMode;
+                    discoveryFallbackAttempted = attemptSummary.DiscoveryFallbackAttempted;
+                    discoveryFallbackReason = attemptSummary.DiscoveryFallbackReason;
+                    discoveryFallbackSucceeded = attemptSummary.DiscoveryFallbackSucceeded;
+                    discoveryFallbackActiveMarkets = attemptSummary.DiscoveryFallbackActiveMarkets;
                     lastDegradationUtc = DateTime.UtcNow;
                     var degradedReason = attemptSummary.ActiveMarketsAvailable < options.MarketDiscovery.MinHealthyActiveMarkets
                         ? (string.IsNullOrWhiteSpace(discoveryHealth.Reason) ? "ActiveBelowExpectedMin" : discoveryHealth.Reason.Contains("OperationCanceled", StringComparison.OrdinalIgnoreCase) ? $"{discoveryHealth.Reason};ActiveBelowExpectedMin" : "ActiveBelowExpectedMin")
