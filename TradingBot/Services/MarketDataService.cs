@@ -92,7 +92,16 @@ public class MarketDataService
                 {
                     using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     timeoutCts.CancelAfter(TimeSpan.FromMilliseconds(options.MarketDiscovery.RequestTimeoutMs));
-                    var json = await _http.GetStringAsync(url, timeoutCts.Token);
+                    using var response = await _http.GetAsync(url, timeoutCts.Token);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        lastError = $"Response status code does not indicate success: {(int)response.StatusCode}";
+                        stoppedReason = "RequestError";
+                        Console.WriteLine($"[DISCOVERY_REQUEST_FAILED] Page={pages + 1} Cursor=<none> Offset={offset} StatusCode={(int)response.StatusCode} RetryBackoffSeconds={Math.Max(1, options.MarketDiscovery.RetryBackoffMs / 1000)} Action=BackoffAndRetryFullDiscovery Endpoint=gamma-api.polymarket.com/markets Limit={pageSize}");
+                        if (retry < options.MarketDiscovery.MaxRetriesPerPage) await Task.Delay(options.MarketDiscovery.RetryBackoffMs * (retry + 1), ct);
+                        continue;
+                    }
+                    var json = await response.Content.ReadAsStringAsync(timeoutCts.Token);
                     batch = JsonConvert.DeserializeObject<List<Market>>(json) ?? new List<Market>();
                     loaded = true;
                     break;

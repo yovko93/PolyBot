@@ -83,6 +83,22 @@ public class BotRuntimeState
     private int _orderbookRecoveredAfterDegradation = 1;
     private DateTime? _lastDegradationUtc;
     private DateTime? _lastRecoveryUtc;
+    private int _discoveryBootstrapHealthy;
+    private int _discoveryBootstrapRetryCount;
+    private DateTime? _discoveryBootstrapLastAttemptUtc;
+    private DateTime? _discoveryBootstrapNextRetryUtc;
+    private int _discoveryBootstrapBackoffSeconds;
+    private string _discoveryBootstrapFailureReason = string.Empty;
+    private int _discoveryRetryBackoffSeconds;
+    private int _discoveryRetriesSuppressedByBackoff;
+    private int _discoveryPersistedSnapshotLoaded;
+    private int _discoveryPersistedSnapshotAgeSeconds;
+    private int _discoveryPersistedSnapshotActiveMarkets;
+    private int _allowlistEvaluationSkipped;
+    private string _allowlistEvaluationSkippedReason = string.Empty;
+    private int _allowlistClassificationBlockedByDiscovery;
+    private string _soakReadiness = "Ready";
+    private string _soakReadinessReason = "None";
     private QuietLogGateStats _quietLogGateStats = new(0, 0, new Dictionary<string, long>(), new Dictionary<string, long>(), 0, 0);
     private OrderBookServiceStats _orderBookServiceStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0);
     private int _paperPretradeRejects;
@@ -178,6 +194,22 @@ public class BotRuntimeState
     public bool OrderbookRecoveredAfterDegradation => Volatile.Read(ref _orderbookRecoveredAfterDegradation) == 1;
     public DateTime? LastDegradationUtc => _lastDegradationUtc;
     public DateTime? LastRecoveryUtc => _lastRecoveryUtc;
+    public bool DiscoveryBootstrapHealthy => Volatile.Read(ref _discoveryBootstrapHealthy) == 1;
+    public int DiscoveryBootstrapRetryCount => Volatile.Read(ref _discoveryBootstrapRetryCount);
+    public DateTime? DiscoveryBootstrapLastAttemptUtc => _discoveryBootstrapLastAttemptUtc;
+    public DateTime? DiscoveryBootstrapNextRetryUtc => _discoveryBootstrapNextRetryUtc;
+    public int DiscoveryBootstrapBackoffSeconds => Volatile.Read(ref _discoveryBootstrapBackoffSeconds);
+    public string DiscoveryBootstrapFailureReason => _discoveryBootstrapFailureReason;
+    public int DiscoveryRetryBackoffSeconds => Volatile.Read(ref _discoveryRetryBackoffSeconds);
+    public int DiscoveryRetriesSuppressedByBackoff => Volatile.Read(ref _discoveryRetriesSuppressedByBackoff);
+    public bool DiscoveryPersistedSnapshotLoaded => Volatile.Read(ref _discoveryPersistedSnapshotLoaded) == 1;
+    public int DiscoveryPersistedSnapshotAgeSeconds => Volatile.Read(ref _discoveryPersistedSnapshotAgeSeconds);
+    public int DiscoveryPersistedSnapshotActiveMarkets => Volatile.Read(ref _discoveryPersistedSnapshotActiveMarkets);
+    public bool AllowlistEvaluationSkipped => Volatile.Read(ref _allowlistEvaluationSkipped) == 1;
+    public string AllowlistEvaluationSkippedReason => _allowlistEvaluationSkippedReason;
+    public bool AllowlistClassificationBlockedByDiscovery => Volatile.Read(ref _allowlistClassificationBlockedByDiscovery) == 1;
+    public string SoakReadiness => _soakReadiness;
+    public string SoakReadinessReason => _soakReadinessReason;
     public QuietLogGateStats QuietLogGateStats => _quietLogGateStats;
     public OrderBookServiceStats OrderBookServiceStats => _orderBookServiceStats;
     public string ProcessRunId => ProcessRunContext.ProcessRunId;
@@ -313,7 +345,7 @@ public class BotRuntimeState
         if (exportQueueCount is int eq) Interlocked.Exchange(ref _exportQueueCount, eq);
         if (patchPreviewItemsCount is int pp) Interlocked.Exchange(ref _patchPreviewItemsCount, pp);
     }
-    public void SetDiscoveryGuardState(bool discoveryHealthy, bool discoveryStable, bool usingLastHealthySnapshot, int lastHealthySnapshotAgeSeconds, int partialAttemptCount, string? lastFailureReason, bool scannerPausedByDiscoveryGuard, int discoveryGuardSkippedCycles, bool discoveryGuardUsingLastHealthySnapshot, int discoveryGuardBlockedNewMarkets, bool longRunStable, string? longRunBlockingReason, bool orderbookRecoveredAfterDegradation, DateTime? lastDegradationUtc, DateTime? lastRecoveryUtc)
+    public void SetDiscoveryGuardState(bool discoveryHealthy, bool discoveryStable, bool usingLastHealthySnapshot, int lastHealthySnapshotAgeSeconds, int partialAttemptCount, string? lastFailureReason, bool scannerPausedByDiscoveryGuard, int discoveryGuardSkippedCycles, bool discoveryGuardUsingLastHealthySnapshot, int discoveryGuardBlockedNewMarkets, bool longRunStable, string? longRunBlockingReason, bool orderbookRecoveredAfterDegradation, DateTime? lastDegradationUtc, DateTime? lastRecoveryUtc, bool discoveryBootstrapHealthy = false, int discoveryBootstrapRetryCount = 0, DateTime? discoveryBootstrapLastAttemptUtc = null, DateTime? discoveryBootstrapNextRetryUtc = null, int discoveryBootstrapBackoffSeconds = 0, string? discoveryBootstrapFailureReason = null, int discoveryRetryBackoffSeconds = 0, int discoveryRetriesSuppressedByBackoff = 0, bool discoveryPersistedSnapshotLoaded = false, int discoveryPersistedSnapshotAgeSeconds = 0, int discoveryPersistedSnapshotActiveMarkets = 0, bool allowlistEvaluationSkipped = false, string? allowlistEvaluationSkippedReason = null, bool allowlistClassificationBlockedByDiscovery = false, string? soakReadiness = null, string? soakReadinessReason = null)
     {
         Interlocked.Exchange(ref _discoveryHealthy, discoveryHealthy ? 1 : 0);
         Interlocked.Exchange(ref _discoveryStable, discoveryStable ? 1 : 0);
@@ -330,6 +362,22 @@ public class BotRuntimeState
         Interlocked.Exchange(ref _orderbookRecoveredAfterDegradation, orderbookRecoveredAfterDegradation ? 1 : 0);
         _lastDegradationUtc = lastDegradationUtc;
         _lastRecoveryUtc = lastRecoveryUtc;
+        Interlocked.Exchange(ref _discoveryBootstrapHealthy, discoveryBootstrapHealthy ? 1 : 0);
+        Interlocked.Exchange(ref _discoveryBootstrapRetryCount, Math.Max(0, discoveryBootstrapRetryCount));
+        _discoveryBootstrapLastAttemptUtc = discoveryBootstrapLastAttemptUtc;
+        _discoveryBootstrapNextRetryUtc = discoveryBootstrapNextRetryUtc;
+        Interlocked.Exchange(ref _discoveryBootstrapBackoffSeconds, Math.Max(0, discoveryBootstrapBackoffSeconds));
+        _discoveryBootstrapFailureReason = discoveryBootstrapFailureReason ?? string.Empty;
+        Interlocked.Exchange(ref _discoveryRetryBackoffSeconds, Math.Max(0, discoveryRetryBackoffSeconds));
+        Interlocked.Exchange(ref _discoveryRetriesSuppressedByBackoff, Math.Max(0, discoveryRetriesSuppressedByBackoff));
+        Interlocked.Exchange(ref _discoveryPersistedSnapshotLoaded, discoveryPersistedSnapshotLoaded ? 1 : 0);
+        Interlocked.Exchange(ref _discoveryPersistedSnapshotAgeSeconds, Math.Max(0, discoveryPersistedSnapshotAgeSeconds));
+        Interlocked.Exchange(ref _discoveryPersistedSnapshotActiveMarkets, Math.Max(0, discoveryPersistedSnapshotActiveMarkets));
+        Interlocked.Exchange(ref _allowlistEvaluationSkipped, allowlistEvaluationSkipped ? 1 : 0);
+        _allowlistEvaluationSkippedReason = allowlistEvaluationSkippedReason ?? string.Empty;
+        Interlocked.Exchange(ref _allowlistClassificationBlockedByDiscovery, allowlistClassificationBlockedByDiscovery ? 1 : 0);
+        _soakReadiness = soakReadiness ?? "Ready";
+        _soakReadinessReason = soakReadinessReason ?? "None";
     }
 
     public void SetAllowlistRefreshCounters(int needsRefresh, int reviewOnly, int mismatch, int refreshPreviewCandidates, int highConfidence, int finalNoCandidate = 0, int finalSemanticConflict = 0, int finalLowConfidence = 0, int finalUnstable = 0, int finalPreviewOnly = 0, int finalLockedManualReview = 0, int actionExplainedSuppressed = 0, int unstableGroups = 0, int actionFlipFlops = 0, int healthy = 0, int monitoringOnly = 0, int needsPricingPrune = 0, int brokenConfig = 0, int disabled = 0, int ignored = 0, int classificationTotal = 0, bool classificationValid = true)

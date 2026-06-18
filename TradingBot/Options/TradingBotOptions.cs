@@ -90,6 +90,7 @@ public class TradingBotOptions
     public RuntimeStateOptions RuntimeState { get; set; } = new();
     public SingleMarketArbOptions SingleMarketArb { get; set; } = new();
     public MarketDiscoveryOptions MarketDiscovery { get; set; } = new();
+    public MarketDiscoveryOptions Discovery { get => MarketDiscovery; set => MarketDiscovery = value ?? new(); }
     public SignalROptions SignalR { get; set; } = new();
     public RuntimeHealthOptions RuntimeHealth { get; set; } = new();
     public RuntimeMemoryOptions RuntimeMemory { get; set; } = new();
@@ -228,7 +229,11 @@ public class MarketDiscoveryOptions
     public bool ContinueWithPartialDiscoveryOnError { get; set; } = true;
     public bool TreatSafetyCapAsWarning { get; set; } = false;
     public int MinHealthyActiveMarkets { get; set; } = 8000;
+    public bool EnablePersistedHealthySnapshot { get; set; } = true;
+    public int PersistedSnapshotTtlMinutes { get; set; } = 360;
+    public int MinPersistedSnapshotActiveMarkets { get; set; } = 8000;
 }
+
 
 public class DiagnosticsOptions
 {
