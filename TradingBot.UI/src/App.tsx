@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Area, AreaChart, CartesianGrid, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useBotData } from './hooks/useBotData';
 
 const money = (n: number) => `$${(n ?? 0).toFixed(2)}`;
@@ -15,11 +15,11 @@ const normalDiagnosticPatterns = [
   'discovery_health', 'discovery health', 'diagnostics snapshot',
   'scanner lifecycle', 'scan complete', 'scan started', 'normal diagnostics'
 ];
-const seriousAlertPatterns = [
-  'rest fetch failed', 'signalr disconnected', 'scanner fault', 'unhandled exception',
-  'fatal backend error', 'circuit breaker opened', 'memory critical',
-  'live trading accidentally enabled', 'signing attempts', 'paper execution error',
-  'data corruption', 'counter mismatch'
+const warningAlertPatterns = ['rest fetch failed', 'signalr disconnected', 'polling fallback', 'no backend', 'disconnected'];
+const fatalAlertPatterns = [
+  'scanner fault', 'unhandled exception', 'fatal backend error', 'circuit breaker opened',
+  'memory critical', 'live trading accidentally enabled', 'signing attempts',
+  'paper execution error', 'paper execution failure', 'data corruption', 'counter mismatch'
 ];
 
 function shortMessage(message: string) {
@@ -32,14 +32,14 @@ function classifyAlert(log: any) {
   const lower = raw.toLowerCase();
   if (normalDiagnosticPatterns.some((p) => lower.includes(p))) return null;
   if (lower.includes('scan') && !lower.includes('scanner fault')) return null;
-  const matched = seriousAlertPatterns.some((p) => lower.includes(p));
-  const fatal = lower.includes('fatal') || lower.includes('unhandled exception') || lower.includes('data corruption') || lower.includes('counter mismatch');
+  const fatal = fatalAlertPatterns.some((p) => lower.includes(p));
+  const warning = warningAlertPatterns.some((p) => lower.includes(p));
   const error = log.level === 'error' && !lower.includes('status') && !lower.includes('health');
-  if (!matched && !fatal && !error) return null;
+  if (!fatal && !warning && !error) return null;
   return {
     id: log.id,
     timestamp: log.timestamp,
-    severity: fatal ? 'FATAL' : error ? 'ERROR' : 'WARNING',
+    severity: fatal ? 'FATAL' : error && !warning ? 'ERROR' : 'WARNING',
     source: String(log.source ?? 'runtime').replace(/^console$/i, 'Runtime'),
     message: shortMessage(String(log.message ?? 'Runtime alert'))
   };
@@ -90,22 +90,30 @@ export default function App() {
   const equity = d.status?.equity ?? paper.equity ?? 0;
   const cash = d.status?.cash ?? paper.cash ?? 0;
   const pnl = d.status?.realizedPnl ?? paper.realizedPnl ?? 0;
+  const equityValues = d.equity.map((p: any) => Number(p.equity)).filter(Number.isFinite);
+  const chartHasData = equityValues.length > 0;
+  const minEquity = chartHasData ? Math.min(...equityValues) : 0;
+  const maxEquity = chartHasData ? Math.max(...equityValues) : 0;
+  const flatEquity = chartHasData && minEquity === maxEquity;
+  const singleEquityPoint = equityValues.length === 1;
+  const domainPadding = flatEquity ? Math.max(5, Math.abs(minEquity) * 0.01) : Math.max(1, (maxEquity - minEquity) * 0.12);
+  const chartDomain: [number, number] = [minEquity - domainPadding, maxEquity + domainPadding];
 
   return <div className="terminal-root min-h-screen terminal-font">
     <header className="status-strip" aria-label="Trading bot status">
       <div className="brand-chip">POLYBOT</div>
-      <Metric label="Backend" value={d.connectionStatus} tone={backendConnected ? 'green' : 'red'} />
+      <Metric label="Backend" value={d.connectionStatus} tone={backendConnected ? 'green' : 'yellow'} />
       <Metric label="Mode" value={d.status?.mode ?? 'PaperOnly'} tone="cyan" />
       <Metric label="Trading" value="Paper / Live off" tone="green" />
       <Metric label="Discovery" value={backendConnected ? (scanner.poolLimitReason ?? (d.controls?.isPaused ? 'Paused' : 'Scanning')) : 'Waiting'} tone={backendConnected ? (d.controls?.isPaused ? 'yellow' : 'cyan') : 'yellow'} />
-      <Metric label="Readiness" value={backendConnected ? (d.controls?.isPaused ? 'Paused' : 'Ready') : 'No backend'} tone={backendConnected ? (d.controls?.isPaused ? 'yellow' : 'green') : 'red'} />
+      <Metric label="Readiness" value={backendConnected ? (d.controls?.isPaused ? 'Paused' : 'Ready') : 'No backend'} tone={backendConnected ? (d.controls?.isPaused ? 'yellow' : 'green') : 'yellow'} />
       <Metric label="P/L" value={money(pnl)} tone={pnl < 0 ? 'red' : 'green'} />
     </header>
 
     <main className="clean-dashboard">
       <Panel title="P/L Vector" active>
         <div className="pl-summary"><BigStat label="Equity" value={money(equity)} tone="green" /><BigStat label="Cash" value={money(cash)} tone="green" /><BigStat label="Realized P/L" value={money(pnl)} tone={pnl < 0 ? 'red' : 'green'} /><BigStat label="Heartbeat" value={time(d.lastHeartbeat)} tone="muted" /><BigStat label="Locked" value={money(d.status?.lockedCapital ?? paper.locked ?? 0)} tone="yellow" /><BigStat label="Open Positions" value={openPositions.length} tone="cyan" /></div>
-        <div className={`pl-chart ${d.equity.length ? 'has-data' : 'is-empty'}`}>{d.equity.length ? <ResponsiveContainer><AreaChart data={d.equity} margin={{ top: 14, right: 18, left: 4, bottom: 6 }}><defs><linearGradient id="plGlow" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#35ff9c" stopOpacity={0.42} /><stop offset="100%" stopColor="#35ff9c" stopOpacity={0.02} /></linearGradient></defs><CartesianGrid stroke="rgba(53,255,156,.08)" vertical={false} /><XAxis dataKey="timestamp" hide /><YAxis tick={{ fill: '#6ee7b7', fontSize: 10 }} width={58} /><Tooltip contentStyle={{ background: '#050807', border: '1px solid rgba(53,255,156,.35)', color: '#d9fff1' }} /><Area type="monotone" dataKey="equity" stroke="#35ff9c" strokeWidth={3} fill="url(#plGlow)" /></AreaChart></ResponsiveContainer> : <div className="chart-empty"><span>Waiting for portfolio/equity updates</span></div>}</div>
+        <div className={`pl-chart ${chartHasData ? 'has-data' : 'is-empty'}`}>{chartHasData ? <ResponsiveContainer><AreaChart data={d.equity} margin={{ top: 14, right: 18, left: 4, bottom: 6 }}><defs><linearGradient id="plGlow" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#35ff9c" stopOpacity={0.18} /><stop offset="100%" stopColor="#35ff9c" stopOpacity={0.01} /></linearGradient></defs><CartesianGrid stroke="rgba(53,255,156,.08)" vertical={false} /><XAxis dataKey="timestamp" hide /><YAxis domain={chartDomain} tick={{ fill: '#6ee7b7', fontSize: 10 }} width={58} /><Tooltip contentStyle={{ background: '#050807', border: '1px solid rgba(53,255,156,.35)', color: '#d9fff1' }} />{flatEquity ? <><ReferenceLine y={minEquity} stroke="#35ff9c" strokeWidth={2} strokeDasharray={singleEquityPoint ? '4 4' : undefined} />{singleEquityPoint && <ReferenceDot x={(d.equity[0] as any).timestamp} y={minEquity} r={4} fill="#35ff9c" stroke="#050807" />}</> : <Area type="monotone" dataKey="equity" stroke="#35ff9c" strokeWidth={3} fill="url(#plGlow)" />}</AreaChart></ResponsiveContainer> : <div className="chart-empty"><span>Waiting for portfolio/equity updates</span></div>}</div>
       </Panel>
 
       <section className="operations-grid">
