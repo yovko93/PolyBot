@@ -19,13 +19,34 @@ export default function App() {
 
   const fatalLogs = useMemo(() => d.logs.filter((l: any) => {
     const m = `${l.level ?? ''} ${l.source ?? ''} ${l.message ?? ''}`.toLowerCase();
-    return l.level === 'error' || m.includes('fatal') || m.includes('critical') || m.includes('exception') || m.includes('failed');
+    return l.level === 'error' || m.includes('fatal') || m.includes('critical') || m.includes('exception');
   }).slice(0, 20), [d.logs]);
+  const connectionAlert = d.connectionStatus !== 'connected' ? { severity: 'Warning', source: 'Connection', message: `Backend connection is ${d.connectionStatus}` } : null;
   const openPositions = useMemo(() => (d.positions ?? []).filter((p: any) => (p.status ?? '').toUpperCase() === 'OPEN'), [d.positions]);
 
   const column = createColumnHelper<any>();
-  const tradeTable = useReactTable({ data: d.trades.slice(0, 80), columns: ['timestamp', 'strategy', 'market', 'status'].map((k) => column.accessor(k, { header: k.toUpperCase(), cell: (i) => text(i.getValue()) })), getCoreRowModel: getCoreRowModel() });
-  const positionTable = useReactTable({ data: openPositions, columns: ['group', 'strategy', 'cost', 'expectedProfit', 'realizedProfit', 'lockedCapital', 'openedAt', 'status'].map((k) => column.accessor(k, { header: k.toUpperCase(), cell: (i) => text(i.getValue()) })), getCoreRowModel: getCoreRowModel() });
+  const tradeTable = useReactTable({
+    data: d.trades.slice(0, 60),
+    columns: [
+      column.accessor('timestamp', { header: 'TIME', cell: (i) => time(i.getValue()) }),
+      column.accessor('strategy', { header: 'STRATEGY', cell: (i) => text(i.getValue()) }),
+      column.accessor('market', { header: 'MARKET', cell: (i) => text(i.getValue()) }),
+      column.accessor('status', { header: 'STATUS', cell: (i) => text(i.getValue()) }),
+      column.accessor((r) => r.pnl ?? r.realizedProfit ?? r.expectedProfit ?? '-', { id: 'pnl', header: 'P/L', cell: (i) => text(i.getValue()) })
+    ],
+    getCoreRowModel: getCoreRowModel()
+  });
+  const positionTable = useReactTable({
+    data: openPositions,
+    columns: [
+      column.accessor((r) => r.market ?? r.group ?? r.groupKey ?? '-', { id: 'market', header: 'MARKET', cell: (i) => text(i.getValue()) }),
+      column.accessor('strategy', { header: 'STRATEGY', cell: (i) => text(i.getValue()) }),
+      column.accessor((r) => r.quantity ?? r.qty ?? r.plannedQty ?? '-', { id: 'qty', header: 'QTY', cell: (i) => text(i.getValue()) }),
+      column.accessor((r) => r.entryPrice ?? r.cost ?? '-', { id: 'entry', header: 'ENTRY', cell: (i) => text(i.getValue()) }),
+      column.accessor((r) => r.unrealizedProfit ?? r.realizedProfit ?? r.status ?? '-', { id: 'unrealized', header: 'UNREALIZED / STATUS', cell: (i) => text(i.getValue()) })
+    ],
+    getCoreRowModel: getCoreRowModel()
+  });
 
   const scanner = d.scanner ?? {};
   const paper = d.paperAccount ?? {};
@@ -41,25 +62,25 @@ export default function App() {
       <Metric label="Trading" value="Paper / Live off" tone="green" />
       <Metric label="Discovery" value={scanner.poolLimitReason ?? (d.controls?.isPaused ? 'Paused' : 'Scanning')} tone={d.controls?.isPaused ? 'yellow' : 'cyan'} />
       <Metric label="Readiness" value={d.controls?.isPaused ? 'Paused' : 'Ready'} tone={d.controls?.isPaused ? 'yellow' : 'green'} />
-      <Metric label="Equity" value={money(equity)} tone="green" />
-      <Metric label="Cash" value={money(cash)} tone="green" />
       <Metric label="P/L" value={money(pnl)} tone={pnl < 0 ? 'red' : 'green'} />
-      <Metric label="Heartbeat" value={time(d.lastHeartbeat)} tone="muted" />
     </header>
 
     <main className="clean-dashboard">
       <Panel title="P/L Vector" active>
-        <div className="pl-summary"><BigStat label="Equity" value={money(equity)} tone="green" /><BigStat label="Realized P/L" value={money(pnl)} tone={pnl < 0 ? 'red' : 'green'} /><BigStat label="Locked" value={money(d.status?.lockedCapital ?? paper.locked ?? 0)} tone="yellow" /><BigStat label="Open Positions" value={openPositions.length} tone="cyan" /></div>
-        <div className="pl-chart">{d.equity.length ? <ResponsiveContainer><AreaChart data={d.equity} margin={{ top: 14, right: 18, left: 4, bottom: 6 }}><defs><linearGradient id="plGlow" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#35ff9c" stopOpacity={0.42} /><stop offset="100%" stopColor="#35ff9c" stopOpacity={0.02} /></linearGradient></defs><CartesianGrid stroke="rgba(53,255,156,.08)" vertical={false} /><XAxis dataKey="timestamp" hide /><YAxis tick={{ fill: '#6ee7b7', fontSize: 10 }} width={58} /><Tooltip contentStyle={{ background: '#050807', border: '1px solid rgba(53,255,156,.35)', color: '#d9fff1' }} /><Area type="monotone" dataKey="equity" stroke="#35ff9c" strokeWidth={3} fill="url(#plGlow)" /></AreaChart></ResponsiveContainer> : <div className="chart-empty"><span>No P/L points yet</span><small>Waiting for portfolio/equity updates</small></div>}</div>
+        <div className="pl-summary"><BigStat label="Equity" value={money(equity)} tone="green" /><BigStat label="Cash" value={money(cash)} tone="green" /><BigStat label="Realized P/L" value={money(pnl)} tone={pnl < 0 ? 'red' : 'green'} /><BigStat label="Heartbeat" value={time(d.lastHeartbeat)} tone="muted" /><BigStat label="Locked" value={money(d.status?.lockedCapital ?? paper.locked ?? 0)} tone="yellow" /><BigStat label="Open Positions" value={openPositions.length} tone="cyan" /></div>
+        <div className={`pl-chart ${d.equity.length ? 'has-data' : 'is-empty'}`}>{d.equity.length ? <ResponsiveContainer><AreaChart data={d.equity} margin={{ top: 14, right: 18, left: 4, bottom: 6 }}><defs><linearGradient id="plGlow" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#35ff9c" stopOpacity={0.42} /><stop offset="100%" stopColor="#35ff9c" stopOpacity={0.02} /></linearGradient></defs><CartesianGrid stroke="rgba(53,255,156,.08)" vertical={false} /><XAxis dataKey="timestamp" hide /><YAxis tick={{ fill: '#6ee7b7', fontSize: 10 }} width={58} /><Tooltip contentStyle={{ background: '#050807', border: '1px solid rgba(53,255,156,.35)', color: '#d9fff1' }} /><Area type="monotone" dataKey="equity" stroke="#35ff9c" strokeWidth={3} fill="url(#plGlow)" /></AreaChart></ResponsiveContainer> : <div className="chart-empty"><span>Waiting for portfolio/equity updates</span></div>}</div>
       </Panel>
 
       <section className="operations-grid">
-        <Panel title="Recent Trades" active compact>{d.trades.length ? <Table t={tradeTable} /> : <Empty label="No recent trades" />}</Panel>
-        <Panel title="Open Positions" active compact>{openPositions.length ? <Table t={positionTable} /> : <Empty label="No open positions" />}</Panel>
+        <Panel title="Recent Trades" active compact>{d.trades.length ? <Table t={tradeTable} /> : <Empty label="Waiting for paper executions" />}</Panel>
+        <Panel title="Open Positions" active compact>{openPositions.length ? <Table t={positionTable} /> : <Empty label="No open paper positions" />}</Panel>
       </section>
 
-      <Panel title={`Fatal Errors${fatalLogs.length ? ` (${fatalLogs.length})` : ''}`} active={fatalLogs.length > 0} compact>
-        <div ref={fatalRef} className="fatal-console">{fatalLogs.length ? fatalLogs.map((l: any) => <div key={l.id} className="fatal-line"><span>{time(l.timestamp)}</span><b>{l.source ?? 'runtime'}</b><p>{l.message}</p></div>) : <Empty label="No fatal errors" />}{d.connectionStatus !== 'connected' && <div className="fatal-line connection"><span>{time(d.lastUpdated)}</span><b>connection</b><p>Backend connection is {d.connectionStatus}</p></div>}</div>
+      <Panel title={`System Alerts${fatalLogs.length || connectionAlert ? ` (${fatalLogs.length + (connectionAlert ? 1 : 0)})` : ''}`} active={fatalLogs.length > 0 || !!connectionAlert} compact>
+        <div ref={fatalRef} className="fatal-console">
+          {connectionAlert && <div className="alert-line warning"><span>{connectionAlert.severity}</span><b>{connectionAlert.source}</b><p>{connectionAlert.message}</p></div>}
+          {fatalLogs.length ? fatalLogs.map((l: any) => <div key={l.id} className="alert-line fatal"><span>Fatal</span><b>{l.source ?? 'runtime'}</b><p>{l.message}</p></div>) : <Empty label="No fatal errors" />}
+        </div>
       </Panel>
 
       <section className="diagnostics-shell">
