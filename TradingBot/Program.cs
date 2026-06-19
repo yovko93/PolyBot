@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using TradingBot.Api;
 using TradingBot.Engines;
@@ -49,9 +50,11 @@ var app = builder.Build();
 app.UseCors("ui");
 var options = app.Services.GetRequiredService<IOptions<TradingBotOptions>>().Value;
 var startupDiscoveryMode = ResolveEffectiveDiscoveryMode(options);
+var sourceAuditOnlySources = ResolveConfigSource(builder.Configuration, "TradingBot:Discovery:SourceAuditOnly", "TradingBot:MarketDiscovery:SourceAuditOnly", "Scanner:Discovery:SourceAuditOnly", "Scanner:MarketDiscovery:SourceAuditOnly");
+var reducedUniverseSources = ResolveConfigSource(builder.Configuration, "TradingBot:Discovery:AllowReducedUniverseDiagnosticsOnly", "TradingBot:MarketDiscovery:AllowReducedUniverseDiagnosticsOnly", "Scanner:Discovery:AllowReducedUniverseDiagnosticsOnly", "Scanner:MarketDiscovery:AllowReducedUniverseDiagnosticsOnly");
 if (options.MarketDiscovery.SourceAuditOnly && options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly)
     Console.WriteLine("[DISCOVERY_MODE_CONFLICT] SourceAuditOnly=true AllowReducedUniverseDiagnosticsOnly=true EffectiveMode=SourceAuditOnly Action=DisableSourceAuditOnlyForReducedUniverseRun");
-Console.WriteLine($"[DISCOVERY_EFFECTIVE_MODE] SourceAuditOnly={options.MarketDiscovery.SourceAuditOnly.ToString().ToLowerInvariant()} AllowReducedUniverseDiagnosticsOnly={options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly.ToString().ToLowerInvariant()} EffectiveMode={startupDiscoveryMode} ReducedUniverseMaxMarkets={options.MarketDiscovery.ReducedUniverseMaxMarkets} PaperBlocked={options.MarketDiscovery.ReducedUniverseBlockPaper.ToString().ToLowerInvariant()} ScannerEnabled={(!options.MarketDiscovery.SourceAuditOnly).ToString().ToLowerInvariant()} OrderbooksEnabled={(!options.MarketDiscovery.SourceAuditOnly).ToString().ToLowerInvariant()}");
+Console.WriteLine($"[DISCOVERY_EFFECTIVE_MODE] SourceAuditOnly={options.MarketDiscovery.SourceAuditOnly.ToString().ToLowerInvariant()} AllowReducedUniverseDiagnosticsOnly={options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly.ToString().ToLowerInvariant()} EffectiveMode={startupDiscoveryMode} ConfigSource_SourceAuditOnly={sourceAuditOnlySources} ConfigSource_AllowReducedUniverseDiagnosticsOnly={reducedUniverseSources} ReducedUniverseMaxMarkets={options.MarketDiscovery.ReducedUniverseMaxMarkets} PaperBlocked={options.MarketDiscovery.ReducedUniverseBlockPaper.ToString().ToLowerInvariant()} ScannerEnabled={(!options.MarketDiscovery.SourceAuditOnly).ToString().ToLowerInvariant()} OrderbooksEnabled={(!options.MarketDiscovery.SourceAuditOnly).ToString().ToLowerInvariant()}");
 PaperPhaseValidationHarness.LogStartupConfig(options, app.Environment.EnvironmentName, app.Environment.ContentRootPath, builder.Configuration.Sources, args);
 PaperPhaseValidationHarness.LogPaperModeStartup(options, app.Environment.EnvironmentName, builder.Configuration.Sources, args);
 var listenUrl = options.ListenUrl;
@@ -2373,6 +2376,24 @@ static string ResolveEffectiveDiscoveryMode(TradingBotOptions options)
     if (options.MarketDiscovery.SourceAuditOnly) return "SourceAuditOnly";
     if (options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly) return "ReducedUniverseDiagnosticsOnly";
     return "Normal";
+}
+
+static string ResolveConfigSource(IConfiguration configuration, params string[] keys)
+{
+    if (configuration is not IConfigurationRoot root) return "Unknown";
+    var matches = new List<string>();
+    foreach (var provider in root.Providers)
+    {
+        foreach (var key in keys)
+        {
+            if (provider.TryGet(key, out var value))
+            {
+                var providerName = provider.ToString()?.Replace(' ', '_') ?? provider.GetType().Name;
+                matches.Add($"{key}@{providerName}={value}");
+            }
+        }
+    }
+    return matches.Count == 0 ? "Default" : string.Join("|", matches);
 }
 
 static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, PaperPositionBook pb, string executionJournalPath, ExecutionPolicy p, OrderBookService obs, PaperTradingEngine paper, int marketsScanned, DateTime scanStart, string? lastError, SingleMarketScanStats scanStats, OpportunityFilteringOptions filtering, MarketDiscoverySummary discovery, int rollingOffset, int batchSize, int totalDiscovered, DateTime discoveryStartedAt, DateTime discoveryCompletedAt, int emptyCycles, int configuredMarketScanLimit, int effectiveMarketLimit, int configuredMaxMarketsToDiscover, TradingBotOptions options, string poolLimitReason, MultiOutcomeGroupArbEngine.MultiOutcomeScanReport multiOutcomeReport, string contentRootPath)
