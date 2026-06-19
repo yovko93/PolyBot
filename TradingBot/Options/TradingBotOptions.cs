@@ -243,6 +243,10 @@ public class MarketDiscoveryOptions
     public int MinimumPartitionedActiveMarkets { get; set; } = 8000;
     public bool SourceAuditOnly { get; set; } = false;
     public bool AllowReducedUniverseDiagnosticsOnly { get; set; } = false;
+    public int ReducedUniverseMaxMarkets { get; set; } = 2000;
+    public string ReducedUniverseSource { get; set; } = "GammaOffset";
+    public bool ReducedUniverseBlockPaper { get; set; } = true;
+    public bool ReducedUniverseRequireExplicitFlag { get; set; } = true;
 }
 
 

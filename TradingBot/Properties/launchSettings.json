@@ -25,6 +25,16 @@
         "DOTNET_ENVIRONMENT": "PaperPhase2"
       },
       "applicationUrl": "http://localhost:53943"
+    },
+    "TradingBot.ReducedUniverseDiagnostics": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "commandLineArgs": "--TradingBot:Discovery:SourceAuditOnly=false --TradingBot:Discovery:AllowReducedUniverseDiagnosticsOnly=true --TradingBot:Discovery:ReducedUniverseRequireExplicitFlag=true --TradingBot:Discovery:ReducedUniverseBlockPaper=true --TradingBot:Discovery:ReducedUniverseMaxMarkets=2000 --TradingBot:Discovery:ReducedUniverseSource=GammaOffset --TradingBot:TradingMode:LiveTradingEnabled=false --TradingBot:TradingMode:PaperTradingEnabled=true --TradingBot:TradingMode:PaperPhase=2 --TradingBot:PaperPhaseValidation:Enabled=false --TradingBot:PaperSettlementValidation:Enabled=false",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "ReducedUniverseDiagnostics",
+        "DOTNET_ENVIRONMENT": "ReducedUniverseDiagnostics"
+      },
+      "applicationUrl": "http://localhost:53943"
     }
   }
 }
