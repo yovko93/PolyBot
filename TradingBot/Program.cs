@@ -48,6 +48,10 @@ builder.Services.AddSingleton<IBotUiLogger, BotUiLogger>();
 var app = builder.Build();
 app.UseCors("ui");
 var options = app.Services.GetRequiredService<IOptions<TradingBotOptions>>().Value;
+var startupDiscoveryMode = ResolveEffectiveDiscoveryMode(options);
+if (options.MarketDiscovery.SourceAuditOnly && options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly)
+    Console.WriteLine("[DISCOVERY_MODE_CONFLICT] SourceAuditOnly=true AllowReducedUniverseDiagnosticsOnly=true EffectiveMode=SourceAuditOnly Action=DisableSourceAuditOnlyForReducedUniverseRun");
+Console.WriteLine($"[DISCOVERY_EFFECTIVE_MODE] SourceAuditOnly={options.MarketDiscovery.SourceAuditOnly.ToString().ToLowerInvariant()} AllowReducedUniverseDiagnosticsOnly={options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly.ToString().ToLowerInvariant()} EffectiveMode={startupDiscoveryMode} ReducedUniverseMaxMarkets={options.MarketDiscovery.ReducedUniverseMaxMarkets} PaperBlocked={options.MarketDiscovery.ReducedUniverseBlockPaper.ToString().ToLowerInvariant()} ScannerEnabled={(!options.MarketDiscovery.SourceAuditOnly).ToString().ToLowerInvariant()} OrderbooksEnabled={(!options.MarketDiscovery.SourceAuditOnly).ToString().ToLowerInvariant()}");
 PaperPhaseValidationHarness.LogStartupConfig(options, app.Environment.EnvironmentName, app.Environment.ContentRootPath, builder.Configuration.Sources, args);
 PaperPhaseValidationHarness.LogPaperModeStartup(options, app.Environment.EnvironmentName, builder.Configuration.Sources, args);
 var listenUrl = options.ListenUrl;
@@ -1354,7 +1358,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 else if (state.PaperExecutionGloballyBlockedByDiscovery || state.DiscoveryReducedUniverse || !state.DiscoveryHealthy || !state.DiscoveryScannerSafeSourceAvailable || state.DiscoverySelectedSource.Equals("Blocked", StringComparison.OrdinalIgnoreCase) || state.DiscoverySelectedSource.Equals("ReducedUniverseDiagnosticsOnly", StringComparison.OrdinalIgnoreCase))
                                 {
                                     state.RecordPaperPretradeReject("PaperBlockedByDiscoveryMode");
-                                    Console.WriteLine($"[PAPER_BLOCKED_BY_DISCOVERY_MODE] Strategy={opp.Strategy} DiscoveryMode={state.DiscoverySelectedSource} DiscoveryHealthy={state.DiscoveryHealthy.ToString().ToLowerInvariant()} DiscoveryReducedUniverse={state.DiscoveryReducedUniverse.ToString().ToLowerInvariant()} Reason=ReducedUniverseDiagnosticsOnly");
+                                    if (ShouldQuietLog("paper", "PAPER_BLOCKED_BY_DISCOVERY_MODE", $"{opp.Strategy}|{state.DiscoverySelectedSource}|{state.DiscoveryReducedUniverse}", LogImportance.Important, "PaperBlockedByDiscoveryMode", opp.GroupKey, strategy: opp.Strategy, everyNCycles: 1, maxPerHour: options.Logging.MaxVerifiedPretradeBlockedAuditPerHour))
+                                        Console.WriteLine($"[PAPER_BLOCKED_BY_DISCOVERY_MODE] Strategy={opp.Strategy} DiscoveryMode={state.DiscoverySelectedSource} DiscoveryHealthy={state.DiscoveryHealthy.ToString().ToLowerInvariant()} DiscoveryReducedUniverse={state.DiscoveryReducedUniverse.ToString().ToLowerInvariant()} Reason=ReducedUniverseDiagnosticsOnly");
                                 }
                                 else if (VerifiedPaperEligibilityDryRun.CanOpenPaper(eligibility, verifiedPaperConfig)) opened = verifiedExecution.OpenPaperPosition(opp, pre, positionBook, plan, fill);
                                 if (opened is null) Console.WriteLine($"[PAPER BASKET SKIPPED] Group={opp.GroupKey} Reason={(verifiedMode == StrategyMode.DiagnosticsOnly ? "ModeDiagnosticsOnly" : paperGate.Approved ? (fill.Status == FillSimulationStatus.FullyFillable ? "DuplicateOpenPosition" : "FillSimulationFailed") : paperGate.Reason)}");
@@ -2361,6 +2366,13 @@ static List<Market> BuildRollingBatch(List<Market> markets, ref int offset, int 
     }
     offset = (offset + batchSize) % markets.Count;
     return result;
+}
+
+static string ResolveEffectiveDiscoveryMode(TradingBotOptions options)
+{
+    if (options.MarketDiscovery.SourceAuditOnly) return "SourceAuditOnly";
+    if (options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly) return "ReducedUniverseDiagnosticsOnly";
+    return "Normal";
 }
 
 static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, PaperPositionBook pb, string executionJournalPath, ExecutionPolicy p, OrderBookService obs, PaperTradingEngine paper, int marketsScanned, DateTime scanStart, string? lastError, SingleMarketScanStats scanStats, OpportunityFilteringOptions filtering, MarketDiscoverySummary discovery, int rollingOffset, int batchSize, int totalDiscovered, DateTime discoveryStartedAt, DateTime discoveryCompletedAt, int emptyCycles, int configuredMarketScanLimit, int effectiveMarketLimit, int configuredMaxMarketsToDiscover, TradingBotOptions options, string poolLimitReason, MultiOutcomeGroupArbEngine.MultiOutcomeScanReport multiOutcomeReport, string contentRootPath)

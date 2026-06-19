@@ -304,7 +304,12 @@ public class SingleMarketOrderBookArbEngine
             {
                 diagnostics.AddReject("PaperBlockedByDiscoveryMode");
                 _state?.RecordPaperPretradeReject("PaperBlockedByDiscoveryMode");
-                Console.WriteLine($"[PAPER_BLOCKED_BY_DISCOVERY_MODE] Strategy={StrategyName} DiscoveryMode={_state?.DiscoverySelectedSource ?? "Unknown"} DiscoveryHealthy={(_state?.DiscoveryHealthy ?? false).ToString().ToLowerInvariant()} DiscoveryReducedUniverse={(_state?.DiscoveryReducedUniverse ?? false).ToString().ToLowerInvariant()} Reason=ReducedUniverseDiagnosticsOnly");
+                var shouldLogPaperBlock = _quietLogGate?.ShouldLog(
+                    new LogEventKey("single-market", "PAPER_BLOCKED_BY_DISCOVERY_MODE", MarketId: book.MarketId, Strategy: StrategyName),
+                    new LogEventFingerprint($"{StrategyName}|{_state?.DiscoverySelectedSource ?? "Unknown"}|{_state?.DiscoveryReducedUniverse}", "PaperBlockedByDiscoveryMode"),
+                    LogImportance.Important,
+                    QuietPolicy(Math.Max(1, _logging.QuietModeDefaultEveryNCycles), Math.Max(1, _logging.MaxVerifiedPretradeBlockedAuditPerHour))) ?? true;
+                if (shouldLogPaperBlock) Console.WriteLine($"[PAPER_BLOCKED_BY_DISCOVERY_MODE] Strategy={StrategyName} DiscoveryMode={_state?.DiscoverySelectedSource ?? "Unknown"} DiscoveryHealthy={(_state?.DiscoveryHealthy ?? false).ToString().ToLowerInvariant()} DiscoveryReducedUniverse={(_state?.DiscoveryReducedUniverse ?? false).ToString().ToLowerInvariant()} Reason=ReducedUniverseDiagnosticsOnly");
                 Console.WriteLine($"[SINGLE_MARKET_PAPER_OPEN_BLOCKED] MarketId={book.MarketId} Reason=PaperBlockedByDiscoveryMode");
                 return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,"PaperBlockedByDiscoveryMode",null);
             }
