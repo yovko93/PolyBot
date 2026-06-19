@@ -299,6 +299,15 @@ public class SingleMarketOrderBookArbEngine
                 Console.WriteLine($"[SINGLE_MARKET_PAPER_OPEN_BLOCKED] MarketId={book.MarketId} Reason=OrderbookCircuitBreakerActive");
                 return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,"OrderbookCircuitBreakerActive",null);
             }
+            var blockedByDiscoveryMode = _state is not null && (_state.PaperExecutionGloballyBlockedByDiscovery || _state.DiscoveryReducedUniverse || !_state.DiscoveryHealthy || !_state.DiscoveryScannerSafeSourceAvailable || _state.DiscoverySelectedSource.Equals("Blocked", StringComparison.OrdinalIgnoreCase) || _state.DiscoverySelectedSource.Equals("ReducedUniverseDiagnosticsOnly", StringComparison.OrdinalIgnoreCase));
+            if (blockedByDiscoveryMode)
+            {
+                diagnostics.AddReject("PaperBlockedByDiscoveryMode");
+                _state?.RecordPaperPretradeReject("PaperBlockedByDiscoveryMode");
+                Console.WriteLine($"[PAPER_BLOCKED_BY_DISCOVERY_MODE] Strategy={StrategyName} DiscoveryMode={_state?.DiscoverySelectedSource ?? "Unknown"} DiscoveryHealthy={(_state?.DiscoveryHealthy ?? false).ToString().ToLowerInvariant()} DiscoveryReducedUniverse={(_state?.DiscoveryReducedUniverse ?? false).ToString().ToLowerInvariant()} Reason=ReducedUniverseDiagnosticsOnly");
+                Console.WriteLine($"[SINGLE_MARKET_PAPER_OPEN_BLOCKED] MarketId={book.MarketId} Reason=PaperBlockedByDiscoveryMode");
+                return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,"PaperBlockedByDiscoveryMode",null);
+            }
 
             if (!paper.TryMarkSingleMarketOpenInFlight(book.MarketId, StrategyName, out var ttlSeconds))
             {

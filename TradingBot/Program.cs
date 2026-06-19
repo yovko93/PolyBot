@@ -502,6 +502,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var discoveryScannerSafeSourceAvailable = false;
     var discoverySourceAuditSources = 0;
     var discoverySourceAuditScannerSafeSources = 0;
+    var reducedUniverseBannerEmitted = false;
     var discoverySourceAuditRecommendedAction = string.Empty;
     DateTime? lastDegradationUtc = null;
     DateTime? lastRecoveryUtc = null;
@@ -637,10 +638,13 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         var now = DateTime.UtcNow;
         var ageSeconds = lastHealthyDiscoveryAt == default ? 0 : (int)Math.Max(0, (now - lastHealthyDiscoveryAt).TotalSeconds);
         var discoveryBootstrapHealthy = lastHealthyDiscoveryMarkets.Count >= options.MarketDiscovery.MinHealthyActiveMarkets;
-        discoveryScannerSafeSourceAvailable = discoveryUsingLastHealthySnapshot || (lastDiscoverySummary.DiscoveryHealthy && !string.Equals(discoveryMode, "Blocked", StringComparison.OrdinalIgnoreCase));
-        var discoveryBlocked = options.MarketDiscovery.SourceAuditOnly || !lastDiscoverySummary.DiscoveryHealthy || string.Equals(discoveryMode, "Blocked", StringComparison.OrdinalIgnoreCase) || !discoveryBootstrapHealthy || !discoveryScannerSafeSourceAvailable;
+        var reducedUniverseActive = options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly && string.Equals(discoveryMode, "ReducedUniverseDiagnosticsOnly", StringComparison.OrdinalIgnoreCase);
+        discoveryScannerSafeSourceAvailable = !reducedUniverseActive && (discoveryUsingLastHealthySnapshot || (lastDiscoverySummary.DiscoveryHealthy && !string.Equals(discoveryMode, "Blocked", StringComparison.OrdinalIgnoreCase)));
+        var discoveryBlocked = reducedUniverseActive || options.MarketDiscovery.SourceAuditOnly || !lastDiscoverySummary.DiscoveryHealthy || string.Equals(discoveryMode, "Blocked", StringComparison.OrdinalIgnoreCase) || !discoveryBootstrapHealthy || !discoveryScannerSafeSourceAvailable;
         var discoveryBlockedReason = options.MarketDiscovery.SourceAuditOnly
             ? "SourceAuditOnly"
+            : reducedUniverseActive
+                ? "BlockedReducedUniverseDiagnosticsOnly"
             : !discoveryScannerSafeSourceAvailable
                 ? "NoScannerSafeDiscoverySource"
                 : !discoveryBootstrapHealthy
@@ -651,7 +655,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         var allowlistSkippedByDiscovery = discoveryBlocked;
         var orderbookRecovered = stats.OrderbookCircuitBreakerState.Equals("Closed", StringComparison.OrdinalIgnoreCase) && stats.BatchBookNormalBadRequestsAfterBreakerOpen == 0;
         var longRunReasons = new List<string>();
-        if (!discoveryStable) longRunReasons.Add("DiscoveryUnavailable");
+        if (reducedUniverseActive) longRunReasons.Add("BlockedReducedUniverseDiagnosticsOnly");
+        else if (!discoveryStable) longRunReasons.Add("DiscoveryUnavailable");
         if (stats.OrderbookCircuitBreakerActive && stats.OrderbookRecoverySucceededCount <= 0) longRunReasons.Add("OrderbookBreakerActive");
         if (stats.BatchBookNormalBadRequestsAfterBreakerOpen > 0) longRunReasons.Add("PostBreakerBadRequests");
         if (stats.InvalidTokenQuarantineActive + stats.MarketOrderbookQuarantineActive > Math.Max(25, options.OrderBook.CircuitBreakerInvalidTokensPerHourThreshold)) longRunReasons.Add("QuarantineStormActive");
@@ -683,19 +688,27 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             discoveryPersistedSnapshotAgeSeconds: discoveryPersistedSnapshotAgeSeconds,
             discoveryPersistedSnapshotActiveMarkets: discoveryPersistedSnapshotActiveMarkets,
             allowlistEvaluationSkipped: allowlistSkippedByDiscovery,
-            allowlistEvaluationSkippedReason: allowlistSkippedByDiscovery ? discoveryBlockedReason : string.Empty,
+            allowlistEvaluationSkippedReason: reducedUniverseActive ? "ReducedUniverseDiagnosticsOnly" : allowlistSkippedByDiscovery ? discoveryBlockedReason : string.Empty,
             allowlistClassificationBlockedByDiscovery: allowlistSkippedByDiscovery,
             soakReadiness: discoveryBlocked ? "Blocked" : "Ready",
             soakReadinessReason: discoveryBlocked ? discoveryBlockedReason : "None",
             discoveryBlockedReason: discoveryBlockedReason,
-            discoverySelectedSource: discoveryScannerSafeSourceAvailable ? (discoveryUsingLastHealthySnapshot ? "PersistedHealthySnapshot" : discoveryMode) : "Blocked",
+            discoverySelectedSource: reducedUniverseActive ? "ReducedUniverseDiagnosticsOnly" : discoveryScannerSafeSourceAvailable ? (discoveryUsingLastHealthySnapshot ? "PersistedHealthySnapshot" : discoveryMode) : "Blocked",
             discoveryScannerSafeSourceAvailable: discoveryScannerSafeSourceAvailable,
             discoverySourceAuditOnly: options.MarketDiscovery.SourceAuditOnly,
             discoverySourceAuditExportWritten: discoverySourceAuditExportWritten,
             discoverySourceAuditExportPath: discoverySourceAuditExportPath,
             discoverySourceAuditSources: discoverySourceAuditSources,
             discoverySourceAuditScannerSafeSources: discoverySourceAuditScannerSafeSources,
-            discoverySourceAuditRecommendedAction: discoverySourceAuditRecommendedAction);
+            discoverySourceAuditRecommendedAction: discoverySourceAuditRecommendedAction,
+            discoveryReducedUniverse: reducedUniverseActive,
+            reducedUniverseMarkets: reducedUniverseActive ? discoveredMarkets.Count : 0,
+            reducedUniverseMaxMarkets: options.MarketDiscovery.ReducedUniverseMaxMarkets,
+            reducedUniverseSource: options.MarketDiscovery.ReducedUniverseSource,
+            paperExecutionGloballyBlockedByDiscovery: reducedUniverseActive || !lastDiscoverySummary.DiscoveryHealthy || !discoveryScannerSafeSourceAvailable || string.Equals(discoveryMode, "Blocked", StringComparison.OrdinalIgnoreCase),
+            strategyExecutionGloballyBlocked: reducedUniverseActive || discoveryBlocked,
+            diagnosticsUniverse: reducedUniverseActive ? "Reduced" : "Full",
+            tradingReadiness: !discoveryBlocked);
     }
 
     var basketStateByGroup = new Dictionary<string, VerifiedBasketState>(StringComparer.OrdinalIgnoreCase);
@@ -857,10 +870,16 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     {
                         if (options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly && discoveredCandidateMarkets.Count > 0)
                         {
-                            discoveredMarkets = discoveredCandidateMarkets;
-                            lastDiscoverySummary = attemptSummary;
+                            discoveredMarkets = discoveredCandidateMarkets.Take(Math.Max(1, options.MarketDiscovery.ReducedUniverseMaxMarkets)).ToList();
+                            lastDiscoverySummary = attemptSummary with { DiscoveryHealthy = false, DiscoveryMode = "ReducedUniverseDiagnosticsOnly", StoppedReason = "ReducedUniverseDiagnosticsOnly" };
+                            discoveryMode = "ReducedUniverseDiagnosticsOnly";
                             options.DiscoveryPartialDiagnosticsOnly = true;
                             scannerPausedByDiscoveryGuard = false;
+                            if (!reducedUniverseBannerEmitted)
+                            {
+                                Console.WriteLine($"[REDUCED_UNIVERSE_DIAGNOSTICS_ONLY] Enabled=true Source={options.MarketDiscovery.ReducedUniverseSource} MaxMarkets={options.MarketDiscovery.ReducedUniverseMaxMarkets} PaperBlocked={options.MarketDiscovery.ReducedUniverseBlockPaper.ToString().ToLowerInvariant()} TradingReady=false Reason=NoScannerSafeDiscoverySource");
+                                reducedUniverseBannerEmitted = true;
+                            }
                             Console.WriteLine($"[DISCOVERY_GUARD] Action=ReducedUniverseDiagnosticsOnly Reason=NoScannerSafeDiscoverySource PartialMarkets={discoveredCandidateMarkets.Count} PaperExecutionGloballyBlockedByDiscovery=true LiveTrading=false");
                         }
                         else
@@ -1331,6 +1350,11 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 {
                                     state.RecordPaperPretradeReject(paperGate.Reason);
                                     if (paperGate.Reason is "DuplicateOpenPosition" or "CooldownActive" or "MaxPaperOpenPerHourReached") Console.WriteLine($"[PAPER_OPEN_SUPPRESSED] Reason={paperGate.Reason} Strategy={opp.Strategy} MarketOrGroup={opp.GroupKey}");
+                                }
+                                else if (state.PaperExecutionGloballyBlockedByDiscovery || state.DiscoveryReducedUniverse || !state.DiscoveryHealthy || !state.DiscoveryScannerSafeSourceAvailable || state.DiscoverySelectedSource.Equals("Blocked", StringComparison.OrdinalIgnoreCase) || state.DiscoverySelectedSource.Equals("ReducedUniverseDiagnosticsOnly", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    state.RecordPaperPretradeReject("PaperBlockedByDiscoveryMode");
+                                    Console.WriteLine($"[PAPER_BLOCKED_BY_DISCOVERY_MODE] Strategy={opp.Strategy} DiscoveryMode={state.DiscoverySelectedSource} DiscoveryHealthy={state.DiscoveryHealthy.ToString().ToLowerInvariant()} DiscoveryReducedUniverse={state.DiscoveryReducedUniverse.ToString().ToLowerInvariant()} Reason=ReducedUniverseDiagnosticsOnly");
                                 }
                                 else if (VerifiedPaperEligibilityDryRun.CanOpenPaper(eligibility, verifiedPaperConfig)) opened = verifiedExecution.OpenPaperPosition(opp, pre, positionBook, plan, fill);
                                 if (opened is null) Console.WriteLine($"[PAPER BASKET SKIPPED] Group={opp.GroupKey} Reason={(verifiedMode == StrategyMode.DiagnosticsOnly ? "ModeDiagnosticsOnly" : paperGate.Approved ? (fill.Status == FillSimulationStatus.FullyFillable ? "DuplicateOpenPosition" : "FillSimulationFailed") : paperGate.Reason)}");
