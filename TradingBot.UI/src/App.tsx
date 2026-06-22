@@ -24,6 +24,11 @@ const fatalAlertPatterns = [
   'paper execution error', 'paper execution failure'
 ];
 
+function isRuntimeExportFileLock(log: any) {
+  const raw = `${log.level ?? ''} ${log.source ?? ''} ${log.message ?? ''}`.toLowerCase();
+  return raw.includes('runtime-soak-status-latest.json') || raw.includes('runtime_status_export') || raw.includes('runtime status export');
+}
+
 function shortMessage(message: string) {
   const withoutPayload = message.replace(/\{[\s\S]*$/, '').replace(/\[[^\]]+\]\s*/, '').trim();
   return (withoutPayload || message).slice(0, 180);
@@ -32,6 +37,7 @@ function shortMessage(message: string) {
 function classifyAlert(log: any) {
   const raw = `${log.level ?? ''} ${log.source ?? ''} ${log.message ?? ''}`;
   const lower = raw.toLowerCase();
+  if (isRuntimeExportFileLock(log)) return null;
   if (normalDiagnosticPatterns.some((p) => lower.includes(p))) return null;
   if (lower.includes('abort')) return null;
   if (lower.includes('scan') && !lower.includes('scanner fault')) return null;
@@ -62,9 +68,17 @@ export default function App() {
   const backendConnected = connected(d.connectionStatus);
   const health = d.runtimeHealth ?? {};
   const connectionLabel = backendConnected ? (d.source === 'POLLING FALLBACK' ? 'Connected via Polling' : 'Connected via SignalR') : 'Disconnected';
+  const runtimeExportStable = runtime(health, 'runtimeStatusExportStable') !== false;
+  const runtimeExportWriteFailures = Number(runtime(health, 'runtimeStatusExportWriteFailures') ?? 0);
+  const runtimeExportReadFailures = Number(runtime(health, 'runtimeStatusExportReadFailures') ?? 0);
+  const runtimeExportRecoveredCount = Number(runtime(health, 'runtimeStatusExportRecoveredCount') ?? 0);
+  const runtimeExportFailureReason = String(runtime(health, 'runtimeStatusExportLastFailureReason') ?? '');
+  const runtimeExportAlert = !runtimeExportStable && (runtimeExportWriteFailures + runtimeExportReadFailures) >= 3 && runtimeExportRecoveredCount === 0
+    ? { id: 'runtime-export-lock', timestamp: d.lastUpdated, severity: 'WARNING', source: 'Runtime Export', message: shortMessage(runtimeExportFailureReason || 'Runtime status export file lock is repeated and unrecovered') }
+    : null;
   const logAlerts = useMemo(() => d.logs.map(classifyAlert).filter(Boolean).slice(0, 20), [d.logs]);
   const connectionAlert = !backendConnected ? { id: 'connection', timestamp: d.lastUpdated, severity: 'WARNING', source: 'Connection', message: `Backend connection is ${d.connectionStatus}` } : null;
-  const systemAlerts = connectionAlert ? [connectionAlert, ...logAlerts] : logAlerts;
+  const systemAlerts = [connectionAlert, runtimeExportAlert, ...logAlerts].filter(Boolean);
   const openPositions = useMemo(() => (d.positions ?? []).filter((p: any) => (p.status ?? '').toUpperCase() === 'OPEN'), [d.positions]);
   const paperTrades = useMemo(() => keepPaperTrades(d.trades, d.singleMarketPaperExecutions, d.executionAudit), [d.trades, d.singleMarketPaperExecutions, d.executionAudit]);
 

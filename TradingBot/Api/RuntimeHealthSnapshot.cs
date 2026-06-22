@@ -206,6 +206,11 @@ public sealed record RuntimeHealthSnapshot(
     bool StrategyExecutionGloballyBlocked,
     string DiagnosticsUniverse,
     bool TradingReadiness,
+    int RuntimeStatusExportWriteFailures,
+    int RuntimeStatusExportReadFailures,
+    string RuntimeStatusExportLastFailureReason,
+    int RuntimeStatusExportRecoveredCount,
+    bool RuntimeStatusExportStable,
     IReadOnlyDictionary<string, TradingBot.Services.StrategyRuntimeCounterSnapshot> StrategyCounters)
 {
     public string ToLogLine()
@@ -449,6 +454,11 @@ public sealed record RuntimeHealthSnapshot(
             StrategyExecutionGloballyBlocked: state.StrategyExecutionGloballyBlocked,
             DiagnosticsUniverse: state.DiagnosticsUniverse,
             TradingReadiness: state.TradingReadiness,
+            RuntimeStatusExportWriteFailures: state.RuntimeStatusExportWriteFailures,
+            RuntimeStatusExportReadFailures: state.RuntimeStatusExportReadFailures,
+            RuntimeStatusExportLastFailureReason: state.RuntimeStatusExportLastFailureReason,
+            RuntimeStatusExportRecoveredCount: state.RuntimeStatusExportRecoveredCount,
+            RuntimeStatusExportStable: state.RuntimeStatusExportStable,
             StrategyCounters: state.StrategyCountersSnapshot());
     }
 }

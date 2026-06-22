@@ -137,6 +137,11 @@ public class BotRuntimeState
     private int _memoryCriticals;
     private DateTime? _lastMemoryCriticalAt;
     private bool _scannerPausedByMemoryGuard;
+    private int _runtimeStatusExportWriteFailures;
+    private int _runtimeStatusExportReadFailures;
+    private int _runtimeStatusExportRecoveredCount;
+    private int _runtimeStatusExportConsecutiveFailures;
+    private string _runtimeStatusExportLastFailureReason = string.Empty;
     private readonly ConcurrentDictionary<string, StrategyRuntimeCounters> _strategyCounters = new(StringComparer.OrdinalIgnoreCase);
 
     private static void Trim<T>(ConcurrentQueue<T> q,int max){ var capped = Math.Max(0, max); while(q.Count>capped) q.TryDequeue(out _); }
@@ -282,6 +287,12 @@ public class BotRuntimeState
     public int MemoryCriticals => Volatile.Read(ref _memoryCriticals);
     public DateTime? LastMemoryCriticalAt => _lastMemoryCriticalAt;
     public bool ScannerPausedByMemoryGuard => _scannerPausedByMemoryGuard;
+    public int RuntimeStatusExportWriteFailures => Volatile.Read(ref _runtimeStatusExportWriteFailures);
+    public int RuntimeStatusExportReadFailures => Volatile.Read(ref _runtimeStatusExportReadFailures);
+    public int RuntimeStatusExportRecoveredCount => Volatile.Read(ref _runtimeStatusExportRecoveredCount);
+    public int RuntimeStatusExportConsecutiveFailures => Volatile.Read(ref _runtimeStatusExportConsecutiveFailures);
+    public string RuntimeStatusExportLastFailureReason => _runtimeStatusExportLastFailureReason;
+    public bool RuntimeStatusExportStable => RuntimeStatusExportConsecutiveFailures < 3;
     public IReadOnlyDictionary<string, int> PaperPretradeRejectsByReason { get { lock (_paperCountersGate) return new Dictionary<string, int>(_paperPretradeRejectsByReason, StringComparer.OrdinalIgnoreCase); } }
     public long NextSeq()=>Interlocked.Increment(ref _seq);
     public void SetStatus(BotStatusDto s){lock(_gate) Status=s;}
@@ -354,6 +365,20 @@ public class BotRuntimeState
         _scannerPausedByMemoryGuard = scannerPaused;
     }
     public void SetScannerPausedByMemoryGuard(bool paused) => _scannerPausedByMemoryGuard = paused;
+    public void RecordRuntimeStatusExportFailure(bool write, string reason)
+    {
+        if (write) Interlocked.Increment(ref _runtimeStatusExportWriteFailures);
+        else Interlocked.Increment(ref _runtimeStatusExportReadFailures);
+        var consecutive = Interlocked.Increment(ref _runtimeStatusExportConsecutiveFailures);
+        _runtimeStatusExportLastFailureReason = reason;
+        if (consecutive == 1 || consecutive % 10 == 0)
+            AddLog(new TerminalLogEntryDto(Guid.NewGuid().ToString("N"), DateTime.UtcNow, "warning", "runtime_export", $"[RUNTIME_STATUS_EXPORT_WARNING] Direction={(write ? "write" : "read")} Consecutive={consecutive} Reason={reason}", NextSeq()));
+    }
+    public void RecordRuntimeStatusExportSuccess()
+    {
+        if (Interlocked.Exchange(ref _runtimeStatusExportConsecutiveFailures, 0) > 0)
+            Interlocked.Increment(ref _runtimeStatusExportRecoveredCount);
+    }
     public void RecordPaperPretradeReject(string reason)
     {
         Interlocked.Increment(ref _paperPretradeRejects);
