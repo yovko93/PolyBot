@@ -33,6 +33,7 @@ function classifyAlert(log: any) {
   const raw = `${log.level ?? ''} ${log.source ?? ''} ${log.message ?? ''}`;
   const lower = raw.toLowerCase();
   if (normalDiagnosticPatterns.some((p) => lower.includes(p))) return null;
+  if (lower.includes('abort')) return null;
   if (lower.includes('scan') && !lower.includes('scanner fault')) return null;
   const fatal = fatalAlertPatterns.some((p) => lower.includes(p));
   const warning = warningAlertPatterns.some((p) => lower.includes(p));
@@ -93,11 +94,16 @@ export default function App() {
 
   const scanner = d.scanner ?? {};
   const paper = d.paperAccount ?? {};
-  const equity = Number(first(runtime(health, 'paperEquity'), d.status?.equity, paper.equity, 0));
-  const cash = Number(first(runtime(health, 'paperCash'), d.status?.cash, paper.cash, 0));
+  const currentEquityValue = first(runtime(health, 'paperEquity'), d.status?.equity, paper.equity);
+  const currentCashValue = first(runtime(health, 'paperCash'), d.status?.cash, paper.cash);
+  const equity = Number(currentEquityValue ?? 0);
+  const cash = Number(currentCashValue ?? 0);
   const pnl = Number(first(runtime(health, 'paperRealizedPnl'), d.status?.realizedPnl, paper.realizedPnl, 0));
   const locked = Number(first(runtime(health, 'paperLocked'), d.status?.lockedCapital, paper.locked, 0));
-  const equityValues = d.equity.map((p: any) => Number(p.equity)).filter(Number.isFinite);
+  const equityHistory = (d.equity ?? []).filter((p: any) => Number.isFinite(Number(p.equity)));
+  const hasCurrentEquity = Number.isFinite(Number(currentEquityValue)) || Number.isFinite(Number(currentCashValue));
+  const chartData = equityHistory.length ? equityHistory : (hasCurrentEquity ? [{ timestamp: d.lastUpdated || new Date().toISOString(), equity }] : []);
+  const equityValues = chartData.map((p: any) => Number(p.equity)).filter(Number.isFinite);
   const chartHasData = equityValues.length > 0;
   const minEquity = chartHasData ? Math.min(...equityValues) : 0;
   const maxEquity = chartHasData ? Math.max(...equityValues) : 0;
@@ -120,7 +126,7 @@ export default function App() {
     <main className="clean-dashboard">
       <Panel title="P/L Vector" active>
         <div className="pl-summary"><BigStat label="Equity" value={money(equity)} tone="green" /><BigStat label="Cash" value={money(cash)} tone="green" /><BigStat label="Realized P/L" value={money(pnl)} tone={pnl < 0 ? 'red' : 'green'} /><BigStat label="Heartbeat" value={time(d.lastHeartbeat)} tone="muted" /><BigStat label="Locked" value={money(locked)} tone="yellow" /><BigStat label="Open Positions" value={openPositions.length} tone="cyan" /></div>
-        <div className={`pl-chart ${chartHasData ? 'has-data' : 'is-empty'}`}>{chartHasData ? <ResponsiveContainer><AreaChart data={d.equity} margin={{ top: 14, right: 18, left: 4, bottom: 6 }}><defs><linearGradient id="plGlow" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#35ff9c" stopOpacity={0.18} /><stop offset="100%" stopColor="#35ff9c" stopOpacity={0.01} /></linearGradient></defs><CartesianGrid stroke="rgba(53,255,156,.08)" vertical={false} /><XAxis dataKey="timestamp" hide /><YAxis domain={chartDomain} tick={{ fill: '#6ee7b7', fontSize: 10 }} width={58} /><Tooltip contentStyle={{ background: '#050807', border: '1px solid rgba(53,255,156,.35)', color: '#d9fff1' }} />{flatEquity ? <><ReferenceLine y={minEquity} stroke="#35ff9c" strokeWidth={2} strokeDasharray={singleEquityPoint ? '4 4' : undefined} />{singleEquityPoint && <ReferenceDot x={(d.equity[0] as any).timestamp} y={minEquity} r={4} fill="#35ff9c" stroke="#050807" />}</> : <Area type="monotone" dataKey="equity" stroke="#35ff9c" strokeWidth={3} fill="url(#plGlow)" />}</AreaChart></ResponsiveContainer> : <div className="chart-empty"><span>Waiting for portfolio/equity updates</span></div>}</div>
+        <div className={`pl-chart ${chartHasData ? 'has-data' : 'is-empty'}`}>{chartHasData ? <ResponsiveContainer><AreaChart data={chartData} margin={{ top: 14, right: 18, left: 4, bottom: 6 }}><defs><linearGradient id="plGlow" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#35ff9c" stopOpacity={0.18} /><stop offset="100%" stopColor="#35ff9c" stopOpacity={0.01} /></linearGradient></defs><CartesianGrid stroke="rgba(53,255,156,.08)" vertical={false} /><XAxis dataKey="timestamp" hide /><YAxis domain={chartDomain} tick={{ fill: '#6ee7b7', fontSize: 10 }} width={58} /><Tooltip contentStyle={{ background: '#050807', border: '1px solid rgba(53,255,156,.35)', color: '#d9fff1' }} />{flatEquity ? <><ReferenceLine y={minEquity} stroke="#35ff9c" strokeWidth={2} strokeDasharray={singleEquityPoint ? '4 4' : undefined} />{singleEquityPoint && <ReferenceDot x={(chartData[0] as any).timestamp} y={minEquity} r={4} fill="#35ff9c" stroke="#050807" />}</> : <Area type="monotone" dataKey="equity" stroke="#35ff9c" strokeWidth={3} fill="url(#plGlow)" />}</AreaChart></ResponsiveContainer> : <div className="chart-empty"><span>Waiting for portfolio/equity updates</span></div>}{chartHasData && !equityHistory.length ? <small className="chart-note">Flat equity / waiting for changes</small> : null}</div>
       </Panel>
 
       <section className="operations-grid">
@@ -136,7 +142,7 @@ export default function App() {
 
       <section className="diagnostics-shell">
         <button className="diagnostics-toggle" onClick={() => setShowDiagnostics((v) => !v)}>{showDiagnostics ? 'Hide diagnostics' : 'Show diagnostics'}</button>
-        {showDiagnostics && <div className="diagnostics-grid"><MiniBlock title="Scanner" rows={[['Active', scanner.activeMarketsAvailable ?? scanner.activeMarketsDiscovered ?? 0], ['Pool', scanner.effectiveMarketPoolSize ?? scanner.effectiveMarketLimit ?? 0], ['Candidates', scanner.candidatesEvaluated ?? 0], ['Liquidity pass', scanner.marketsPassingLiquidity ?? 0], ['Best edge', scanner.bestEdgeIsAvailable ? scanner.bestEdgeSeen : 'N/A']]} /><MiniBlock title="Paper Summary" rows={[['Exposure', money(runtime(health, 'paperTotalExposure') ?? paper.totalExposure ?? locked)], ['Settlements', d.paperSettlements?.length ?? paper.settlements ?? 0], ['Rejects', Object.entries(paper.blockedCountsByReason ?? {}).map(([k, v]: any) => `${k}=${v}`).join(' ') || '-']]} /><MiniBlock title="Runtime" rows={[['Source', d.source], ['Discovery', discoveryLabel(health, scanner, d.controls)], ['Readiness', readinessLabel(health, d.controls)], ['REST error', d.lastRestError || '-'], ['Last event', d.lastEvent || '-'], ['Updated', time(d.lastUpdated)], ['Logs', d.logs.length]]} /><div className="raw-log-block"><h4>Raw diagnostics</h4>{d.logs.slice(0, 30).map((l: any) => <pre key={l.id}>{time(l.timestamp)} [{l.source}] {l.message}</pre>)}</div></div>}
+        {showDiagnostics && <div className="diagnostics-grid"><MiniBlock title="Scanner" rows={[["Active", scanner.activeMarketsAvailable ?? scanner.activeMarketsDiscovered ?? 0], ["Pool", scanner.effectiveMarketPoolSize ?? scanner.effectiveMarketLimit ?? 0], ["Candidates", scanner.candidatesEvaluated ?? 0], ["Liquidity pass", scanner.marketsPassingLiquidity ?? 0], ["Best edge", scanner.bestEdgeIsAvailable ? scanner.bestEdgeSeen : 'N/A']]} /><MiniBlock title="Paper Summary" rows={[["Exposure", money(runtime(health, 'paperTotalExposure') ?? paper.totalExposure ?? locked)], ["Settlements", d.paperSettlements?.length ?? paper.settlements ?? 0], ["Rejects", Object.entries(paper.blockedCountsByReason ?? {}).map(([k, v]: any) => `${k}=${v}`).join(' ') || '-']]} /><MiniBlock title="Runtime" rows={[["Source", runtime(health, '__source') ?? d.source], ["Discovery", discoveryLabel(health, scanner, d.controls)], ["Readiness", readinessLabel(health, d.controls)], ["Universe", runtime(health, 'diagnosticsUniverse') ?? '-'], ["Reduced markets", runtime(health, 'reducedUniverseMarkets') ?? 0], ["Updated", time(runtime(health, '__updatedAt') ?? d.lastUpdated)]]} /><details className="raw-log-block"><summary>Raw logs</summary><div className="raw-log-console">{d.logs.slice(0, 30).map((l: any) => <pre key={l.id}>{time(l.timestamp)} [{l.source}] {l.message}</pre>)}</div></details></div>}
       </section>
     </main>
   </div>;
@@ -144,11 +150,16 @@ export default function App() {
 
 
 function discoveryLabel(health: any, scanner: any, controls: any) {
-  if (runtime(health, 'discoveryReducedUniverse')) return 'ReducedUniverseDiagnosticsOnly';
+  const mode = String(first(runtime(health, 'discoveryMode'), runtime(health, 'discoverySelectedSource'), '')).toLowerCase();
+  if (runtime(health, 'discoverySourceAuditOnly')) return 'Blocked';
+  if (mode === 'reduceduniversediagnosticsonly' || runtime(health, 'discoveryReducedUniverse')) return 'Reduced Universe';
   return first(runtime(health, 'discoverySelectedSource'), scanner?.poolLimitReason, controls?.isPaused ? 'Paused' : undefined, 'Scanning');
 }
 function readinessLabel(health: any, controls: any) {
+  const mode = String(first(runtime(health, 'discoveryMode'), runtime(health, 'discoverySelectedSource'), '')).toLowerCase();
   if (controls?.isPaused) return 'Paused';
+  if (runtime(health, 'discoverySourceAuditOnly')) return 'SourceAuditOnly';
+  if (mode === 'reduceduniversediagnosticsonly' || runtime(health, 'discoveryReducedUniverse')) return 'Blocked / Reduced diagnostics';
   return first(runtime(health, 'soakReadinessReason'), runtime(health, 'soakReadiness'), runtime(health, 'tradingReadiness') === true ? 'Ready' : undefined, 'Ready');
 }
 function keepPaperTrades(trades: any[] = [], singleMarketExecutions: any[] = [], audit: any[] = []) {

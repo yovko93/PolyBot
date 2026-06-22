@@ -4,6 +4,23 @@ import { keepLatest, UIDataLimits } from '../constants/uiDataLimits';
 import { addLogDeduped, dedupeLogSnapshot } from '../utils/logDedupe';
 
 
+
+function parseRuntimeHealthLog(log: any) {
+  const message = String(log?.message ?? '');
+  const isRuntime = message.includes('[RUNTIME_HEALTH]') || message.includes('[SOAK_STATUS]');
+  if (!isRuntime) return null;
+  const pairs: Record<string, any> = { __source: message.includes('[SOAK_STATUS]') ? 'SOAK_STATUS' : 'RUNTIME_HEALTH', __updatedAt: log?.timestamp ?? new Date().toISOString() };
+  for (const match of message.matchAll(/([A-Za-z][A-Za-z0-9_]*)=([^\s{}]+)/g)) {
+    const [, rawKey, rawValue] = match;
+    const key = rawKey.charAt(0).toLowerCase() + rawKey.slice(1);
+    if (rawValue === 'true' || rawValue === 'false') pairs[key] = rawValue === 'true';
+    else if (/^-?\d+(\.\d+)?$/.test(rawValue)) pairs[key] = Number(rawValue);
+    else pairs[key] = rawValue;
+  }
+  if (pairs.discoveryMode && !pairs.discoverySelectedSource) pairs.discoverySelectedSource = pairs.discoveryMode;
+  return pairs;
+}
+
 function appendEquityPoint(points: any[], health: any) {
   const equity = Number(health?.paperEquity);
   if (!Number.isFinite(equity)) return points;
@@ -35,7 +52,7 @@ export function useBotData() {
         const healthy = await getBotHealth(ac.signal);
         if (!healthy) setLastRestError('backend health endpoint unavailable');
         const [s, o, p, t, sc, r, l, eq, c, md, vbs, ea, drp, arr, sma, smx, pa, ps, rh] = await Promise.all([getBotStatus(ac.signal), getOpportunities(ac.signal), getPositions(ac.signal), getTradeLogs(ac.signal), getScannerStats(ac.signal), getRisk(ac.signal), getTerminalLogs(ac.signal), getEquity(ac.signal), getControls(ac.signal), getMultiOutcomeDiagnostics(ac.signal), getVerifiedBasketScreener(ac.signal), getExecutionAudit(ac.signal), getDryRunOrderPlans(ac.signal), getAllowlistRepairReport(ac.signal), getSingleMarketArbs(ac.signal), getSingleMarketPaperExecutions(ac.signal), getPaperAccount(ac.signal), getPaperSettlements(ac.signal), getRuntimeHealth(ac.signal)]);
-        setStatus(s); setRuntimeHealth(rh); setSingleMarketArbs(sma); setSingleMarketPaperExecutions(smx); setPaperAccount(pa); setPaperSettlements(ps); setMultiOutcomeDiagnostics(md); setVerifiedBasketScreener(vbs); setExecutionAudit(keepLatest(ea, UIDataLimits.MaxAuditRows)); setDryRunOrderPlans(keepLatest(drp, UIDataLimits.MaxDiagnosticsRows)); setAllowlistRepairReport(trimRepairReport(arr)); setOpps(keepLatest(o, UIDataLimits.MaxOpportunities)); setPositions(p); setTrades(keepLatest(t, UIDataLimits.MaxTradeLogRows)); setScanner(sc); setRisk(r); setLogs(dedupeLogSnapshot(keepLatest(l, UIDataLimits.MaxRecentLogs), UIDataLimits.MaxRecentLogs)); setEquity(keepLatest(eq, UIDataLimits.MaxChartPoints)); setControls(c); setConnectionStatus(healthy ? 'CONNECTED' : 'DEGRADED'); setSource(healthy ? 'POLLING FALLBACK' : 'SNAPSHOT'); setLastUpdated(new Date().toISOString());
+        setStatus(s); setRuntimeHealth(rh ? { ...rh, __source: 'REST', __updatedAt: new Date().toISOString() } : rh); setSingleMarketArbs(sma); setSingleMarketPaperExecutions(smx); setPaperAccount(pa); setPaperSettlements(ps); setMultiOutcomeDiagnostics(md); setVerifiedBasketScreener(vbs); setExecutionAudit(keepLatest(ea, UIDataLimits.MaxAuditRows)); setDryRunOrderPlans(keepLatest(drp, UIDataLimits.MaxDiagnosticsRows)); setAllowlistRepairReport(trimRepairReport(arr)); setOpps(keepLatest(o, UIDataLimits.MaxOpportunities)); setPositions(p); setTrades(keepLatest(t, UIDataLimits.MaxTradeLogRows)); setScanner(sc); setRisk(r); setLogs(dedupeLogSnapshot(keepLatest(l, UIDataLimits.MaxRecentLogs), UIDataLimits.MaxRecentLogs)); setEquity(keepLatest(eq, UIDataLimits.MaxChartPoints)); setControls(c); setConnectionStatus(healthy ? 'CONNECTED' : 'DEGRADED'); setSource(healthy ? 'POLLING FALLBACK' : 'SNAPSHOT'); setLastUpdated(new Date().toISOString());
       } catch (e: any) { setLastRestError(String(e)); setConnectionStatus('DISCONNECTED'); }
 
       const subscriptionCleanup = await subscribeToBotEvents({
@@ -46,7 +63,11 @@ export function useBotData() {
         onPositions: (d) => { setLastEvent('positionsUpdated'); setPositions(d); setLastUpdated(new Date().toISOString()); },
         onRisk: setRisk,
         onScanner: setScanner,
-        onLog: (d) => setLogs((x: any[]) => addLogDeduped(x, d, UIDataLimits.MaxRecentLogs)),
+        onLog: (d) => {
+          const parsedHealth = parseRuntimeHealthLog(d);
+          if (parsedHealth) { setRuntimeHealth((current: any) => ({ ...(current ?? {}), ...parsedHealth })); setSource('LIVE BACKEND'); setLastUpdated(parsedHealth.__updatedAt); }
+          setLogs((x: any[]) => addLogDeduped(x, d, UIDataLimits.MaxRecentLogs));
+        },
         onEquity: (d) => setEquity(keepLatest(d, UIDataLimits.MaxChartPoints)),
         onHeartbeat: setLastHeartbeat,
         onConnectionState: (s) => { if (!seenEvents.current.has(s)) seenEvents.current.add(s); setConnectionStatus(s); setSource(s === 'CONNECTED' ? 'LIVE BACKEND' : 'POLLING FALLBACK'); },
@@ -54,7 +75,7 @@ export function useBotData() {
         onSingleMarketArbs: (d) => setSingleMarketArbs(d),
         onSingleMarketPaperExecutions: (d) => setSingleMarketPaperExecutions(d),
         onPaperAccount: (d) => setPaperAccount(d),
-        onRuntimeHealth: (d) => { setRuntimeHealth(d); if (d?.paperEquity != null) setEquity((x: any[]) => appendEquityPoint(x, d)); }
+        onRuntimeHealth: (d) => { const stamped = d ? { ...d, __source: 'REST', __updatedAt: new Date().toISOString() } : d; setRuntimeHealth(stamped); if (d?.paperEquity != null) setEquity((x: any[]) => appendEquityPoint(x, d)); }
       });
       if (disposed) subscriptionCleanup();
       else cleanup = subscriptionCleanup;
