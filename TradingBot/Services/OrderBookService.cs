@@ -77,6 +77,7 @@ public class OrderBookService : IOrderBookProvider
     private long _batchBookNormalBadRequestsBeforeBreakerOpen;
     private long _batchBookNormalRequestsAfterBreakerOpen;
     private long _batchBookNormalBadRequestsAfterBreakerOpen;
+    private long _reducedUniversePostRecoveryBadRequests;
     private readonly HttpClient _http;
     private readonly object _cacheLock = new();
 
@@ -513,6 +514,63 @@ public class OrderBookService : IOrderBookProvider
         return _orderbookEligibility.Get(marketId);
     }
 
+    public ReducedUniverseOrderbookFilterResult FilterReducedUniverseOrderbookEligibleMarkets(IEnumerable<Market> markets)
+    {
+        var raw = markets.Where(m => m != null).ToList();
+        var filtered = new List<Market>();
+        var seenTokens = new HashSet<string>(StringComparer.Ordinal);
+        var excludedInvalidTokens = 0;
+        var excludedQuarantinedMarkets = 0;
+        var excludedBadHistory = 0;
+
+        lock (_cacheLock)
+        {
+            var now = DateTime.UtcNow;
+            TrimInvalidTokenQuarantineLocked(now);
+            TrimMarketOrderbookQuarantineLocked(now);
+            foreach (var market in raw)
+            {
+                if (string.IsNullOrWhiteSpace(market.id) || market.clobTokenIds == null || market.clobTokenIds.Count < 2)
+                {
+                    excludedInvalidTokens++;
+                    continue;
+                }
+
+                var tokens = market.clobTokenIds.Select(NormalizeTokenId).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>().Take(2).ToArray();
+                if (tokens.Length < 2 || tokens.Any(t => !IsValidTokenIdFormat(t)) || tokens.Distinct(StringComparer.Ordinal).Count() != tokens.Length || tokens.Any(t => seenTokens.Contains(t)))
+                {
+                    excludedInvalidTokens++;
+                    continue;
+                }
+
+                if (_invalidTokenQuarantine.ContainsKey(tokens[0]) || _invalidTokenQuarantine.ContainsKey(tokens[1]) || _marketOrderbookQuarantine.ContainsKey(market.id))
+                {
+                    excludedQuarantinedMarkets++;
+                    continue;
+                }
+
+                if (!_orderbookEligibility.Get(market.id).Eligible || _orderbookUnavailableMarkets.Contains(market.id))
+                {
+                    excludedBadHistory++;
+                    continue;
+                }
+
+                seenTokens.Add(tokens[0]);
+                seenTokens.Add(tokens[1]);
+                filtered.Add(market);
+            }
+        }
+
+        return new ReducedUniverseOrderbookFilterResult(
+            RawMarkets: raw.Count,
+            FilteredMarkets: filtered.Count,
+            ExcludedInvalidTokens: excludedInvalidTokens,
+            ExcludedQuarantinedMarkets: excludedQuarantinedMarkets,
+            ExcludedBadHistory: excludedBadHistory,
+            EligibleMarkets: filtered.Count,
+            Markets: filtered);
+    }
+
     public void QuarantineMarketOrderbook(string? marketId, string? yesTokenId, string? noTokenId, string reason, string source = "BatchBookPairBadRequest")
     {
         if (string.IsNullOrWhiteSpace(marketId)) return;
@@ -612,6 +670,7 @@ public class OrderBookService : IOrderBookProvider
                 || _batchBadRequestsThisCycle > MaxBatchBookBadRequestsPerCycle;
             if (_circuitBreakerState == OrderbookCircuitBreakerState.Recovering && _batchBadRequests > _postCloseBaselineBadRequests)
             {
+                Interlocked.Increment(ref _reducedUniversePostRecoveryBadRequests);
                 Interlocked.Increment(ref _orderbookRecoveryBadRequests);
                 Interlocked.Increment(ref _orderbookRecoveryFailedCount);
                 Console.WriteLine("[ORDERBOOK_CIRCUIT_BREAKER_RECOVERY_FAILED] Reason=RecoveringBadRequest");
@@ -783,7 +842,11 @@ public class OrderBookService : IOrderBookProvider
             BatchBookNormalRequestsAfterBreakerOpen: Interlocked.Read(ref _batchBookNormalRequestsAfterBreakerOpen),
             BatchBookNormalBadRequestsAfterBreakerOpen: Interlocked.Read(ref _batchBookNormalBadRequestsAfterBreakerOpen),
             QuarantinedMarketsReintroducedBlocked: Interlocked.Read(ref _quarantinedMarketsReintroducedBlocked),
-            QuarantinedTokensReintroducedBlocked: Interlocked.Read(ref _quarantinedTokensReintroducedBlocked)
+            QuarantinedTokensReintroducedBlocked: Interlocked.Read(ref _quarantinedTokensReintroducedBlocked),
+            ReducedUniverseScanPausedByOrderbookHealth: CircuitBreakerState != OrderbookCircuitBreakerState.Closed || QuarantinedTokenCount > 0 || _marketOrderbookQuarantine.Count > 0,
+            ReducedUniverseOrderbookRecoveryMode: CircuitBreakerState == OrderbookCircuitBreakerState.HalfOpen || CircuitBreakerState == OrderbookCircuitBreakerState.Recovering,
+            ReducedUniverseOrderbookRecoveryCleanWindowSeconds: _recoveringSinceUtc.HasValue ? Math.Max(0, (long)(DateTime.UtcNow - _recoveringSinceUtc.Value).TotalSeconds) : (_lastClosedUtc.HasValue ? Math.Max(0, (long)(DateTime.UtcNow - _lastClosedUtc.Value).TotalSeconds) : 0),
+            ReducedUniversePostRecoveryBadRequests: Interlocked.Read(ref _reducedUniversePostRecoveryBadRequests)
         );
     }
 
@@ -1445,7 +1508,7 @@ public class OrderBookService : IOrderBookProvider
             _snapshotCache.Clear();
         }
 
-        var batchSize = Math.Max(1, CircuitBreakerState == OrderbookCircuitBreakerState.Recovering ? Math.Min(MaxBatchBookRequestSize, RecoveryMaxBatchSize) : MaxBatchBookRequestSize);
+        var batchSize = Math.Max(1, entryState == OrderbookCircuitBreakerState.Recovering || entryState == OrderbookCircuitBreakerState.HalfOpen ? Math.Min(MaxBatchBookRequestSize, RecoveryMaxBatchSize) : MaxBatchBookRequestSize);
 
         foreach (var batch in validation.TokenIds.Chunk(batchSize))
         {

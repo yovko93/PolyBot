@@ -74,5 +74,9 @@ public record OrderBookServiceStats(
     long BatchBookNormalRequestsAfterBreakerOpen = 0,
     long BatchBookNormalBadRequestsAfterBreakerOpen = 0,
     long QuarantinedMarketsReintroducedBlocked = 0,
-    long QuarantinedTokensReintroducedBlocked = 0
+    long QuarantinedTokensReintroducedBlocked = 0,
+    bool ReducedUniverseScanPausedByOrderbookHealth = false,
+    bool ReducedUniverseOrderbookRecoveryMode = false,
+    long ReducedUniverseOrderbookRecoveryCleanWindowSeconds = 0,
+    long ReducedUniversePostRecoveryBadRequests = 0
 );
