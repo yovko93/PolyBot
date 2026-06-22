@@ -7,6 +7,8 @@ const money = (n: number) => `$${(n ?? 0).toFixed(2)}`;
 const time = (v: any) => (v ? new Date(v).toLocaleTimeString() : '-');
 const text = (v: any) => String(v ?? '-');
 const connected = (status: string) => status.toLowerCase() === 'connected';
+const first = (...values: any[]) => values.find((v) => v !== undefined && v !== null && v !== '');
+const runtime = (h: any, key: string) => h?.[key] ?? h?.[key.charAt(0).toUpperCase() + key.slice(1)];
 
 const normalDiagnosticPatterns = [
   'soak_status', 'soak status', 'runtime_health', 'runtime health',
@@ -17,9 +19,9 @@ const normalDiagnosticPatterns = [
 ];
 const warningAlertPatterns = ['rest fetch failed', 'signalr disconnected', 'polling fallback', 'no backend', 'disconnected'];
 const fatalAlertPatterns = [
-  'scanner fault', 'unhandled exception', 'fatal backend error', 'circuit breaker opened',
-  'memory critical', 'live trading accidentally enabled', 'signing attempts',
-  'paper execution error', 'paper execution failure', 'data corruption', 'counter mismatch'
+  'scanner fault', 'unhandled exception', 'fatal backend error', 'fatal exception', 'circuit breaker opened',
+  'orderbook circuit breaker', 'memory critical', 'live trading accidentally enabled', 'signing attempts',
+  'paper execution error', 'paper execution failure'
 ];
 
 function shortMessage(message: string) {
@@ -31,15 +33,17 @@ function classifyAlert(log: any) {
   const raw = `${log.level ?? ''} ${log.source ?? ''} ${log.message ?? ''}`;
   const lower = raw.toLowerCase();
   if (normalDiagnosticPatterns.some((p) => lower.includes(p))) return null;
+  if (lower.includes('abort')) return null;
   if (lower.includes('scan') && !lower.includes('scanner fault')) return null;
   const fatal = fatalAlertPatterns.some((p) => lower.includes(p));
   const warning = warningAlertPatterns.some((p) => lower.includes(p));
-  const error = log.level === 'error' && !lower.includes('status') && !lower.includes('health');
-  if (!fatal && !warning && !error) return null;
+  const restOrSignalRError = (lower.includes('rest') || lower.includes('signalr')) && (lower.includes('error') || lower.includes('failed') || lower.includes('unavailable'));
+  const error = log.level === 'error' && (restOrSignalRError || lower.includes('scanner fault') || lower.includes('fatal') || lower.includes('memory critical'));
+  if (!fatal && !warning && !error && !restOrSignalRError) return null;
   return {
     id: log.id,
     timestamp: log.timestamp,
-    severity: fatal ? 'FATAL' : error && !warning ? 'ERROR' : 'WARNING',
+    severity: fatal ? 'FATAL' : (error || restOrSignalRError) && !warning ? 'ERROR' : 'WARNING',
     source: String(log.source ?? 'runtime').replace(/^console$/i, 'Runtime'),
     message: shortMessage(String(log.message ?? 'Runtime alert'))
   };
@@ -56,14 +60,17 @@ export default function App() {
   useEffect(() => { if (fatalRef.current) fatalRef.current.scrollTop = 0; }, [d.logs]);
 
   const backendConnected = connected(d.connectionStatus);
+  const health = d.runtimeHealth ?? {};
+  const connectionLabel = backendConnected ? (d.source === 'POLLING FALLBACK' ? 'Connected via Polling' : 'Connected via SignalR') : 'Disconnected';
   const logAlerts = useMemo(() => d.logs.map(classifyAlert).filter(Boolean).slice(0, 20), [d.logs]);
   const connectionAlert = !backendConnected ? { id: 'connection', timestamp: d.lastUpdated, severity: 'WARNING', source: 'Connection', message: `Backend connection is ${d.connectionStatus}` } : null;
   const systemAlerts = connectionAlert ? [connectionAlert, ...logAlerts] : logAlerts;
   const openPositions = useMemo(() => (d.positions ?? []).filter((p: any) => (p.status ?? '').toUpperCase() === 'OPEN'), [d.positions]);
+  const paperTrades = useMemo(() => keepPaperTrades(d.trades, d.singleMarketPaperExecutions, d.executionAudit), [d.trades, d.singleMarketPaperExecutions, d.executionAudit]);
 
   const column = createColumnHelper<any>();
   const tradeTable = useReactTable({
-    data: d.trades.slice(0, 60),
+    data: paperTrades.slice(0, 60),
     columns: [
       column.accessor('timestamp', { header: 'TIME', cell: (i) => time(i.getValue()) }),
       column.accessor('strategy', { header: 'STRATEGY', cell: (i) => text(i.getValue()) }),
@@ -87,10 +94,16 @@ export default function App() {
 
   const scanner = d.scanner ?? {};
   const paper = d.paperAccount ?? {};
-  const equity = d.status?.equity ?? paper.equity ?? 0;
-  const cash = d.status?.cash ?? paper.cash ?? 0;
-  const pnl = d.status?.realizedPnl ?? paper.realizedPnl ?? 0;
-  const equityValues = d.equity.map((p: any) => Number(p.equity)).filter(Number.isFinite);
+  const currentEquityValue = first(runtime(health, 'paperEquity'), d.status?.equity, paper.equity);
+  const currentCashValue = first(runtime(health, 'paperCash'), d.status?.cash, paper.cash);
+  const equity = Number(currentEquityValue ?? 0);
+  const cash = Number(currentCashValue ?? 0);
+  const pnl = Number(first(runtime(health, 'paperRealizedPnl'), d.status?.realizedPnl, paper.realizedPnl, 0));
+  const locked = Number(first(runtime(health, 'paperLocked'), d.status?.lockedCapital, paper.locked, 0));
+  const equityHistory = (d.equity ?? []).filter((p: any) => Number.isFinite(Number(p.equity)));
+  const hasCurrentEquity = Number.isFinite(Number(currentEquityValue)) || Number.isFinite(Number(currentCashValue));
+  const chartData = equityHistory.length ? equityHistory : (hasCurrentEquity ? [{ timestamp: d.lastUpdated || new Date().toISOString(), equity }] : []);
+  const equityValues = chartData.map((p: any) => Number(p.equity)).filter(Number.isFinite);
   const chartHasData = equityValues.length > 0;
   const minEquity = chartHasData ? Math.min(...equityValues) : 0;
   const maxEquity = chartHasData ? Math.max(...equityValues) : 0;
@@ -99,25 +112,58 @@ export default function App() {
   const domainPadding = flatEquity ? Math.max(5, Math.abs(minEquity) * 0.01) : Math.max(1, (maxEquity - minEquity) * 0.12);
   const chartDomain: [number, number] = [minEquity - domainPadding, maxEquity + domainPadding];
 
+  const strategyCounters = strategyCounterMap(health);
+  const singleStrategy = getStrategyCounter(strategyCounters, 'SingleMarketBuyBoth');
+  const autoStrategy = getStrategyCounter(strategyCounters, 'AutoCandidateMultiOutcome');
+  const verifiedStrategy = getStrategyCounter(strategyCounters, 'VerifiedMultiOutcome');
+  const singleCycle = runtime(health, 'singleMarketFullCycleSummary') ?? {};
+  const reducedMarkets = runtime(health, 'reducedUniverseMarkets') ?? scanner.effectiveMarketPoolSize ?? scanner.effectiveMarketLimit ?? 0;
+  const singleCandidates = first(singleStrategy?.cand, scanner.candidatesEvaluated, 0);
+  const bestEdge = first(singleCycle.bestEdge, scanner.bestEdgeIsAvailable ? scanner.bestEdgeSeen : undefined, 'N/A');
+  const scannerRows = [
+    ['Universe', runtime(health, 'discoveryReducedUniverse') ? 'Reduced' : (runtime(health, 'diagnosticsUniverse') ?? 'Full')],
+    ['Pool', reducedMarkets],
+    ['Single scan', first(singleStrategy?.scan, scanner.marketsScannedThisCycle, scanner.marketsScanned, 0)],
+    ['Books', first(singleStrategy?.books, scanner.orderbooksScanned, scanner.orderbooksRequested, 0)],
+    ['Candidates', singleCandidates],
+    ['Positive', first(singleStrategy?.positive, scanner.positiveEdgeFound, 0)],
+    ['Paper opened', first(singleStrategy?.paper, runtime(health, 'paperOpened'), 0)],
+    ['Best edge', bestEdge]
+  ];
+  const strategyRows = [
+    ['SingleMarketBuyBoth', strategyCompact(singleStrategy, ['scan', 'books', 'cand', 'positive', 'paper'])],
+    ['AutoCandidate', strategyCompact(autoStrategy, ['scan', 'cand', 'positive'])],
+    ['Verified', strategyCompact(verifiedStrategy, ['scan', 'cand', 'positive'])]
+  ];
+  const cycleRows = singleCycle && Object.keys(singleCycle).length ? [
+    ['Cycle', singleCycle.cycle ?? '-'],
+    ['Markets', singleCycle.markets ?? '-'],
+    ['Data quality', singleCycle.dataQualityRejected ?? '-'],
+    ['Below min edge', singleCycle.belowMinEdge ?? '-'],
+    ['Positive edge', singleCycle.positiveEdge ?? '-'],
+    ['Best edge', singleCycle.bestEdge ?? '-'],
+    ['Best rejected', singleCycle.bestRejectedRawEdge ?? '-']
+  ] : [];
+
   return <div className="terminal-root min-h-screen terminal-font">
     <header className="status-strip" aria-label="Trading bot status">
       <div className="brand-chip">POLYBOT</div>
-      <Metric label="Backend" value={d.connectionStatus} tone={backendConnected ? 'green' : 'yellow'} />
-      <Metric label="Mode" value={d.status?.mode ?? 'PaperOnly'} tone="cyan" />
-      <Metric label="Trading" value="Paper / Live off" tone="green" />
-      <Metric label="Discovery" value={backendConnected ? (scanner.poolLimitReason ?? (d.controls?.isPaused ? 'Paused' : 'Scanning')) : 'Waiting'} tone={backendConnected ? (d.controls?.isPaused ? 'yellow' : 'cyan') : 'yellow'} />
-      <Metric label="Readiness" value={backendConnected ? (d.controls?.isPaused ? 'Paused' : 'Ready') : 'No backend'} tone={backendConnected ? (d.controls?.isPaused ? 'yellow' : 'green') : 'yellow'} />
+      <Metric label="Backend" value={connectionLabel} tone={backendConnected ? 'green' : 'yellow'} />
+      <Metric label="Mode" value={d.status?.mode ?? `PaperPhase ${runtime(health, 'paperPhase') ?? 'PaperOnly'}`} tone="cyan" />
+      <Metric label="Trading" value={runtime(health, 'strategyExecutionGloballyBlocked') ? 'Strategy blocked' : 'Paper / Live off'} tone={runtime(health, 'strategyExecutionGloballyBlocked') ? 'yellow' : 'green'} />
+      <Metric label="Discovery" value={backendConnected ? discoveryLabel(health, scanner, d.controls) : 'Waiting'} tone={backendConnected ? (d.controls?.isPaused || runtime(health, 'discoveryReducedUniverse') ? 'yellow' : 'cyan') : 'yellow'} />
+      <Metric label="Readiness" value={backendConnected ? readinessLabel(health, d.controls) : 'No backend'} tone={backendConnected ? (runtime(health, 'tradingReadiness') ? 'green' : 'yellow') : 'yellow'} />
       <Metric label="P/L" value={money(pnl)} tone={pnl < 0 ? 'red' : 'green'} />
     </header>
 
     <main className="clean-dashboard">
       <Panel title="P/L Vector" active>
-        <div className="pl-summary"><BigStat label="Equity" value={money(equity)} tone="green" /><BigStat label="Cash" value={money(cash)} tone="green" /><BigStat label="Realized P/L" value={money(pnl)} tone={pnl < 0 ? 'red' : 'green'} /><BigStat label="Heartbeat" value={time(d.lastHeartbeat)} tone="muted" /><BigStat label="Locked" value={money(d.status?.lockedCapital ?? paper.locked ?? 0)} tone="yellow" /><BigStat label="Open Positions" value={openPositions.length} tone="cyan" /></div>
-        <div className={`pl-chart ${chartHasData ? 'has-data' : 'is-empty'}`}>{chartHasData ? <ResponsiveContainer><AreaChart data={d.equity} margin={{ top: 14, right: 18, left: 4, bottom: 6 }}><defs><linearGradient id="plGlow" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#35ff9c" stopOpacity={0.18} /><stop offset="100%" stopColor="#35ff9c" stopOpacity={0.01} /></linearGradient></defs><CartesianGrid stroke="rgba(53,255,156,.08)" vertical={false} /><XAxis dataKey="timestamp" hide /><YAxis domain={chartDomain} tick={{ fill: '#6ee7b7', fontSize: 10 }} width={58} /><Tooltip contentStyle={{ background: '#050807', border: '1px solid rgba(53,255,156,.35)', color: '#d9fff1' }} />{flatEquity ? <><ReferenceLine y={minEquity} stroke="#35ff9c" strokeWidth={2} strokeDasharray={singleEquityPoint ? '4 4' : undefined} />{singleEquityPoint && <ReferenceDot x={(d.equity[0] as any).timestamp} y={minEquity} r={4} fill="#35ff9c" stroke="#050807" />}</> : <Area type="monotone" dataKey="equity" stroke="#35ff9c" strokeWidth={3} fill="url(#plGlow)" />}</AreaChart></ResponsiveContainer> : <div className="chart-empty"><span>Waiting for portfolio/equity updates</span></div>}</div>
+        <div className="pl-summary"><BigStat label="Equity" value={money(equity)} tone="green" /><BigStat label="Cash" value={money(cash)} tone="green" /><BigStat label="Realized P/L" value={money(pnl)} tone={pnl < 0 ? 'red' : 'green'} /><BigStat label="Heartbeat" value={time(d.lastHeartbeat)} tone="muted" /><BigStat label="Locked" value={money(locked)} tone="yellow" /><BigStat label="Open Positions" value={openPositions.length} tone="cyan" /></div>
+        <div className={`pl-chart ${chartHasData ? 'has-data' : 'is-empty'}`}>{chartHasData ? <ResponsiveContainer><AreaChart data={chartData} margin={{ top: 14, right: 18, left: 4, bottom: 6 }}><defs><linearGradient id="plGlow" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#35ff9c" stopOpacity={0.18} /><stop offset="100%" stopColor="#35ff9c" stopOpacity={0.01} /></linearGradient></defs><CartesianGrid stroke="rgba(53,255,156,.08)" vertical={false} /><XAxis dataKey="timestamp" hide /><YAxis domain={chartDomain} tick={{ fill: '#6ee7b7', fontSize: 10 }} width={58} /><Tooltip contentStyle={{ background: '#050807', border: '1px solid rgba(53,255,156,.35)', color: '#d9fff1' }} />{flatEquity ? <><ReferenceLine y={minEquity} stroke="#35ff9c" strokeWidth={2} strokeDasharray={singleEquityPoint ? '4 4' : undefined} />{singleEquityPoint && <ReferenceDot x={(chartData[0] as any).timestamp} y={minEquity} r={4} fill="#35ff9c" stroke="#050807" />}</> : <Area type="monotone" dataKey="equity" stroke="#35ff9c" strokeWidth={3} fill="url(#plGlow)" />}</AreaChart></ResponsiveContainer> : <div className="chart-empty"><span>Waiting for portfolio/equity updates</span></div>}{chartHasData && !equityHistory.length ? <small className="chart-note">Flat equity / waiting for changes</small> : null}</div>
       </Panel>
 
       <section className="operations-grid">
-        <Panel title="Recent Trades" active compact>{d.trades.length ? <Table t={tradeTable} /> : <Empty label="Waiting for paper executions" />}</Panel>
+        <Panel title="Recent Trades" active compact>{paperTrades.length ? <Table t={tradeTable} /> : <Empty label="Waiting for paper executions" />}</Panel>
         <Panel title="Open Positions" active compact>{openPositions.length ? <Table t={positionTable} /> : <Empty label="No open paper positions" />}</Panel>
       </section>
 
@@ -129,10 +175,74 @@ export default function App() {
 
       <section className="diagnostics-shell">
         <button className="diagnostics-toggle" onClick={() => setShowDiagnostics((v) => !v)}>{showDiagnostics ? 'Hide diagnostics' : 'Show diagnostics'}</button>
-        {showDiagnostics && <div className="diagnostics-grid"><MiniBlock title="Scanner" rows={[['Active', scanner.activeMarketsAvailable ?? scanner.activeMarketsDiscovered ?? 0], ['Pool', scanner.effectiveMarketPoolSize ?? scanner.effectiveMarketLimit ?? 0], ['Candidates', scanner.candidatesEvaluated ?? 0], ['Liquidity pass', scanner.marketsPassingLiquidity ?? 0], ['Best edge', scanner.bestEdgeIsAvailable ? scanner.bestEdgeSeen : 'N/A']]} /><MiniBlock title="Paper Summary" rows={[['Exposure', money(paper.totalExposure ?? d.status?.lockedCapital ?? 0)], ['Settlements', d.paperSettlements?.length ?? paper.settlements ?? 0], ['Rejects', Object.entries(paper.blockedCountsByReason ?? {}).map(([k, v]: any) => `${k}=${v}`).join(' ') || '-']]} /><MiniBlock title="Runtime" rows={[['Source', d.source], ['REST error', d.lastRestError || '-'], ['Last event', d.lastEvent || '-'], ['Updated', time(d.lastUpdated)], ['Logs', d.logs.length]]} /><div className="raw-log-block"><h4>Raw diagnostics</h4>{d.logs.slice(0, 30).map((l: any) => <pre key={l.id}>{time(l.timestamp)} [{l.source}] {l.message}</pre>)}</div></div>}
+        {showDiagnostics && <div className="diagnostics-grid"><MiniBlock title="Scanner" rows={scannerRows} /><MiniBlock title="Strategy Summary" rows={strategyRows} /><MiniBlock title="Paper Summary" rows={[["Exposure", money(runtime(health, 'paperTotalExposure') ?? paper.totalExposure ?? locked)], ["Settlements", d.paperSettlements?.length ?? paper.settlements ?? 0], ["Rejects", Object.entries(paper.blockedCountsByReason ?? {}).map(([k, v]: any) => `${k}=${v}`).join(' ') || '-']]} /><MiniBlock title="Runtime" rows={[["Source", runtime(health, '__source') ?? d.source], ["Discovery", discoveryLabel(health, scanner, d.controls)], ["Readiness", readinessLabel(health, d.controls)], ["Universe", runtime(health, 'diagnosticsUniverse') ?? '-'], ["Reduced markets", runtime(health, 'reducedUniverseMarkets') ?? 0], ["Updated", time(runtime(health, '__updatedAt') ?? d.lastUpdated)]]} />{cycleRows.length ? <MiniBlock title="Single Cycle" rows={cycleRows} /> : null}<details className="raw-log-block"><summary>Raw logs</summary><div className="raw-log-console">{d.logs.slice(0, 30).map((l: any) => <pre key={l.id}>{time(l.timestamp)} [{l.source}] {l.message}</pre>)}</div></details></div>}
       </section>
     </main>
   </div>;
+}
+
+
+
+function strategyCounterMap(health: any) {
+  const rawCounters = runtime(health, 'strategyCounters') ?? {};
+  const counters: Record<string, any> = {};
+  for (const [name, counter] of Object.entries(rawCounters)) counters[name] = normalizeStrategyCounter(counter);
+  const structured: Array<[string, string]> = [
+    ['strategyScanCounts', 'scan'],
+    ['strategyCandidates', 'cand'],
+    ['strategyPositiveEdges', 'positive'],
+    ['strategyExecutionReady', 'ready'],
+    ['strategyPaperOpened', 'paper']
+  ];
+  for (const [field, target] of structured) {
+    const bag = runtime(health, field);
+    if (!bag || typeof bag !== 'object') continue;
+    for (const [strategy, value] of Object.entries(bag)) {
+      counters[strategy] ??= {};
+      counters[strategy][target] = Number(value);
+    }
+  }
+  return counters;
+}
+function normalizeStrategyCounter(counter: any) {
+  if (!counter || typeof counter !== 'object') return counter;
+  return {
+    ...counter,
+    scan: first(counter.scan, counter.scanned, counter.Scanned),
+    books: first(counter.books, counter.Books),
+    cand: first(counter.cand, counter.candidates, counter.Candidates),
+    positive: first(counter.positive, counter.positiveEdges, counter.PositiveEdges),
+    paper: first(counter.paper, counter.paperOpened, counter.PaperOpened),
+    ready: first(counter.ready, counter.executionReady, counter.ExecutionReady)
+  };
+}
+function getStrategyCounter(counters: any, name: string) {
+  const key = Object.keys(counters ?? {}).find((k) => k.toLowerCase() === name.toLowerCase());
+  return key ? counters[key] : null;
+}
+function strategyCompact(counter: any, fields: string[]) {
+  if (!counter) return '-';
+  return fields.map((f) => `${f}=${counter[f] ?? 0}`).join(' / ');
+}
+
+function discoveryLabel(health: any, scanner: any, controls: any) {
+  const mode = String(first(runtime(health, 'discoveryMode'), runtime(health, 'discoverySelectedSource'), '')).toLowerCase();
+  if (runtime(health, 'discoverySourceAuditOnly')) return 'Blocked';
+  if (mode === 'reduceduniversediagnosticsonly' || runtime(health, 'discoveryReducedUniverse')) return 'Reduced Universe';
+  return first(runtime(health, 'discoverySelectedSource'), scanner?.poolLimitReason, controls?.isPaused ? 'Paused' : undefined, 'Scanning');
+}
+function readinessLabel(health: any, controls: any) {
+  const mode = String(first(runtime(health, 'discoveryMode'), runtime(health, 'discoverySelectedSource'), '')).toLowerCase();
+  if (controls?.isPaused) return 'Paused';
+  if (runtime(health, 'discoverySourceAuditOnly')) return 'SourceAuditOnly';
+  if (mode === 'reduceduniversediagnosticsonly' || runtime(health, 'discoveryReducedUniverse')) return 'Blocked / Reduced diagnostics';
+  return first(runtime(health, 'soakReadinessReason'), runtime(health, 'soakReadiness'), runtime(health, 'tradingReadiness') === true ? 'Ready' : undefined, 'Ready');
+}
+function keepPaperTrades(trades: any[] = [], singleMarketExecutions: any[] = [], audit: any[] = []) {
+  const paperStatuses = new Set(['PAPER_EXECUTED', 'PAPER_OPENED', 'PAPER_CLOSED', 'FILLED', 'OPENED', 'CLOSED']);
+  const fromTrades = trades.filter((t) => paperStatuses.has(String(t.status ?? '').toUpperCase()));
+  const fromAudit = audit.filter((a) => String(a.status ?? a.eventType ?? '').toLowerCase().includes('paper'));
+  return [...singleMarketExecutions, ...fromTrades, ...fromAudit].filter((t) => !String(t.message ?? t.source ?? '').toLowerCase().includes('diagnostic'));
 }
 
 function Metric({ label, value, tone }: any) { return <div className="status-metric"><span>{label}</span><strong className={`tone-${tone ?? 'green'}`}>{value}</strong></div>; }
