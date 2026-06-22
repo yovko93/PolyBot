@@ -4,6 +4,67 @@ import { keepLatest, UIDataLimits } from '../constants/uiDataLimits';
 import { addLogDeduped, dedupeLogSnapshot } from '../utils/logDedupe';
 
 
+function parseCounterBag(value: string) {
+  const bag: Record<string, number> = {};
+  for (const part of value.replace(/[{}]/g, '').split(',')) {
+    const [key, raw] = part.split(':');
+    const numberValue = Number(raw);
+    if (key && Number.isFinite(numberValue)) bag[key.trim()] = numberValue;
+  }
+  return bag;
+}
+
+function mergeStructuredStrategyCounters(pairs: Record<string, any>, source: Record<string, any>) {
+  const fieldMap: Record<string, string> = {
+    strategyScanCounts: 'scan',
+    strategyCandidates: 'cand',
+    strategyPositiveEdges: 'positive',
+    strategyExecutionReady: 'ready',
+    strategyPaperOpened: 'paper'
+  };
+  for (const [field, target] of Object.entries(fieldMap)) {
+    const bag = source[field];
+    if (!bag || typeof bag !== 'object') continue;
+    for (const [strategy, value] of Object.entries(bag)) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) continue;
+      pairs.strategyCounters ??= {};
+      pairs.strategyCounters[strategy] ??= {};
+      pairs.strategyCounters[strategy][target] = numeric;
+    }
+  }
+}
+
+function parseStrategies(message: string, pairs: Record<string, any>) {
+  const strategiesMatch = message.match(/Strategies=\{([^}]*)\}/);
+  if (!strategiesMatch) return;
+  pairs.strategyCounters ??= {};
+  for (const item of strategiesMatch[1].split(',')) {
+    const parts = item.split(':').map((x) => x.trim()).filter(Boolean);
+    if (parts.length < 2) continue;
+    const [name, mode, ...metrics] = parts;
+    const counter = { ...(pairs.strategyCounters[name] ?? {}), mode };
+    for (const metric of metrics) {
+      const [key, raw] = metric.split('=');
+      const numeric = Number(raw);
+      counter[key] = Number.isFinite(numeric) ? numeric : raw;
+    }
+    pairs.strategyCounters[name] = counter;
+  }
+}
+
+function parseSingleMarketSummaryLog(log: any) {
+  const message = String(log?.message ?? '');
+  if (!message.includes('[SINGLE_MARKET_FULL_CYCLE_SUMMARY]')) return null;
+  const summary: Record<string, any> = { __updatedAt: log?.timestamp ?? new Date().toISOString() };
+  for (const match of message.matchAll(/([A-Za-z][A-Za-z0-9_]*)=([^\s{}]+)/g)) {
+    const [, rawKey, rawValue] = match;
+    const key = rawKey.charAt(0).toLowerCase() + rawKey.slice(1);
+    const numeric = Number(rawValue);
+    summary[key] = Number.isFinite(numeric) ? numeric : rawValue;
+  }
+  return summary;
+}
 
 function parseRuntimeHealthLog(log: any) {
   const message = String(log?.message ?? '');
@@ -18,6 +79,12 @@ function parseRuntimeHealthLog(log: any) {
     else pairs[key] = rawValue;
   }
   if (pairs.discoveryMode && !pairs.discoverySelectedSource) pairs.discoverySelectedSource = pairs.discoveryMode;
+  for (const match of message.matchAll(/(StrategyScanCounts|StrategyCandidates|StrategyPositiveEdges|StrategyExecutionReady|StrategyPaperOpened)=({[^}]*}|[^\s]+)/g)) {
+    const key = match[1].charAt(0).toLowerCase() + match[1].slice(1);
+    pairs[key] = parseCounterBag(match[2]);
+  }
+  parseStrategies(message, pairs);
+  mergeStructuredStrategyCounters(pairs, pairs);
   return pairs;
 }
 
@@ -65,7 +132,12 @@ export function useBotData() {
         onScanner: setScanner,
         onLog: (d) => {
           const parsedHealth = parseRuntimeHealthLog(d);
-          if (parsedHealth) { setRuntimeHealth((current: any) => ({ ...(current ?? {}), ...parsedHealth })); setSource('LIVE BACKEND'); setLastUpdated(parsedHealth.__updatedAt); }
+          const cycleSummary = parseSingleMarketSummaryLog(d);
+          if (parsedHealth || cycleSummary) {
+            setRuntimeHealth((current: any) => ({ ...(current ?? {}), ...(parsedHealth ?? {}), ...(cycleSummary ? { singleMarketFullCycleSummary: cycleSummary } : {}) }));
+            setSource('LIVE BACKEND');
+            setLastUpdated((parsedHealth ?? cycleSummary)?.__updatedAt ?? new Date().toISOString());
+          }
           setLogs((x: any[]) => addLogDeduped(x, d, UIDataLimits.MaxRecentLogs));
         },
         onEquity: (d) => setEquity(keepLatest(d, UIDataLimits.MaxChartPoints)),

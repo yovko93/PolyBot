@@ -112,6 +112,39 @@ export default function App() {
   const domainPadding = flatEquity ? Math.max(5, Math.abs(minEquity) * 0.01) : Math.max(1, (maxEquity - minEquity) * 0.12);
   const chartDomain: [number, number] = [minEquity - domainPadding, maxEquity + domainPadding];
 
+  const strategyCounters = strategyCounterMap(health);
+  const singleStrategy = getStrategyCounter(strategyCounters, 'SingleMarketBuyBoth');
+  const autoStrategy = getStrategyCounter(strategyCounters, 'AutoCandidateMultiOutcome');
+  const verifiedStrategy = getStrategyCounter(strategyCounters, 'VerifiedMultiOutcome');
+  const singleCycle = runtime(health, 'singleMarketFullCycleSummary') ?? {};
+  const reducedMarkets = runtime(health, 'reducedUniverseMarkets') ?? scanner.effectiveMarketPoolSize ?? scanner.effectiveMarketLimit ?? 0;
+  const singleCandidates = first(singleStrategy?.cand, scanner.candidatesEvaluated, 0);
+  const bestEdge = first(singleCycle.bestEdge, scanner.bestEdgeIsAvailable ? scanner.bestEdgeSeen : undefined, 'N/A');
+  const scannerRows = [
+    ['Universe', runtime(health, 'discoveryReducedUniverse') ? 'Reduced' : (runtime(health, 'diagnosticsUniverse') ?? 'Full')],
+    ['Pool', reducedMarkets],
+    ['Single scan', first(singleStrategy?.scan, scanner.marketsScannedThisCycle, scanner.marketsScanned, 0)],
+    ['Books', first(singleStrategy?.books, scanner.orderbooksScanned, scanner.orderbooksRequested, 0)],
+    ['Candidates', singleCandidates],
+    ['Positive', first(singleStrategy?.positive, scanner.positiveEdgeFound, 0)],
+    ['Paper opened', first(singleStrategy?.paper, runtime(health, 'paperOpened'), 0)],
+    ['Best edge', bestEdge]
+  ];
+  const strategyRows = [
+    ['SingleMarketBuyBoth', strategyCompact(singleStrategy, ['scan', 'books', 'cand', 'positive', 'paper'])],
+    ['AutoCandidate', strategyCompact(autoStrategy, ['scan', 'cand', 'positive'])],
+    ['Verified', strategyCompact(verifiedStrategy, ['scan', 'cand', 'positive'])]
+  ];
+  const cycleRows = singleCycle && Object.keys(singleCycle).length ? [
+    ['Cycle', singleCycle.cycle ?? '-'],
+    ['Markets', singleCycle.markets ?? '-'],
+    ['Data quality', singleCycle.dataQualityRejected ?? '-'],
+    ['Below min edge', singleCycle.belowMinEdge ?? '-'],
+    ['Positive edge', singleCycle.positiveEdge ?? '-'],
+    ['Best edge', singleCycle.bestEdge ?? '-'],
+    ['Best rejected', singleCycle.bestRejectedRawEdge ?? '-']
+  ] : [];
+
   return <div className="terminal-root min-h-screen terminal-font">
     <header className="status-strip" aria-label="Trading bot status">
       <div className="brand-chip">POLYBOT</div>
@@ -142,12 +175,55 @@ export default function App() {
 
       <section className="diagnostics-shell">
         <button className="diagnostics-toggle" onClick={() => setShowDiagnostics((v) => !v)}>{showDiagnostics ? 'Hide diagnostics' : 'Show diagnostics'}</button>
-        {showDiagnostics && <div className="diagnostics-grid"><MiniBlock title="Scanner" rows={[["Active", scanner.activeMarketsAvailable ?? scanner.activeMarketsDiscovered ?? 0], ["Pool", scanner.effectiveMarketPoolSize ?? scanner.effectiveMarketLimit ?? 0], ["Candidates", scanner.candidatesEvaluated ?? 0], ["Liquidity pass", scanner.marketsPassingLiquidity ?? 0], ["Best edge", scanner.bestEdgeIsAvailable ? scanner.bestEdgeSeen : 'N/A']]} /><MiniBlock title="Paper Summary" rows={[["Exposure", money(runtime(health, 'paperTotalExposure') ?? paper.totalExposure ?? locked)], ["Settlements", d.paperSettlements?.length ?? paper.settlements ?? 0], ["Rejects", Object.entries(paper.blockedCountsByReason ?? {}).map(([k, v]: any) => `${k}=${v}`).join(' ') || '-']]} /><MiniBlock title="Runtime" rows={[["Source", runtime(health, '__source') ?? d.source], ["Discovery", discoveryLabel(health, scanner, d.controls)], ["Readiness", readinessLabel(health, d.controls)], ["Universe", runtime(health, 'diagnosticsUniverse') ?? '-'], ["Reduced markets", runtime(health, 'reducedUniverseMarkets') ?? 0], ["Updated", time(runtime(health, '__updatedAt') ?? d.lastUpdated)]]} /><details className="raw-log-block"><summary>Raw logs</summary><div className="raw-log-console">{d.logs.slice(0, 30).map((l: any) => <pre key={l.id}>{time(l.timestamp)} [{l.source}] {l.message}</pre>)}</div></details></div>}
+        {showDiagnostics && <div className="diagnostics-grid"><MiniBlock title="Scanner" rows={scannerRows} /><MiniBlock title="Strategy Summary" rows={strategyRows} /><MiniBlock title="Paper Summary" rows={[["Exposure", money(runtime(health, 'paperTotalExposure') ?? paper.totalExposure ?? locked)], ["Settlements", d.paperSettlements?.length ?? paper.settlements ?? 0], ["Rejects", Object.entries(paper.blockedCountsByReason ?? {}).map(([k, v]: any) => `${k}=${v}`).join(' ') || '-']]} /><MiniBlock title="Runtime" rows={[["Source", runtime(health, '__source') ?? d.source], ["Discovery", discoveryLabel(health, scanner, d.controls)], ["Readiness", readinessLabel(health, d.controls)], ["Universe", runtime(health, 'diagnosticsUniverse') ?? '-'], ["Reduced markets", runtime(health, 'reducedUniverseMarkets') ?? 0], ["Updated", time(runtime(health, '__updatedAt') ?? d.lastUpdated)]]} />{cycleRows.length ? <MiniBlock title="Single Cycle" rows={cycleRows} /> : null}<details className="raw-log-block"><summary>Raw logs</summary><div className="raw-log-console">{d.logs.slice(0, 30).map((l: any) => <pre key={l.id}>{time(l.timestamp)} [{l.source}] {l.message}</pre>)}</div></details></div>}
       </section>
     </main>
   </div>;
 }
 
+
+
+function strategyCounterMap(health: any) {
+  const rawCounters = runtime(health, 'strategyCounters') ?? {};
+  const counters: Record<string, any> = {};
+  for (const [name, counter] of Object.entries(rawCounters)) counters[name] = normalizeStrategyCounter(counter);
+  const structured: Array<[string, string]> = [
+    ['strategyScanCounts', 'scan'],
+    ['strategyCandidates', 'cand'],
+    ['strategyPositiveEdges', 'positive'],
+    ['strategyExecutionReady', 'ready'],
+    ['strategyPaperOpened', 'paper']
+  ];
+  for (const [field, target] of structured) {
+    const bag = runtime(health, field);
+    if (!bag || typeof bag !== 'object') continue;
+    for (const [strategy, value] of Object.entries(bag)) {
+      counters[strategy] ??= {};
+      counters[strategy][target] = Number(value);
+    }
+  }
+  return counters;
+}
+function normalizeStrategyCounter(counter: any) {
+  if (!counter || typeof counter !== 'object') return counter;
+  return {
+    ...counter,
+    scan: first(counter.scan, counter.scanned, counter.Scanned),
+    books: first(counter.books, counter.Books),
+    cand: first(counter.cand, counter.candidates, counter.Candidates),
+    positive: first(counter.positive, counter.positiveEdges, counter.PositiveEdges),
+    paper: first(counter.paper, counter.paperOpened, counter.PaperOpened),
+    ready: first(counter.ready, counter.executionReady, counter.ExecutionReady)
+  };
+}
+function getStrategyCounter(counters: any, name: string) {
+  const key = Object.keys(counters ?? {}).find((k) => k.toLowerCase() === name.toLowerCase());
+  return key ? counters[key] : null;
+}
+function strategyCompact(counter: any, fields: string[]) {
+  if (!counter) return '-';
+  return fields.map((f) => `${f}=${counter[f] ?? 0}`).join(' / ');
+}
 
 function discoveryLabel(health: any, scanner: any, controls: any) {
   const mode = String(first(runtime(health, 'discoveryMode'), runtime(health, 'discoverySelectedSource'), '')).toLowerCase();
