@@ -87,5 +87,6 @@ public record OrderBookServiceStats(
     long TruePostBreakerNormalRequests = 0,
     long TruePostBreakerBadRequests = 0,
     int ReducedUniverseBadHistoryActive = 0,
-    bool ReducedUniverseBadHistoryLoaded = false
+    bool ReducedUniverseBadHistoryLoaded = false,
+    int ReducedUniverseBadHistoryExpired = 0
 );

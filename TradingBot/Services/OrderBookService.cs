@@ -136,7 +136,7 @@ public class OrderBookService : IOrderBookProvider
     private readonly Dictionary<string, string> _tokenMarketIds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (string YesTokenId, string NoTokenId)> _marketTokenPairs = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, MarketOrderbookQuarantine> _marketOrderbookQuarantine = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, DateTime> _reducedUniverseBadHistory = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ReducedUniverseBadOrderbookHistoryEntry> _reducedUniverseBadHistory = new(StringComparer.OrdinalIgnoreCase);
     private readonly OrderbookEligibilityRegistry _orderbookEligibility = new();
     private readonly HashSet<string> _orderbookUnavailableMarkets = new(StringComparer.OrdinalIgnoreCase);
     private readonly Queue<(DateTime Time, string EventName, string Sample)> _batchErrorSamples = new();
@@ -160,10 +160,12 @@ public class OrderBookService : IOrderBookProvider
     private readonly Queue<DateTime> _invalidTokenTimes = new();
     private bool _circuitBreakerLoggedOpen;
     private bool _reducedUniverseBadHistoryLoaded;
+    private long _reducedUniverseBadHistoryExpired;
 
     private TimeSpan _cacheTtl = TimeSpan.FromSeconds(60);
     private int _maxCacheEntries = 5000;
     private TimeSpan ReducedUniverseBadHistoryTtl => TimeSpan.FromDays(7);
+    public string SourceDiscoveryMode { get; set; } = "Unknown";
 
     public OrderBookService(HttpClient http)
     {
@@ -521,7 +523,7 @@ public class OrderBookService : IOrderBookProvider
         return _orderbookEligibility.Get(marketId);
     }
 
-    private string ReducedUniverseBadHistoryPath => Path.Combine(ExportDirectory, "reduced-universe-orderbook-bad-history.json");
+    private string ReducedUniverseBadHistoryPath => Path.Combine(ExportDirectory, "reduced-universe-bad-orderbook-history.json");
 
     private void EnsureReducedUniverseBadHistoryLoadedLocked(DateTime now)
     {
@@ -530,10 +532,14 @@ public class OrderBookService : IOrderBookProvider
         try
         {
             if (!File.Exists(ReducedUniverseBadHistoryPath)) return;
-            var loaded = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, DateTime>>(File.ReadAllText(ReducedUniverseBadHistoryPath));
+            var loaded = System.Text.Json.JsonSerializer.Deserialize<List<ReducedUniverseBadOrderbookHistoryEntry>>(File.ReadAllText(ReducedUniverseBadHistoryPath));
             if (loaded == null) return;
             foreach (var item in loaded)
-                if (item.Value > now) _reducedUniverseBadHistory[item.Key] = item.Value;
+            {
+                var expiresAt = item.QuarantineUntilUtc ?? item.LastSeenUtc.Add(ReducedUniverseBadHistoryTtl);
+                if (expiresAt > now) _reducedUniverseBadHistory[item.Key] = item;
+                else Interlocked.Increment(ref _reducedUniverseBadHistoryExpired);
+            }
         }
         catch { }
     }
@@ -543,24 +549,60 @@ public class OrderBookService : IOrderBookProvider
         try
         {
             Directory.CreateDirectory(ExportDirectory);
-            File.WriteAllText(ReducedUniverseBadHistoryPath, System.Text.Json.JsonSerializer.Serialize(_reducedUniverseBadHistory));
+            var json = System.Text.Json.JsonSerializer.Serialize(_reducedUniverseBadHistory.Values.OrderBy(x => x.Key).ToList());
+            var temp = ReducedUniverseBadHistoryPath + ".tmp";
+            File.WriteAllText(temp, json);
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                try
+                {
+                    File.Move(temp, ReducedUniverseBadHistoryPath, overwrite: true);
+                    break;
+                }
+                catch (IOException) when (attempt < 2) { System.Threading.Thread.Sleep(25); }
+            }
         }
         catch { }
     }
 
-    private void RememberReducedUniverseBadHistoryLocked(string key, DateTime now)
+    private void RememberReducedUniverseBadHistoryLocked(string key, DateTime now, string reason = "OrderbookQuarantine", string lastFailureKind = "OrderbookQuarantine", string? marketId = null, string? tokenId = null, DateTime? quarantineUntilUtc = null)
     {
         if (string.IsNullOrWhiteSpace(key)) return;
         EnsureReducedUniverseBadHistoryLoadedLocked(now);
-        _reducedUniverseBadHistory[key] = now.Add(ReducedUniverseBadHistoryTtl);
+        var existing = _reducedUniverseBadHistory.TryGetValue(key, out var entry) ? entry : null;
+        _reducedUniverseBadHistory[key] = new ReducedUniverseBadOrderbookHistoryEntry(
+            Key: key,
+            MarketId: marketId ?? existing?.MarketId,
+            TokenId: tokenId ?? existing?.TokenId,
+            Reason: NormalizeBadHistoryReason(reason, lastFailureKind),
+            FirstSeenUtc: existing?.FirstSeenUtc ?? now,
+            LastSeenUtc: now,
+            FailureCount: (existing?.FailureCount ?? 0) + 1,
+            LastFailureKind: lastFailureKind,
+            QuarantineUntilUtc: quarantineUntilUtc ?? now.Add(ReducedUniverseBadHistoryTtl),
+            SourceRunId: TradingBot.Api.ProcessRunContext.ProcessRunId,
+            SourceDiscoveryMode: SourceDiscoveryMode);
         PersistReducedUniverseBadHistoryLocked();
+    }
+
+    private static string NormalizeBadHistoryReason(string reason, string lastFailureKind)
+    {
+        if (reason.Contains("InvalidToken", StringComparison.OrdinalIgnoreCase) || lastFailureKind.Contains("InvalidToken", StringComparison.OrdinalIgnoreCase)) return "InvalidToken";
+        if (reason.Contains("Isolation", StringComparison.OrdinalIgnoreCase) || lastFailureKind.Contains("Isolation", StringComparison.OrdinalIgnoreCase)) return "SingleTokenIsolationFailure";
+        if (reason.Contains("Unavailable", StringComparison.OrdinalIgnoreCase)) return "MarketOrderbookUnavailable";
+        if (reason.Contains("BadRequest", StringComparison.OrdinalIgnoreCase) || lastFailureKind.Contains("BadRequest", StringComparison.OrdinalIgnoreCase)) return "BatchBookBadRequest";
+        if (reason.Contains("CircuitBreaker", StringComparison.OrdinalIgnoreCase) || lastFailureKind.Contains("CircuitBreaker", StringComparison.OrdinalIgnoreCase)) return "CircuitBreakerContributed";
+        return "OrderbookQuarantine";
     }
 
     private void TrimReducedUniverseBadHistoryLocked(DateTime now)
     {
         EnsureReducedUniverseBadHistoryLoadedLocked(now);
-        foreach (var key in _reducedUniverseBadHistory.Where(x => x.Value <= now).Select(x => x.Key).ToList())
+        foreach (var key in _reducedUniverseBadHistory.Where(x => (x.Value.QuarantineUntilUtc ?? x.Value.LastSeenUtc.Add(ReducedUniverseBadHistoryTtl)) <= now).Select(x => x.Key).ToList())
+        {
             _reducedUniverseBadHistory.Remove(key);
+            Interlocked.Increment(ref _reducedUniverseBadHistoryExpired);
+        }
     }
 
     public ReducedUniverseOrderbookFilterResult FilterReducedUniverseOrderbookEligibleMarkets(IEnumerable<Market> markets)
@@ -634,9 +676,9 @@ public class OrderBookService : IOrderBookProvider
             _marketOrderbookQuarantine[marketId] = new MarketOrderbookQuarantine(marketId, yesTokenId ?? existing?.YesTokenId ?? "", noTokenId ?? existing?.NoTokenId ?? "", reason, existing?.FirstDetectedAtUtc ?? now, now, (int)Math.Round(MarketOrderbookQuarantineTtl.TotalMinutes), source, until);
             _orderbookUnavailableMarkets.Add(marketId);
             _orderbookEligibility.MarkIneligible(marketId, reason, source, until);
-            RememberReducedUniverseBadHistoryLocked($"market:{marketId}", now);
-            RememberReducedUniverseBadHistoryLocked($"token:{yesTokenId}", now);
-            RememberReducedUniverseBadHistoryLocked($"token:{noTokenId}", now);
+            RememberReducedUniverseBadHistoryLocked($"market:{marketId}", now, reason, source, marketId: marketId, quarantineUntilUtc: until);
+            RememberReducedUniverseBadHistoryLocked($"token:{yesTokenId}", now, reason, source, marketId: marketId, tokenId: yesTokenId, quarantineUntilUtc: until);
+            RememberReducedUniverseBadHistoryLocked($"token:{noTokenId}", now, reason, source, marketId: marketId, tokenId: noTokenId, quarantineUntilUtc: until);
         }
         Console.WriteLine($"[MARKET_ORDERBOOK_QUARANTINED] MarketId={marketId} Reason={reason} Source={source} TtlMinutes={(int)Math.Round(MarketOrderbookQuarantineTtl.TotalMinutes)}");
         PublishStats();
@@ -932,7 +974,7 @@ public class OrderBookService : IOrderBookProvider
             BatchBookNormalBadRequestsAfterBreakerOpen: Interlocked.Read(ref _batchBookNormalBadRequestsAfterBreakerOpen),
             QuarantinedMarketsReintroducedBlocked: Interlocked.Read(ref _quarantinedMarketsReintroducedBlocked),
             QuarantinedTokensReintroducedBlocked: Interlocked.Read(ref _quarantinedTokensReintroducedBlocked),
-            ReducedUniverseScanPausedByOrderbookHealth: CircuitBreakerState != OrderbookCircuitBreakerState.Closed || invalidActive > 0 || marketActive > 0,
+            ReducedUniverseScanPausedByOrderbookHealth: CircuitBreakerState != OrderbookCircuitBreakerState.Closed || invalidActive > 0 || marketActive > 0 || Interlocked.Read(ref _truePostBreakerBadRequests) > 0,
             ReducedUniverseOrderbookRecoveryMode: CircuitBreakerState == OrderbookCircuitBreakerState.HalfOpen || CircuitBreakerState == OrderbookCircuitBreakerState.Recovering,
             ReducedUniverseOrderbookRecoveryCleanWindowSeconds: _recoveringSinceUtc.HasValue ? Math.Max(0, (long)(DateTime.UtcNow - _recoveringSinceUtc.Value).TotalSeconds) : (_lastClosedUtc.HasValue ? Math.Max(0, (long)(DateTime.UtcNow - _lastClosedUtc.Value).TotalSeconds) : 0),
             ReducedUniversePostRecoveryBadRequests: Interlocked.Read(ref _reducedUniversePostRecoveryBadRequests),
@@ -944,7 +986,8 @@ public class OrderBookService : IOrderBookProvider
             TruePostBreakerNormalRequests: Interlocked.Read(ref _truePostBreakerNormalRequests),
             TruePostBreakerBadRequests: Interlocked.Read(ref _truePostBreakerBadRequests),
             ReducedUniverseBadHistoryActive: _reducedUniverseBadHistory.Count,
-            ReducedUniverseBadHistoryLoaded: _reducedUniverseBadHistoryLoaded
+            ReducedUniverseBadHistoryLoaded: _reducedUniverseBadHistoryLoaded,
+            ReducedUniverseBadHistoryExpired: (int)Math.Min(int.MaxValue, Interlocked.Read(ref _reducedUniverseBadHistoryExpired))
         );
     }
 
@@ -1247,7 +1290,8 @@ public class OrderBookService : IOrderBookProvider
                 if (SplitBatchOnBadRequest && batch.Count > 1 && depth == 0 && TryReserveSplitRetry())
                 {
                     lock (_cacheLock) OpenCircuitBreakerLocked(DateTime.UtcNow, "InvalidTokenPatternFailedBatchSplit");
-                    return await SplitAndRetryBadRequestAsync(batch, bodyFactory, result, ct, depth, json);
+                    Interlocked.Add(ref _orderbookRequestsBlockedByCircuitBreaker, batch.Count);
+                    return BatchPostResult.FromBadRequest(0, batch.Count);
                 }
 
                 if (batch.Count == 1)
@@ -1731,7 +1775,7 @@ public class OrderBookService : IOrderBookProvider
             if (_invalidTokenQuarantine.ContainsKey(token)) Interlocked.Increment(ref _batchRepeatedInvalidTokenAfterQuarantine);
             else Interlocked.Increment(ref _invalidTokenQuarantineAdded);
             _invalidTokenQuarantine[token] = now.Add(InvalidTokenQuarantineTtl);
-            RememberReducedUniverseBadHistoryLocked($"token:{token}", now);
+            RememberReducedUniverseBadHistoryLocked($"token:{token}", now, "InvalidToken", reason, marketId: _tokenMarketIds.TryGetValue(token, out var badHistoryMarketId) ? badHistoryMarketId : null, tokenId: token, quarantineUntilUtc: now.Add(InvalidTokenQuarantineTtl));
             _knownInvalidTokensThisCycle.Add(token);
             _invalidTokenTimes.Enqueue(now);
             if (_circuitBreakerState == OrderbookCircuitBreakerState.Recovering && Interlocked.Read(ref _batchInvalidTokens) > _postCloseBaselineInvalidTokens)

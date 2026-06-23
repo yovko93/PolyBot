@@ -669,6 +669,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         var discoveryStable = !discoveryBlocked && (lastDiscoverySummary.DiscoveryHealthy || discoveryUsingLastHealthySnapshot);
         var effectiveScannerPausedByDiscoveryGuard = scannerPausedByDiscoveryGuard || (discoveryBlocked && !reducedUniverseBuilt);
         var allowlistSkippedByDiscovery = discoveryBlocked;
+        orderbookService.SourceDiscoveryMode = reducedUniverseActive ? "ReducedUniverseDiagnosticsOnly" : discoveryMode;
         var reducedUniverseOrderbookStable = !reducedUniverseActive || (stats.InvalidTokenQuarantineActive == 0 && stats.MarketOrderbookQuarantineActive == 0 && stats.TruePostBreakerBadRequests == 0 && stats.MarketOrderbookQuarantineLifecycleBalanced && stats.InvalidTokenQuarantineLifecycleBalanced && stats.OrderbookCircuitBreakerState.Equals("Closed", StringComparison.OrdinalIgnoreCase));
         var orderbookRecovered = stats.OrderbookCircuitBreakerState.Equals("Closed", StringComparison.OrdinalIgnoreCase) && stats.BatchBookNormalBadRequestsAfterBreakerOpen == 0;
         var longRunReasons = new List<string>();
@@ -983,8 +984,22 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             singleMarketFullCycleId = scanPool.Count == 0 ? scanId : (fullCoverageCompletedThisBatch ? fullCoverageCompletedCount : fullCoverageCompletedCount + 1);
             var singleMarketFullCycleComplete = scanPool.Count > 0 && (options.Mode == "AllAtOnce" || currentRollingOffsetAfter == 0 || filtered.Count >= scanPool.Count || fullCoverageCompletedThisBatch);
             var orderbookSemaphore = new SemaphoreSlim(options.MaxConcurrentOrderbookRequests);
+            var reducedOrderbookStatsBeforeFetch = orderbookService.GetStats();
+            var pauseReducedOrderbookScan = options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly
+                && string.Equals(discoveryMode, "ReducedUniverseDiagnosticsOnly", StringComparison.OrdinalIgnoreCase)
+                && (!reducedOrderbookStatsBeforeFetch.MarketOrderbookQuarantineLifecycleBalanced
+                    || !reducedOrderbookStatsBeforeFetch.InvalidTokenQuarantineLifecycleBalanced
+                    || reducedOrderbookStatsBeforeFetch.InvalidTokenQuarantineActive > 0
+                    || reducedOrderbookStatsBeforeFetch.MarketOrderbookQuarantineActive > 0
+                    || reducedOrderbookStatsBeforeFetch.TruePostBreakerBadRequests > 0
+                    || !string.Equals(reducedOrderbookStatsBeforeFetch.OrderbookCircuitBreakerState, "Closed", StringComparison.OrdinalIgnoreCase));
+            if (pauseReducedOrderbookScan)
+            {
+                Console.WriteLine($"[REDUCED_UNIVERSE_ORDERBOOK_SCAN_PAUSED] Reason=OrderbookHealth InvalidTokenQuarantineActive={reducedOrderbookStatsBeforeFetch.InvalidTokenQuarantineActive} MarketOrderbookQuarantineActive={reducedOrderbookStatsBeforeFetch.MarketOrderbookQuarantineActive} TruePostBreakerBadRequests={reducedOrderbookStatsBeforeFetch.TruePostBreakerBadRequests} CircuitBreakerState={reducedOrderbookStatsBeforeFetch.OrderbookCircuitBreakerState}");
+                filtered = new List<Market>();
+            }
             SetScannerStage("BatchOrderbookFetch", "OrderBookService");
-            await orderbookService.PrefetchBinarySnapshotsAsync(filtered);
+            if (!pauseReducedOrderbookScan) await orderbookService.PrefetchBinarySnapshotsAsync(filtered);
             SetScannerStage("StrategyOrchestrator", "StrategyOrchestrator");
             var strategyResults = await strategyOrchestrator.RunEnabledAsync(new OpportunityStrategyContext(filtered!, new PaperTradingEngineFacade { Engine = paper }, orderbookSemaphore, singleMarketFullCycleId, singleMarketFullCycleComplete, options.Diagnostics.OperationalQuietMode || !options.SingleMarketArb.LogBatchSummaries, stoppingToken));
             var singleResult = strategyResults.FirstOrDefault(x => x.StrategyName.Equals("SingleMarketBuyBoth", StringComparison.OrdinalIgnoreCase));

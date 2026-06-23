@@ -156,7 +156,8 @@ export default function App() {
     ['Stable now', String(runtime(health, 'orderbookStableNow') ?? true)],
     ['True post bad', runtime(health, 'truePostBreakerBadRequests') ?? 0],
     ['In-flight bad', runtime(health, 'inFlightBeforeBreakerBadRequestsAfterOpen') ?? 0],
-    ['Bad history', runtime(health, 'reducedUniverseBadHistoryActive') ?? 0]
+    ['Bad history', `${runtime(health, 'reducedUniverseBadHistoryActive') ?? 0}/${runtime(health, 'reducedUniverseBadHistoryExpired') ?? 0}`],
+    ['Paper diag eligible', String(runtime(health, 'paperDiagnosticsLimitedEligible') ?? false)]
   ];
   const strategyRows = [
     ['SingleMarketBuyBoth', strategyCompact(singleStrategy, ['scan', 'books', 'cand', 'positive', 'paper'])],
