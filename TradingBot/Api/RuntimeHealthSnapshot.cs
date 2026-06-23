@@ -519,7 +519,6 @@ public sealed record RuntimeHealthSnapshot(
             RuntimeStatusExportStable: state.RuntimeStatusExportStable,
             StrategyCounters: state.StrategyCountersSnapshot());
     }
-}
 
     private static string PaperDiagnosticsLimitedReason(BotRuntimeState state)
     {
@@ -535,6 +534,7 @@ public sealed record RuntimeHealthSnapshot(
         if (TradingBot.Services.LiveTradingGuard.SigningAttempts > 0) reasons.Add("SigningAttempts");
         return reasons.Count == 0 ? "None" : string.Join("|", reasons);
     }
+}
 
 public sealed record RuntimeHealthTrend(
     double MinProcessMemoryMbWindow,
