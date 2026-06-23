@@ -151,7 +151,12 @@ export default function App() {
     ['Invalid quarantine', runtime(health, 'invalidTokenQuarantineActive') ?? 0],
     ['Market quarantine', runtime(health, 'marketOrderbookQuarantineActive') ?? 0],
     ['Breaker', runtime(health, 'orderbookCircuitBreakerState') ?? '-'],
-    ['Breaker opens', runtime(health, 'orderbookCircuitBreakerOpenCount') ?? 0]
+    ['Breaker opens', runtime(health, 'orderbookCircuitBreakerOpenCount') ?? 0],
+    ['Lifecycle', `${runtime(health, 'marketOrderbookQuarantineLifecycleBalanced') ?? true}/${runtime(health, 'invalidTokenQuarantineLifecycleBalanced') ?? true}`],
+    ['Stable now', String(runtime(health, 'orderbookStableNow') ?? true)],
+    ['True post bad', runtime(health, 'truePostBreakerBadRequests') ?? 0],
+    ['In-flight bad', runtime(health, 'inFlightBeforeBreakerBadRequestsAfterOpen') ?? 0],
+    ['Bad history', runtime(health, 'reducedUniverseBadHistoryActive') ?? 0]
   ];
   const strategyRows = [
     ['SingleMarketBuyBoth', strategyCompact(singleStrategy, ['scan', 'books', 'cand', 'positive', 'paper'])],

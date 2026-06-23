@@ -669,13 +669,13 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         var discoveryStable = !discoveryBlocked && (lastDiscoverySummary.DiscoveryHealthy || discoveryUsingLastHealthySnapshot);
         var effectiveScannerPausedByDiscoveryGuard = scannerPausedByDiscoveryGuard || (discoveryBlocked && !reducedUniverseBuilt);
         var allowlistSkippedByDiscovery = discoveryBlocked;
-        var reducedUniverseOrderbookStable = !reducedUniverseActive || (stats.BatchBadRequests == 0 && stats.BatchInvalidTokens == 0 && stats.InvalidTokenQuarantineActive == 0 && stats.MarketOrderbookQuarantineActive == 0 && stats.BatchBookNormalBadRequestsAfterBreakerOpen == 0 && stats.OrderbookCircuitBreakerState.Equals("Closed", StringComparison.OrdinalIgnoreCase));
+        var reducedUniverseOrderbookStable = !reducedUniverseActive || (stats.InvalidTokenQuarantineActive == 0 && stats.MarketOrderbookQuarantineActive == 0 && stats.TruePostBreakerBadRequests == 0 && stats.MarketOrderbookQuarantineLifecycleBalanced && stats.InvalidTokenQuarantineLifecycleBalanced && stats.OrderbookCircuitBreakerState.Equals("Closed", StringComparison.OrdinalIgnoreCase));
         var orderbookRecovered = stats.OrderbookCircuitBreakerState.Equals("Closed", StringComparison.OrdinalIgnoreCase) && stats.BatchBookNormalBadRequestsAfterBreakerOpen == 0;
         var longRunReasons = new List<string>();
         if (reducedUniverseActive) longRunReasons.Add("BlockedReducedUniverseDiagnosticsOnly");
         else if (!discoveryStable) longRunReasons.Add("DiscoveryUnavailable");
         if (stats.OrderbookCircuitBreakerActive && stats.OrderbookRecoverySucceededCount <= 0) longRunReasons.Add("OrderbookBreakerActive");
-        if (stats.BatchBookNormalBadRequestsAfterBreakerOpen > 0) longRunReasons.Add("PostBreakerBadRequests");
+        if (stats.TruePostBreakerBadRequests > 0) longRunReasons.Add("PostBreakerBadRequests");
         if (!reducedUniverseOrderbookStable) longRunReasons.Add("ReducedUniverseOrderbookUnstable");
         if (stats.InvalidTokenQuarantineActive + stats.MarketOrderbookQuarantineActive > Math.Max(25, options.OrderBook.CircuitBreakerInvalidTokensPerHourThreshold)) longRunReasons.Add("QuarantineStormActive");
         state.SetDiscoveryGuardState(
