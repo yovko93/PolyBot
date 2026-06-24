@@ -39,8 +39,10 @@ public static class ProcessRunContext
     public static string? ValidateOrderbookCounters(OrderBookServiceStats stats)
     {
         var reasons = new List<string>();
-        if (stats.MarketOrderbookQuarantineAdded > 0 && stats.MarketOrderbookQuarantineActive < 1)
-            reasons.Add($"MarketOrderbookQuarantineAdded={stats.MarketOrderbookQuarantineAdded},MarketOrderbookQuarantineActive={stats.MarketOrderbookQuarantineActive}");
+        if (!stats.MarketOrderbookQuarantineLifecycleBalanced)
+            reasons.Add($"MarketOrderbookQuarantineLifecycleUnbalanced:{stats.OrderbookQuarantineLifecycleMismatchReason}");
+        if (!stats.InvalidTokenQuarantineLifecycleBalanced)
+            reasons.Add($"InvalidTokenQuarantineLifecycleUnbalanced:{stats.OrderbookQuarantineLifecycleMismatchReason}");
         if (Interlocked.Read(ref _batchBookTokenQuarantinedLogs) > 0 && stats.BatchBookSingleTokenQuarantined <= 0)
             reasons.Add($"BatchBookTokenQuarantinedLogs={Interlocked.Read(ref _batchBookTokenQuarantinedLogs)},BatchBookSingleTokenQuarantined={stats.BatchBookSingleTokenQuarantined}");
         if (Interlocked.Read(ref _orderbookCircuitBreakerOpenedLogs) > 0 && stats.OrderbookCircuitBreakerOpenCount <= 0)
@@ -55,7 +57,7 @@ public static class ProcessRunContext
     }
 
     public static string FormatMismatchLog(string reason, OrderBookServiceStats stats)
-        => $"[DIAGNOSTICS_COUNTER_MISMATCH] ProcessRunId={ProcessRunId} Category=Orderbook ObservedLogs=BatchBookTokenQuarantined:{Interlocked.Read(ref _batchBookTokenQuarantinedLogs)},MarketOrderbookQuarantined:{Interlocked.Read(ref _marketOrderbookQuarantinedLogs)},CircuitBreakerOpened:{Interlocked.Read(ref _orderbookCircuitBreakerOpenedLogs)} Counters=BatchBookBadRequests:{stats.BatchBadRequests},BatchBookInvalidTokens:{stats.BatchInvalidTokens},BatchBookSingleTokenQuarantined:{stats.BatchBookSingleTokenQuarantined},MarketOrderbookQuarantineActive:{stats.MarketOrderbookQuarantineActive},MarketOrderbookQuarantineAdded:{stats.MarketOrderbookQuarantineAdded},OrderbookCircuitBreakerOpenCount:{stats.OrderbookCircuitBreakerOpenCount},OrderbookCircuitBreakerState:{stats.OrderbookCircuitBreakerState} Reason={reason} Action=FailDiagnostics";
+        => $"[DIAGNOSTICS_COUNTER_MISMATCH] ProcessRunId={ProcessRunId} Category=Orderbook ObservedLogs=BatchBookTokenQuarantined:{Interlocked.Read(ref _batchBookTokenQuarantinedLogs)},MarketOrderbookQuarantined:{Interlocked.Read(ref _marketOrderbookQuarantinedLogs)},CircuitBreakerOpened:{Interlocked.Read(ref _orderbookCircuitBreakerOpenedLogs)} Counters=BatchBookBadRequests:{stats.BatchBadRequests},BatchBookInvalidTokens:{stats.BatchInvalidTokens},BatchBookSingleTokenQuarantined:{stats.BatchBookSingleTokenQuarantined},InvalidTokenQuarantineActive:{stats.InvalidTokenQuarantineActive},InvalidTokenQuarantineAdded:{stats.InvalidTokenQuarantineAdded},InvalidTokenQuarantineExpired:{stats.InvalidTokenQuarantineExpired},MarketOrderbookQuarantineActive:{stats.MarketOrderbookQuarantineActive},MarketOrderbookQuarantineAdded:{stats.MarketOrderbookQuarantineAdded},MarketOrderbookQuarantineExpired:{stats.MarketOrderbookQuarantineExpired},MarketOrderbookQuarantineLifecycleBalanced:{stats.MarketOrderbookQuarantineLifecycleBalanced},InvalidTokenQuarantineLifecycleBalanced:{stats.InvalidTokenQuarantineLifecycleBalanced},OrderbookCircuitBreakerOpenCount:{stats.OrderbookCircuitBreakerOpenCount},OrderbookCircuitBreakerState:{stats.OrderbookCircuitBreakerState} Reason={reason} Action=FailDiagnostics";
 
     public static void RecordReadinessInvariantCorrection(string reason)
     {

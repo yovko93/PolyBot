@@ -104,6 +104,13 @@ public class BotRuntimeState
     private int _discoveryScannerSafeSourceAvailable;
     private int _discoveryReducedUniverse;
     private int _reducedUniverseMarkets;
+    private int _reducedUniverseRawMarkets;
+    private int _reducedUniverseFilteredMarkets;
+    private int _reducedUniverseExcludedInvalidTokens;
+    private int _reducedUniverseExcludedQuarantinedMarkets;
+    private int _reducedUniverseExcludedBadHistory;
+    private int _reducedUniverseOrderbookEligibleMarkets;
+    private int _reducedUniverseOrderbookStable = 1;
     private int _reducedUniverseMaxMarkets;
     private string _reducedUniverseSource = string.Empty;
     private int _paperExecutionGloballyBlockedByDiscovery;
@@ -238,6 +245,13 @@ public class BotRuntimeState
     public bool DiscoveryScannerSafeSourceAvailable => Volatile.Read(ref _discoveryScannerSafeSourceAvailable) == 1;
     public bool DiscoveryReducedUniverse => Volatile.Read(ref _discoveryReducedUniverse) == 1;
     public int ReducedUniverseMarkets => Volatile.Read(ref _reducedUniverseMarkets);
+    public int ReducedUniverseRawMarkets => Volatile.Read(ref _reducedUniverseRawMarkets);
+    public int ReducedUniverseFilteredMarkets => Volatile.Read(ref _reducedUniverseFilteredMarkets);
+    public int ReducedUniverseExcludedInvalidTokens => Volatile.Read(ref _reducedUniverseExcludedInvalidTokens);
+    public int ReducedUniverseExcludedQuarantinedMarkets => Volatile.Read(ref _reducedUniverseExcludedQuarantinedMarkets);
+    public int ReducedUniverseExcludedBadHistory => Volatile.Read(ref _reducedUniverseExcludedBadHistory);
+    public int ReducedUniverseOrderbookEligibleMarkets => Volatile.Read(ref _reducedUniverseOrderbookEligibleMarkets);
+    public bool ReducedUniverseOrderbookStable => Volatile.Read(ref _reducedUniverseOrderbookStable) == 1;
     public int ReducedUniverseMaxMarkets => Volatile.Read(ref _reducedUniverseMaxMarkets);
     public string ReducedUniverseSource => _reducedUniverseSource;
     public bool PaperExecutionGloballyBlockedByDiscovery => Volatile.Read(ref _paperExecutionGloballyBlockedByDiscovery) == 1;
@@ -441,7 +455,7 @@ public class BotRuntimeState
         if (reasons.Count > 0) ProcessRunContext.RecordReadinessInvariantCorrection(string.Join("|", reasons.Distinct(StringComparer.OrdinalIgnoreCase)));
     }
 
-    public void SetDiscoveryGuardState(bool discoveryHealthy, bool discoveryStable, bool usingLastHealthySnapshot, int lastHealthySnapshotAgeSeconds, int partialAttemptCount, string? lastFailureReason, bool scannerPausedByDiscoveryGuard, int discoveryGuardSkippedCycles, bool discoveryGuardUsingLastHealthySnapshot, int discoveryGuardBlockedNewMarkets, bool longRunStable, string? longRunBlockingReason, bool orderbookRecoveredAfterDegradation, DateTime? lastDegradationUtc, DateTime? lastRecoveryUtc, bool discoveryBootstrapHealthy = false, int discoveryBootstrapRetryCount = 0, DateTime? discoveryBootstrapLastAttemptUtc = null, DateTime? discoveryBootstrapNextRetryUtc = null, int discoveryBootstrapBackoffSeconds = 0, string? discoveryBootstrapFailureReason = null, int discoveryRetryBackoffSeconds = 0, int discoveryRetriesSuppressedByBackoff = 0, bool discoveryPersistedSnapshotLoaded = false, int discoveryPersistedSnapshotAgeSeconds = 0, int discoveryPersistedSnapshotActiveMarkets = 0, bool allowlistEvaluationSkipped = false, string? allowlistEvaluationSkippedReason = null, bool allowlistClassificationBlockedByDiscovery = false, string? soakReadiness = null, string? soakReadinessReason = null, string? discoveryBlockedReason = null, string? discoverySelectedSource = null, bool discoveryScannerSafeSourceAvailable = false, bool discoverySourceAuditOnly = false, bool discoverySourceAuditExportWritten = false, string? discoverySourceAuditExportPath = null, int discoverySourceAuditSources = 0, int discoverySourceAuditScannerSafeSources = 0, string? discoverySourceAuditRecommendedAction = null, bool discoveryReducedUniverse = false, int reducedUniverseMarkets = 0, int reducedUniverseMaxMarkets = 0, string? reducedUniverseSource = null, bool paperExecutionGloballyBlockedByDiscovery = false, bool strategyExecutionGloballyBlocked = false, string? diagnosticsUniverse = null, bool tradingReadiness = false)
+    public void SetDiscoveryGuardState(bool discoveryHealthy, bool discoveryStable, bool usingLastHealthySnapshot, int lastHealthySnapshotAgeSeconds, int partialAttemptCount, string? lastFailureReason, bool scannerPausedByDiscoveryGuard, int discoveryGuardSkippedCycles, bool discoveryGuardUsingLastHealthySnapshot, int discoveryGuardBlockedNewMarkets, bool longRunStable, string? longRunBlockingReason, bool orderbookRecoveredAfterDegradation, DateTime? lastDegradationUtc, DateTime? lastRecoveryUtc, bool discoveryBootstrapHealthy = false, int discoveryBootstrapRetryCount = 0, DateTime? discoveryBootstrapLastAttemptUtc = null, DateTime? discoveryBootstrapNextRetryUtc = null, int discoveryBootstrapBackoffSeconds = 0, string? discoveryBootstrapFailureReason = null, int discoveryRetryBackoffSeconds = 0, int discoveryRetriesSuppressedByBackoff = 0, bool discoveryPersistedSnapshotLoaded = false, int discoveryPersistedSnapshotAgeSeconds = 0, int discoveryPersistedSnapshotActiveMarkets = 0, bool allowlistEvaluationSkipped = false, string? allowlistEvaluationSkippedReason = null, bool allowlistClassificationBlockedByDiscovery = false, string? soakReadiness = null, string? soakReadinessReason = null, string? discoveryBlockedReason = null, string? discoverySelectedSource = null, bool discoveryScannerSafeSourceAvailable = false, bool discoverySourceAuditOnly = false, bool discoverySourceAuditExportWritten = false, string? discoverySourceAuditExportPath = null, int discoverySourceAuditSources = 0, int discoverySourceAuditScannerSafeSources = 0, string? discoverySourceAuditRecommendedAction = null, bool discoveryReducedUniverse = false, int reducedUniverseMarkets = 0, int reducedUniverseMaxMarkets = 0, string? reducedUniverseSource = null, bool paperExecutionGloballyBlockedByDiscovery = false, bool reducedUniverseOrderbookStable = true, int reducedUniverseRawMarkets = 0, int reducedUniverseFilteredMarkets = 0, int reducedUniverseExcludedInvalidTokens = 0, int reducedUniverseExcludedQuarantinedMarkets = 0, int reducedUniverseExcludedBadHistory = 0, int reducedUniverseOrderbookEligibleMarkets = 0, bool strategyExecutionGloballyBlocked = false, string? diagnosticsUniverse = null, bool tradingReadiness = false)
     {
         Interlocked.Exchange(ref _discoveryHealthy, discoveryHealthy ? 1 : 0);
         Interlocked.Exchange(ref _discoveryStable, discoveryStable ? 1 : 0);
@@ -479,6 +493,13 @@ public class BotRuntimeState
         Interlocked.Exchange(ref _discoveryScannerSafeSourceAvailable, discoveryScannerSafeSourceAvailable ? 1 : 0);
         Interlocked.Exchange(ref _discoveryReducedUniverse, discoveryReducedUniverse ? 1 : 0);
         Interlocked.Exchange(ref _reducedUniverseMarkets, Math.Max(0, reducedUniverseMarkets));
+        Interlocked.Exchange(ref _reducedUniverseRawMarkets, Math.Max(0, reducedUniverseRawMarkets));
+        Interlocked.Exchange(ref _reducedUniverseFilteredMarkets, Math.Max(0, reducedUniverseFilteredMarkets));
+        Interlocked.Exchange(ref _reducedUniverseExcludedInvalidTokens, Math.Max(0, reducedUniverseExcludedInvalidTokens));
+        Interlocked.Exchange(ref _reducedUniverseExcludedQuarantinedMarkets, Math.Max(0, reducedUniverseExcludedQuarantinedMarkets));
+        Interlocked.Exchange(ref _reducedUniverseExcludedBadHistory, Math.Max(0, reducedUniverseExcludedBadHistory));
+        Interlocked.Exchange(ref _reducedUniverseOrderbookEligibleMarkets, Math.Max(0, reducedUniverseOrderbookEligibleMarkets));
+        Interlocked.Exchange(ref _reducedUniverseOrderbookStable, reducedUniverseOrderbookStable ? 1 : 0);
         Interlocked.Exchange(ref _reducedUniverseMaxMarkets, Math.Max(0, reducedUniverseMaxMarkets));
         _reducedUniverseSource = reducedUniverseSource ?? string.Empty;
         Interlocked.Exchange(ref _paperExecutionGloballyBlockedByDiscovery, paperExecutionGloballyBlockedByDiscovery ? 1 : 0);

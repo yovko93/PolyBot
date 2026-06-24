@@ -74,5 +74,19 @@ public record OrderBookServiceStats(
     long BatchBookNormalRequestsAfterBreakerOpen = 0,
     long BatchBookNormalBadRequestsAfterBreakerOpen = 0,
     long QuarantinedMarketsReintroducedBlocked = 0,
-    long QuarantinedTokensReintroducedBlocked = 0
+    long QuarantinedTokensReintroducedBlocked = 0,
+    bool ReducedUniverseScanPausedByOrderbookHealth = false,
+    bool ReducedUniverseOrderbookRecoveryMode = false,
+    long ReducedUniverseOrderbookRecoveryCleanWindowSeconds = 0,
+    long ReducedUniversePostRecoveryBadRequests = 0,
+    bool MarketOrderbookQuarantineLifecycleBalanced = true,
+    bool InvalidTokenQuarantineLifecycleBalanced = true,
+    string OrderbookQuarantineLifecycleMismatchReason = "",
+    long InFlightBeforeBreakerCompletedAfterOpen = 0,
+    long InFlightBeforeBreakerBadRequestsAfterOpen = 0,
+    long TruePostBreakerNormalRequests = 0,
+    long TruePostBreakerBadRequests = 0,
+    int ReducedUniverseBadHistoryActive = 0,
+    bool ReducedUniverseBadHistoryLoaded = false,
+    int ReducedUniverseBadHistoryExpired = 0
 );

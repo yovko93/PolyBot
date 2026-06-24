@@ -144,6 +144,21 @@ export default function App() {
     ['Paper opened', first(singleStrategy?.paper, runtime(health, 'paperOpened'), 0)],
     ['Best edge', bestEdge]
   ];
+  const orderbookRows = [
+    ['Stable', String(runtime(health, 'reducedUniverseOrderbookStable') ?? true)],
+    ['Eligible', runtime(health, 'reducedUniverseOrderbookEligibleMarkets') ?? '-'],
+    ['Paused', String(runtime(health, 'reducedUniverseScanPausedByOrderbookHealth') ?? false)],
+    ['Invalid quarantine', runtime(health, 'invalidTokenQuarantineActive') ?? 0],
+    ['Market quarantine', runtime(health, 'marketOrderbookQuarantineActive') ?? 0],
+    ['Breaker', runtime(health, 'orderbookCircuitBreakerState') ?? '-'],
+    ['Breaker opens', runtime(health, 'orderbookCircuitBreakerOpenCount') ?? 0],
+    ['Lifecycle', `${runtime(health, 'marketOrderbookQuarantineLifecycleBalanced') ?? true}/${runtime(health, 'invalidTokenQuarantineLifecycleBalanced') ?? true}`],
+    ['Stable now', String(runtime(health, 'orderbookStableNow') ?? true)],
+    ['True post bad', runtime(health, 'truePostBreakerBadRequests') ?? 0],
+    ['In-flight bad', runtime(health, 'inFlightBeforeBreakerBadRequestsAfterOpen') ?? 0],
+    ['Bad history', `${runtime(health, 'reducedUniverseBadHistoryActive') ?? 0}/${runtime(health, 'reducedUniverseBadHistoryExpired') ?? 0}`],
+    ['Paper diag eligible', String(runtime(health, 'paperDiagnosticsLimitedEligible') ?? false)]
+  ];
   const strategyRows = [
     ['SingleMarketBuyBoth', strategyCompact(singleStrategy, ['scan', 'books', 'cand', 'positive', 'paper'])],
     ['AutoCandidate', strategyCompact(autoStrategy, ['scan', 'cand', 'positive'])],
@@ -189,7 +204,7 @@ export default function App() {
 
       <section className="diagnostics-shell">
         <button className="diagnostics-toggle" onClick={() => setShowDiagnostics((v) => !v)}>{showDiagnostics ? 'Hide diagnostics' : 'Show diagnostics'}</button>
-        {showDiagnostics && <div className="diagnostics-grid"><MiniBlock title="Scanner" rows={scannerRows} /><MiniBlock title="Strategy Summary" rows={strategyRows} /><MiniBlock title="Paper Summary" rows={[["Exposure", money(runtime(health, 'paperTotalExposure') ?? paper.totalExposure ?? locked)], ["Settlements", d.paperSettlements?.length ?? paper.settlements ?? 0], ["Rejects", Object.entries(paper.blockedCountsByReason ?? {}).map(([k, v]: any) => `${k}=${v}`).join(' ') || '-']]} /><MiniBlock title="Runtime" rows={[["Source", runtime(health, '__source') ?? d.source], ["Discovery", discoveryLabel(health, scanner, d.controls)], ["Readiness", readinessLabel(health, d.controls)], ["Universe", runtime(health, 'diagnosticsUniverse') ?? '-'], ["Reduced markets", runtime(health, 'reducedUniverseMarkets') ?? 0], ["Updated", time(runtime(health, '__updatedAt') ?? d.lastUpdated)]]} />{cycleRows.length ? <MiniBlock title="Single Cycle" rows={cycleRows} /> : null}<details className="raw-log-block"><summary>Raw logs</summary><div className="raw-log-console">{d.logs.slice(0, 30).map((l: any) => <pre key={l.id}>{time(l.timestamp)} [{l.source}] {l.message}</pre>)}</div></details></div>}
+        {showDiagnostics && <div className="diagnostics-grid"><MiniBlock title="Scanner" rows={scannerRows} /><MiniBlock title="Strategy Summary" rows={strategyRows} /><MiniBlock title="Paper Summary" rows={[["Exposure", money(runtime(health, 'paperTotalExposure') ?? paper.totalExposure ?? locked)], ["Settlements", d.paperSettlements?.length ?? paper.settlements ?? 0], ["Rejects", Object.entries(paper.blockedCountsByReason ?? {}).map(([k, v]: any) => `${k}=${v}`).join(' ') || '-']]} /><MiniBlock title="Runtime" rows={[["Source", runtime(health, '__source') ?? d.source], ["Discovery", discoveryLabel(health, scanner, d.controls)], ["Readiness", readinessLabel(health, d.controls)], ["Universe", runtime(health, 'diagnosticsUniverse') ?? '-'], ["Reduced markets", runtime(health, 'reducedUniverseMarkets') ?? 0], ["Updated", time(runtime(health, '__updatedAt') ?? d.lastUpdated)]]} /><MiniBlock title="Orderbook Health" rows={orderbookRows} />{cycleRows.length ? <MiniBlock title="Single Cycle" rows={cycleRows} /> : null}<details className="raw-log-block"><summary>Raw logs</summary><div className="raw-log-console">{d.logs.slice(0, 30).map((l: any) => <pre key={l.id}>{time(l.timestamp)} [{l.source}] {l.message}</pre>)}</div></details></div>}
       </section>
     </main>
   </div>;
