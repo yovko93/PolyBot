@@ -118,6 +118,10 @@ public class BotRuntimeState
     private int _strategyExecutionGloballyBlocked;
     private string _diagnosticsUniverse = "Full";
     private int _tradingReadiness;
+    private long _singleMarketScanPausedByOrderbookHealth;
+    private long _singleMarketPausedCycles;
+    private long _singleMarketNormalCycles;
+    private long _singleMarketFullCyclesCompleted;
     private int _discoverySourceAuditOnly;
     private int _discoverySourceAuditExportWritten;
     private string _discoverySourceAuditExportPath = string.Empty;
@@ -259,6 +263,10 @@ public class BotRuntimeState
     public bool StrategyExecutionGloballyBlocked => Volatile.Read(ref _strategyExecutionGloballyBlocked) == 1;
     public string DiagnosticsUniverse => _diagnosticsUniverse;
     public bool TradingReadiness => Volatile.Read(ref _tradingReadiness) == 1;
+    public long SingleMarketScanPausedByOrderbookHealth => Volatile.Read(ref _singleMarketScanPausedByOrderbookHealth);
+    public long SingleMarketPausedCycles => Volatile.Read(ref _singleMarketPausedCycles);
+    public long SingleMarketNormalCycles => Volatile.Read(ref _singleMarketNormalCycles);
+    public long SingleMarketFullCyclesCompleted => Volatile.Read(ref _singleMarketFullCyclesCompleted);
     public bool DiscoverySourceAuditOnly => Volatile.Read(ref _discoverySourceAuditOnly) == 1;
     public bool DiscoverySourceAuditExportWritten => Volatile.Read(ref _discoverySourceAuditExportWritten) == 1;
     public string DiscoverySourceAuditExportPath => _discoverySourceAuditExportPath;
@@ -371,6 +379,13 @@ public class BotRuntimeState
     public void AddUnresolvedDiagnostics(IEnumerable<object> items){foreach(var item in items.Take(_runtime.MaxUnresolvedDiagnostics)) _unresolvedDiagnostics.Enqueue(item); Trim(_unresolvedDiagnostics,_runtime.MaxUnresolvedDiagnostics);}
     public void SetQuietLogGateStats(QuietLogGateStats stats) => _quietLogGateStats = stats;
     public void SetOrderBookServiceStats(OrderBookServiceStats stats) => _orderBookServiceStats = stats;
+    public void SetSingleMarketScanCycleCounters(long pausedByOrderbookHealth, long pausedCycles, long normalCycles, long fullCyclesCompleted)
+    {
+        Interlocked.Exchange(ref _singleMarketScanPausedByOrderbookHealth, Math.Max(0, pausedByOrderbookHealth));
+        Interlocked.Exchange(ref _singleMarketPausedCycles, Math.Max(0, pausedCycles));
+        Interlocked.Exchange(ref _singleMarketNormalCycles, Math.Max(0, normalCycles));
+        Interlocked.Exchange(ref _singleMarketFullCyclesCompleted, Math.Max(0, fullCyclesCompleted));
+    }
     public void RecordMemoryWarning() => Interlocked.Increment(ref _memoryWarnings);
     public void RecordMemoryCritical(DateTime whenUtc, bool scannerPaused)
     {

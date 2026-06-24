@@ -484,6 +484,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var duplicateBatchWarnings = 0;
     var lastBatchFingerprint = "";
     var repeatedBatchCount = 0;
+    var singleMarketScanPausedByOrderbookHealth = 0L;
+    var singleMarketPausedCycles = 0L;
+    var singleMarketNormalCycles = 0L;
+    var singleMarketFullCyclesCompleted = 0L;
     var lastDiscoveryAt = default(DateTime);
     var discoveryStartedAt = default(DateTime);
     var discoveryCompletedAt = default(DateTime);
@@ -971,19 +975,6 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             var scanPool = discoveredMarkets.Take(effectiveMarketLimit).ToList();
             var batchSize = options.Mode == "AllAtOnce" ? scanPool.Count : Math.Min(options.ScanBatchSize, scanPool.Count);
             batchSize = Math.Min(batchSize, options.MaxOrderbooksPerCycle);
-            var currentRollingOffsetBefore = rollingOffset;
-            var filtered = BuildRollingBatch(scanPool, ref rollingOffset, batchSize, options);
-            var currentRollingOffsetAfter = rollingOffset;
-            batchStartIndex = filtered.Count == 0 ? 0 : currentRollingOffsetBefore;
-            batchEndIndex = filtered.Count == 0 ? 0 : ((currentRollingOffsetBefore + filtered.Count - 1) % Math.Max(1, scanPool.Count));
-            var fullCoverageCompletedThisBatch = scanPool.Count > 0 && filtered.Count > 0 && (currentRollingOffsetAfter == 0 || currentRollingOffsetAfter < currentRollingOffsetBefore);
-            if (fullCoverageCompletedThisBatch) fullCoverageCompletedCount++;
-            cyclesCompletedSinceDiscovery++;
-            totalMarketsScannedSinceStart += filtered.Count;
-            scanId++;
-            singleMarketFullCycleId = scanPool.Count == 0 ? scanId : (fullCoverageCompletedThisBatch ? fullCoverageCompletedCount : fullCoverageCompletedCount + 1);
-            var singleMarketFullCycleComplete = scanPool.Count > 0 && (options.Mode == "AllAtOnce" || currentRollingOffsetAfter == 0 || filtered.Count >= scanPool.Count || fullCoverageCompletedThisBatch);
-            var orderbookSemaphore = new SemaphoreSlim(options.MaxConcurrentOrderbookRequests);
             var reducedOrderbookStatsBeforeFetch = orderbookService.GetStats();
             var pauseReducedOrderbookScan = options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly
                 && string.Equals(discoveryMode, "ReducedUniverseDiagnosticsOnly", StringComparison.OrdinalIgnoreCase)
@@ -992,16 +983,45 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     || reducedOrderbookStatsBeforeFetch.InvalidTokenQuarantineActive > 0
                     || reducedOrderbookStatsBeforeFetch.MarketOrderbookQuarantineActive > 0
                     || reducedOrderbookStatsBeforeFetch.TruePostBreakerBadRequests > 0
+                    || reducedOrderbookStatsBeforeFetch.ReducedUniverseOrderbookRecoveryMode
+                    || reducedOrderbookStatsBeforeFetch.ReducedUniverseScanPausedByOrderbookHealth
                     || !string.Equals(reducedOrderbookStatsBeforeFetch.OrderbookCircuitBreakerState, "Closed", StringComparison.OrdinalIgnoreCase));
+            var currentRollingOffsetBefore = rollingOffset;
+            var filtered = pauseReducedOrderbookScan ? new List<Market>() : BuildRollingBatch(scanPool, ref rollingOffset, batchSize, options);
+            var currentRollingOffsetAfter = rollingOffset;
+            batchStartIndex = filtered.Count == 0 ? 0 : currentRollingOffsetBefore;
+            batchEndIndex = filtered.Count == 0 ? 0 : ((currentRollingOffsetBefore + filtered.Count - 1) % Math.Max(1, scanPool.Count));
+            var fullCoverageCompletedThisBatch = !pauseReducedOrderbookScan && scanPool.Count > 0 && filtered.Count > 0 && (currentRollingOffsetAfter == 0 || currentRollingOffsetAfter < currentRollingOffsetBefore);
+            if (fullCoverageCompletedThisBatch) { fullCoverageCompletedCount++; singleMarketFullCyclesCompleted++; }
+            if (!pauseReducedOrderbookScan) cyclesCompletedSinceDiscovery++;
+            totalMarketsScannedSinceStart += filtered.Count;
+            scanId++;
+            singleMarketFullCycleId = scanPool.Count == 0 ? scanId : (fullCoverageCompletedThisBatch ? fullCoverageCompletedCount : fullCoverageCompletedCount + 1);
+            var singleMarketFullCycleComplete = !pauseReducedOrderbookScan && scanPool.Count > 0 && (options.Mode == "AllAtOnce" || currentRollingOffsetAfter == 0 || filtered.Count >= scanPool.Count || fullCoverageCompletedThisBatch);
+            var orderbookSemaphore = new SemaphoreSlim(options.MaxConcurrentOrderbookRequests);
             if (pauseReducedOrderbookScan)
             {
+                singleMarketScanPausedByOrderbookHealth++;
+                singleMarketPausedCycles++;
+                state.SetSingleMarketScanCycleCounters(singleMarketScanPausedByOrderbookHealth, singleMarketPausedCycles, singleMarketNormalCycles, singleMarketFullCyclesCompleted);
                 Console.WriteLine($"[REDUCED_UNIVERSE_ORDERBOOK_SCAN_PAUSED] Reason=OrderbookHealth InvalidTokenQuarantineActive={reducedOrderbookStatsBeforeFetch.InvalidTokenQuarantineActive} MarketOrderbookQuarantineActive={reducedOrderbookStatsBeforeFetch.MarketOrderbookQuarantineActive} TruePostBreakerBadRequests={reducedOrderbookStatsBeforeFetch.TruePostBreakerBadRequests} CircuitBreakerState={reducedOrderbookStatsBeforeFetch.OrderbookCircuitBreakerState}");
-                filtered = new List<Market>();
+                Console.WriteLine($"[SINGLE_MARKET_SCAN_PAUSED] Reason=ReducedUniverseOrderbookHealth CircuitBreakerState={reducedOrderbookStatsBeforeFetch.OrderbookCircuitBreakerState} RecoveryMode={reducedOrderbookStatsBeforeFetch.ReducedUniverseOrderbookRecoveryMode.ToString().ToLowerInvariant()} NextRetryUtc={DateTime.UtcNow.AddMilliseconds(options.ScanIntervalMs):O}");
+            }
+            else
+            {
+                singleMarketScanPausedByOrderbookHealth = 0;
+                singleMarketNormalCycles++;
+                state.SetSingleMarketScanCycleCounters(singleMarketScanPausedByOrderbookHealth, singleMarketPausedCycles, singleMarketNormalCycles, singleMarketFullCyclesCompleted);
             }
             SetScannerStage("BatchOrderbookFetch", "OrderBookService");
-            if (!pauseReducedOrderbookScan) await orderbookService.PrefetchBinarySnapshotsAsync(filtered);
+            if (pauseReducedOrderbookScan && (reducedOrderbookStatsBeforeFetch.OrderbookCircuitBreakerState.Equals("HalfOpen", StringComparison.OrdinalIgnoreCase) || reducedOrderbookStatsBeforeFetch.OrderbookCircuitBreakerState.Equals("Recovering", StringComparison.OrdinalIgnoreCase)))
+                await orderbookService.PrefetchBinarySnapshotsAsync(scanPool);
+            else if (!pauseReducedOrderbookScan)
+                await orderbookService.PrefetchBinarySnapshotsAsync(filtered);
             SetScannerStage("StrategyOrchestrator", "StrategyOrchestrator");
-            var strategyResults = await strategyOrchestrator.RunEnabledAsync(new OpportunityStrategyContext(filtered!, new PaperTradingEngineFacade { Engine = paper }, orderbookSemaphore, singleMarketFullCycleId, singleMarketFullCycleComplete, options.Diagnostics.OperationalQuietMode || !options.SingleMarketArb.LogBatchSummaries, stoppingToken));
+            var strategyResults = pauseReducedOrderbookScan
+                ? Array.Empty<OpportunityStrategyScanResult>()
+                : await strategyOrchestrator.RunEnabledAsync(new OpportunityStrategyContext(filtered!, new PaperTradingEngineFacade { Engine = paper }, orderbookSemaphore, singleMarketFullCycleId, singleMarketFullCycleComplete, options.Diagnostics.OperationalQuietMode || !options.SingleMarketArb.LogBatchSummaries, stoppingToken));
             var singleResult = strategyResults.FirstOrDefault(x => x.StrategyName.Equals("SingleMarketBuyBoth", StringComparison.OrdinalIgnoreCase));
             var scanStats = new SingleMarketScanStats(
                 (int)(singleResult?.Scanned ?? 0),
@@ -1020,8 +1040,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 0,
                 (int)(singleResult?.SingleMarketCircuitBreakerSkippedMarkets ?? 0),
                 (int)(singleResult?.SingleMarketCircuitBreakerSkippedCycles ?? 0));
-            var singleMarketFullSummary = singleMarketFullCycle.AddBatch(singleMarketFullCycleId, state.SingleMarketSnapshot.Summary, state.SingleMarketSnapshot.DataQualityRejectSamples);
-            if (options.Diagnostics.OperationalQuietMode && singleMarketFullCycle.ShouldLog(singleMarketFullSummary, options.Logging, singleMarketFullCycleComplete, options.SingleMarketArb.LogCycleProgress))
+            var singleMarketFullSummary = pauseReducedOrderbookScan ? null : singleMarketFullCycle.AddBatch(singleMarketFullCycleId, state.SingleMarketSnapshot.Summary, state.SingleMarketSnapshot.DataQualityRejectSamples);
+            if (!pauseReducedOrderbookScan && singleMarketFullSummary is not null && options.Diagnostics.OperationalQuietMode && singleMarketFullCycle.ShouldLog(singleMarketFullSummary, options.Logging, singleMarketFullCycleComplete, options.SingleMarketArb.LogCycleProgress))
                 Console.WriteLine(SingleMarketFullCycleSummaryAggregator.ToLogLine(singleMarketFullSummary));
 
             MultiOutcomeGroupArbEngine.MultiOutcomeScanReport multiOutcomeReport = new(0,0,0,0,0,0,0,0m,0m,0m,"","NotEvaluated",new Dictionary<string,int>(),Array.Empty<MultiOutcomeGroupArbEngine.RejectedSample>(),Array.Empty<MultiOutcomeGroupArbEngine.CandidateGroupReview>());
@@ -2162,12 +2182,15 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             var batchMarketIds = filtered.Select(x => x.id ?? "").Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
             var distinctMarketIdsInBatch = batchMarketIds.Distinct(StringComparer.Ordinal).Count();
             var batchFingerprint = string.Join("|", batchMarketIds);
-            if (batchFingerprint == lastBatchFingerprint) repeatedBatchCount++; else repeatedBatchCount = 1;
-            lastBatchFingerprint = batchFingerprint;
-            if (repeatedBatchCount >= 3)
+            if (!pauseReducedOrderbookScan)
             {
-                duplicateBatchWarnings++;
-                Console.WriteLine($"[SCAN_WARNING] Same market batch repeated {repeatedBatchCount} times. Rolling cursor may be stuck. Range={batchStartIndex}-{batchEndIndex}");
+                if (batchFingerprint == lastBatchFingerprint) repeatedBatchCount++; else repeatedBatchCount = 1;
+                lastBatchFingerprint = batchFingerprint;
+                if (repeatedBatchCount >= 3)
+                {
+                    duplicateBatchWarnings++;
+                    Console.WriteLine($"[SCAN_WARNING] Same market batch repeated {repeatedBatchCount} times. Rolling cursor may be stuck. Range={batchStartIndex}-{batchEndIndex}");
+                }
             }
             if (executableCount > 0)
             {
