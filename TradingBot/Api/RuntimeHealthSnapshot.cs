@@ -515,12 +515,12 @@ public sealed record RuntimeHealthSnapshot(
             SingleMarketFullCyclesCompleted: state.SingleMarketFullCyclesCompleted,
             PaperDiagnosticsLimitedEligible: IsPaperDiagnosticsLimitedEligible(state),
             PaperDiagnosticsLimitedBlockedReason: PaperDiagnosticsLimitedReason(state),
-            OrderbookStableNow: OrderbookStableNow(state),
+            OrderbookStableNow: ComputeOrderbookStableNow(state),
             OrderbookStableWindowMinutes: options?.RuntimeHealth.SoakTrendWindowMinutes ?? 0,
             BatchBookBadRequestsDeltaWindow: 0,
             BatchBookInvalidTokensDeltaWindow: 0,
             PostBreakerBadRequestsDeltaWindow: 0,
-            ReducedUniverseOrderbookStableNow: OrderbookStableNow(state),
+            ReducedUniverseOrderbookStableNow: ComputeOrderbookStableNow(state),
             ReducedUniverseMaxMarkets: state.ReducedUniverseMaxMarkets,
             ReducedUniverseSource: state.ReducedUniverseSource,
             PaperExecutionGloballyBlockedByDiscovery: state.PaperExecutionGloballyBlockedByDiscovery,
@@ -543,7 +543,7 @@ public sealed record RuntimeHealthSnapshot(
         if (!string.Equals(stats.OrderbookCircuitBreakerState, "Closed", StringComparison.OrdinalIgnoreCase)) reasons.Add("OrderbookCircuitBreakerNotClosed");
         if (stats.ReducedUniverseOrderbookRecoveryMode) reasons.Add("ReducedUniverseOrderbookRecoveryMode");
         if (stats.ReducedUniverseScanPausedByOrderbookHealth) reasons.Add("ReducedUniverseScanPausedByOrderbookHealth");
-        if (!OrderbookStableNow(state)) reasons.Add("OrderbookStableNowFalse");
+        if (!ComputeOrderbookStableNow(state)) reasons.Add("OrderbookStableNowFalse");
         if (state.SingleMarketScanPausedByOrderbookHealth > 0) reasons.Add("SingleMarketScanPausedByOrderbookHealth");
         if (stats.TruePostBreakerBadRequests > 0) reasons.Add("TruePostBreakerBadRequests");
         if (stats.InvalidTokenQuarantineActive > 0) reasons.Add("InvalidTokenQuarantineActive");
@@ -556,7 +556,7 @@ public sealed record RuntimeHealthSnapshot(
         return reasons.Count == 0 ? "None" : string.Join("|", reasons);
     }
 
-    private static bool OrderbookStableNow(BotRuntimeState state)
+    private static bool ComputeOrderbookStableNow(BotRuntimeState state)
     {
         var stats = state.OrderBookServiceStats;
         return string.Equals(stats.OrderbookCircuitBreakerState, "Closed", StringComparison.OrdinalIgnoreCase)
@@ -570,7 +570,7 @@ public sealed record RuntimeHealthSnapshot(
     private static bool IsPaperDiagnosticsLimitedEligible(BotRuntimeState state)
     {
         var stats = state.OrderBookServiceStats;
-        return OrderbookStableNow(state)
+        return ComputeOrderbookStableNow(state)
             && state.SingleMarketScanPausedByOrderbookHealth == 0
             && stats.TruePostBreakerBadRequests == 0
             && state.DiagnosticsCounterMismatchCount == 0
