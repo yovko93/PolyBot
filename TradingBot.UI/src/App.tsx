@@ -132,6 +132,18 @@ export default function App() {
   const verifiedStrategy = getStrategyCounter(strategyCounters, 'VerifiedMultiOutcome');
   const singleCycle = runtime(health, 'singleMarketFullCycleSummary') ?? {};
   const reducedMarkets = runtime(health, 'reducedUniverseMarkets') ?? scanner.effectiveMarketPoolSize ?? scanner.effectiveMarketLimit ?? 0;
+  const discoveryMode = String(first(runtime(health, 'discoveryMode'), runtime(health, 'discoverySelectedSource'), '')).toLowerCase();
+  const backendPaperDiagnosticsEligible = runtime(health, 'paperDiagnosticsLimitedEligible') === true;
+  const paperDiagnosticsEligibleSafe = backendPaperDiagnosticsEligible
+    && discoveryMode === 'reduceduniversediagnosticsonly'
+    && runtime(health, 'discoveryReducedUniverse') === true
+    && String(runtime(health, 'diagnosticsUniverse') ?? '').toLowerCase() === 'reduced';
+  const backendPaperDiagnosticsBlockedReason = String(runtime(health, 'paperDiagnosticsLimitedBlockedReason') ?? '');
+  const paperDiagnosticsBlockedReason = paperDiagnosticsEligibleSafe
+    ? 'None'
+    : (backendPaperDiagnosticsEligible && !paperDiagnosticsEligibleSafe && (!backendPaperDiagnosticsBlockedReason || backendPaperDiagnosticsBlockedReason === 'None')
+      ? 'ReducedUniverseNotActive'
+      : (backendPaperDiagnosticsBlockedReason || 'NotEligible'));
   const singleCandidates = first(singleStrategy?.cand, scanner.candidatesEvaluated, 0);
   const bestEdge = first(singleCycle.bestEdge, scanner.bestEdgeIsAvailable ? scanner.bestEdgeSeen : undefined, 'N/A');
   const scannerRows = [
@@ -157,7 +169,9 @@ export default function App() {
     ['True post bad', runtime(health, 'truePostBreakerBadRequests') ?? 0],
     ['In-flight bad', runtime(health, 'inFlightBeforeBreakerBadRequestsAfterOpen') ?? 0],
     ['Bad history', `${runtime(health, 'reducedUniverseBadHistoryActive') ?? 0}/${runtime(health, 'reducedUniverseBadHistoryExpired') ?? 0}`],
-    ['Paper diag eligible', String(runtime(health, 'paperDiagnosticsLimitedEligible') ?? false)]
+    ['Paper diag eligible', String(paperDiagnosticsEligibleSafe)],
+    ['Paper diag reason', paperDiagnosticsBlockedReason],
+    ...(backendPaperDiagnosticsEligible && !paperDiagnosticsEligibleSafe ? [['Paper diag warning', 'Backend eligible ignored: not ReducedUniverseDiagnosticsOnly']] : [])
   ];
   const strategyRows = [
     ['SingleMarketBuyBoth', strategyCompact(singleStrategy, ['scan', 'books', 'cand', 'positive', 'paper'])],

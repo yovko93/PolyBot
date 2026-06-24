@@ -248,6 +248,7 @@ app.MapHub<BotHub>("/hubs/bot");
 var apiTask = app.RunAsync(listenUrl);
 var state = app.Services.GetRequiredService<BotRuntimeState>();
 var reducedUniverseConfigured = !options.MarketDiscovery.SourceAuditOnly && options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly;
+var reducedUniverseExplicitFlagSatisfied = !options.MarketDiscovery.ReducedUniverseRequireExplicitFlag || options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly;
 state.SetDiscoveryGuardState(
     discoveryHealthy: false,
     discoveryStable: false,
@@ -279,7 +280,11 @@ state.SetDiscoveryGuardState(
     paperExecutionGloballyBlockedByDiscovery: reducedUniverseConfigured,
     strategyExecutionGloballyBlocked: reducedUniverseConfigured,
     diagnosticsUniverse: reducedUniverseConfigured ? "Reduced" : "Full",
-    tradingReadiness: false);
+    tradingReadiness: false,
+    allowReducedUniverseDiagnosticsOnly: options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly,
+    reducedUniverseRequireExplicitFlag: options.MarketDiscovery.ReducedUniverseRequireExplicitFlag,
+    reducedUniverseExplicitFlagSatisfied: reducedUniverseExplicitFlagSatisfied,
+    reducedUniverseActivationBlockedReason: reducedUniverseConfigured ? string.Empty : options.MarketDiscovery.SourceAuditOnly ? "SourceAuditOnly" : "NotExplicitlyEnabled");
 var quietLogGate = app.Services.GetRequiredService<QuietLogGate>();
 var logger = app.Services.GetRequiredService<IBotUiLogger>();
 options = app.Services.GetRequiredService<IOptions<TradingBotOptions>>().Value;
@@ -659,6 +664,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         var discoveryBootstrapHealthy = lastHealthyDiscoveryMarkets.Count >= options.MarketDiscovery.MinHealthyActiveMarkets;
         var reducedUniverseActive = options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly && string.Equals(discoveryMode, "ReducedUniverseDiagnosticsOnly", StringComparison.OrdinalIgnoreCase);
         var reducedUniverseBuilt = reducedUniverseActive && discoveredMarkets.Count > 0;
+        var reducedUniverseExplicitSatisfied = !options.MarketDiscovery.ReducedUniverseRequireExplicitFlag || options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly;
         discoveryScannerSafeSourceAvailable = !reducedUniverseActive && (discoveryUsingLastHealthySnapshot || (lastDiscoverySummary.DiscoveryHealthy && !string.Equals(discoveryMode, "Blocked", StringComparison.OrdinalIgnoreCase)));
         var discoveryBlocked = reducedUniverseActive || options.MarketDiscovery.SourceAuditOnly || !lastDiscoverySummary.DiscoveryHealthy || string.Equals(discoveryMode, "Blocked", StringComparison.OrdinalIgnoreCase) || !discoveryBootstrapHealthy || !discoveryScannerSafeSourceAvailable;
         var discoveryBlockedReason = options.MarketDiscovery.SourceAuditOnly
@@ -670,6 +676,15 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 : !discoveryBootstrapHealthy
                     ? "DiscoveryBootstrapUnavailable"
                     : "None";
+        var reducedUniverseActivationBlockedReason = reducedUniverseActive
+            ? string.Empty
+            : options.MarketDiscovery.SourceAuditOnly
+                ? "SourceAuditOnly"
+                : !options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly || !reducedUniverseExplicitSatisfied
+                    ? "NotExplicitlyEnabled"
+                    : reducedUniverseFilter.EligibleMarkets <= 0 && discoveredMarkets.Count == 0
+                        ? "ReducedUniverseEmpty"
+                        : discoveryBlockedReason;
         var discoveryStable = !discoveryBlocked && (lastDiscoverySummary.DiscoveryHealthy || discoveryUsingLastHealthySnapshot);
         var effectiveScannerPausedByDiscoveryGuard = scannerPausedByDiscoveryGuard || (discoveryBlocked && !reducedUniverseBuilt);
         var allowlistSkippedByDiscovery = discoveryBlocked;
@@ -738,7 +753,11 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             paperExecutionGloballyBlockedByDiscovery: reducedUniverseActive || !lastDiscoverySummary.DiscoveryHealthy || !discoveryScannerSafeSourceAvailable || string.Equals(discoveryMode, "Blocked", StringComparison.OrdinalIgnoreCase),
             strategyExecutionGloballyBlocked: reducedUniverseActive || discoveryBlocked,
             diagnosticsUniverse: reducedUniverseActive ? "Reduced" : "Full",
-            tradingReadiness: !discoveryBlocked && reducedUniverseOrderbookStable);
+            tradingReadiness: !discoveryBlocked && reducedUniverseOrderbookStable,
+            allowReducedUniverseDiagnosticsOnly: options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly,
+            reducedUniverseRequireExplicitFlag: options.MarketDiscovery.ReducedUniverseRequireExplicitFlag,
+            reducedUniverseExplicitFlagSatisfied: reducedUniverseExplicitSatisfied,
+            reducedUniverseActivationBlockedReason: reducedUniverseActivationBlockedReason);
     }
 
     var basketStateByGroup = new Dictionary<string, VerifiedBasketState>(StringComparer.OrdinalIgnoreCase);
@@ -934,7 +953,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             discoveryMode = "ReducedUniverseDiagnosticsOnly";
                             scannerPausedByDiscoveryGuard = true;
                             discoveryGuardSkippedCycles++;
-                            Console.WriteLine($"[REDUCED_UNIVERSE_ACTIVATION_SKIPPED] Reason=ReducedUniverseSourceUnavailable Active={attemptSummary.ActiveMarketsAvailable} CandidateMarkets={discoveredCandidateMarkets.Count} Source={options.MarketDiscovery.ReducedUniverseSource}");
+                            Console.WriteLine($"[REDUCED_UNIVERSE_ACTIVATION_SKIPPED] Reason=ReducedUniverseSourceUnavailable SourceAuditOnly={options.MarketDiscovery.SourceAuditOnly.ToString().ToLowerInvariant()} AllowReducedUniverseDiagnosticsOnly={options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly.ToString().ToLowerInvariant()} ReducedUniverseRequireExplicitFlag={options.MarketDiscovery.ReducedUniverseRequireExplicitFlag.ToString().ToLowerInvariant()} ReducedUniverseExplicitFlagSatisfied={(!options.MarketDiscovery.ReducedUniverseRequireExplicitFlag || options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly).ToString().ToLowerInvariant()} PartialMarkets={discoveredCandidateMarkets.Count} DiscoveryFailureKind={attemptSummary.DiscoveryLastFailureKind} Active={attemptSummary.ActiveMarketsAvailable} Source={options.MarketDiscovery.ReducedUniverseSource}");
                         }
                         else
                         {
