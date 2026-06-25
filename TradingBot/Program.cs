@@ -1063,6 +1063,13 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             var singleMarketFullSummary = pauseReducedOrderbookScan ? null : singleMarketFullCycle.AddBatch(singleMarketFullCycleId, state.SingleMarketSnapshot.Summary, state.SingleMarketSnapshot.DataQualityRejectSamples);
             if (!pauseReducedOrderbookScan && singleMarketFullSummary is not null && options.Diagnostics.OperationalQuietMode && singleMarketFullCycle.ShouldLog(singleMarketFullSummary, options.Logging, singleMarketFullCycleComplete, options.SingleMarketArb.LogCycleProgress))
                 Console.WriteLine(SingleMarketFullCycleSummaryAggregator.ToLogLine(singleMarketFullSummary));
+            if (!pauseReducedOrderbookScan && singleMarketFullCycleComplete)
+            {
+                var sm = state.SingleMarketSnapshot.Summary;
+                string F(decimal? v) => v.HasValue ? v.Value.ToString("0.####") : "N/A";
+                var limitedEligible = RuntimeHealthSnapshot.From(state, options).PaperDiagnosticsLimitedEligible;
+                Console.WriteLine($"[SINGLE_MARKET_NEAR_MISS_SUMMARY] Cycle={singleMarketFullCycleId} BestRawEdge={F(sm.BestRawEdge)} BestAfterCostEdge={F(sm.BestAfterCostEdge)} BestAfterSafetyEdge={F(sm.BestAfterSafetyEdge)} NearestRejectedReason={sm.BestRejectedReason} PositiveBeforeCost={sm.ValidRawPositive} PositiveAfterCost={sm.ValidAfterCostPositive} PositiveAfterSafety={sm.ValidAfterSafetyPositive} ExecutionReady={sm.ExecutionReady} PaperDiagnosticsLimitedEligible={limitedEligible.ToString().ToLowerInvariant()} PaperOpened={sm.PaperOpened}");
+            }
 
             MultiOutcomeGroupArbEngine.MultiOutcomeScanReport multiOutcomeReport = new(0,0,0,0,0,0,0,0m,0m,0m,"","NotEvaluated",new Dictionary<string,int>(),Array.Empty<MultiOutcomeGroupArbEngine.RejectedSample>(),Array.Empty<MultiOutcomeGroupArbEngine.CandidateGroupReview>());
             SetScannerStage("MultiCandidateScan", "MultiOutcomeGroupArbEngine");
@@ -2448,6 +2455,7 @@ static SingleMarketArbSnapshotDto BuildSingleMarketSignalRPayload(BotRuntimeStat
     {
         PositiveCandidates = snapshot.PositiveCandidates.Take(limit).ToArray(),
         TopNearMisses = snapshot.TopNearMisses.Take(Math.Min(limit, options.RuntimeState.MaxSingleMarketNearMisses)).ToArray(),
+        TopOpportunityAuditNearMisses = snapshot.TopOpportunityAuditNearMisses.Take(Math.Min(limit, options.RuntimeState.MaxSingleMarketNearMisses)).ToArray(),
         DataQualityRejectSamples = snapshot.DataQualityRejectSamples.Take(Math.Min(limit, options.RuntimeState.MaxSingleMarketDataQualitySamples)).ToArray(),
         PaperExecutions = snapshot.PaperExecutions.Take(Math.Min(limit, options.RuntimeState.MaxSingleMarketExecutions)).ToArray()
     };
@@ -2459,6 +2467,7 @@ static SingleMarketArbSnapshotDto BuildSingleMarketSignalRPayload(BotRuntimeStat
         {
             PositiveCandidates = payload.PositiveCandidates.Take(limit).ToArray(),
             TopNearMisses = payload.TopNearMisses.Take(limit).ToArray(),
+            TopOpportunityAuditNearMisses = payload.TopOpportunityAuditNearMisses.Take(limit).ToArray(),
             DataQualityRejectSamples = payload.DataQualityRejectSamples.Take(limit).ToArray(),
             PaperExecutions = payload.PaperExecutions.Take(limit).ToArray()
         };

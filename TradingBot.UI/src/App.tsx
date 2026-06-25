@@ -160,7 +160,15 @@ export default function App() {
     ['Candidates', singleCandidates],
     ['Positive', first(singleStrategy?.positive, scanner.positiveEdgeFound, 0)],
     ['Paper opened', first(singleStrategy?.paper, runtime(health, 'paperOpened'), 0)],
-    ['Best edge', bestEdge]
+    ['Best edge', bestEdge],
+    ['Best raw edge', first(runtime(health, 'singleMarketBestRawEdge'), 'N/A')],
+    ['Best after-cost edge', first(runtime(health, 'singleMarketBestAfterCostEdge'), 'N/A')],
+    ['Best after-safety edge', first(runtime(health, 'singleMarketBestAfterSafetyEdge'), 'N/A')],
+    ['Positive before cost', first(runtime(health, 'singleMarketPositiveBeforeCost'), 0)],
+    ['Positive after cost', first(runtime(health, 'singleMarketPositiveAfterCost'), 0)],
+    ['Positive after safety', first(runtime(health, 'singleMarketPositiveAfterSafety'), 0)],
+    ['Execution ready', first(runtime(health, 'singleMarketExecutionReady'), singleStrategy?.ready, 0)],
+    ['Best rejected reason', first(runtime(health, 'singleMarketBestRejectedReason'), 'None')]
   ];
   const orderbookRows = [
     ['Stable', String(runtime(health, 'reducedUniverseOrderbookStable') ?? true)],
