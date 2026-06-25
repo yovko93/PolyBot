@@ -134,6 +134,7 @@ export default function App() {
   const reducedMarkets = runtime(health, 'reducedUniverseMarkets') ?? scanner.effectiveMarketPoolSize ?? scanner.effectiveMarketLimit ?? 0;
   const discoveryMode = String(first(runtime(health, 'discoveryMode'), runtime(health, 'discoverySelectedSource'), '')).toLowerCase();
   const backendPaperDiagnosticsEligible = runtime(health, 'paperDiagnosticsLimitedEligible') === true;
+  const paperDiagnosticsEnabled = runtime(health, 'paperDiagnosticsLimitedEnabled') === true;
   const paperDiagnosticsEligibleSafe = backendPaperDiagnosticsEligible
     && discoveryMode === 'reduceduniversediagnosticsonly'
     && runtime(health, 'discoveryReducedUniverse') === true
@@ -144,6 +145,11 @@ export default function App() {
     : (backendPaperDiagnosticsEligible && !paperDiagnosticsEligibleSafe && (!backendPaperDiagnosticsBlockedReason || backendPaperDiagnosticsBlockedReason === 'None')
       ? 'ReducedUniverseNotActive'
       : (backendPaperDiagnosticsBlockedReason || 'NotEligible'));
+  const tradingState = paperDiagnosticsEnabled && paperDiagnosticsEligibleSafe
+    ? 'Paper limited'
+    : paperDiagnosticsEnabled
+      ? 'Strategy blocked'
+      : (runtime(health, 'strategyExecutionGloballyBlocked') ? 'Strategy blocked' : 'Paper / Live off');
   const singleCandidates = first(singleStrategy?.cand, scanner.candidatesEvaluated, 0);
   const bestEdge = first(singleCycle.bestEdge, scanner.bestEdgeIsAvailable ? scanner.bestEdgeSeen : undefined, 'N/A');
   const scannerRows = [
@@ -193,7 +199,7 @@ export default function App() {
       <div className="brand-chip">POLYBOT</div>
       <Metric label="Backend" value={connectionLabel} tone={backendConnected ? 'green' : 'yellow'} />
       <Metric label="Mode" value={d.status?.mode ?? `PaperPhase ${runtime(health, 'paperPhase') ?? 'PaperOnly'}`} tone="cyan" />
-      <Metric label="Trading" value={runtime(health, 'strategyExecutionGloballyBlocked') ? 'Strategy blocked' : 'Paper / Live off'} tone={runtime(health, 'strategyExecutionGloballyBlocked') ? 'yellow' : 'green'} />
+      <Metric label="Trading" value={tradingState} tone={tradingState === 'Paper limited' ? 'cyan' : tradingState === 'Strategy blocked' ? 'yellow' : 'green'} />
       <Metric label="Discovery" value={backendConnected ? discoveryLabel(health, scanner, d.controls) : 'Waiting'} tone={backendConnected ? (d.controls?.isPaused || runtime(health, 'discoveryReducedUniverse') ? 'yellow' : 'cyan') : 'yellow'} />
       <Metric label="Readiness" value={backendConnected ? readinessLabel(health, d.controls) : 'No backend'} tone={backendConnected ? (runtime(health, 'tradingReadiness') ? 'green' : 'yellow') : 'yellow'} />
       <Metric label="P/L" value={money(pnl)} tone={pnl < 0 ? 'red' : 'green'} />
@@ -218,7 +224,7 @@ export default function App() {
 
       <section className="diagnostics-shell">
         <button className="diagnostics-toggle" onClick={() => setShowDiagnostics((v) => !v)}>{showDiagnostics ? 'Hide diagnostics' : 'Show diagnostics'}</button>
-        {showDiagnostics && <div className="diagnostics-grid"><MiniBlock title="Scanner" rows={scannerRows} /><MiniBlock title="Strategy Summary" rows={strategyRows} /><MiniBlock title="Paper Summary" rows={[["Exposure", money(runtime(health, 'paperTotalExposure') ?? paper.totalExposure ?? locked)], ["Settlements", d.paperSettlements?.length ?? paper.settlements ?? 0], ["Rejects", Object.entries(paper.blockedCountsByReason ?? {}).map(([k, v]: any) => `${k}=${v}`).join(' ') || '-']]} /><MiniBlock title="Runtime" rows={[["Source", runtime(health, '__source') ?? d.source], ["Discovery", discoveryLabel(health, scanner, d.controls)], ["Readiness", readinessLabel(health, d.controls)], ["Universe", runtime(health, 'diagnosticsUniverse') ?? '-'], ["Reduced markets", runtime(health, 'reducedUniverseMarkets') ?? 0], ["Updated", time(runtime(health, '__updatedAt') ?? d.lastUpdated)]]} /><MiniBlock title="Orderbook Health" rows={orderbookRows} />{cycleRows.length ? <MiniBlock title="Single Cycle" rows={cycleRows} /> : null}<details className="raw-log-block"><summary>Raw logs</summary><div className="raw-log-console">{d.logs.slice(0, 30).map((l: any) => <pre key={l.id}>{time(l.timestamp)} [{l.source}] {l.message}</pre>)}</div></details></div>}
+        {showDiagnostics && <div className="diagnostics-grid"><MiniBlock title="Scanner" rows={scannerRows} /><MiniBlock title="Strategy Summary" rows={strategyRows} /><MiniBlock title="Paper Limited" rows={[["Enabled", String(paperDiagnosticsEnabled)], ["Eligible", String(paperDiagnosticsEligibleSafe)], ["Reason", paperDiagnosticsBlockedReason], ["Allowed", runtime(health, 'paperDiagnosticsLimitedAllowedStrategy') ?? '-'], ["Max positions", runtime(health, 'paperDiagnosticsLimitedMaxOpenPositions') ?? '-'], ["Trade cap", money(runtime(health, 'paperDiagnosticsLimitedMaxPaperNotionalPerTrade') ?? 0)], ["Exposure cap", money(runtime(health, 'paperDiagnosticsLimitedMaxPaperTotalExposure') ?? 0)], ["Opens last hour", runtime(health, 'paperDiagnosticsLimitedOpensLastHour') ?? 0], ["Last reject", runtime(health, 'paperDiagnosticsLimitedGateLastRejectReason') ?? 'None'], ["Opened", runtime(health, 'paperDiagnosticsLimitedPaperOpened') ?? 0]]} /><MiniBlock title="Paper Summary" rows={[["Exposure", money(runtime(health, 'paperTotalExposure') ?? paper.totalExposure ?? locked)], ["Settlements", d.paperSettlements?.length ?? paper.settlements ?? 0], ["Rejects", Object.entries(paper.blockedCountsByReason ?? {}).map(([k, v]: any) => `${k}=${v}`).join(' ') || '-']]} /><MiniBlock title="Runtime" rows={[["Source", runtime(health, '__source') ?? d.source], ["Discovery", discoveryLabel(health, scanner, d.controls)], ["Readiness", readinessLabel(health, d.controls)], ["Universe", runtime(health, 'diagnosticsUniverse') ?? '-'], ["Reduced markets", runtime(health, 'reducedUniverseMarkets') ?? 0], ["Updated", time(runtime(health, '__updatedAt') ?? d.lastUpdated)]]} /><MiniBlock title="Orderbook Health" rows={orderbookRows} />{cycleRows.length ? <MiniBlock title="Single Cycle" rows={cycleRows} /> : null}<details className="raw-log-block"><summary>Raw logs</summary><div className="raw-log-console">{d.logs.slice(0, 30).map((l: any) => <pre key={l.id}>{time(l.timestamp)} [{l.source}] {l.message}</pre>)}</div></details></div>}
       </section>
     </main>
   </div>;

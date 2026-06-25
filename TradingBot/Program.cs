@@ -55,6 +55,7 @@ var reducedUniverseSources = ResolveConfigSource(builder.Configuration, "Trading
 if (options.MarketDiscovery.SourceAuditOnly && options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly)
     Console.WriteLine("[DISCOVERY_MODE_CONFLICT] SourceAuditOnly=true AllowReducedUniverseDiagnosticsOnly=true EffectiveMode=SourceAuditOnly Action=DisableSourceAuditOnlyForReducedUniverseRun");
 Console.WriteLine($"[DISCOVERY_EFFECTIVE_MODE] SourceAuditOnly={options.MarketDiscovery.SourceAuditOnly.ToString().ToLowerInvariant()} AllowReducedUniverseDiagnosticsOnly={options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly.ToString().ToLowerInvariant()} EffectiveMode={startupDiscoveryMode} ConfigSource_SourceAuditOnly={sourceAuditOnlySources} ConfigSource_AllowReducedUniverseDiagnosticsOnly={reducedUniverseSources} ReducedUniverseMaxMarkets={options.MarketDiscovery.ReducedUniverseMaxMarkets} PaperBlocked={options.MarketDiscovery.ReducedUniverseBlockPaper.ToString().ToLowerInvariant()} ScannerEnabled={(!options.MarketDiscovery.SourceAuditOnly).ToString().ToLowerInvariant()} OrderbooksEnabled={(!options.MarketDiscovery.SourceAuditOnly).ToString().ToLowerInvariant()}");
+LogPaperDiagnosticsLimitedStartup(options);
 PaperPhaseValidationHarness.LogStartupConfig(options, app.Environment.EnvironmentName, app.Environment.ContentRootPath, builder.Configuration.Sources, args);
 PaperPhaseValidationHarness.LogPaperModeStartup(options, app.Environment.EnvironmentName, builder.Configuration.Sources, args);
 var listenUrl = options.ListenUrl;
@@ -435,13 +436,13 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var kalshiOptions = new KalshiOptions();
     var executionPolicy = new ExecutionPolicy
     {
-        MaxNotionalPerTrade = options.TradingMode.PaperPhase >= 2 ? options.PaperRisk.MaxPaperNotionalPerTrade : Math.Min(options.MaxNotionalPerTrade, options.PaperRisk.MaxPaperNotionalPerTrade),
+        MaxNotionalPerTrade = options.PaperDiagnosticsLimited.Enabled ? options.PaperDiagnosticsLimited.MaxPaperNotionalPerTrade : options.TradingMode.PaperPhase >= 2 ? options.PaperRisk.MaxPaperNotionalPerTrade : Math.Min(options.MaxNotionalPerTrade, options.PaperRisk.MaxPaperNotionalPerTrade),
         MinNotionalPerTrade = options.MinNotionalPerTrade,
         MinEdgePerShare = options.MinEdgePerShare,
         MinExpectedProfit = options.MinExpectedProfit,
-        MaxLockedCapital = Math.Min(options.MaxLockedCapital, options.PaperRisk.MaxPaperTotalExposure),
-        MaxOpenPositions = Math.Min(options.MaxOpenPositions, options.PaperRisk.MaxPaperPositionsTotal),
-        MaxExposurePerGroup = options.PaperRisk.MaxPaperTotalExposure,
+        MaxLockedCapital = options.PaperDiagnosticsLimited.Enabled ? options.PaperDiagnosticsLimited.MaxPaperTotalExposure : Math.Min(options.MaxLockedCapital, options.PaperRisk.MaxPaperTotalExposure),
+        MaxOpenPositions = options.PaperDiagnosticsLimited.Enabled ? options.PaperDiagnosticsLimited.MaxOpenPositions : Math.Min(options.MaxOpenPositions, options.PaperRisk.MaxPaperPositionsTotal),
+        MaxExposurePerGroup = options.PaperDiagnosticsLimited.Enabled ? options.PaperDiagnosticsLimited.MaxPaperTotalExposure : options.PaperRisk.MaxPaperTotalExposure,
         AllowBasketArbs = true,
         AllowSingleMarketArbs = true,
         AllowCompleteSetSellArbs = true,
@@ -466,7 +467,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var verifiedConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "VerifiedMultiOutcome");
     var autoConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "AutoCandidateMultiOutcome");
     var experimentalConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "ExperimentalMultiOutcome");
-    var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketFees, options.SingleMarketSlippage, monitor, sizing, options.SingleMarketArb, state, contentRootPath, verifiedExecution, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate, opportunityExecutionQueue, singleConfig.Mode);
+    var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketFees, options.SingleMarketSlippage, monitor, sizing, options.SingleMarketArb, state, contentRootPath, verifiedExecution, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate, opportunityExecutionQueue, singleConfig.Mode, options);
     var singleMarketStrategy = new SingleMarketBuyBothOpportunityStrategy(singleMarketArb);
     var strategyOrchestrator = new StrategyOrchestrator(new IOpportunityStrategy[] { singleMarketStrategy }, options, state.RecordStrategyResult);
     Console.WriteLine($"[STRATEGY_ORCHESTRATOR] SingleMarketBuyBoth={singleConfig.Mode} VerifiedMultiOutcome={verifiedConfig.Mode} AutoCandidateMultiOutcome={autoConfig.Mode} ExperimentalMultiOutcome={experimentalConfig.Mode}");
@@ -2488,6 +2489,27 @@ static string ResolveEffectiveDiscoveryMode(TradingBotOptions options)
     if (options.MarketDiscovery.SourceAuditOnly) return "SourceAuditOnly";
     if (options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly) return "ReducedUniverseDiagnosticsOnly";
     return "Normal";
+}
+
+static void LogPaperDiagnosticsLimitedStartup(TradingBotOptions options)
+{
+    var cfg = options.PaperDiagnosticsLimited;
+    if (!cfg.Enabled)
+    {
+        Console.WriteLine("[PAPER_DIAGNOSTICS_LIMITED_DISABLED]");
+        return;
+    }
+
+    Console.WriteLine("[PAPER_DIAGNOSTICS_LIMITED_MODE]");
+    Console.WriteLine($"Enabled={cfg.Enabled.ToString().ToLowerInvariant()}");
+    Console.WriteLine($"AllowedStrategy={cfg.AllowedStrategy}");
+    Console.WriteLine($"MaxOpenPositions={cfg.MaxOpenPositions}");
+    Console.WriteLine($"MaxPaperNotionalPerTrade={cfg.MaxPaperNotionalPerTrade:0.####}");
+    Console.WriteLine($"MaxPaperTotalExposure={cfg.MaxPaperTotalExposure:0.####}");
+    Console.WriteLine($"MaxPaperOpensPerHour={cfg.MaxPaperOpensPerHour}");
+    Console.WriteLine($"LiveTrading={options.TradingMode.LiveTradingEnabled.ToString().ToLowerInvariant()}");
+    Console.WriteLine("SigningDisabled=true");
+    Console.WriteLine($"RequiresReducedUniverse={cfg.RequireReducedUniverse.ToString().ToLowerInvariant()}");
 }
 
 static string ResolveConfigSource(IConfiguration configuration, params string[] keys)

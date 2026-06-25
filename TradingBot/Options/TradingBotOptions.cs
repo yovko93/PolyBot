@@ -57,6 +57,7 @@ public class TradingBotOptions
     public bool PaperOnly { get; set; } = true;
     public TradingModeOptions TradingMode { get; set; } = new();
     public PaperRiskOptions PaperRisk { get; set; } = new();
+    public PaperDiagnosticsLimitedOptions PaperDiagnosticsLimited { get; set; } = new();
     public VerifiedBasketArbOptions VerifiedBasketArb { get; set; } = new();
     public PaperPhase2Options PaperPhase2 { get; set; } = new();
     public PaperPhaseValidationOptions PaperPhaseValidation { get; set; } = new();
@@ -132,6 +133,25 @@ public class PaperRiskOptions
     public bool AllowVerifiedBasketPaper { get; set; } = true;
     public bool AllowExperimentalPaper { get; set; } = false;
     public bool AllowRepairSuggestedGroups { get; set; } = false;
+}
+
+public class PaperDiagnosticsLimitedOptions
+{
+    public bool Enabled { get; set; } = false;
+    public bool RequireExplicitFlag { get; set; } = true;
+    public string AllowedStrategy { get; set; } = "SingleMarketBuyBoth";
+    public int MaxOpenPositions { get; set; } = 1;
+    public decimal MaxPaperNotionalPerTrade { get; set; } = 5m;
+    public decimal MaxPaperTotalExposure { get; set; } = 5m;
+    public int MaxPaperOpensPerHour { get; set; } = 1;
+    public decimal MinEdgeOverride { get; set; } = 0.01m;
+    public bool RequireReducedUniverse { get; set; } = true;
+    public bool RequirePaperDiagnosticsLimitedEligible { get; set; } = true;
+    public bool RequireOrderbookStableNow { get; set; } = true;
+    public bool RequireNoCircuitBreaker { get; set; } = true;
+    public bool RequireNoBadRequestDeltas { get; set; } = true;
+    public bool RequireNoSigningAttempts { get; set; } = true;
+    public bool RequireLiveTradingFalse { get; set; } = true;
 }
 
 public class VerifiedBasketArbOptions
