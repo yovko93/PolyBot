@@ -386,7 +386,7 @@ public class SingleMarketOrderBookArbEngine
         }
         if (cfg.RequireOrderbookStableNow && !OrderbookStableNow(_state)) reasons.Add("OrderbookStableNowFalse");
         if (cfg.RequireNoCircuitBreaker && (stats.OrderbookCircuitBreakerActive || !string.Equals(stats.OrderbookCircuitBreakerState, "Closed", StringComparison.OrdinalIgnoreCase))) reasons.Add("OrderbookCircuitBreakerNotClosed");
-        if (cfg.RequireNoBadRequestDeltas && (stats.BatchBookBadRequests > 0 || stats.BatchBookInvalidTokens > 0 || stats.TruePostBreakerBadRequests > 0)) reasons.Add("BadRequestDeltasNonZero");
+        if (cfg.RequireNoBadRequestDeltas && (stats.BatchBadRequests > 0 || stats.BatchInvalidTokens > 0 || stats.TruePostBreakerBadRequests > 0)) reasons.Add("BadRequestDeltasNonZero");
         if (_state.DiagnosticsCounterMismatchCount > 0) reasons.Add("DiagnosticsCounterMismatch");
         if (_state.MemoryCriticals > 0 || _state.ScannerPausedByMemoryGuard) reasons.Add("MemoryUnstable");
         if (cfg.RequireLiveTradingFalse && _botOptions.TradingMode.LiveTradingEnabled) reasons.Add("LiveTradingEnabled");
