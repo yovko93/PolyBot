@@ -51,6 +51,7 @@ public class OrderBookService : IOrderBookProvider
     private long _orderbookCircuitBreakerHalfOpenAttempts;
     private long _orderbookCircuitBreakerHalfOpenSucceeded;
     private long _orderbookCircuitBreakerHalfOpenFailed;
+    private long _orderbookCircuitBreakerHalfOpenTimedOutCount;
     private long _batchBookCanaryTimeouts;
     private long _batchBookCanaryInvalidTokens;
     private long _batchBookCanaryOrderbookUnavailable;
@@ -108,6 +109,7 @@ public class OrderBookService : IOrderBookProvider
     public int CircuitBreakerHalfOpenCanaryMarkets { get; set; } = 25;
     public int CircuitBreakerHalfOpenMaxBadRequests { get; set; } = 0;
     public int CircuitBreakerHalfOpenMaxTimeouts { get; set; } = 1;
+    public TimeSpan CircuitBreakerHalfOpenMaxDuration { get; set; } = TimeSpan.FromSeconds(120);
     public double CircuitBreakerCooldownBackoffMultiplier { get; set; } = 2;
     public TimeSpan RecoveryDuration { get; set; } = TimeSpan.FromMinutes(5);
     public int RecoveryMaxMarketsPerCycle { get; set; } = 100;
@@ -152,6 +154,7 @@ public class OrderBookService : IOrderBookProvider
     private string _circuitBreakerLastHalfOpenFailureReason = string.Empty;
     private long _halfOpenBaselineBadRequests;
     private long _halfOpenBaselineTimeouts;
+    private DateTime? _halfOpenStartedUtc;
     private DateTime? _recoveringSinceUtc;
     private DateTime? _lastClosedUtc;
     private long _postCloseBaselineBadRequests;
@@ -205,6 +208,7 @@ public class OrderBookService : IOrderBookProvider
         CircuitBreakerHalfOpenCanaryMarkets = Math.Max(1, options.CircuitBreakerHalfOpenCanaryMarkets);
         CircuitBreakerHalfOpenMaxBadRequests = Math.Max(0, options.CircuitBreakerHalfOpenMaxBadRequests);
         CircuitBreakerHalfOpenMaxTimeouts = Math.Max(0, options.CircuitBreakerHalfOpenMaxTimeouts);
+        CircuitBreakerHalfOpenMaxDuration = TimeSpan.FromSeconds(Math.Max(1, options.CircuitBreakerHalfOpenMaxSeconds));
         CircuitBreakerCooldownBackoffMultiplier = Math.Max(1.0, options.CircuitBreakerCooldownBackoffMultiplier);
         RecoveryDuration = TimeSpan.FromMinutes(Math.Max(1, options.RecoveryDurationMinutes));
         RecoveryMaxMarketsPerCycle = Math.Max(1, options.RecoveryMaxMarketsPerCycle);
@@ -809,6 +813,7 @@ public class OrderBookService : IOrderBookProvider
         if (_circuitBreakerState != OrderbookCircuitBreakerState.Open) Interlocked.Increment(ref _orderbookCircuitBreakerOpenCount);
         _circuitBreakerState = OrderbookCircuitBreakerState.Open;
         _recoveringSinceUtc = null;
+        _halfOpenStartedUtc = null;
         _circuitBreakerLastOpenReason = reason;
         _circuitBreakerOpenUntilUtc = now.Add(_currentCircuitBreakerCooldown);
         if (!_circuitBreakerLoggedOpen)
@@ -824,13 +829,26 @@ public class OrderBookService : IOrderBookProvider
         if (_circuitBreakerState == OrderbookCircuitBreakerState.Open && _circuitBreakerOpenUntilUtc <= now)
         {
             _circuitBreakerState = OrderbookCircuitBreakerState.HalfOpen;
+            _halfOpenStartedUtc = now;
+            _halfOpenBaselineBadRequests = Interlocked.Read(ref _batchBadRequests);
+            _halfOpenBaselineTimeouts = Interlocked.Read(ref _batchTimeouts);
             _circuitBreakerLoggedOpen = false;
+        }
+        if (_circuitBreakerState == OrderbookCircuitBreakerState.HalfOpen && _halfOpenStartedUtc.HasValue && now - _halfOpenStartedUtc.Value > CircuitBreakerHalfOpenMaxDuration)
+        {
+            Interlocked.Increment(ref _orderbookCircuitBreakerHalfOpenTimedOutCount);
+            Interlocked.Increment(ref _orderbookCircuitBreakerHalfOpenFailed);
+            _circuitBreakerLastHalfOpenFailureReason = "HalfOpenTimedOut";
+            Console.WriteLine($"[ORDERBOOK_CIRCUIT_BREAKER_HALF_OPEN_FAILED] Reason=HalfOpenTimedOut HalfOpenAgeSeconds={(long)(now - _halfOpenStartedUtc.Value).TotalSeconds} HalfOpenMaxSeconds={(long)CircuitBreakerHalfOpenMaxDuration.TotalSeconds}");
+            OpenCircuitBreakerLocked(now, "HalfOpenTimedOut");
+            return;
         }
         if (_circuitBreakerState == OrderbookCircuitBreakerState.Recovering && _recoveringSinceUtc.HasValue && now - _recoveringSinceUtc.Value >= RecoveryDuration)
         {
             _circuitBreakerState = OrderbookCircuitBreakerState.Closed;
             _lastClosedUtc = now;
             _recoveringSinceUtc = null;
+            _halfOpenStartedUtc = null;
             _currentCircuitBreakerCooldown = CircuitBreakerInitialCooldown;
             Interlocked.Increment(ref _orderbookRecoverySucceededCount);
             Console.WriteLine("[ORDERBOOK_CIRCUIT_BREAKER_RECOVERY_SUCCEEDED] State=Closed");
@@ -858,6 +876,7 @@ public class OrderBookService : IOrderBookProvider
             }
             _circuitBreakerState = OrderbookCircuitBreakerState.Recovering;
             _recoveringSinceUtc = DateTime.UtcNow;
+            _halfOpenStartedUtc = null;
             _postCloseBaselineBadRequests = Interlocked.Read(ref _batchBadRequests);
             _postCloseBaselineInvalidTokens = Interlocked.Read(ref _batchInvalidTokens);
             Interlocked.Increment(ref _orderbookCircuitBreakerHalfOpenSucceeded);
@@ -942,6 +961,10 @@ public class OrderBookService : IOrderBookProvider
             OrderbookCircuitBreakerHalfOpenAttempts: Interlocked.Read(ref _orderbookCircuitBreakerHalfOpenAttempts),
             OrderbookCircuitBreakerHalfOpenSucceeded: Interlocked.Read(ref _orderbookCircuitBreakerHalfOpenSucceeded),
             OrderbookCircuitBreakerHalfOpenFailed: Interlocked.Read(ref _orderbookCircuitBreakerHalfOpenFailed),
+            OrderbookCircuitBreakerHalfOpenStartedUtc: _halfOpenStartedUtc,
+            OrderbookCircuitBreakerHalfOpenAgeSeconds: _circuitBreakerState == OrderbookCircuitBreakerState.HalfOpen && _halfOpenStartedUtc.HasValue ? Math.Max(0, (long)(DateTime.UtcNow - _halfOpenStartedUtc.Value).TotalSeconds) : 0,
+            OrderbookCircuitBreakerHalfOpenMaxSeconds: (long)CircuitBreakerHalfOpenMaxDuration.TotalSeconds,
+            OrderbookCircuitBreakerHalfOpenTimedOutCount: Interlocked.Read(ref _orderbookCircuitBreakerHalfOpenTimedOutCount),
             BatchBookCanaryTimeouts: Interlocked.Read(ref _batchBookCanaryTimeouts),
             BatchBookCanaryInvalidTokens: Interlocked.Read(ref _batchBookCanaryInvalidTokens),
             BatchBookCanaryOrderbookUnavailable: Interlocked.Read(ref _batchBookCanaryOrderbookUnavailable),

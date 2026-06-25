@@ -204,6 +204,7 @@ public class OrderBookOptions
     public int CircuitBreakerHalfOpenCanaryMarkets { get; set; } = 25;
     public int CircuitBreakerHalfOpenMaxBadRequests { get; set; } = 0;
     public int CircuitBreakerHalfOpenMaxTimeouts { get; set; } = 1;
+    public int CircuitBreakerHalfOpenMaxSeconds { get; set; } = 120;
     public double CircuitBreakerCooldownBackoffMultiplier { get; set; } = 2;
     public int RecoveryDurationMinutes { get; set; } = 5;
     public int RecoveryMaxMarketsPerCycle { get; set; } = 100;
