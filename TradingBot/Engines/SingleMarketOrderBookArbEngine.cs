@@ -23,6 +23,7 @@ public class SingleMarketOrderBookArbEngine
     private readonly MultiOutcomeLoggingOptions _logging;
     private readonly bool _operationalQuietMode;
     private readonly BotRuntimeState? _state;
+    private readonly TradingBotOptions? _botOptions;
     private readonly string? _contentRootPath;
     private readonly SingleMarketDataQualityValidator _dataQuality;
     private readonly SingleMarketFillSimulator _fillSimulator = new();
@@ -63,7 +64,8 @@ public class SingleMarketOrderBookArbEngine
         MultiOutcomeLoggingOptions? logging = null,
         QuietLogGate? quietLogGate = null,
         OpportunityExecutionQueue? executionQueue = null,
-        StrategyMode strategyMode = StrategyMode.PaperEligible)
+        StrategyMode strategyMode = StrategyMode.PaperEligible,
+        TradingBotOptions? botOptions = null)
     {
         _orderBooks = orderBooks;
         _options = options ?? new SingleMarketArbOptions { MinEdgePerShare = minEdgePerShare };
@@ -74,6 +76,7 @@ public class SingleMarketOrderBookArbEngine
         _sizing = sizing ?? new ExecutionSizingService(new ExecutionPolicy { MaxNotionalPerTrade = _options.MaxNotionalPerTrade, MinNotionalPerTrade = _options.MinNotional });
         _sizingLogsEnabled = _sizing.EnableSizingLogs;
         _state = state;
+        _botOptions = botOptions;
         _contentRootPath = contentRootPath;
         _dataQuality = new SingleMarketDataQualityValidator(_options);
         _audit = audit;
@@ -300,18 +303,19 @@ public class SingleMarketOrderBookArbEngine
                 return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,"OrderbookCircuitBreakerActive",null);
             }
             var blockedByDiscoveryMode = _state is not null && (_state.PaperExecutionGloballyBlockedByDiscovery || _state.DiscoveryReducedUniverse || !_state.DiscoveryHealthy || !_state.DiscoveryScannerSafeSourceAvailable || _state.DiscoverySelectedSource.Equals("Blocked", StringComparison.OrdinalIgnoreCase) || _state.DiscoverySelectedSource.Equals("ReducedUniverseDiagnosticsOnly", StringComparison.OrdinalIgnoreCase));
-            if (blockedByDiscoveryMode)
+            var limitedGate = EvaluatePaperDiagnosticsLimitedGate(fill.SimulatedCost);
+            if (blockedByDiscoveryMode && !limitedGate.Allowed)
             {
-                diagnostics.AddReject("PaperBlockedByDiscoveryMode");
-                _state?.RecordPaperPretradeReject("PaperBlockedByDiscoveryMode");
+                diagnostics.AddReject(limitedGate.CounterReason);
+                _state?.RecordPaperPretradeReject(limitedGate.CounterReason);
                 var shouldLogPaperBlock = _quietLogGate?.ShouldLog(
                     new LogEventKey("single-market", "PAPER_BLOCKED_BY_DISCOVERY_MODE", MarketId: book.MarketId, Strategy: StrategyName),
                     new LogEventFingerprint($"{StrategyName}|{_state?.DiscoverySelectedSource ?? "Unknown"}|{_state?.DiscoveryReducedUniverse}", "PaperBlockedByDiscoveryMode"),
                     LogImportance.Important,
                     QuietPolicy(Math.Max(1, _logging.QuietModeDefaultEveryNCycles), Math.Max(1, _logging.MaxVerifiedPretradeBlockedAuditPerHour))) ?? true;
-                if (shouldLogPaperBlock) Console.WriteLine($"[PAPER_BLOCKED_BY_DISCOVERY_MODE] Strategy={StrategyName} DiscoveryMode={_state?.DiscoverySelectedSource ?? "Unknown"} DiscoveryHealthy={(_state?.DiscoveryHealthy ?? false).ToString().ToLowerInvariant()} DiscoveryReducedUniverse={(_state?.DiscoveryReducedUniverse ?? false).ToString().ToLowerInvariant()} Reason=ReducedUniverseDiagnosticsOnly");
-                Console.WriteLine($"[SINGLE_MARKET_PAPER_OPEN_BLOCKED] MarketId={book.MarketId} Reason=PaperBlockedByDiscoveryMode");
-                return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,"PaperBlockedByDiscoveryMode",null);
+                if (shouldLogPaperBlock) Console.WriteLine($"[PAPER_DIAGNOSTICS_LIMITED_BLOCKED] Strategy=SingleMarketBuyBoth MarketId={book.MarketId} Reason={limitedGate.Reason}");
+                Console.WriteLine($"[SINGLE_MARKET_PAPER_OPEN_BLOCKED] MarketId={book.MarketId} Reason={limitedGate.CounterReason}");
+                return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,limitedGate.CounterReason,null);
             }
 
             if (!paper.TryMarkSingleMarketOpenInFlight(book.MarketId, StrategyName, out var ttlSeconds))
@@ -356,6 +360,69 @@ public class SingleMarketOrderBookArbEngine
             return SingleMarketScanResult.Empty;
         }
         finally { semaphore.Release(); }
+    }
+
+    private (bool Allowed, string Reason, string CounterReason) EvaluatePaperDiagnosticsLimitedGate(decimal notional)
+    {
+        if (_state is null || _botOptions is null || !_botOptions.PaperDiagnosticsLimited.Enabled)
+            return (false, "PaperDiagnosticsLimitedDisabled", "PaperBlockedByDiscoveryMode");
+
+        var cfg = _botOptions.PaperDiagnosticsLimited;
+        var stats = _state.OrderBookServiceStats;
+        var reasons = new List<string>();
+        if (cfg.RequireExplicitFlag && !cfg.Enabled) reasons.Add("ExplicitFlagNotSatisfied");
+        if (!string.Equals(cfg.AllowedStrategy, "SingleMarketBuyBoth", StringComparison.OrdinalIgnoreCase)) reasons.Add("StrategyNotAllowed");
+        if (cfg.RequireReducedUniverse)
+        {
+            if (!string.Equals(_state.DiscoverySelectedSource, "ReducedUniverseDiagnosticsOnly", StringComparison.OrdinalIgnoreCase)) reasons.Add("DiscoveryModeNotReducedUniverseDiagnosticsOnly");
+            if (!_state.DiscoveryReducedUniverse) reasons.Add("DiscoveryReducedUniverseFalse");
+            if (!string.Equals(_state.DiagnosticsUniverse, "Reduced", StringComparison.OrdinalIgnoreCase)) reasons.Add("DiagnosticsUniverseNotReduced");
+            if (_state.ReducedUniverseMarkets <= 0) reasons.Add("ReducedUniverseMarketsEmpty");
+        }
+        if (cfg.RequirePaperDiagnosticsLimitedEligible)
+        {
+            var eligibleReason = PaperDiagnosticsLimitedEligibilityReason(_state);
+            if (!string.Equals(eligibleReason, "None", StringComparison.OrdinalIgnoreCase)) reasons.Add(eligibleReason);
+        }
+        if (cfg.RequireOrderbookStableNow && !OrderbookStableNow(_state)) reasons.Add("OrderbookStableNowFalse");
+        if (cfg.RequireNoCircuitBreaker && (stats.OrderbookCircuitBreakerActive || !string.Equals(stats.OrderbookCircuitBreakerState, "Closed", StringComparison.OrdinalIgnoreCase))) reasons.Add("OrderbookCircuitBreakerNotClosed");
+        if (cfg.RequireNoBadRequestDeltas && (stats.BatchBookBadRequests > 0 || stats.BatchBookInvalidTokens > 0 || stats.TruePostBreakerBadRequests > 0)) reasons.Add("BadRequestDeltasNonZero");
+        if (_state.DiagnosticsCounterMismatchCount > 0) reasons.Add("DiagnosticsCounterMismatch");
+        if (_state.MemoryCriticals > 0 || _state.ScannerPausedByMemoryGuard) reasons.Add("MemoryUnstable");
+        if (cfg.RequireLiveTradingFalse && _botOptions.TradingMode.LiveTradingEnabled) reasons.Add("LiveTradingEnabled");
+        if (cfg.RequireNoSigningAttempts && LiveTradingGuard.SigningAttempts > 0) reasons.Add("SigningAttemptDetected");
+        if (_state.PaperOpenPositions >= cfg.MaxOpenPositions) reasons.Add("MaxOpenPositions");
+        if (_state.PaperTotalExposure + notional > cfg.MaxPaperTotalExposure) reasons.Add("MaxPaperTotalExposure");
+        if (notional > cfg.MaxPaperNotionalPerTrade) reasons.Add("MaxPaperNotionalPerTrade");
+        if (_state.PaperOpenCountLastHour >= cfg.MaxPaperOpensPerHour) reasons.Add("MaxPaperOpensPerHour");
+
+        var reason = reasons.Count == 0 ? "None" : string.Join("|", reasons.Distinct(StringComparer.OrdinalIgnoreCase));
+        return (reasons.Count == 0, reason, reasons.Count == 0 ? "None" : "PaperBlockedByDiagnosticsLimitedGate");
+    }
+
+    private static bool OrderbookStableNow(BotRuntimeState state)
+    {
+        var stats = state.OrderBookServiceStats;
+        return string.Equals(stats.OrderbookCircuitBreakerState, "Closed", StringComparison.OrdinalIgnoreCase)
+            && !stats.OrderbookCircuitBreakerActive
+            && !stats.ReducedUniverseOrderbookRecoveryMode
+            && !stats.ReducedUniverseScanPausedByOrderbookHealth
+            && stats.TruePostBreakerBadRequests == 0
+            && stats.MarketOrderbookQuarantineActive == 0
+            && stats.InvalidTokenQuarantineActive == 0;
+    }
+
+    private static string PaperDiagnosticsLimitedEligibilityReason(BotRuntimeState state)
+    {
+        var reasons = new List<string>();
+        if (!state.ReducedUniverseExplicitFlagSatisfied) reasons.Add("NotExplicitlyEnabled");
+        if (!state.DiscoveryReducedUniverse) reasons.Add("ReducedUniverseNotActive");
+        if (!string.Equals(state.DiagnosticsUniverse, "Reduced", StringComparison.OrdinalIgnoreCase)) reasons.Add("ReducedUniverseNotActive");
+        if (!OrderbookStableNow(state)) reasons.Add("OrderbookStableNowFalse");
+        if (state.DiagnosticsCounterMismatchCount > 0) reasons.Add("DiagnosticsCounterMismatch");
+        if (state.LiveTradingBlockedCount > 0) reasons.Add("LiveTradingSafety");
+        if (LiveTradingGuard.SigningAttempts > 0) reasons.Add("SigningAttemptDetected");
+        return reasons.Count == 0 ? "None" : string.Join("|", reasons.Distinct(StringComparer.OrdinalIgnoreCase));
     }
 
     private void RecordMonitor(BinaryOrderBookSnapshot book, decimal edge, decimal adjustedCost, decimal quantity)
