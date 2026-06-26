@@ -99,15 +99,24 @@ public class TradingBotOptions
     public CacheOptions Caches { get; set; } = new();
     public OrderBookOptions OrderBook { get; set; } = new();
     public SoakOptions Soak { get; set; } = new();
+    public StrategyOrchestratorOptions StrategyOrchestrator { get; set; } = new();
     public Dictionary<string, OpportunityStrategyConfig> Strategies { get; set; } = StrategyDefaults();
 
     private static Dictionary<string, OpportunityStrategyConfig> StrategyDefaults() => new(StringComparer.OrdinalIgnoreCase)
     {
         ["SingleMarketBuyBoth"] = new(true, StrategyMode.PaperEligible, 100),
-        ["VerifiedMultiOutcome"] = new(true, StrategyMode.DiagnosticsOnly, 50),
-        ["AutoCandidateMultiOutcome"] = new(true, StrategyMode.DiagnosticsOnly, 25),
+        ["VerifiedMultiOutcome"] = new(true, StrategyMode.ShadowPaperEligible, 50),
+        ["AutoCandidateMultiOutcome"] = new(true, StrategyMode.ShadowPaperEligible, 25),
+        ["MultiOutcomeNearMiss"] = new(true, StrategyMode.DiagnosticsOnly, 10),
         ["ExperimentalMultiOutcome"] = new(false, StrategyMode.Disabled, 0)
     };
+}
+
+public class StrategyOrchestratorOptions
+{
+    public bool Enabled { get; set; } = true;
+    public int MaxConcurrentStrategies { get; set; } = 4;
+    public int MaxConcurrentOrderbookConsumers { get; set; } = 1;
 }
 
 public class TradingModeOptions

@@ -466,11 +466,12 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var singleConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "SingleMarketBuyBoth");
     var verifiedConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "VerifiedMultiOutcome");
     var autoConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "AutoCandidateMultiOutcome");
+    var nearMissConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "MultiOutcomeNearMiss");
     var experimentalConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "ExperimentalMultiOutcome");
     var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketFees, options.SingleMarketSlippage, monitor, sizing, options.SingleMarketArb, state, contentRootPath, verifiedExecution, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate, opportunityExecutionQueue, singleConfig.Mode, options);
     var singleMarketStrategy = new SingleMarketBuyBothOpportunityStrategy(singleMarketArb);
-    var strategyOrchestrator = new StrategyOrchestrator(new IOpportunityStrategy[] { singleMarketStrategy }, options, state.RecordStrategyResult);
-    Console.WriteLine($"[STRATEGY_ORCHESTRATOR] SingleMarketBuyBoth={singleConfig.Mode} VerifiedMultiOutcome={verifiedConfig.Mode} AutoCandidateMultiOutcome={autoConfig.Mode} ExperimentalMultiOutcome={experimentalConfig.Mode}");
+    var strategyOrchestrator = new StrategyOrchestrator(new IOpportunityStrategy[] { singleMarketStrategy, new NullOpportunityStrategy("MultiOutcomeNearMiss") }, options, state.RecordStrategyResult);
+    Console.WriteLine($"[STRATEGY_ORCHESTRATOR] Enabled={options.StrategyOrchestrator.Enabled.ToString().ToLowerInvariant()} MaxConcurrentStrategies={options.StrategyOrchestrator.MaxConcurrentStrategies} MaxConcurrentOrderbookConsumers={options.StrategyOrchestrator.MaxConcurrentOrderbookConsumers} SingleMarketBuyBoth={singleConfig.Mode} VerifiedMultiOutcome={verifiedConfig.Mode} AutoCandidateMultiOutcome={autoConfig.Mode} MultiOutcomeNearMiss={nearMissConfig.Mode} ExperimentalMultiOutcome={experimentalConfig.Mode}");
     var singleMarketFullCycle = new SingleMarketFullCycleSummaryAggregator(options.SingleMarketArb);
 
     var config = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory).AddJsonFile("appsettings.json", optional: true).Build();
@@ -1018,7 +1019,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             scanId++;
             singleMarketFullCycleId = scanPool.Count == 0 ? scanId : (fullCoverageCompletedThisBatch ? fullCoverageCompletedCount : fullCoverageCompletedCount + 1);
             var singleMarketFullCycleComplete = !pauseReducedOrderbookScan && scanPool.Count > 0 && (options.Mode == "AllAtOnce" || currentRollingOffsetAfter == 0 || filtered.Count >= scanPool.Count || fullCoverageCompletedThisBatch);
-            var orderbookSemaphore = new SemaphoreSlim(options.MaxConcurrentOrderbookRequests);
+            var orderbookSemaphore = new SemaphoreSlim(Math.Max(1, options.StrategyOrchestrator.MaxConcurrentOrderbookConsumers));
             if (pauseReducedOrderbookScan)
             {
                 singleMarketScanPausedByOrderbookHealth++;
@@ -1965,6 +1966,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     if (rejectedOnlyCandidateScan) lastRejectedOnlyCandidateScanFingerprint = rejectedOnlyMaterialFingerprint;
                     var autoTopSkipReason = string.IsNullOrWhiteSpace(multiOutcomeReport.TopSkipReason) ? "None" : multiOutcomeReport.TopSkipReason;
                     var autoTopSkipCount = autoTopSkipReason == "None" ? 0 : (multiOutcomeReport.RejectedByReason.TryGetValue(autoTopSkipReason, out var autoTopSkipValue) ? autoTopSkipValue : 0);
+                    if (autoConfig.Mode == StrategyMode.ShadowPaperEligible && multiOutcomeReport.ExecutableGroups > 0)
+                        Console.WriteLine($"[SHADOW_PAPER_CANDIDATE] Strategy=AutoCandidateMultiOutcome Mode={autoConfig.Mode} Candidates={multiOutcomeReport.ExecutableGroups} BestAfterSafetyEdge={(multiOutcomeReport.BestCandidateEdge.HasValue ? multiOutcomeReport.BestCandidateEdge.Value.ToString("0.####") : "N/A")} BlockedReason=ModeShadowPaperEligible");
                     strategyOrchestrator.RecordExternalResult(new OpportunityStrategyScanResult(
                         "AutoCandidateMultiOutcome",
                         StrategyMode.DiagnosticsOnly,
@@ -1972,10 +1975,15 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         Candidates: multiOutcomeReport.GroupsDetected,
                         ExecutionCandidates: 0,
                         PaperOpened: 0,
-                        DiagnosticsOnlyBlocked: multiOutcomeReport.ExecutableGroups,
-                        PositiveEdges: 0,
+                        DiagnosticsOnlyBlocked: autoConfig.Mode == StrategyMode.DiagnosticsOnly ? multiOutcomeReport.ExecutableGroups : 0,
+                        ShadowWouldOpen: autoConfig.Mode == StrategyMode.ShadowPaperEligible ? multiOutcomeReport.ExecutableGroups : 0,
+                        BlockedByMode: autoConfig.Mode == StrategyMode.PaperEligible ? 0 : multiOutcomeReport.ExecutableGroups,
+                        PositiveEdges: multiOutcomeReport.ExecutableGroups,
                         ExecutionReady: 0,
                         BestEdge: multiOutcomeReport.BestCandidateEdge,
+                        BestRawEdge: multiOutcomeReport.BestCandidateEdge,
+                        BestAfterSafetyEdge: multiOutcomeReport.BestCandidateEdge,
+                        BestRejectedReason: autoTopSkipReason,
                         TopSkipReason: autoTopSkipReason,
                         TopSkipCount: autoTopSkipCount,
                         RejectedByReason: multiOutcomeReport.RejectedByReason),
@@ -2039,6 +2047,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     decimal? verifiedBestStrategyEdge = bestConservativeNet
                         ?? bestAlternateProfileNetValue
                         ?? bestRawValue;
+                    if (verifiedConfig.Mode == StrategyMode.ShadowPaperEligible && verifiedWouldOpenIfPaperEligible > 0)
+                        Console.WriteLine($"[SHADOW_PAPER_CANDIDATE] Strategy=VerifiedMultiOutcome Mode={verifiedConfig.Mode} Candidates={verifiedWouldOpenIfPaperEligible} BestAfterSafetyEdge={(verifiedBestStrategyEdge.HasValue ? verifiedBestStrategyEdge.Value.ToString("0.####") : "N/A")} BlockedReason=ModeShadowPaperEligible");
                     strategyOrchestrator.RecordExternalResult(new OpportunityStrategyScanResult(
                         "VerifiedMultiOutcome",
                         StrategyMode.DiagnosticsOnly,
@@ -2046,11 +2056,20 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         Candidates: verifiedEvaluated,
                         ExecutionCandidates: 0,
                         PaperOpened: 0,
-                        DiagnosticsOnlyBlocked: verifiedWouldOpenIfPaperEligible,
+                        DiagnosticsOnlyBlocked: verifiedConfig.Mode == StrategyMode.DiagnosticsOnly ? verifiedWouldOpenIfPaperEligible : 0,
+                        ShadowWouldOpen: verifiedConfig.Mode == StrategyMode.ShadowPaperEligible ? verifiedWouldOpenIfPaperEligible : 0,
+                        BlockedByMode: verifiedConfig.Mode == StrategyMode.PaperEligible ? 0 : verifiedWouldOpenIfPaperEligible,
+                        BlockedByRisk: verifiedRejectedByRisk,
+                        BlockedByFill: verifiedBlockedByFill,
+                        BlockedByDepth: verifiedBlockedByDepth,
                         PositiveEdges: verifiedActivePositive + verifiedRawPositiveOnly + verifiedAlternatePositive + experimentalCandidates,
                         ExecutionReady: verifiedWouldOpenIfPaperEligible,
                         OrderbookUnavailable: verifiedRejectedByReason.Where(x => x.Key.Contains("Orderbook", StringComparison.OrdinalIgnoreCase) || x.Key.Contains("MissingNoAsk", StringComparison.OrdinalIgnoreCase)).Sum(x => x.Value),
                         BestEdge: verifiedBestStrategyEdge,
+                        BestRawEdge: bestRawValue,
+                        BestAfterCostEdge: bestAlternateProfileNetValue,
+                        BestAfterSafetyEdge: bestConservativeNet ?? verifiedBestStrategyEdge,
+                        BestRejectedReason: verifiedTopSkip.Key ?? "None",
                         TopSkipReason: verifiedTopSkip.Key ?? "None",
                         TopSkipCount: verifiedTopSkip.Value,
                         RejectedByReason: verifiedRejectedByReason,
@@ -2077,6 +2096,17 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         VerifiedWouldOpenBlockedByDepth: verifiedBlockedByDepth,
                         VerifiedWouldOpenBlockedByUnknown: verifiedBlockedByUnknown),
                         multiOutcomeValidator.LoadedAllowlistCount);
+                    var shadowExportDir = Path.Combine(contentRootPath, "exports");
+                    Directory.CreateDirectory(shadowExportDir);
+                    var shadowRows = new[]
+                    {
+                        new { timestampUtc = DateTime.UtcNow, processRunId = state.ProcessRunId, strategy = "VerifiedMultiOutcome", mode = verifiedConfig.Mode.ToString(), marketOrGroupKey = "verified-multi-outcome", legs = 0, rawEdge = bestRawValue, afterCostEdge = bestAlternateProfileNetValue, afterSafetyEdge = bestConservativeNet ?? verifiedBestStrategyEdge, executableQty = 0, notionalAtCap = 0, wouldOpen = verifiedConfig.Mode == StrategyMode.ShadowPaperEligible && verifiedWouldOpenIfPaperEligible > 0, blockedReason = verifiedConfig.Mode == StrategyMode.ShadowPaperEligible ? "ModeShadowPaperEligible" : "NotShadowEligible", paperDiagnosticsLimitedEligible = RuntimeHealthSnapshot.From(state, options).PaperDiagnosticsLimitedEligible, orderbookStableNow = RuntimeHealthSnapshot.From(state, options).OrderbookStableNow, reducedUniverseOrderbookStableNow = RuntimeHealthSnapshot.From(state, options).ReducedUniverseOrderbookStableNow },
+                        new { timestampUtc = DateTime.UtcNow, processRunId = state.ProcessRunId, strategy = "AutoCandidateMultiOutcome", mode = autoConfig.Mode.ToString(), marketOrGroupKey = "auto-candidate-multi-outcome", legs = 0, rawEdge = multiOutcomeReport.BestCandidateEdge, afterCostEdge = multiOutcomeReport.BestCandidateEdge, afterSafetyEdge = multiOutcomeReport.BestCandidateEdge, executableQty = 0, notionalAtCap = 0, wouldOpen = autoConfig.Mode == StrategyMode.ShadowPaperEligible && multiOutcomeReport.ExecutableGroups > 0, blockedReason = autoConfig.Mode == StrategyMode.ShadowPaperEligible ? "ModeShadowPaperEligible" : "NotShadowEligible", paperDiagnosticsLimitedEligible = RuntimeHealthSnapshot.From(state, options).PaperDiagnosticsLimitedEligible, orderbookStableNow = RuntimeHealthSnapshot.From(state, options).OrderbookStableNow, reducedUniverseOrderbookStableNow = RuntimeHealthSnapshot.From(state, options).ReducedUniverseOrderbookStableNow }
+                    }.Where(x => x.wouldOpen).Take(100).ToArray();
+                    File.WriteAllText(Path.Combine(shadowExportDir, "shadow-paper-candidates-latest.json"), System.Text.Json.JsonSerializer.Serialize(shadowRows, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
+                    File.WriteAllText(Path.Combine(shadowExportDir, "verified-multi-outcome-near-misses-latest.json"), System.Text.Json.JsonSerializer.Serialize(groupDiagnostics.Take(100), new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
+                    File.WriteAllText(Path.Combine(shadowExportDir, "auto-candidate-near-misses-latest.json"), System.Text.Json.JsonSerializer.Serialize(multiOutcomeReport.RejectedSamples.Take(100), new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
+                    File.WriteAllText(Path.Combine(shadowExportDir, "multi-strategy-near-misses-latest.json"), System.Text.Json.JsonSerializer.Serialize(new { verified = groupDiagnostics.Take(50), autoCandidate = multiOutcomeReport.RejectedSamples.Take(50), singleMarket = state.SingleMarketSnapshot.TopOpportunityAuditNearMisses.Take(50) }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
                     if (!unresolvedCounts.InvariantOk)
                         Console.WriteLine(unresolvedCounts.ToCounterErrorLogLine());
                     var unresolvedFingerprint = ScanLogSummaryService.VerifiedUnresolvedCategoryFingerprint(unresolvedCounts, unresolvedGroupSetFingerprint);

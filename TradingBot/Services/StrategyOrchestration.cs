@@ -4,7 +4,7 @@ using TradingBot.Options;
 
 namespace TradingBot.Services;
 
-public enum StrategyMode { Disabled, DiagnosticsOnly, PaperEligible }
+public enum StrategyMode { Disabled, DiagnosticsOnly, ShadowPaperEligible, PaperEligible }
 
 public sealed record OpportunityStrategyConfig(bool Enabled = false, StrategyMode Mode = StrategyMode.Disabled, int Priority = 0)
 {
@@ -33,6 +33,18 @@ public sealed record OpportunityStrategyScanResult(
     int ExecutionCandidates = 0,
     int PaperOpened = 0,
     int DiagnosticsOnlyBlocked = 0,
+    int EdgeStable = 0,
+    int ShadowWouldOpen = 0,
+    int BlockedByMode = 0,
+    int BlockedByPaperDiagnosticsLimitedGate = 0,
+    int BlockedByOrderbookHealth = 0,
+    int BlockedByRisk = 0,
+    int BlockedByFill = 0,
+    int BlockedByDepth = 0,
+    decimal? BestRawEdge = null,
+    decimal? BestAfterCostEdge = null,
+    decimal? BestAfterSafetyEdge = null,
+    string BestRejectedReason = "None",
     int Faults = 0,
     string? LastError = null,
     int Books = 0,
@@ -104,11 +116,11 @@ public sealed class OpportunityExecutionQueue
     public async Task<bool> EnqueueAsync(OpportunityExecutionCandidate candidate, CancellationToken ct = default)
     {
         Interlocked.Increment(ref _enqueued);
-        if (candidate.Mode != StrategyMode.PaperEligible)
+        if (candidate.Mode != StrategyMode.PaperEligible || !candidate.StrategyName.Equals("SingleMarketBuyBoth", StringComparison.OrdinalIgnoreCase))
         {
             Interlocked.Increment(ref _rejectedDiagnosticsOnly);
-            Console.WriteLine($"[STRATEGY_EXECUTION_SKIPPED] Strategy={candidate.StrategyName} Mode={candidate.Mode} MarketOrGroup={candidate.MarketOrGroup} Reason=DiagnosticsOnlyCannotOpenPaper");
-            Console.WriteLine($"[STRATEGY_EXECUTION_BLOCKED] Strategy={candidate.StrategyName} Mode={candidate.Mode} MarketOrGroup={candidate.MarketOrGroup} Reason=DiagnosticsOnlyCannotOpenPaper");
+            Console.WriteLine($"[STRATEGY_EXECUTION_SKIPPED] Strategy={candidate.StrategyName} Mode={candidate.Mode} MarketOrGroup={candidate.MarketOrGroup} Reason=ModeOrStrategyCannotOpenPaper");
+            Console.WriteLine($"[STRATEGY_EXECUTION_BLOCKED] Strategy={candidate.StrategyName} Mode={candidate.Mode} MarketOrGroup={candidate.MarketOrGroup} Reason=ModeOrStrategyCannotOpenPaper");
             return false;
         }
 
@@ -166,16 +178,26 @@ public sealed class StrategyOrchestrator
         var configured = _options.Strategies;
         var enabled = _strategies
             .Select(s => (Strategy: s, Config: ResolveConfig(configured, s.Name)))
-            .Where(x => x.Config.Enabled && x.Config.Mode != StrategyMode.Disabled)
+             .Where(x => x.Config.Enabled && x.Config.Mode != StrategyMode.Disabled)
             .OrderByDescending(x => x.Config.Priority)
+            .Take(Math.Max(1, _options.StrategyOrchestrator.MaxConcurrentStrategies))
             .ToArray();
 
-        var tasks = enabled.Select(x =>
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var throttler = new SemaphoreSlim(Math.Max(1, _options.StrategyOrchestrator.MaxConcurrentStrategies));
+        var tasks = enabled.Select(async x =>
         {
-            LogScanStart(x.Strategy.Name, x.Config, context.Markets.Count);
-            return RunOneAsync(x.Strategy, x.Config, context);
+            await throttler.WaitAsync(context.CancellationToken);
+            try
+            {
+                LogScanStart(x.Strategy.Name, x.Config, context.Markets.Count);
+                return await RunOneAsync(x.Strategy, x.Config, context);
+            }
+            finally { throttler.Release(); }
         }).ToArray();
         var results = await Task.WhenAll(tasks);
+        sw.Stop();
+        LogMultiStrategySummary(results, sw.ElapsedMilliseconds);
         foreach (var result in results) _recordResult?.Invoke(result);
         return results;
     }
@@ -208,6 +230,16 @@ public sealed class StrategyOrchestrator
         _recordResult?.Invoke(result);
     }
 
+    private void LogMultiStrategySummary(IReadOnlyList<OpportunityStrategyScanResult> results, long elapsedMs)
+    {
+        if (!_options.StrategyOrchestrator.Enabled) return;
+        var active = results.Where(r => r.Mode != StrategyMode.Disabled).ToArray();
+        var paper = active.Where(r => r.Mode == StrategyMode.PaperEligible).Select(r => r.StrategyName);
+        var shadow = active.Where(r => r.Mode == StrategyMode.ShadowPaperEligible).Select(r => r.StrategyName);
+        var best = active.OrderByDescending(r => r.BestAfterSafetyEdge ?? r.BestEdge ?? decimal.MinValue).FirstOrDefault();
+        Console.WriteLine($"[MULTI_STRATEGY_SUMMARY] ActiveStrategies={string.Join("|", active.Select(r => r.StrategyName))} PaperEligibleStrategies={string.Join("|", paper)} ShadowStrategies={string.Join("|", shadow)} TotalCandidates={active.Sum(r => r.Candidates)} TotalPositive={active.Sum(r => r.PositiveEdges)} TotalExecutionReady={active.Sum(r => r.ExecutionReady)} TotalShadowWouldOpen={active.Sum(r => r.ShadowWouldOpen)} TotalPaperOpened={active.Sum(r => r.PaperOpened)} BestStrategy={best?.StrategyName ?? "None"} BestAfterSafetyEdge={(best?.BestAfterSafetyEdge ?? best?.BestEdge)?.ToString("0.####") ?? "N/A"} PaperDiagnosticsLimitedEligible=unknown OrderbookStableNow=unknown ReducedUniverseOrderbookStableNow=unknown DurationMs={elapsedMs}");
+    }
+
     private void LogScanStart(string strategyName, OpportunityStrategyConfig config, int scannedItems)
     {
         var shouldLog = !_options.Diagnostics.OperationalQuietMode;
@@ -229,7 +261,7 @@ public sealed class StrategyOrchestrator
         lock (_logGate) shouldLog = shouldLog || _resultLogged.Add(result.StrategyName);
         if (shouldLog)
         {
-            Console.WriteLine($"[STRATEGY_SCAN_RESULT] Strategy={result.StrategyName} Mode={config.Mode} PaperEligible={(config.Mode == StrategyMode.PaperEligible).ToString().ToLowerInvariant()} Scanned={result.Scanned} Books={result.Books} BothAsks={result.BothAsks} Candidates={result.Candidates} Positive={result.PositiveEdges} ExecutionReady={result.ExecutionReady} PaperOpened={result.PaperOpened} ExecutionCandidates={result.ExecutionCandidates} ExecutionCandidatesSuppressed={result.DiagnosticsOnlyBlocked} OrderbookUnavailable={result.OrderbookUnavailable} BestEdge={(result.BestEdge.HasValue ? result.BestEdge.Value.ToString("0.####") : "N/A")} TopSkip={result.TopSkipReason}:{result.TopSkipCount} Faults={result.Faults}");
+            Console.WriteLine($"[STRATEGY_SCAN_RESULT] Strategy={result.StrategyName} Mode={config.Mode} PaperEligible={(config.Mode == StrategyMode.PaperEligible).ToString().ToLowerInvariant()} Shadow={(config.Mode == StrategyMode.ShadowPaperEligible).ToString().ToLowerInvariant()} Scanned={result.Scanned} Books={result.Books} BothAsks={result.BothAsks} Candidates={result.Candidates} Positive={result.PositiveEdges} ExecutionReady={result.ExecutionReady} EdgeStable={result.EdgeStable} ShadowWouldOpen={result.ShadowWouldOpen} PaperOpened={result.PaperOpened} ExecutionCandidates={result.ExecutionCandidates} ExecutionCandidatesSuppressed={result.DiagnosticsOnlyBlocked} OrderbookUnavailable={result.OrderbookUnavailable} BestEdge={(result.BestEdge.HasValue ? result.BestEdge.Value.ToString("0.####") : "N/A")} TopSkip={result.TopSkipReason}:{result.TopSkipCount} Faults={result.Faults}");
         }
 
         var now = DateTime.UtcNow;
@@ -264,7 +296,7 @@ public sealed class StrategyOrchestrator
                 Console.WriteLine($"[STRATEGY_DIAGNOSTICS_ONLY_SUMMARY] Strategy={result.StrategyName} CandidatesSuppressed={result.DiagnosticsOnlyBlocked} ActiveConservativeExecutable={result.VerifiedActiveConservativeExecutable} RawPositiveOnly={result.VerifiedRawPositiveOnly} AlternateProfilePositive={result.VerifiedAlternateProfilePositive} ExperimentalProfileCandidate={result.VerifiedExperimentalProfileCandidate} WouldOpenIfPaperEligible={result.VerifiedWouldOpenIfPaperEligible}");
         }
         if (summaryDue)
-            Console.WriteLine($"[STRATEGY_SUMMARY] Strategy={result.StrategyName} Mode={config.Mode} Scanned={result.Scanned} Books={result.Books} Candidates={result.Candidates} Positive={result.PositiveEdges} ExecutionReady={result.ExecutionReady} PaperOpened={result.PaperOpened} RejectedByReason={FormatReasons(result.RejectedByReason)}");
+            Console.WriteLine($"[STRATEGY_SUMMARY] Strategy={result.StrategyName} Mode={config.Mode} Scanned={result.Scanned} Books={result.Books} Candidates={result.Candidates} Positive={result.PositiveEdges} ExecutionReady={result.ExecutionReady} EdgeStable={result.EdgeStable} ShadowWouldOpen={result.ShadowWouldOpen} PaperOpened={result.PaperOpened} ShadowWouldOpen={result.ShadowWouldOpen} BlockedByMode={result.BlockedByMode} BlockedByPaperDiagnosticsLimitedGate={result.BlockedByPaperDiagnosticsLimitedGate} BlockedByOrderbookHealth={result.BlockedByOrderbookHealth} BlockedByRisk={result.BlockedByRisk} BlockedByFill={result.BlockedByFill} BlockedByDepth={result.BlockedByDepth} BestRawEdge={(result.BestRawEdge ?? result.BestEdge)?.ToString("0.####") ?? "N/A"} BestAfterCostEdge={result.BestAfterCostEdge?.ToString("0.####") ?? "N/A"} BestAfterSafetyEdge={(result.BestAfterSafetyEdge ?? result.BestEdge)?.ToString("0.####") ?? "N/A"} BestRejectedReason={result.BestRejectedReason} RejectedByReason={FormatReasons(result.RejectedByReason)}");
     }
 
     private static string EdgeBucket(decimal? edge) => edge.HasValue ? Math.Round(edge.Value, 3).ToString("0.###") : "N/A";
@@ -291,6 +323,14 @@ public sealed class StrategyRuntimeCounters
     private long _executionCandidates;
     private long _paperOpened;
     private long _diagnosticsOnlyBlocked;
+    private long _edgeStable;
+    private long _shadowWouldOpen;
+    private long _blockedByMode;
+    private long _blockedByPaperDiagnosticsLimitedGate;
+    private long _blockedByOrderbookHealth;
+    private long _blockedByRisk;
+    private long _blockedByFill;
+    private long _blockedByDepth;
     private long _faults;
     private long _books;
     private long _bothAsks;
@@ -341,6 +381,14 @@ public sealed class StrategyRuntimeCounters
         Interlocked.Add(ref _executionCandidates, result.ExecutionCandidates);
         Interlocked.Add(ref _paperOpened, result.PaperOpened);
         Interlocked.Add(ref _diagnosticsOnlyBlocked, result.DiagnosticsOnlyBlocked);
+        Interlocked.Add(ref _edgeStable, result.EdgeStable);
+        Interlocked.Add(ref _shadowWouldOpen, result.ShadowWouldOpen);
+        Interlocked.Add(ref _blockedByMode, result.BlockedByMode);
+        Interlocked.Add(ref _blockedByPaperDiagnosticsLimitedGate, result.BlockedByPaperDiagnosticsLimitedGate);
+        Interlocked.Add(ref _blockedByOrderbookHealth, result.BlockedByOrderbookHealth);
+        Interlocked.Add(ref _blockedByRisk, result.BlockedByRisk);
+        Interlocked.Add(ref _blockedByFill, result.BlockedByFill);
+        Interlocked.Add(ref _blockedByDepth, result.BlockedByDepth);
         Interlocked.Add(ref _faults, result.Faults);
         Interlocked.Add(ref _books, result.Books);
         Interlocked.Add(ref _bothAsks, result.BothAsks);
@@ -398,6 +446,14 @@ public sealed class StrategyRuntimeCounters
         Interlocked.Read(ref _executionCandidates),
         Interlocked.Read(ref _paperOpened),
         Interlocked.Read(ref _diagnosticsOnlyBlocked),
+        Interlocked.Read(ref _edgeStable),
+        Interlocked.Read(ref _shadowWouldOpen),
+        Interlocked.Read(ref _blockedByMode),
+        Interlocked.Read(ref _blockedByPaperDiagnosticsLimitedGate),
+        Interlocked.Read(ref _blockedByOrderbookHealth),
+        Interlocked.Read(ref _blockedByRisk),
+        Interlocked.Read(ref _blockedByFill),
+        Interlocked.Read(ref _blockedByDepth),
         Interlocked.Read(ref _faults),
         Interlocked.Read(ref _books),
         Interlocked.Read(ref _bothAsks),
@@ -454,6 +510,14 @@ public sealed record StrategyRuntimeCounterSnapshot(
     long ExecutionCandidates,
     long PaperOpened,
     long DiagnosticsOnlyBlocked,
+    long EdgeStable,
+    long ShadowWouldOpen,
+    long BlockedByMode,
+    long BlockedByPaperDiagnosticsLimitedGate,
+    long BlockedByOrderbookHealth,
+    long BlockedByRisk,
+    long BlockedByFill,
+    long BlockedByDepth,
     long Faults,
     long Books,
     long BothAsks,
