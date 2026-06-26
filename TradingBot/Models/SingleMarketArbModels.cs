@@ -77,8 +77,53 @@ public record SingleMarketScanSummaryDto(
     string TopRejectReason,
     int TopRejectCount,
     IReadOnlyDictionary<string, int> RejectedByReason,
-    IReadOnlyDictionary<string, int> DataQualityRejectedByReason);
+    IReadOnlyDictionary<string, int> DataQualityRejectedByReason,
+    int DataQualityRejectedRawPositive = 0,
+    int ValidRawPositive = 0,
+    int ValidAfterCostPositive = 0,
+    int ValidAfterSafetyPositive = 0,
+    int RejectedByFill = 0,
+    int RejectedByDepth = 0,
+    int RejectedByRisk = 0,
+    int RejectedByPaperDiagnosticsLimitedGate = 0,
+    decimal? BestRawEdge = null,
+    decimal? BestAfterCostEdge = null,
+    decimal? BestAfterSafetyEdge = null,
+    decimal? BestExecutableEdge = null,
+    string BestRejectedReason = "None",
+    SingleMarketEdgeDistributionDto? EdgeDistribution = null);
 
+public record SingleMarketEdgeQuantilesDto(
+    decimal? Min = null,
+    decimal? P01 = null,
+    decimal? P05 = null,
+    decimal? P10 = null,
+    decimal? P25 = null,
+    decimal? P50 = null,
+    decimal? P75 = null,
+    decimal? P90 = null,
+    decimal? P95 = null,
+    decimal? P99 = null,
+    decimal? Max = null);
+
+public record SingleMarketAfterSafetyEdgeBucketsDto(
+    int BelowMinus5bp = 0,
+    int Minus5bpToMinus2bp = 0,
+    int Minus2bpToMinus1bp = 0,
+    int Minus1bpTo0 = 0,
+    int ZeroTo1bp = 0,
+    int OnebpTo5bp = 0,
+    int Above5bp = 0);
+
+public record SingleMarketEdgeDistributionDto(
+    int ValidEdgeSamples = 0,
+    string SampleMode = "Reservoir",
+    int Capacity = 4096,
+    long DroppedSamples = 0,
+    SingleMarketEdgeQuantilesDto? RawEdge = null,
+    SingleMarketEdgeQuantilesDto? AfterCostEdge = null,
+    SingleMarketEdgeQuantilesDto? AfterSafetyEdge = null,
+    SingleMarketAfterSafetyEdgeBucketsDto? ThresholdBuckets = null);
 
 public record SingleMarketFullCycleSummary(
     long CycleId,
@@ -119,11 +164,33 @@ public record SingleMarketNearMissDto(
     decimal EdgePerShare,
     decimal RequiredImprovement);
 
+public record SingleMarketOpportunityAuditDto(
+    [property: JsonPropertyName("marketId")] string MarketId,
+    [property: JsonPropertyName("conditionId")] string? ConditionId,
+    [property: JsonPropertyName("title")] string Title,
+    [property: JsonPropertyName("yesAsk")] decimal YesAsk,
+    [property: JsonPropertyName("noAsk")] decimal NoAsk,
+    [property: JsonPropertyName("rawCost")] decimal RawCost,
+    [property: JsonPropertyName("rawEdge")] decimal RawEdge,
+    [property: JsonPropertyName("afterCostEdge")] decimal AfterCostEdge,
+    [property: JsonPropertyName("afterSafetyEdge")] decimal AfterSafetyEdge,
+    [property: JsonPropertyName("availableQty")] decimal AvailableQty,
+    [property: JsonPropertyName("executableQty")] decimal ExecutableQty,
+    [property: JsonPropertyName("notionalAtCap")] decimal NotionalAtCap,
+    [property: JsonPropertyName("rejectedReason")] string RejectedReason,
+    [property: JsonPropertyName("dataQualityReason")] string? DataQualityReason,
+    [property: JsonPropertyName("fillPassed")] bool FillPassed,
+    [property: JsonPropertyName("depthPassed")] bool DepthPassed,
+    [property: JsonPropertyName("riskPassed")] bool RiskPassed,
+    [property: JsonPropertyName("paperDiagnosticsLimitedGatePassed")] bool PaperDiagnosticsLimitedGatePassed,
+    [property: JsonPropertyName("timestampUtc")] DateTime TimestampUtc);
+
 public record SingleMarketArbSnapshotDto(
     DateTime TimestampUtc,
     long ScanId,
     SingleMarketScanSummaryDto Summary,
     IReadOnlyList<SingleMarketArbOpportunityDto> PositiveCandidates,
     IReadOnlyList<SingleMarketNearMissDto> TopNearMisses,
+    IReadOnlyList<SingleMarketOpportunityAuditDto> TopOpportunityAuditNearMisses,
     IReadOnlyList<SingleMarketDataQualityRejectSampleDto> DataQualityRejectSamples,
     IReadOnlyList<SingleMarketPaperExecutionDto> PaperExecutions);
