@@ -21,7 +21,7 @@ const warningAlertPatterns = ['rest fetch failed', 'signalr disconnected', 'poll
 const fatalAlertPatterns = [
   'scanner fault', 'unhandled exception', 'fatal backend error', 'fatal exception', 'circuit breaker opened',
   'orderbook circuit breaker', 'memory critical', 'live trading accidentally enabled', 'signing attempts',
-  'paper execution error', 'paper execution failure'
+  'paper execution error', 'paper execution failure', 'non-singlemarket paper'
 ];
 
 function isRuntimeExportFileLock(log: any) {
@@ -106,6 +106,7 @@ export default function App() {
     getCoreRowModel: getCoreRowModel()
   });
 
+
   const scanner = d.scanner ?? {};
   const paper = d.paperAccount ?? {};
   const currentEquityValue = first(runtime(health, 'paperEquity'), d.status?.equity, paper.equity);
@@ -130,6 +131,9 @@ export default function App() {
   const singleStrategy = getStrategyCounter(strategyCounters, 'SingleMarketBuyBoth');
   const autoStrategy = getStrategyCounter(strategyCounters, 'AutoCandidateMultiOutcome');
   const verifiedStrategy = getStrategyCounter(strategyCounters, 'VerifiedMultiOutcome');
+  const nearMissStrategy = getStrategyCounter(strategyCounters, 'MultiOutcomeNearMiss');
+  const activeStrategies = Object.entries(strategyCounters).filter(([, c]: any) => String(c?.mode ?? '').toLowerCase() !== 'disabled' && Number(c?.scan ?? 0) > 0);
+  const nonSinglePaperAttempt = Object.entries(strategyCounters).some(([name, c]: any) => name.toLowerCase() !== 'singlemarketbuyboth' && Number(c?.paper ?? c?.paperOpened ?? 0) > 0);
   const singleCycle = runtime(health, 'singleMarketFullCycleSummary') ?? {};
   const reducedMarkets = runtime(health, 'reducedUniverseMarkets') ?? scanner.effectiveMarketPoolSize ?? scanner.effectiveMarketLimit ?? 0;
   const discoveryMode = String(first(runtime(health, 'discoveryMode'), runtime(health, 'discoverySelectedSource'), '')).toLowerCase();
@@ -145,11 +149,9 @@ export default function App() {
     : (backendPaperDiagnosticsEligible && !paperDiagnosticsEligibleSafe && (!backendPaperDiagnosticsBlockedReason || backendPaperDiagnosticsBlockedReason === 'None')
       ? 'ReducedUniverseNotActive'
       : (backendPaperDiagnosticsBlockedReason || 'NotEligible'));
-  const tradingState = paperDiagnosticsEnabled && paperDiagnosticsEligibleSafe
+  const tradingState = paperDiagnosticsEnabled
     ? 'Paper limited'
-    : paperDiagnosticsEnabled
-      ? 'Strategy blocked'
-      : (runtime(health, 'strategyExecutionGloballyBlocked') ? 'Strategy blocked' : 'Paper / Live off');
+    : (runtime(health, 'strategyExecutionGloballyBlocked') ? 'Strategy blocked' : 'Paper / Live off');
   const singleCandidates = first(singleStrategy?.cand, scanner.candidatesEvaluated, 0);
   const bestEdge = first(singleCycle.bestEdge, scanner.bestEdgeIsAvailable ? scanner.bestEdgeSeen : undefined, 'N/A');
   const scannerRows = [
@@ -188,10 +190,35 @@ export default function App() {
     ...(backendPaperDiagnosticsEligible && !paperDiagnosticsEligibleSafe ? [['Paper diag warning', 'Backend eligible ignored: not ReducedUniverseDiagnosticsOnly']] : [])
   ];
   const strategyRows = [
-    ['SingleMarketBuyBoth', strategyCompact(singleStrategy, ['scan', 'books', 'cand', 'positive', 'paper'])],
-    ['AutoCandidate', strategyCompact(autoStrategy, ['scan', 'cand', 'positive'])],
-    ['Verified', strategyCompact(verifiedStrategy, ['scan', 'cand', 'positive'])]
+    ['Status', activeStrategies.length > 1 ? 'Multi-strategy diagnostics active' : 'Single strategy'],
+    ...(nonSinglePaperAttempt ? [['Warning', 'Non-SingleMarket paper attempt detected']] : []),
+    ['SingleMarketBuyBoth', strategyCompact(singleStrategy, ['scan', 'books', 'cand', 'positive', 'ready', 'shadow', 'paper'])],
+    ['AutoCandidate', strategyCompact(autoStrategy, ['scan', 'books', 'cand', 'positive', 'ready', 'shadow', 'paper'])],
+    ['Verified', strategyCompact(verifiedStrategy, ['scan', 'books', 'cand', 'positive', 'ready', 'shadow', 'paper'])],
+    ['MultiOutcomeNearMiss', strategyCompact(nearMissStrategy, ['scan', 'books', 'cand', 'positive', 'ready', 'shadow', 'paper'])]
   ];
+  const strategyTableRows = Object.entries(strategyCounters).map(([name, c]: any) => ({
+    strategy: name, mode: c?.mode ?? '-', scan: c?.scan ?? 0, books: c?.books ?? 0, candidates: c?.cand ?? 0, positive: c?.positive ?? 0, ready: c?.ready ?? 0, shadow: c?.shadow ?? c?.shadowWouldOpen ?? 0, paper: c?.paper ?? 0, best: c?.bestAfterSafetyEdge ?? c?.bestEdge ?? '-', reason: c?.bestRejectedReason ?? c?.topSkipReason ?? '-'
+  }));
+
+  const strategyTable = useReactTable({
+    data: strategyTableRows,
+    columns: [
+      column.accessor('strategy', { header: 'Strategy', cell: (i) => text(i.getValue()) }),
+      column.accessor('mode', { header: 'Mode', cell: (i) => text(i.getValue()) }),
+      column.accessor('scan', { header: 'Scan', cell: (i) => text(i.getValue()) }),
+      column.accessor('books', { header: 'Books', cell: (i) => text(i.getValue()) }),
+      column.accessor('candidates', { header: 'Candidates', cell: (i) => text(i.getValue()) }),
+      column.accessor('positive', { header: 'Positive', cell: (i) => text(i.getValue()) }),
+      column.accessor('ready', { header: 'Execution ready', cell: (i) => text(i.getValue()) }),
+      column.accessor('shadow', { header: 'Shadow would open', cell: (i) => text(i.getValue()) }),
+      column.accessor('paper', { header: 'Paper opened', cell: (i) => text(i.getValue()) }),
+      column.accessor('best', { header: 'Best after-safety edge', cell: (i) => text(i.getValue()) }),
+      column.accessor('reason', { header: 'Last blocked reason', cell: (i) => text(i.getValue()) })
+    ],
+    getCoreRowModel: getCoreRowModel()
+  });
+
   const edgeDistributionRows = [
     ['Samples', runtime(health, 'singleMarketValidEdgeSamples') ?? 0],
     ['Raw P95 / P99 / Max', `${first(runtime(health, 'singleMarketRawEdgeP95'), 'N/A')} / ${first(runtime(health, 'singleMarketRawEdgeP99'), 'N/A')} / ${first(runtime(health, 'singleMarketRawEdgeMax'), 'N/A')}`],
@@ -240,7 +267,7 @@ export default function App() {
 
       <section className="diagnostics-shell">
         <button className="diagnostics-toggle" onClick={() => setShowDiagnostics((v) => !v)}>{showDiagnostics ? 'Hide diagnostics' : 'Show diagnostics'}</button>
-        {showDiagnostics && <div className="diagnostics-grid"><MiniBlock title="Scanner" rows={scannerRows} /><MiniBlock title="Edge Distribution" rows={edgeDistributionRows} /><MiniBlock title="Strategy Summary" rows={strategyRows} /><MiniBlock title="Paper Limited" rows={[["Enabled", String(paperDiagnosticsEnabled)], ["Eligible", String(paperDiagnosticsEligibleSafe)], ["Reason", paperDiagnosticsBlockedReason], ["Allowed", runtime(health, 'paperDiagnosticsLimitedAllowedStrategy') ?? '-'], ["Max positions", runtime(health, 'paperDiagnosticsLimitedMaxOpenPositions') ?? '-'], ["Trade cap", money(runtime(health, 'paperDiagnosticsLimitedMaxPaperNotionalPerTrade') ?? 0)], ["Exposure cap", money(runtime(health, 'paperDiagnosticsLimitedMaxPaperTotalExposure') ?? 0)], ["Opens last hour", runtime(health, 'paperDiagnosticsLimitedOpensLastHour') ?? 0], ["Last reject", runtime(health, 'paperDiagnosticsLimitedGateLastRejectReason') ?? 'None'], ["Opened", runtime(health, 'paperDiagnosticsLimitedPaperOpened') ?? 0]]} /><MiniBlock title="Paper Summary" rows={[["Exposure", money(runtime(health, 'paperTotalExposure') ?? paper.totalExposure ?? locked)], ["Settlements", d.paperSettlements?.length ?? paper.settlements ?? 0], ["Rejects", Object.entries(paper.blockedCountsByReason ?? {}).map(([k, v]: any) => `${k}=${v}`).join(' ') || '-']]} /><MiniBlock title="Runtime" rows={[["Source", runtime(health, '__source') ?? d.source], ["Discovery", discoveryLabel(health, scanner, d.controls)], ["Readiness", readinessLabel(health, d.controls)], ["Universe", runtime(health, 'diagnosticsUniverse') ?? '-'], ["Reduced markets", runtime(health, 'reducedUniverseMarkets') ?? 0], ["Updated", time(runtime(health, '__updatedAt') ?? d.lastUpdated)]]} /><MiniBlock title="Orderbook Health" rows={orderbookRows} />{cycleRows.length ? <MiniBlock title="Single Cycle" rows={cycleRows} /> : null}<details className="raw-log-block"><summary>Raw logs</summary><div className="raw-log-console">{d.logs.slice(0, 30).map((l: any) => <pre key={l.id}>{time(l.timestamp)} [{l.source}] {l.message}</pre>)}</div></details></div>}
+        {showDiagnostics && <div className="diagnostics-grid"><MiniBlock title="Scanner" rows={scannerRows} /><MiniBlock title="Edge Distribution" rows={edgeDistributionRows} /><MiniBlock title="Strategy Summary" rows={strategyRows} />{strategyTableRows.length ? <Panel title="Strategy Table" active compact><Table t={strategyTable} /></Panel> : null}<MiniBlock title="Paper Limited" rows={[["Enabled", String(paperDiagnosticsEnabled)], ["Eligible", String(paperDiagnosticsEligibleSafe)], ["Reason", paperDiagnosticsBlockedReason], ["Allowed", runtime(health, 'paperDiagnosticsLimitedAllowedStrategy') ?? '-'], ["Max positions", runtime(health, 'paperDiagnosticsLimitedMaxOpenPositions') ?? '-'], ["Trade cap", money(runtime(health, 'paperDiagnosticsLimitedMaxPaperNotionalPerTrade') ?? 0)], ["Exposure cap", money(runtime(health, 'paperDiagnosticsLimitedMaxPaperTotalExposure') ?? 0)], ["Opens last hour", runtime(health, 'paperDiagnosticsLimitedOpensLastHour') ?? 0], ["Last reject", runtime(health, 'paperDiagnosticsLimitedGateLastRejectReason') ?? 'None'], ["Opened", runtime(health, 'paperDiagnosticsLimitedPaperOpened') ?? 0]]} /><MiniBlock title="Paper Summary" rows={[["Exposure", money(runtime(health, 'paperTotalExposure') ?? paper.totalExposure ?? locked)], ["Settlements", d.paperSettlements?.length ?? paper.settlements ?? 0], ["Rejects", Object.entries(paper.blockedCountsByReason ?? {}).map(([k, v]: any) => `${k}=${v}`).join(' ') || '-']]} /><MiniBlock title="Runtime" rows={[["Source", runtime(health, '__source') ?? d.source], ["Discovery", discoveryLabel(health, scanner, d.controls)], ["Readiness", readinessLabel(health, d.controls)], ["Universe", runtime(health, 'diagnosticsUniverse') ?? '-'], ["Reduced markets", runtime(health, 'reducedUniverseMarkets') ?? 0], ["Updated", time(runtime(health, '__updatedAt') ?? d.lastUpdated)]]} /><MiniBlock title="Orderbook Health" rows={orderbookRows} />{cycleRows.length ? <MiniBlock title="Single Cycle" rows={cycleRows} /> : null}<details className="raw-log-block"><summary>Raw logs</summary><div className="raw-log-console">{d.logs.slice(0, 30).map((l: any) => <pre key={l.id}>{time(l.timestamp)} [{l.source}] {l.message}</pre>)}</div></details></div>}
       </section>
     </main>
   </div>;
@@ -278,7 +305,10 @@ function normalizeStrategyCounter(counter: any) {
     cand: first(counter.cand, counter.candidates, counter.Candidates),
     positive: first(counter.positive, counter.positiveEdges, counter.PositiveEdges),
     paper: first(counter.paper, counter.paperOpened, counter.PaperOpened),
-    ready: first(counter.ready, counter.executionReady, counter.ExecutionReady)
+    ready: first(counter.ready, counter.executionReady, counter.ExecutionReady),
+    shadow: first(counter.shadow, counter.shadowWouldOpen, counter.ShadowWouldOpen),
+    bestAfterSafetyEdge: first(counter.bestAfterSafetyEdge, counter.BestAfterSafetyEdge, counter.bestEdge, counter.BestEdge),
+    bestRejectedReason: first(counter.bestRejectedReason, counter.BestRejectedReason, counter.topSkipReason, counter.TopSkipReason)
   };
 }
 function getStrategyCounter(counters: any, name: string) {
