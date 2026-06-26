@@ -89,7 +89,37 @@ public sealed record OpportunityStrategyScanResult(
     bool BestCandidateValid = false,
     bool BestCandidatePriced = false,
     bool BestCandidateExecutableLike = false,
-    string BestCandidateReason = "N/A")
+    string BestCandidateReason = "N/A",
+    int AutoVerifiedExact = 0,
+    int AutoVerifiedNear = 0,
+    int AutoSemanticUnpriced = 0,
+    int AutoNeedsManualReview = 0,
+    int AutoPartialOverlap = 0,
+    int AutoMissingLeg = 0,
+    int AutoAmbiguousGroup = 0,
+    int AutoDifferentEvent = 0,
+    int AutoUnverified = 0,
+    int AutoVerificationHigh = 0,
+    int AutoVerificationMedium = 0,
+    int AutoVerificationLow = 0,
+    int AutoBestVerificationScore = 0,
+    string AutoBestVerificationConfidence = "N/A",
+    string AutoBestVerificationReason = "N/A",
+    string AutoBestVerifiedLikeGroupKey = "N/A",
+    int AutoCandidatePricingAttempted = 0,
+    int AutoCandidatePricingSucceeded = 0,
+    int AutoCandidatePricingFailed = 0,
+    int AutoCandidatePricingSkippedByHealth = 0,
+    int AutoCandidatePricingSkippedIncomplete = 0,
+    int AutoCandidatePricingMissingNoAsk = 0,
+    int AutoCandidatePricingMissingYesAsk = 0,
+    int AutoCandidatePricingEmptyBook = 0,
+    decimal? AutoCandidateBestRawEdge = null,
+    decimal? AutoCandidateBestAfterCostEdge = null,
+    decimal? AutoCandidateBestAfterSafetyEdge = null,
+    string AutoCandidateBestPricingReason = "N/A",
+    int AutoCandidateCompletedGroups = 0,
+    int AutoCandidateIncompleteGroups = 0)
 {
     public static OpportunityStrategyScanResult Disabled(string strategyName) => new(strategyName, StrategyMode.Disabled);
 }
@@ -370,6 +400,14 @@ public sealed class StrategyRuntimeCounters
     private bool _bestCandidatePriced;
     private bool _bestCandidateExecutableLike;
     private string _bestCandidateReason = "N/A";
+    private long _autoVerifiedExact, _autoVerifiedNear, _autoSemanticUnpriced, _autoNeedsManualReview, _autoPartialOverlap, _autoMissingLeg, _autoAmbiguousGroup, _autoDifferentEvent, _autoUnverified, _autoVerificationHigh, _autoVerificationMedium, _autoVerificationLow;
+    private int _autoBestVerificationScore;
+    private string _autoBestVerificationConfidence = "N/A";
+    private string _autoBestVerificationReason = "N/A";
+    private string _autoBestVerifiedLikeGroupKey = "N/A";
+    private long _autoCandidatePricingAttempted, _autoCandidatePricingSucceeded, _autoCandidatePricingFailed, _autoCandidatePricingSkippedByHealth, _autoCandidatePricingSkippedIncomplete, _autoCandidatePricingMissingNoAsk, _autoCandidatePricingMissingYesAsk, _autoCandidatePricingEmptyBook, _autoCandidateCompletedGroups, _autoCandidateIncompleteGroups;
+    private decimal? _autoCandidateBestRawEdge, _autoCandidateBestAfterCostEdge, _autoCandidateBestAfterSafetyEdge;
+    private string _autoCandidateBestPricingReason = "N/A";
     private readonly object _reasonGate = new();
     private readonly Dictionary<string, long> _rejectedByReason = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _bestEdgeGate = new();
@@ -434,6 +472,42 @@ public sealed class StrategyRuntimeCounters
         Interlocked.Add(ref _unverified, result.Unverified);
         Interlocked.Add(ref _reviewOnly, result.ReviewOnly);
         Interlocked.Add(ref _missingPricing, result.MissingPricing);
+        Interlocked.Add(ref _autoVerifiedExact, result.AutoVerifiedExact);
+        Interlocked.Add(ref _autoVerifiedNear, result.AutoVerifiedNear);
+        Interlocked.Add(ref _autoSemanticUnpriced, result.AutoSemanticUnpriced);
+        Interlocked.Add(ref _autoNeedsManualReview, result.AutoNeedsManualReview);
+        Interlocked.Add(ref _autoPartialOverlap, result.AutoPartialOverlap);
+        Interlocked.Add(ref _autoMissingLeg, result.AutoMissingLeg);
+        Interlocked.Add(ref _autoAmbiguousGroup, result.AutoAmbiguousGroup);
+        Interlocked.Add(ref _autoDifferentEvent, result.AutoDifferentEvent);
+        Interlocked.Add(ref _autoUnverified, result.AutoUnverified);
+        Interlocked.Add(ref _autoVerificationHigh, result.AutoVerificationHigh);
+        Interlocked.Add(ref _autoVerificationMedium, result.AutoVerificationMedium);
+        Interlocked.Add(ref _autoVerificationLow, result.AutoVerificationLow);
+        if (result.AutoBestVerificationScore >= _autoBestVerificationScore)
+        {
+            _autoBestVerificationScore = result.AutoBestVerificationScore;
+            _autoBestVerificationConfidence = result.AutoBestVerificationConfidence;
+            _autoBestVerificationReason = result.AutoBestVerificationReason;
+            _autoBestVerifiedLikeGroupKey = result.AutoBestVerifiedLikeGroupKey;
+        }
+        Interlocked.Add(ref _autoCandidatePricingAttempted, result.AutoCandidatePricingAttempted);
+        Interlocked.Add(ref _autoCandidatePricingSucceeded, result.AutoCandidatePricingSucceeded);
+        Interlocked.Add(ref _autoCandidatePricingFailed, result.AutoCandidatePricingFailed);
+        Interlocked.Add(ref _autoCandidatePricingSkippedByHealth, result.AutoCandidatePricingSkippedByHealth);
+        Interlocked.Add(ref _autoCandidatePricingSkippedIncomplete, result.AutoCandidatePricingSkippedIncomplete);
+        Interlocked.Add(ref _autoCandidatePricingMissingNoAsk, result.AutoCandidatePricingMissingNoAsk);
+        Interlocked.Add(ref _autoCandidatePricingMissingYesAsk, result.AutoCandidatePricingMissingYesAsk);
+        Interlocked.Add(ref _autoCandidatePricingEmptyBook, result.AutoCandidatePricingEmptyBook);
+        Interlocked.Add(ref _autoCandidateCompletedGroups, result.AutoCandidateCompletedGroups);
+        Interlocked.Add(ref _autoCandidateIncompleteGroups, result.AutoCandidateIncompleteGroups);
+        if (result.AutoCandidateBestAfterSafetyEdge.HasValue && (!_autoCandidateBestAfterSafetyEdge.HasValue || result.AutoCandidateBestAfterSafetyEdge.Value > _autoCandidateBestAfterSafetyEdge.Value))
+        {
+            _autoCandidateBestRawEdge = result.AutoCandidateBestRawEdge;
+            _autoCandidateBestAfterCostEdge = result.AutoCandidateBestAfterCostEdge;
+            _autoCandidateBestAfterSafetyEdge = result.AutoCandidateBestAfterSafetyEdge;
+            _autoCandidateBestPricingReason = result.AutoCandidateBestPricingReason;
+        }
         _bestCandidateValid = result.BestCandidateValid;
         _bestCandidatePriced = result.BestCandidatePriced;
         _bestCandidateExecutableLike = result.BestCandidateExecutableLike;
@@ -518,7 +592,15 @@ public sealed class StrategyRuntimeCounters
         _bestCandidateValid,
         _bestCandidatePriced,
         _bestCandidateExecutableLike,
-        _bestCandidateReason);
+        _bestCandidateReason,
+        Interlocked.Read(ref _autoVerifiedExact), Interlocked.Read(ref _autoVerifiedNear), Interlocked.Read(ref _autoSemanticUnpriced), Interlocked.Read(ref _autoNeedsManualReview),
+        Interlocked.Read(ref _autoPartialOverlap), Interlocked.Read(ref _autoMissingLeg), Interlocked.Read(ref _autoAmbiguousGroup), Interlocked.Read(ref _autoDifferentEvent), Interlocked.Read(ref _autoUnverified),
+        Interlocked.Read(ref _autoVerificationHigh), Interlocked.Read(ref _autoVerificationMedium), Interlocked.Read(ref _autoVerificationLow),
+        _autoBestVerificationScore, _autoBestVerificationConfidence, _autoBestVerificationReason, _autoBestVerifiedLikeGroupKey,
+        Interlocked.Read(ref _autoCandidatePricingAttempted), Interlocked.Read(ref _autoCandidatePricingSucceeded), Interlocked.Read(ref _autoCandidatePricingFailed), Interlocked.Read(ref _autoCandidatePricingSkippedByHealth),
+        Interlocked.Read(ref _autoCandidatePricingSkippedIncomplete), Interlocked.Read(ref _autoCandidatePricingMissingNoAsk), Interlocked.Read(ref _autoCandidatePricingMissingYesAsk), Interlocked.Read(ref _autoCandidatePricingEmptyBook),
+        _autoCandidateBestRawEdge, _autoCandidateBestAfterCostEdge, _autoCandidateBestAfterSafetyEdge, _autoCandidateBestPricingReason,
+        Interlocked.Read(ref _autoCandidateCompletedGroups), Interlocked.Read(ref _autoCandidateIncompleteGroups));
 
     private decimal? BestEdgeSnapshot()
     {
@@ -592,4 +674,34 @@ public sealed record StrategyRuntimeCounterSnapshot(
     bool BestCandidateValid = false,
     bool BestCandidatePriced = false,
     bool BestCandidateExecutableLike = false,
-    string BestCandidateReason = "N/A");
+    string BestCandidateReason = "N/A",
+    long VerifiedExact = 0,
+    long VerifiedNear = 0,
+    long SemanticUnpriced = 0,
+    long NeedsManualReview = 0,
+    long PartialOverlap = 0,
+    long MissingLeg = 0,
+    long AmbiguousGroup = 0,
+    long DifferentEvent = 0,
+    long AutoUnverified = 0,
+    long VerificationHigh = 0,
+    long VerificationMedium = 0,
+    long VerificationLow = 0,
+    int BestVerificationScore = 0,
+    string BestVerificationConfidence = "N/A",
+    string BestVerificationReason = "N/A",
+    string BestVerifiedLikeGroupKey = "N/A",
+    long AutoCandidatePricingAttempted = 0,
+    long AutoCandidatePricingSucceeded = 0,
+    long AutoCandidatePricingFailed = 0,
+    long AutoCandidatePricingSkippedByHealth = 0,
+    long AutoCandidatePricingSkippedIncomplete = 0,
+    long AutoCandidatePricingMissingNoAsk = 0,
+    long AutoCandidatePricingMissingYesAsk = 0,
+    long AutoCandidatePricingEmptyBook = 0,
+    decimal? AutoCandidateBestRawEdge = null,
+    decimal? AutoCandidateBestAfterCostEdge = null,
+    decimal? AutoCandidateBestAfterSafetyEdge = null,
+    string AutoCandidateBestPricingReason = "N/A",
+    long AutoCandidateCompletedGroups = 0,
+    long AutoCandidateIncompleteGroups = 0);
