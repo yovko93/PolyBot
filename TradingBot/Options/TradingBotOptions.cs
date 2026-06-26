@@ -100,6 +100,7 @@ public class TradingBotOptions
     public OrderBookOptions OrderBook { get; set; } = new();
     public SoakOptions Soak { get; set; } = new();
     public StrategyOrchestratorOptions StrategyOrchestrator { get; set; } = new();
+    public AutoCandidatePricingOptions AutoCandidatePricing { get; set; } = new();
     public Dictionary<string, OpportunityStrategyConfig> Strategies { get; set; } = StrategyDefaults();
 
     private static Dictionary<string, OpportunityStrategyConfig> StrategyDefaults() => new(StringComparer.OrdinalIgnoreCase)
@@ -110,6 +111,15 @@ public class TradingBotOptions
         ["MultiOutcomeNearMiss"] = new(true, StrategyMode.DiagnosticsOnly, 10),
         ["ExperimentalMultiOutcome"] = new(false, StrategyMode.Disabled, 0)
     };
+}
+
+public class AutoCandidatePricingOptions
+{
+    public bool Enabled { get; set; } = true;
+    public int MaxCandidatesPerCycle { get; set; } = 25;
+    public bool RequireOrderbookStableNow { get; set; } = true;
+    public bool RequireReducedUniverseOrderbookStableNow { get; set; } = true;
+    public bool DiagnosticsOnly { get; set; } = true;
 }
 
 public class StrategyOrchestratorOptions
