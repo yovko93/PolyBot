@@ -90,8 +90,40 @@ public record SingleMarketScanSummaryDto(
     decimal? BestAfterCostEdge = null,
     decimal? BestAfterSafetyEdge = null,
     decimal? BestExecutableEdge = null,
-    string BestRejectedReason = "None");
+    string BestRejectedReason = "None",
+    SingleMarketEdgeDistributionDto? EdgeDistribution = null);
 
+public record SingleMarketEdgeQuantilesDto(
+    decimal? Min = null,
+    decimal? P01 = null,
+    decimal? P05 = null,
+    decimal? P10 = null,
+    decimal? P25 = null,
+    decimal? P50 = null,
+    decimal? P75 = null,
+    decimal? P90 = null,
+    decimal? P95 = null,
+    decimal? P99 = null,
+    decimal? Max = null);
+
+public record SingleMarketAfterSafetyEdgeBucketsDto(
+    int BelowMinus5bp = 0,
+    int Minus5bpToMinus2bp = 0,
+    int Minus2bpToMinus1bp = 0,
+    int Minus1bpTo0 = 0,
+    int ZeroTo1bp = 0,
+    int OnebpTo5bp = 0,
+    int Above5bp = 0);
+
+public record SingleMarketEdgeDistributionDto(
+    int ValidEdgeSamples = 0,
+    string SampleMode = "Reservoir",
+    int Capacity = 4096,
+    long DroppedSamples = 0,
+    SingleMarketEdgeQuantilesDto? RawEdge = null,
+    SingleMarketEdgeQuantilesDto? AfterCostEdge = null,
+    SingleMarketEdgeQuantilesDto? AfterSafetyEdge = null,
+    SingleMarketAfterSafetyEdgeBucketsDto? ThresholdBuckets = null);
 
 public record SingleMarketFullCycleSummary(
     long CycleId,

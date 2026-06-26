@@ -1069,6 +1069,11 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 string F(decimal? v) => v.HasValue ? v.Value.ToString("0.####") : "N/A";
                 var limitedEligible = RuntimeHealthSnapshot.From(state, options).PaperDiagnosticsLimitedEligible;
                 Console.WriteLine($"[SINGLE_MARKET_NEAR_MISS_SUMMARY] Cycle={singleMarketFullCycleId} BestRawEdge={F(sm.BestRawEdge)} BestAfterCostEdge={F(sm.BestAfterCostEdge)} BestAfterSafetyEdge={F(sm.BestAfterSafetyEdge)} NearestRejectedReason={sm.BestRejectedReason} PositiveBeforeCost={sm.ValidRawPositive} PositiveAfterCost={sm.ValidAfterCostPositive} PositiveAfterSafety={sm.ValidAfterSafetyPositive} ExecutionReady={sm.ExecutionReady} PaperDiagnosticsLimitedEligible={limitedEligible.ToString().ToLowerInvariant()} PaperOpened={sm.PaperOpened}");
+                var dist = sm.EdgeDistribution ?? new SingleMarketEdgeDistributionDto();
+                var raw = dist.RawEdge ?? new SingleMarketEdgeQuantilesDto();
+                var safety = dist.AfterSafetyEdge ?? new SingleMarketEdgeQuantilesDto();
+                var buckets = dist.ThresholdBuckets ?? new SingleMarketAfterSafetyEdgeBucketsDto();
+                Console.WriteLine($"[SINGLE_MARKET_EDGE_DISTRIBUTION] Cycle={singleMarketFullCycleId} Samples={dist.ValidEdgeSamples} RawP50={F(raw.P50)} RawP95={F(raw.P95)} RawP99={F(raw.P99)} RawMax={F(raw.Max)} AfterSafetyP50={F(safety.P50)} AfterSafetyP95={F(safety.P95)} AfterSafetyP99={F(safety.P99)} AfterSafetyMax={F(safety.Max)} BucketMinus1bpTo0={buckets.Minus1bpTo0} Bucket0To1bp={buckets.ZeroTo1bp} BucketAbove5bp={buckets.Above5bp} PaperDiagnosticsLimitedEligible={limitedEligible.ToString().ToLowerInvariant()} PaperOpened={sm.PaperOpened}");
             }
 
             MultiOutcomeGroupArbEngine.MultiOutcomeScanReport multiOutcomeReport = new(0,0,0,0,0,0,0,0m,0m,0m,"","NotEvaluated",new Dictionary<string,int>(),Array.Empty<MultiOutcomeGroupArbEngine.RejectedSample>(),Array.Empty<MultiOutcomeGroupArbEngine.CandidateGroupReview>());

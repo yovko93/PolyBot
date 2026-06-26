@@ -182,6 +182,7 @@ public class SingleMarketOrderBookArbEngine
             diagnostics.RecordValidRawEdge(validRawEdge);
             diagnostics.RecordValidAfterCostEdge(edge);
             diagnostics.RecordValidAfterSafetyEdge(edge);
+            diagnostics.RecordEdgeDistribution(validRawEdge, edge, edge);
             if (validRawEdge > 0m) diagnostics.IncrementValidRawPositive();
             if (edge > 0m) diagnostics.IncrementValidAfterCostPositive();
             if (edge > 0m) diagnostics.IncrementValidAfterSafetyPositive();
@@ -509,6 +510,7 @@ public class SingleMarketOrderBookArbEngine
         var dqSamples = diagnostics.DataQualitySamples.Take(_options.TopDataQualityRejectSampleCount).ToArray();
         var executions = _state?.SingleMarketExecutions().TakeLast(_options.TopExecutionCount).ToArray() ?? diagnostics.Executions.Take(_options.TopExecutionCount).ToArray();
         var auditNearMisses = diagnostics.AuditNearMisses.OrderByDescending(x => x.AfterSafetyEdge).Take(50).ToArray();
+        var edgeDistribution = diagnostics.BuildEdgeDistribution();
         var summary = new SingleMarketScanSummaryDto(
             DateTime.UtcNow,
             diagnostics.ScanId,
@@ -540,7 +542,8 @@ public class SingleMarketOrderBookArbEngine
             diagnostics.BestAfterCostEdge,
             diagnostics.BestAfterSafetyEdge,
             diagnostics.BestExecutableEdge,
-            auditNearMisses.FirstOrDefault()?.RejectedReason ?? "None");
+            auditNearMisses.FirstOrDefault()?.RejectedReason ?? "None",
+            edgeDistribution);
         var snapshot = new SingleMarketArbSnapshotDto(DateTime.UtcNow, diagnostics.ScanId, summary, positive, topNearMisses, auditNearMisses, dqSamples, executions);
         _state?.SetSingleMarketSnapshot(snapshot);
         return summary;
@@ -801,6 +804,7 @@ public class SingleMarketOrderBookArbEngine
         File.WriteAllText(Path.Combine(dir, "single-market-arb-opportunities-latest.json"), JsonSerializer.Serialize(_state.SingleMarketSnapshot, jsonOptions));
         File.WriteAllText(Path.Combine(dir, "single-market-paper-executions-latest.json"), JsonSerializer.Serialize(_state.SingleMarketExecutions().TakeLast(100), jsonOptions));
         File.WriteAllText(Path.Combine(dir, "single-market-near-misses-latest.json"), JsonSerializer.Serialize(_state.SingleMarketSnapshot.TopOpportunityAuditNearMisses.Take(50), jsonOptions));
+        ExportEdgeDistributionLatest(dir, jsonOptions);
     }
 
 
@@ -863,6 +867,61 @@ public class SingleMarketOrderBookArbEngine
         }
     }
 
+    private void ExportEdgeDistributionLatest(string dir, JsonSerializerOptions jsonOptions)
+    {
+        if (_state is null) return;
+        var summary = _state.SingleMarketSnapshot.Summary;
+        var payload = new
+        {
+            generatedAtUtc = DateTime.UtcNow,
+            processRunId = _state.ProcessRunId,
+            uptime = DateTime.UtcNow - _state.StartedAtUtc,
+            validEdgeSamples = summary.EdgeDistribution?.ValidEdgeSamples ?? 0,
+            rawEdge = summary.EdgeDistribution?.RawEdge ?? new SingleMarketEdgeQuantilesDto(),
+            afterCostEdge = summary.EdgeDistribution?.AfterCostEdge ?? new SingleMarketEdgeQuantilesDto(),
+            afterSafetyEdge = summary.EdgeDistribution?.AfterSafetyEdge ?? new SingleMarketEdgeQuantilesDto(),
+            thresholdBuckets = summary.EdgeDistribution?.ThresholdBuckets ?? new SingleMarketAfterSafetyEdgeBucketsDto(),
+            bestRawEdge = summary.BestRawEdge,
+            bestAfterCostEdge = summary.BestAfterCostEdge,
+            bestAfterSafetyEdge = summary.BestAfterSafetyEdge,
+            positiveBeforeCost = summary.ValidRawPositive,
+            positiveAfterCost = summary.ValidAfterCostPositive,
+            positiveAfterSafety = summary.ValidAfterSafetyPositive,
+            executionReady = summary.ExecutionReady,
+            paperDiagnosticsLimitedEligible = RuntimeHealthSnapshot.From(_state, _botOptions).PaperDiagnosticsLimitedEligible,
+            paperOpened = summary.PaperOpened
+        };
+        WriteJsonAtomic(Path.Combine(dir, "single-market-edge-distribution-latest.json"), payload, jsonOptions);
+    }
+
+    private static void WriteJsonAtomic<T>(string path, T payload, JsonSerializerOptions jsonOptions)
+    {
+        var tmp = $"{path}.{Guid.NewGuid():N}.tmp";
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                File.WriteAllText(tmp, JsonSerializer.Serialize(payload, jsonOptions));
+                if (File.Exists(path)) File.Replace(tmp, path, null);
+                else File.Move(tmp, path);
+                return;
+            }
+            catch (IOException)
+            {
+                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                if (attempt >= 2) return;
+                Thread.Sleep(25 * (attempt + 1));
+            }
+            catch (UnauthorizedAccessException)
+            {
+                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                if (attempt >= 2) return;
+                Thread.Sleep(25 * (attempt + 1));
+            }
+        }
+        try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+    }
+
     private SingleMarketOpportunityAuditDto AuditNearMiss(BinaryOrderBookSnapshot book, string? conditionId, decimal yes, decimal no, decimal rawCost, decimal rawEdge, decimal afterCostEdge, decimal afterSafetyEdge, decimal availableQty, decimal executableQty, decimal notionalAtCap, string rejectedReason, string? dataQualityReason, bool fillPassed, bool depthPassed, bool riskPassed, bool paperDiagnosticsLimitedGatePassed)
         => new(book.MarketId, conditionId, book.Question, yes, no, rawCost, rawEdge, afterCostEdge, afterSafetyEdge, availableQty, executableQty, notionalAtCap, rejectedReason, dataQualityReason, fillPassed, depthPassed, riskPassed, paperDiagnosticsLimitedGatePassed, DateTime.UtcNow);
 
@@ -917,6 +976,18 @@ public class SingleMarketOrderBookArbEngine
         private int _rejectedByDepth;
         private int _rejectedByRisk;
         private int _rejectedByPaperDiagnosticsLimitedGate;
+        private const int EdgeDistributionCapacity = 4096;
+        private readonly object _distributionGate = new();
+        private readonly Random _distributionRandom = new(unchecked((int)scanId));
+        private readonly List<EdgeDistributionSample> _edgeDistributionSamples = new(EdgeDistributionCapacity);
+        private long _edgeDistributionTotal;
+        private int _bucketBelowMinus5bp;
+        private int _bucketMinus5bpToMinus2bp;
+        private int _bucketMinus2bpToMinus1bp;
+        private int _bucketMinus1bpTo0;
+        private int _bucket0To1bp;
+        private int _bucket1bpTo5bp;
+        private int _bucketAbove5bp;
         private readonly object _edgeGate = new();
         public long ScanId { get; } = scanId;
         public int Scanned => Volatile.Read(ref _scanned);
@@ -975,6 +1046,69 @@ public class SingleMarketOrderBookArbEngine
         public void RecordValidAfterCostEdge(decimal edge) { lock (_edgeGate) if (!_bestAfterCostEdge.HasValue || edge > _bestAfterCostEdge.Value) _bestAfterCostEdge = edge; }
         public void RecordValidAfterSafetyEdge(decimal edge) { lock (_edgeGate) if (!_bestAfterSafetyEdge.HasValue || edge > _bestAfterSafetyEdge.Value) _bestAfterSafetyEdge = edge; }
         public void RecordBestExecutableEdge(decimal edge) { lock (_edgeGate) if (!_bestExecutableEdge.HasValue || edge > _bestExecutableEdge.Value) _bestExecutableEdge = edge; }
+        public void RecordEdgeDistribution(decimal rawEdge, decimal afterCostEdge, decimal afterSafetyEdge)
+        {
+            lock (_distributionGate)
+            {
+                _edgeDistributionTotal++;
+                var sample = new EdgeDistributionSample(rawEdge, afterCostEdge, afterSafetyEdge);
+                if (_edgeDistributionSamples.Count < EdgeDistributionCapacity) _edgeDistributionSamples.Add(sample);
+                else
+                {
+                    var replacement = _distributionRandom.NextInt64(_edgeDistributionTotal);
+                    if (replacement < EdgeDistributionCapacity) _edgeDistributionSamples[(int)replacement] = sample;
+                }
+            }
+            IncrementAfterSafetyBucket(afterSafetyEdge);
+        }
+
+        public SingleMarketEdgeDistributionDto BuildEdgeDistribution()
+        {
+            EdgeDistributionSample[] samples;
+            long total;
+            lock (_distributionGate)
+            {
+                samples = _edgeDistributionSamples.ToArray();
+                total = _edgeDistributionTotal;
+            }
+            return new SingleMarketEdgeDistributionDto(
+                ValidEdgeSamples: checked((int)Math.Min(int.MaxValue, total)),
+                SampleMode: "Reservoir",
+                Capacity: EdgeDistributionCapacity,
+                DroppedSamples: Math.Max(0, total - samples.Length),
+                RawEdge: Quantiles(samples.Select(x => x.RawEdge)),
+                AfterCostEdge: Quantiles(samples.Select(x => x.AfterCostEdge)),
+                AfterSafetyEdge: Quantiles(samples.Select(x => x.AfterSafetyEdge)),
+                ThresholdBuckets: new SingleMarketAfterSafetyEdgeBucketsDto(
+                    BelowMinus5bp: Volatile.Read(ref _bucketBelowMinus5bp),
+                    Minus5bpToMinus2bp: Volatile.Read(ref _bucketMinus5bpToMinus2bp),
+                    Minus2bpToMinus1bp: Volatile.Read(ref _bucketMinus2bpToMinus1bp),
+                    Minus1bpTo0: Volatile.Read(ref _bucketMinus1bpTo0),
+                    ZeroTo1bp: Volatile.Read(ref _bucket0To1bp),
+                    OnebpTo5bp: Volatile.Read(ref _bucket1bpTo5bp),
+                    Above5bp: Volatile.Read(ref _bucketAbove5bp)));
+        }
+
+        private void IncrementAfterSafetyBucket(decimal edge)
+        {
+            if (edge < -0.0005m) Interlocked.Increment(ref _bucketBelowMinus5bp);
+            else if (edge < -0.0002m) Interlocked.Increment(ref _bucketMinus5bpToMinus2bp);
+            else if (edge < -0.0001m) Interlocked.Increment(ref _bucketMinus2bpToMinus1bp);
+            else if (edge < 0m) Interlocked.Increment(ref _bucketMinus1bpTo0);
+            else if (edge < 0.0001m) Interlocked.Increment(ref _bucket0To1bp);
+            else if (edge <= 0.0005m) Interlocked.Increment(ref _bucket1bpTo5bp);
+            else Interlocked.Increment(ref _bucketAbove5bp);
+        }
+
+        private static SingleMarketEdgeQuantilesDto Quantiles(IEnumerable<decimal> values)
+        {
+            var sorted = values.OrderBy(x => x).ToArray();
+            if (sorted.Length == 0) return new SingleMarketEdgeQuantilesDto();
+            decimal Q(decimal p) => sorted[(int)Math.Clamp(Math.Ceiling(p * sorted.Length) - 1, 0, sorted.Length - 1)];
+            return new SingleMarketEdgeQuantilesDto(sorted[0], Q(0.01m), Q(0.05m), Q(0.10m), Q(0.25m), Q(0.50m), Q(0.75m), Q(0.90m), Q(0.95m), Q(0.99m), sorted[^1]);
+        }
+
+        private sealed record EdgeDistributionSample(decimal RawEdge, decimal AfterCostEdge, decimal AfterSafetyEdge);
         public void AddReject(string reason)
         {
             RejectCounts.AddOrUpdate(reason, 1, (_, x) => x + 1);
