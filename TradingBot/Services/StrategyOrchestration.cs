@@ -197,7 +197,6 @@ public sealed class StrategyOrchestrator
         }).ToArray();
         var results = await Task.WhenAll(tasks);
         sw.Stop();
-        LogMultiStrategySummary(results, sw.ElapsedMilliseconds);
         foreach (var result in results) _recordResult?.Invoke(result);
         return results;
     }
@@ -228,16 +227,6 @@ public sealed class StrategyOrchestrator
         result = result with { Mode = config.Mode };
         LogScanResult(result, config);
         _recordResult?.Invoke(result);
-    }
-
-    private void LogMultiStrategySummary(IReadOnlyList<OpportunityStrategyScanResult> results, long elapsedMs)
-    {
-        if (!_options.StrategyOrchestrator.Enabled) return;
-        var active = results.Where(r => r.Mode != StrategyMode.Disabled).ToArray();
-        var paper = active.Where(r => r.Mode == StrategyMode.PaperEligible).Select(r => r.StrategyName);
-        var shadow = active.Where(r => r.Mode == StrategyMode.ShadowPaperEligible).Select(r => r.StrategyName);
-        var best = active.OrderByDescending(r => r.BestAfterSafetyEdge ?? r.BestEdge ?? decimal.MinValue).FirstOrDefault();
-        Console.WriteLine($"[MULTI_STRATEGY_SUMMARY] ActiveStrategies={string.Join("|", active.Select(r => r.StrategyName))} PaperEligibleStrategies={string.Join("|", paper)} ShadowStrategies={string.Join("|", shadow)} TotalCandidates={active.Sum(r => r.Candidates)} TotalPositive={active.Sum(r => r.PositiveEdges)} TotalExecutionReady={active.Sum(r => r.ExecutionReady)} TotalShadowWouldOpen={active.Sum(r => r.ShadowWouldOpen)} TotalPaperOpened={active.Sum(r => r.PaperOpened)} BestStrategy={best?.StrategyName ?? "None"} BestAfterSafetyEdge={(best?.BestAfterSafetyEdge ?? best?.BestEdge)?.ToString("0.####") ?? "N/A"} PaperDiagnosticsLimitedEligible=unknown OrderbookStableNow=unknown ReducedUniverseOrderbookStableNow=unknown DurationMs={elapsedMs}");
     }
 
     private void LogScanStart(string strategyName, OpportunityStrategyConfig config, int scannedItems)

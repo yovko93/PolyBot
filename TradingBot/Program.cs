@@ -471,7 +471,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketFees, options.SingleMarketSlippage, monitor, sizing, options.SingleMarketArb, state, contentRootPath, verifiedExecution, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate, opportunityExecutionQueue, singleConfig.Mode, options);
     var singleMarketStrategy = new SingleMarketBuyBothOpportunityStrategy(singleMarketArb);
     var strategyOrchestrator = new StrategyOrchestrator(new IOpportunityStrategy[] { singleMarketStrategy, new NullOpportunityStrategy("MultiOutcomeNearMiss") }, options, state.RecordStrategyResult);
-    Console.WriteLine($"[STRATEGY_ORCHESTRATOR] Enabled={options.StrategyOrchestrator.Enabled.ToString().ToLowerInvariant()} MaxConcurrentStrategies={options.StrategyOrchestrator.MaxConcurrentStrategies} MaxConcurrentOrderbookConsumers={options.StrategyOrchestrator.MaxConcurrentOrderbookConsumers} SingleMarketBuyBoth={singleConfig.Mode} VerifiedMultiOutcome={verifiedConfig.Mode} AutoCandidateMultiOutcome={autoConfig.Mode} MultiOutcomeNearMiss={nearMissConfig.Mode} ExperimentalMultiOutcome={experimentalConfig.Mode}");
+    Console.WriteLine($"[MULTI_STRATEGY_ORCHESTRATOR] Enabled={options.StrategyOrchestrator.Enabled.ToString().ToLowerInvariant()} MaxConcurrentStrategies={options.StrategyOrchestrator.MaxConcurrentStrategies} MaxConcurrentOrderbookConsumers={options.StrategyOrchestrator.MaxConcurrentOrderbookConsumers} Strategies=SingleMarketBuyBoth:{singleConfig.Mode}|VerifiedMultiOutcome:{verifiedConfig.Mode}|AutoCandidateMultiOutcome:{autoConfig.Mode}|MultiOutcomeNearMiss:{nearMissConfig.Mode}|ExperimentalMultiOutcome:{experimentalConfig.Mode}");
     var singleMarketFullCycle = new SingleMarketFullCycleSummaryAggregator(options.SingleMarketArb);
 
     var config = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory).AddJsonFile("appsettings.json", optional: true).Build();
@@ -2108,6 +2108,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     File.WriteAllText(Path.Combine(shadowExportDir, "verified-multi-outcome-near-misses-latest.json"), System.Text.Json.JsonSerializer.Serialize(groupDiagnostics.Take(100), new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
                     File.WriteAllText(Path.Combine(shadowExportDir, "auto-candidate-near-misses-latest.json"), System.Text.Json.JsonSerializer.Serialize(multiOutcomeReport.TopRejectedSamples.Take(100), new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
                     File.WriteAllText(Path.Combine(shadowExportDir, "multi-strategy-near-misses-latest.json"), System.Text.Json.JsonSerializer.Serialize(new { verified = groupDiagnostics.Take(50), autoCandidate = multiOutcomeReport.TopRejectedSamples.Take(50), singleMarket = state.SingleMarketSnapshot.TopOpportunityAuditNearMisses.Take(50) }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
+                    EmitMultiStrategySummary(state, options);
                     if (!unresolvedCounts.InvariantOk)
                         Console.WriteLine(unresolvedCounts.ToCounterErrorLogLine());
                     var unresolvedFingerprint = ScanLogSummaryService.VerifiedUnresolvedCategoryFingerprint(unresolvedCounts, unresolvedGroupSetFingerprint);
@@ -2803,6 +2804,28 @@ public class MultiTextWriter(TextWriter original, Action<string> mirror) : TextW
         original.WriteLine(enriched);
         mirror(enriched);
     }
+}
+
+
+static void EmitMultiStrategySummary(BotRuntimeState state, TradingBotOptions options)
+{
+    if (!options.StrategyOrchestrator.Enabled) return;
+    var counters = state.StrategyCountersSnapshot();
+    var health = RuntimeHealthSnapshot.From(state, options);
+    var order = new[] { "SingleMarketBuyBoth", "VerifiedMultiOutcome", "AutoCandidateMultiOutcome", "MultiOutcomeNearMiss", "ExperimentalMultiOutcome" };
+    var configured = order
+        .Select(name => (Name: name, Config: StrategyOrchestrator.ResolveConfig(options.Strategies, name), Counter: counters.TryGetValue(name, out var c) ? c : null))
+        .Where(x => x.Config.Mode != StrategyMode.Disabled && x.Counter is not null && x.Counter.LastScanUtc != default)
+        .ToArray();
+    var paper = configured.Where(x => x.Config.Mode == StrategyMode.PaperEligible).Select(x => x.Name);
+    var shadow = configured.Where(x => x.Config.Mode == StrategyMode.ShadowPaperEligible).Select(x => x.Name);
+    var best = configured
+        .Where(x => x.Counter!.BestEdge.HasValue)
+        .OrderByDescending(x => x.Counter!.BestEdge!.Value)
+        .FirstOrDefault();
+    var bestStrategy = best.Counter is null ? "None" : best.Name;
+    var bestEdge = best.Counter is null ? "N/A" : best.Counter.BestEdge!.Value.ToString("0.####");
+    Console.WriteLine($"[MULTI_STRATEGY_SUMMARY] ActiveStrategies={string.Join("|", configured.Select(x => x.Name))} PaperEligibleStrategies={string.Join("|", paper)} ShadowStrategies={string.Join("|", shadow)} TotalCandidates={configured.Sum(x => x.Counter!.Candidates)} TotalPositive={configured.Sum(x => x.Counter!.PositiveEdges)} TotalExecutionReady={configured.Sum(x => x.Counter!.ExecutionReady)} TotalShadowWouldOpen={configured.Sum(x => x.Counter!.ShadowWouldOpen)} TotalPaperOpened={configured.Sum(x => x.Counter!.PaperOpened)} BestStrategy={bestStrategy} BestAfterSafetyEdge={bestEdge} PaperDiagnosticsLimitedEligible={health.PaperDiagnosticsLimitedEligible.ToString().ToLowerInvariant()} OrderbookStableNow={health.OrderbookStableNow.ToString().ToLowerInvariant()} ReducedUniverseOrderbookStableNow={health.ReducedUniverseOrderbookStableNow.ToString().ToLowerInvariant()}");
 }
 
 public sealed record PersistedHealthyDiscoverySnapshot(string ProcessRunId, DateTime CreatedAtUtc, int ActiveCount, int RawCount, IReadOnlyList<PersistedHealthyMarket> Markets);
