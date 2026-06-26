@@ -1966,27 +1966,37 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     if (rejectedOnlyCandidateScan) lastRejectedOnlyCandidateScanFingerprint = rejectedOnlyMaterialFingerprint;
                     var autoTopSkipReason = string.IsNullOrWhiteSpace(multiOutcomeReport.TopSkipReason) ? "None" : multiOutcomeReport.TopSkipReason;
                     var autoTopSkipCount = autoTopSkipReason == "None" ? 0 : (multiOutcomeReport.RejectedByReason.TryGetValue(autoTopSkipReason, out var autoTopSkipValue) ? autoTopSkipValue : 0);
-                    if (autoConfig.Mode == StrategyMode.ShadowPaperEligible && multiOutcomeReport.ExecutableGroups > 0)
+                    var autoBestPriced = multiOutcomeReport.ExecutableGroups > 0 && !IsInvalidBestCandidateReason(autoTopSkipReason);
+                    if (autoConfig.Mode == StrategyMode.ShadowPaperEligible && autoBestPriced && multiOutcomeReport.ExecutableGroups > 0)
                         Console.WriteLine($"[SHADOW_PAPER_CANDIDATE] Strategy=AutoCandidateMultiOutcome Mode={autoConfig.Mode} Candidates={multiOutcomeReport.ExecutableGroups} BestAfterSafetyEdge={multiOutcomeReport.BestCandidateEdge.ToString("0.####")} BlockedReason=ModeShadowPaperEligible");
                     strategyOrchestrator.RecordExternalResult(new OpportunityStrategyScanResult(
                         "AutoCandidateMultiOutcome",
-                        StrategyMode.DiagnosticsOnly,
+                        autoConfig.Mode,
                         Scanned: multiOutcomeReport.GroupsDetected,
                         Candidates: multiOutcomeReport.GroupsDetected,
                         ExecutionCandidates: 0,
                         PaperOpened: 0,
                         DiagnosticsOnlyBlocked: autoConfig.Mode == StrategyMode.DiagnosticsOnly ? multiOutcomeReport.ExecutableGroups : 0,
-                        ShadowWouldOpen: autoConfig.Mode == StrategyMode.ShadowPaperEligible ? multiOutcomeReport.ExecutableGroups : 0,
-                        BlockedByMode: autoConfig.Mode == StrategyMode.PaperEligible ? 0 : multiOutcomeReport.ExecutableGroups,
-                        PositiveEdges: multiOutcomeReport.ExecutableGroups,
+                        ShadowWouldOpen: autoConfig.Mode == StrategyMode.ShadowPaperEligible && autoBestPriced ? multiOutcomeReport.ExecutableGroups : 0,
+                        BlockedByMode: autoConfig.Mode == StrategyMode.PaperEligible ? 0 : (autoBestPriced ? multiOutcomeReport.ExecutableGroups : 0),
+                        PositiveEdges: autoBestPriced && multiOutcomeReport.BestCandidateEdge > 0 ? multiOutcomeReport.ExecutableGroups : 0,
                         ExecutionReady: 0,
-                        BestEdge: multiOutcomeReport.BestCandidateEdge,
-                        BestRawEdge: multiOutcomeReport.BestCandidateEdge,
-                        BestAfterSafetyEdge: multiOutcomeReport.BestCandidateEdge,
+                        BestEdge: autoBestPriced ? multiOutcomeReport.BestCandidateEdge : null,
+                        BestRawEdge: autoBestPriced ? multiOutcomeReport.BestCandidateEdge : null,
+                        BestAfterSafetyEdge: autoBestPriced ? multiOutcomeReport.BestCandidateEdge : null,
                         BestRejectedReason: autoTopSkipReason,
                         TopSkipReason: autoTopSkipReason,
                         TopSkipCount: autoTopSkipCount,
-                        RejectedByReason: multiOutcomeReport.RejectedByReason),
+                        RejectedByReason: multiOutcomeReport.RejectedByReason,
+                        ValidPriced: autoBestPriced ? multiOutcomeReport.ExecutableGroups : 0,
+                        InvalidOrUnpriced: autoBestPriced ? Math.Max(0, multiOutcomeReport.GroupsDetected - multiOutcomeReport.ExecutableGroups) : multiOutcomeReport.GroupsDetected,
+                        Unverified: autoTopSkipReason.Equals("AutoCandidateUnverified", StringComparison.OrdinalIgnoreCase) ? multiOutcomeReport.GroupsDetected : 0,
+                        ReviewOnly: autoTopSkipReason.Equals("ReviewOnly", StringComparison.OrdinalIgnoreCase) ? multiOutcomeReport.GroupsDetected : 0,
+                        MissingPricing: IsMissingPricingReason(autoTopSkipReason) ? multiOutcomeReport.GroupsDetected : 0,
+                        BestCandidateValid: autoBestPriced,
+                        BestCandidatePriced: autoBestPriced,
+                        BestCandidateExecutableLike: false,
+                        BestCandidateReason: autoBestPriced ? "Priced" : autoTopSkipReason),
                         multiOutcomeReport.GroupsDetected);
                     var bestConservativeNet = snapshot.BestByConservative?.ActiveProfileNetEdge;
                     decimal? bestExperimentalNet = ScanLogSummaryService.BestExperimentalNet(snapshot.ExperimentalCandidates);
@@ -2051,7 +2061,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         Console.WriteLine($"[SHADOW_PAPER_CANDIDATE] Strategy=VerifiedMultiOutcome Mode={verifiedConfig.Mode} Candidates={verifiedWouldOpenIfPaperEligible} BestAfterSafetyEdge={(verifiedBestStrategyEdge.HasValue ? verifiedBestStrategyEdge.Value.ToString("0.####") : "N/A")} BlockedReason=ModeShadowPaperEligible");
                     strategyOrchestrator.RecordExternalResult(new OpportunityStrategyScanResult(
                         "VerifiedMultiOutcome",
-                        StrategyMode.DiagnosticsOnly,
+                        verifiedConfig.Mode,
                         Scanned: multiOutcomeValidator.LoadedAllowlistCount,
                         Candidates: verifiedEvaluated,
                         ExecutionCandidates: 0,
@@ -2062,7 +2072,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         BlockedByRisk: verifiedRejectedByRisk,
                         BlockedByFill: verifiedBlockedByFill,
                         BlockedByDepth: verifiedBlockedByDepth,
-                        PositiveEdges: verifiedActivePositive + verifiedRawPositiveOnly + verifiedAlternatePositive + experimentalCandidates,
+                        PositiveEdges: verifiedActivePositive,
                         ExecutionReady: verifiedWouldOpenIfPaperEligible,
                         OrderbookUnavailable: verifiedRejectedByReason.Where(x => x.Key.Contains("Orderbook", StringComparison.OrdinalIgnoreCase) || x.Key.Contains("MissingNoAsk", StringComparison.OrdinalIgnoreCase)).Sum(x => x.Value),
                         BestEdge: verifiedBestStrategyEdge,
@@ -2094,7 +2104,17 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         VerifiedPricingBlockedByTokenQuarantined: verifiedPricingBlockedByTokenQuarantined,
                         VerifiedWouldOpenBlockedByFill: verifiedBlockedByFill,
                         VerifiedWouldOpenBlockedByDepth: verifiedBlockedByDepth,
-                        VerifiedWouldOpenBlockedByUnknown: verifiedBlockedByUnknown),
+                        VerifiedWouldOpenBlockedByUnknown: verifiedBlockedByUnknown,
+                        ValidPriced: verifiedBestStrategyEdge.HasValue && (activeExecutable > 0 || verifiedWouldOpenIfPaperEligible > 0) ? Math.Max(1, activeExecutable + verifiedWouldOpenIfPaperEligible) : 0,
+                        InvalidOrUnpriced: Math.Max(0, verifiedEvaluated - (verifiedBestStrategyEdge.HasValue ? 1 : 0)),
+                        DataQualityRejected: verifiedRejectedByReason.Where(x => x.Key.Contains("DataQuality", StringComparison.OrdinalIgnoreCase) || x.Key.Contains("Suspicious", StringComparison.OrdinalIgnoreCase)).Sum(x => x.Value),
+                        Unverified: verifiedRejectedByReason.Where(x => x.Key.Contains("Unverified", StringComparison.OrdinalIgnoreCase)).Sum(x => x.Value),
+                        ReviewOnly: finalReviewOnlyCount,
+                        MissingPricing: verifiedRejectedByReason.Where(x => IsMissingPricingReason(x.Key)).Sum(x => x.Value),
+                        BestCandidateValid: verifiedBestStrategyEdge.HasValue && (activeExecutable > 0 || verifiedWouldOpenIfPaperEligible > 0),
+                        BestCandidatePriced: verifiedBestStrategyEdge.HasValue,
+                        BestCandidateExecutableLike: activeExecutable > 0 || verifiedWouldOpenIfPaperEligible > 0,
+                        BestCandidateReason: (activeExecutable > 0 || verifiedWouldOpenIfPaperEligible > 0) ? "Priced" : (verifiedTopSkip.Key ?? (verifiedBestStrategyEdge.HasValue ? "Priced" : "N/A"))),
                         multiOutcomeValidator.LoadedAllowlistCount);
                     var shadowExportDir = Path.Combine(contentRootPath, "exports");
                     Directory.CreateDirectory(shadowExportDir);
@@ -2102,12 +2122,14 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var shadowRows = new List<object>(2);
                     if (verifiedConfig.Mode == StrategyMode.ShadowPaperEligible && verifiedWouldOpenIfPaperEligible > 0)
                         shadowRows.Add(new { timestampUtc = DateTime.UtcNow, processRunId = state.ProcessRunId, strategy = "VerifiedMultiOutcome", mode = verifiedConfig.Mode.ToString(), marketOrGroupKey = "verified-multi-outcome", legs = 0, rawEdge = bestRawValue, afterCostEdge = bestAlternateProfileNetValue, afterSafetyEdge = bestConservativeNet ?? verifiedBestStrategyEdge, executableQty = 0, notionalAtCap = 0, wouldOpen = true, blockedReason = "ModeShadowPaperEligible", paperDiagnosticsLimitedEligible = shadowHealth.PaperDiagnosticsLimitedEligible, orderbookStableNow = shadowHealth.OrderbookStableNow, reducedUniverseOrderbookStableNow = shadowHealth.ReducedUniverseOrderbookStableNow });
-                    if (autoConfig.Mode == StrategyMode.ShadowPaperEligible && multiOutcomeReport.ExecutableGroups > 0)
+                    if (autoConfig.Mode == StrategyMode.ShadowPaperEligible && autoBestPriced && multiOutcomeReport.ExecutableGroups > 0)
                         shadowRows.Add(new { timestampUtc = DateTime.UtcNow, processRunId = state.ProcessRunId, strategy = "AutoCandidateMultiOutcome", mode = autoConfig.Mode.ToString(), marketOrGroupKey = "auto-candidate-multi-outcome", legs = 0, rawEdge = multiOutcomeReport.BestCandidateEdge, afterCostEdge = multiOutcomeReport.BestCandidateEdge, afterSafetyEdge = multiOutcomeReport.BestCandidateEdge, executableQty = 0, notionalAtCap = 0, wouldOpen = true, blockedReason = "ModeShadowPaperEligible", paperDiagnosticsLimitedEligible = shadowHealth.PaperDiagnosticsLimitedEligible, orderbookStableNow = shadowHealth.OrderbookStableNow, reducedUniverseOrderbookStableNow = shadowHealth.ReducedUniverseOrderbookStableNow });
+                    else if (autoConfig.Mode == StrategyMode.ShadowPaperEligible && multiOutcomeReport.GroupsDetected > 0)
+                        shadowRows.Add(new { timestampUtc = DateTime.UtcNow, processRunId = state.ProcessRunId, strategy = "AutoCandidateMultiOutcome", mode = autoConfig.Mode.ToString(), marketOrGroupKey = "auto-candidate-multi-outcome", legs = 0, rawEdge = (decimal?)null, afterCostEdge = (decimal?)null, afterSafetyEdge = (decimal?)null, executableQty = 0, notionalAtCap = 0, wouldOpen = false, blockedReason = autoTopSkipReason, paperDiagnosticsLimitedEligible = shadowHealth.PaperDiagnosticsLimitedEligible, orderbookStableNow = shadowHealth.OrderbookStableNow, reducedUniverseOrderbookStableNow = shadowHealth.ReducedUniverseOrderbookStableNow });
                     File.WriteAllText(Path.Combine(shadowExportDir, "shadow-paper-candidates-latest.json"), System.Text.Json.JsonSerializer.Serialize(shadowRows, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
                     File.WriteAllText(Path.Combine(shadowExportDir, "verified-multi-outcome-near-misses-latest.json"), System.Text.Json.JsonSerializer.Serialize(groupDiagnostics.Take(100), new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
                     File.WriteAllText(Path.Combine(shadowExportDir, "auto-candidate-near-misses-latest.json"), System.Text.Json.JsonSerializer.Serialize(multiOutcomeReport.TopRejectedSamples.Take(100), new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
-                    File.WriteAllText(Path.Combine(shadowExportDir, "multi-strategy-near-misses-latest.json"), System.Text.Json.JsonSerializer.Serialize(new { verified = groupDiagnostics.Take(50), autoCandidate = multiOutcomeReport.TopRejectedSamples.Take(50), singleMarket = state.SingleMarketSnapshot.TopOpportunityAuditNearMisses.Take(50) }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
+                    File.WriteAllText(Path.Combine(shadowExportDir, "multi-strategy-near-misses-latest.json"), System.Text.Json.JsonSerializer.Serialize(new { verified = groupDiagnostics.Take(50).Select(x => new { item = x, bestCandidateValid = false, bestCandidatePriced = x.BestEdge.HasValue, bestCandidateExecutableLike = false, bestCandidateReason = x.SkipReason, invalidCategory = InvalidCategory(x.SkipReason) }), autoCandidate = multiOutcomeReport.TopRejectedSamples.Take(50).Select(x => new { x.GroupKey, x.Reason, bestCandidateValid = false, bestCandidatePriced = false, bestCandidateExecutableLike = false, bestCandidateReason = x.Reason, invalidCategory = InvalidCategory(x.Reason) }), singleMarket = state.SingleMarketSnapshot.TopOpportunityAuditNearMisses.Take(50) }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
                     EmitMultiStrategySummary(state, options);
                     if (!unresolvedCounts.InvariantOk)
                         Console.WriteLine(unresolvedCounts.ToCounterErrorLogLine());
@@ -2806,14 +2828,43 @@ static void EmitMultiStrategySummary(BotRuntimeState state, TradingBotOptions op
         .ToArray();
     var paper = configured.Where(x => x.Config.Mode == StrategyMode.PaperEligible).Select(x => x.Name);
     var shadow = configured.Where(x => x.Config.Mode == StrategyMode.ShadowPaperEligible).Select(x => x.Name);
-    var best = configured
-        .Where(x => x.Counter!.BestEdge.HasValue)
+    var bestValidPriced = configured
+        .Where(x => x.Counter!.BestCandidateValid && x.Counter!.BestCandidatePriced && x.Counter!.BestEdge.HasValue)
         .OrderByDescending(x => x.Counter!.BestEdge!.Value)
         .FirstOrDefault();
-    var bestStrategy = best.Counter is null ? "None" : best.Name;
-    var bestEdge = best.Counter is null ? "N/A" : best.Counter.BestEdge!.Value.ToString("0.####");
-    Console.WriteLine($"[MULTI_STRATEGY_SUMMARY] ActiveStrategies={string.Join("|", configured.Select(x => x.Name))} PaperEligibleStrategies={string.Join("|", paper)} ShadowStrategies={string.Join("|", shadow)} TotalCandidates={configured.Sum(x => x.Counter!.Candidates)} TotalPositive={configured.Sum(x => x.Counter!.PositiveEdges)} TotalExecutionReady={configured.Sum(x => x.Counter!.ExecutionReady)} TotalShadowWouldOpen={configured.Sum(x => x.Counter!.ShadowWouldOpen)} TotalPaperOpened={configured.Sum(x => x.Counter!.PaperOpened)} BestStrategy={bestStrategy} BestAfterSafetyEdge={bestEdge} PaperDiagnosticsLimitedEligible={health.PaperDiagnosticsLimitedEligible.ToString().ToLowerInvariant()} OrderbookStableNow={health.OrderbookStableNow.ToString().ToLowerInvariant()} ReducedUniverseOrderbookStableNow={health.ReducedUniverseOrderbookStableNow.ToString().ToLowerInvariant()}");
+    var bestExecutable = configured
+        .Where(x => x.Counter!.BestCandidateValid && x.Counter!.BestCandidatePriced && x.Counter!.BestEdge.HasValue && (x.Counter!.ExecutionReady > 0 || x.Counter!.ShadowWouldOpen > 0))
+        .OrderByDescending(x => x.Counter!.BestEdge!.Value)
+        .FirstOrDefault();
+    var bestStrategy = bestValidPriced.Counter is null ? "N/A" : bestValidPriced.Name;
+    var bestEdge = bestValidPriced.Counter is null ? "N/A" : bestValidPriced.Counter.BestEdge!.Value.ToString("0.####");
+    var bestReason = bestValidPriced.Counter is null ? "NoValidPricedCandidate" : bestValidPriced.Counter.BestCandidateReason;
+    var bestExecutableStrategy = bestExecutable.Counter is null ? "N/A" : bestExecutable.Name;
+    var bestExecutableEdge = bestExecutable.Counter is null ? "N/A" : bestExecutable.Counter.BestEdge!.Value.ToString("0.####");
+    Console.WriteLine($"[MULTI_STRATEGY_SUMMARY] ActiveStrategies={string.Join("|", configured.Select(x => x.Name))} PaperEligibleStrategies={string.Join("|", paper)} ShadowStrategies={string.Join("|", shadow)} TotalCandidates={configured.Sum(x => x.Counter!.Candidates)} TotalPositive={configured.Sum(x => x.Counter!.PositiveEdges)} TotalValidPricedCandidates={configured.Sum(x => x.Counter!.ValidPriced)} TotalInvalidOrUnpricedCandidates={configured.Sum(x => x.Counter!.InvalidOrUnpriced)} TotalDataQualityRejected={configured.Sum(x => x.Counter!.DataQualityRejected)} TotalUnverifiedCandidates={configured.Sum(x => x.Counter!.Unverified)} TotalReviewOnlyCandidates={configured.Sum(x => x.Counter!.ReviewOnly)} TotalMissingPricingCandidates={configured.Sum(x => x.Counter!.MissingPricing)} TotalExecutionReady={configured.Sum(x => x.Counter!.ExecutionReady)} TotalShadowWouldOpen={configured.Sum(x => x.Counter!.ShadowWouldOpen)} TotalPaperOpened={configured.Sum(x => x.Counter!.PaperOpened)} BestStrategy={bestStrategy} BestAfterSafetyEdge={bestEdge} BestCandidateReason={bestReason} BestValidPricedStrategy={bestStrategy} BestValidPricedAfterSafetyEdge={bestEdge} BestExecutableStrategy={bestExecutableStrategy} BestExecutableAfterSafetyEdge={bestExecutableEdge} PaperDiagnosticsLimitedEligible={health.PaperDiagnosticsLimitedEligible.ToString().ToLowerInvariant()} OrderbookStableNow={health.OrderbookStableNow.ToString().ToLowerInvariant()} ReducedUniverseOrderbookStableNow={health.ReducedUniverseOrderbookStableNow.ToString().ToLowerInvariant()}");
 }
+
+static bool IsMissingPricingReason(string? reason)
+    => !string.IsNullOrWhiteSpace(reason)
+       && (reason.Contains("MissingYesAsk", StringComparison.OrdinalIgnoreCase)
+           || reason.Contains("MissingNoAsk", StringComparison.OrdinalIgnoreCase)
+           || reason.Contains("MissingLeg", StringComparison.OrdinalIgnoreCase)
+           || reason.Contains("MissingPricing", StringComparison.OrdinalIgnoreCase));
+
+static bool IsInvalidBestCandidateReason(string? reason)
+{
+    if (string.IsNullOrWhiteSpace(reason)) return true;
+    var invalid = new[] { "AutoCandidateUnverified", "ReviewOnly", "DiagnosticsOnly", "MissingYesAsk", "MissingNoAsk", "MissingLeg", "VerifiedGroupNotFoundInDiscoveredPool", "VerifiedGroupMissingBecauseDiscoveryIncomplete", "ResolverMissingConfiguredGroup", "SuspiciousYesNoAskSum", "DataQualityRejected", "N/A" };
+    return invalid.Any(x => reason.Equals(x, StringComparison.OrdinalIgnoreCase) || reason.Contains(x, StringComparison.OrdinalIgnoreCase));
+}
+
+static string InvalidCategory(string? reason)
+    => string.IsNullOrWhiteSpace(reason) ? "N/A"
+        : IsMissingPricingReason(reason) ? "MissingPricing"
+        : reason.Contains("Unverified", StringComparison.OrdinalIgnoreCase) ? "Unverified"
+        : reason.Contains("ReviewOnly", StringComparison.OrdinalIgnoreCase) ? "ReviewOnly"
+        : reason.Contains("DataQuality", StringComparison.OrdinalIgnoreCase) || reason.Contains("Suspicious", StringComparison.OrdinalIgnoreCase) ? "DataQualityRejected"
+        : reason;
 
 
 public class MultiTextWriter(TextWriter original, Action<string> mirror) : TextWriter

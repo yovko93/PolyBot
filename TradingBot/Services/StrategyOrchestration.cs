@@ -79,7 +79,17 @@ public sealed record OpportunityStrategyScanResult(
     int VerifiedPricingBlockedByMarketOrderbookQuarantined = 0,
     int VerifiedPricingBlockedByTokenQuarantined = 0,
     int SingleMarketCircuitBreakerSkippedMarkets = 0,
-    int SingleMarketCircuitBreakerSkippedCycles = 0)
+    int SingleMarketCircuitBreakerSkippedCycles = 0,
+    int ValidPriced = 0,
+    int InvalidOrUnpriced = 0,
+    int DataQualityRejected = 0,
+    int Unverified = 0,
+    int ReviewOnly = 0,
+    int MissingPricing = 0,
+    bool BestCandidateValid = false,
+    bool BestCandidatePriced = false,
+    bool BestCandidateExecutableLike = false,
+    string BestCandidateReason = "N/A")
 {
     public static OpportunityStrategyScanResult Disabled(string strategyName) => new(strategyName, StrategyMode.Disabled);
 }
@@ -285,7 +295,7 @@ public sealed class StrategyOrchestrator
                 Console.WriteLine($"[STRATEGY_DIAGNOSTICS_ONLY_SUMMARY] Strategy={result.StrategyName} CandidatesSuppressed={result.DiagnosticsOnlyBlocked} ActiveConservativeExecutable={result.VerifiedActiveConservativeExecutable} RawPositiveOnly={result.VerifiedRawPositiveOnly} AlternateProfilePositive={result.VerifiedAlternateProfilePositive} ExperimentalProfileCandidate={result.VerifiedExperimentalProfileCandidate} WouldOpenIfPaperEligible={result.VerifiedWouldOpenIfPaperEligible}");
         }
         if (summaryDue)
-            Console.WriteLine($"[STRATEGY_SUMMARY] Strategy={result.StrategyName} Mode={config.Mode} Scanned={result.Scanned} Books={result.Books} Candidates={result.Candidates} Positive={result.PositiveEdges} ExecutionReady={result.ExecutionReady} EdgeStable={result.EdgeStable} ShadowWouldOpen={result.ShadowWouldOpen} PaperOpened={result.PaperOpened} ShadowWouldOpen={result.ShadowWouldOpen} BlockedByMode={result.BlockedByMode} BlockedByPaperDiagnosticsLimitedGate={result.BlockedByPaperDiagnosticsLimitedGate} BlockedByOrderbookHealth={result.BlockedByOrderbookHealth} BlockedByRisk={result.BlockedByRisk} BlockedByFill={result.BlockedByFill} BlockedByDepth={result.BlockedByDepth} BestRawEdge={(result.BestRawEdge ?? result.BestEdge)?.ToString("0.####") ?? "N/A"} BestAfterCostEdge={result.BestAfterCostEdge?.ToString("0.####") ?? "N/A"} BestAfterSafetyEdge={(result.BestAfterSafetyEdge ?? result.BestEdge)?.ToString("0.####") ?? "N/A"} BestRejectedReason={result.BestRejectedReason} RejectedByReason={FormatReasons(result.RejectedByReason)}");
+            Console.WriteLine($"[STRATEGY_SUMMARY] Strategy={result.StrategyName} Mode={config.Mode} Scanned={result.Scanned} Books={result.Books} Candidates={result.Candidates} Positive={result.PositiveEdges} ExecutionReady={result.ExecutionReady} EdgeStable={result.EdgeStable} ShadowWouldOpen={result.ShadowWouldOpen} PaperOpened={result.PaperOpened} ShadowWouldOpen={result.ShadowWouldOpen} BlockedByMode={result.BlockedByMode} BlockedByPaperDiagnosticsLimitedGate={result.BlockedByPaperDiagnosticsLimitedGate} BlockedByOrderbookHealth={result.BlockedByOrderbookHealth} BlockedByRisk={result.BlockedByRisk} BlockedByFill={result.BlockedByFill} BlockedByDepth={result.BlockedByDepth} BestRawEdge={(result.BestRawEdge ?? result.BestEdge)?.ToString("0.####") ?? "N/A"} BestAfterCostEdge={result.BestAfterCostEdge?.ToString("0.####") ?? "N/A"} BestAfterSafetyEdge={(result.BestAfterSafetyEdge ?? result.BestEdge)?.ToString("0.####") ?? "N/A"} BestRejectedReason={result.BestRejectedReason} ValidPriced={result.ValidPriced} InvalidOrUnpriced={result.InvalidOrUnpriced} DataQualityRejected={result.DataQualityRejected} Unverified={result.Unverified} ReviewOnly={result.ReviewOnly} MissingPricing={result.MissingPricing} BestCandidateValid={result.BestCandidateValid.ToString().ToLowerInvariant()} BestCandidatePriced={result.BestCandidatePriced.ToString().ToLowerInvariant()} BestCandidateExecutableLike={result.BestCandidateExecutableLike.ToString().ToLowerInvariant()} BestCandidateReason={result.BestCandidateReason} RejectedByReason={FormatReasons(result.RejectedByReason)}");
     }
 
     private static string EdgeBucket(decimal? edge) => edge.HasValue ? Math.Round(edge.Value, 3).ToString("0.###") : "N/A";
@@ -350,6 +360,16 @@ public sealed class StrategyRuntimeCounters
     private long _verifiedPricingBlockedByTokenQuarantined;
     private long _singleMarketCircuitBreakerSkippedMarkets;
     private long _singleMarketCircuitBreakerSkippedCycles;
+    private long _validPriced;
+    private long _invalidOrUnpriced;
+    private long _dataQualityRejected;
+    private long _unverified;
+    private long _reviewOnly;
+    private long _missingPricing;
+    private bool _bestCandidateValid;
+    private bool _bestCandidatePriced;
+    private bool _bestCandidateExecutableLike;
+    private string _bestCandidateReason = "N/A";
     private readonly object _reasonGate = new();
     private readonly Dictionary<string, long> _rejectedByReason = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _bestEdgeGate = new();
@@ -408,6 +428,16 @@ public sealed class StrategyRuntimeCounters
         Interlocked.Add(ref _verifiedPricingBlockedByTokenQuarantined, result.VerifiedPricingBlockedByTokenQuarantined);
         Interlocked.Add(ref _singleMarketCircuitBreakerSkippedMarkets, result.SingleMarketCircuitBreakerSkippedMarkets);
         Interlocked.Add(ref _singleMarketCircuitBreakerSkippedCycles, result.SingleMarketCircuitBreakerSkippedCycles);
+        Interlocked.Add(ref _validPriced, result.ValidPriced);
+        Interlocked.Add(ref _invalidOrUnpriced, result.InvalidOrUnpriced);
+        Interlocked.Add(ref _dataQualityRejected, result.DataQualityRejected);
+        Interlocked.Add(ref _unverified, result.Unverified);
+        Interlocked.Add(ref _reviewOnly, result.ReviewOnly);
+        Interlocked.Add(ref _missingPricing, result.MissingPricing);
+        _bestCandidateValid = result.BestCandidateValid;
+        _bestCandidatePriced = result.BestCandidatePriced;
+        _bestCandidateExecutableLike = result.BestCandidateExecutableLike;
+        _bestCandidateReason = result.BestCandidateReason;
         if (result.BestEdge.HasValue)
         {
             lock (_bestEdgeGate)
@@ -478,7 +508,17 @@ public sealed class StrategyRuntimeCounters
         Interlocked.Read(ref _verifiedPricingBlockedByMarketOrderbookQuarantined),
         Interlocked.Read(ref _verifiedPricingBlockedByTokenQuarantined),
         Interlocked.Read(ref _singleMarketCircuitBreakerSkippedMarkets),
-        Interlocked.Read(ref _singleMarketCircuitBreakerSkippedCycles));
+        Interlocked.Read(ref _singleMarketCircuitBreakerSkippedCycles),
+        Interlocked.Read(ref _validPriced),
+        Interlocked.Read(ref _invalidOrUnpriced),
+        Interlocked.Read(ref _dataQualityRejected),
+        Interlocked.Read(ref _unverified),
+        Interlocked.Read(ref _reviewOnly),
+        Interlocked.Read(ref _missingPricing),
+        _bestCandidateValid,
+        _bestCandidatePriced,
+        _bestCandidateExecutableLike,
+        _bestCandidateReason);
 
     private decimal? BestEdgeSnapshot()
     {
@@ -542,4 +582,14 @@ public sealed record StrategyRuntimeCounterSnapshot(
     long VerifiedPricingBlockedByMarketOrderbookQuarantined = 0,
     long VerifiedPricingBlockedByTokenQuarantined = 0,
     long SingleMarketCircuitBreakerSkippedMarkets = 0,
-    long SingleMarketCircuitBreakerSkippedCycles = 0);
+    long SingleMarketCircuitBreakerSkippedCycles = 0,
+    long ValidPriced = 0,
+    long InvalidOrUnpriced = 0,
+    long DataQualityRejected = 0,
+    long Unverified = 0,
+    long ReviewOnly = 0,
+    long MissingPricing = 0,
+    bool BestCandidateValid = false,
+    bool BestCandidatePriced = false,
+    bool BestCandidateExecutableLike = false,
+    string BestCandidateReason = "N/A");

@@ -46,7 +46,15 @@ public sealed class SingleMarketBuyBothOpportunityStrategy : IOpportunityStrateg
             TopSkipCount: topSkip.Value,
             RejectedByReason: rejectedByReason,
             SingleMarketCircuitBreakerSkippedMarkets: stats.CircuitBreakerSkippedMarkets,
-            SingleMarketCircuitBreakerSkippedCycles: stats.CircuitBreakerSkippedCycles);
+            SingleMarketCircuitBreakerSkippedCycles: stats.CircuitBreakerSkippedCycles,
+            ValidPriced: stats.BestEdgeSeen.HasValue ? 1 : 0,
+            InvalidOrUnpriced: Math.Max(0, stats.Candidates - (stats.BestEdgeSeen.HasValue ? 1 : 0)),
+            DataQualityRejected: rejectedByReason.Where(x => x.Key.Contains("DataQuality", StringComparison.OrdinalIgnoreCase) || x.Key.Contains("Suspicious", StringComparison.OrdinalIgnoreCase)).Sum(x => x.Value),
+            MissingPricing: rejectedByReason.Where(x => x.Key.Contains("MissingYesAsk", StringComparison.OrdinalIgnoreCase) || x.Key.Contains("MissingNoAsk", StringComparison.OrdinalIgnoreCase)).Sum(x => x.Value),
+            BestCandidateValid: stats.BestEdgeSeen.HasValue,
+            BestCandidatePriced: stats.BestEdgeSeen.HasValue,
+            BestCandidateExecutableLike: stats.ExecutionReady > 0,
+            BestCandidateReason: stats.BestEdgeSeen.HasValue ? (topSkip.Key ?? "Priced") : (topSkip.Key ?? "N/A"));
     }
 }
 

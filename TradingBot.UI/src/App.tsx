@@ -198,7 +198,7 @@ export default function App() {
     ['MultiOutcomeNearMiss', strategyCompact(nearMissStrategy, ['scan', 'books', 'cand', 'positive', 'ready', 'shadow', 'paper'])]
   ];
   const strategyTableRows = Object.entries(strategyCounters).map(([name, c]: any) => ({
-    strategy: name, mode: c?.mode ?? '-', scan: c?.scan ?? 0, books: c?.books ?? 0, candidates: c?.cand ?? 0, positive: c?.positive ?? 0, ready: c?.ready ?? 0, shadow: c?.shadow ?? c?.shadowWouldOpen ?? 0, paper: c?.paper ?? 0, best: c?.bestAfterSafetyEdge ?? c?.bestEdge ?? '-', reason: c?.bestRejectedReason ?? c?.topSkipReason ?? '-'
+    strategy: name, mode: c?.mode ?? '-', scan: c?.scan ?? 0, books: c?.books ?? 0, candidates: c?.cand ?? 0, positive: c?.positive ?? 0, ready: c?.ready ?? 0, shadow: c?.shadow ?? c?.shadowWouldOpen ?? 0, paper: c?.paper ?? 0, bestValid: (c?.bestCandidateValid && c?.bestCandidatePriced) ? (c?.bestValidPricedAfterSafetyEdge ?? c?.bestAfterSafetyEdge ?? '-') : '-', bestExec: (Number(c?.ready ?? 0) > 0 || Number(c?.shadow ?? c?.shadowWouldOpen ?? 0) > 0) && c?.bestCandidateValid ? (c?.bestExecutableAfterSafetyEdge ?? c?.bestAfterSafetyEdge ?? '-') : '-', badge: !c?.bestCandidatePriced ? 'Missing pricing' : !c?.bestCandidateValid ? (c?.bestCandidateReason ?? 'Invalid') : '', reason: c?.bestCandidateReason ?? c?.bestRejectedReason ?? c?.topSkipReason ?? '-'
   }));
 
   const strategyTable = useReactTable({
@@ -213,7 +213,9 @@ export default function App() {
       column.accessor('ready', { header: 'Execution ready', cell: (i) => text(i.getValue()) }),
       column.accessor('shadow', { header: 'Shadow would open', cell: (i) => text(i.getValue()) }),
       column.accessor('paper', { header: 'Paper opened', cell: (i) => text(i.getValue()) }),
-      column.accessor('best', { header: 'Best after-safety edge', cell: (i) => text(i.getValue()) }),
+      column.accessor('bestValid', { header: 'Best valid edge', cell: (i) => text(i.getValue()) }),
+      column.accessor('bestExec', { header: 'Best executable edge', cell: (i) => text(i.getValue()) }),
+      column.accessor('badge', { header: 'Validity', cell: (i) => text(i.getValue() || 'Valid priced') }),
       column.accessor('reason', { header: 'Last blocked reason', cell: (i) => text(i.getValue()) })
     ],
     getCoreRowModel: getCoreRowModel()
@@ -308,6 +310,17 @@ function normalizeStrategyCounter(counter: any) {
     ready: first(counter.ready, counter.executionReady, counter.ExecutionReady),
     shadow: first(counter.shadow, counter.shadowWouldOpen, counter.ShadowWouldOpen),
     bestAfterSafetyEdge: first(counter.bestAfterSafetyEdge, counter.BestAfterSafetyEdge, counter.bestEdge, counter.BestEdge),
+    bestValidPricedAfterSafetyEdge: first(counter.bestValidPricedAfterSafetyEdge, counter.BestValidPricedAfterSafetyEdge, counter.bestAfterSafetyEdge, counter.BestAfterSafetyEdge, counter.bestEdge, counter.BestEdge),
+    bestExecutableAfterSafetyEdge: first(counter.bestExecutableAfterSafetyEdge, counter.BestExecutableAfterSafetyEdge, (Number(first(counter.executionReady, counter.ExecutionReady, counter.shadowWouldOpen, counter.ShadowWouldOpen, 0)) > 0 ? first(counter.bestAfterSafetyEdge, counter.BestAfterSafetyEdge, counter.bestEdge, counter.BestEdge) : undefined)),
+    bestCandidateValid: first(counter.bestCandidateValid, counter.BestCandidateValid, false),
+    bestCandidatePriced: first(counter.bestCandidatePriced, counter.BestCandidatePriced, false),
+    bestCandidateExecutableLike: first(counter.bestCandidateExecutableLike, counter.BestCandidateExecutableLike, false),
+    bestCandidateReason: first(counter.bestCandidateReason, counter.BestCandidateReason, counter.bestRejectedReason, counter.BestRejectedReason),
+    validPriced: first(counter.validPriced, counter.ValidPriced, 0),
+    invalidOrUnpriced: first(counter.invalidOrUnpriced, counter.InvalidOrUnpriced, 0),
+    unverified: first(counter.unverified, counter.Unverified, 0),
+    reviewOnly: first(counter.reviewOnly, counter.ReviewOnly, 0),
+    missingPricing: first(counter.missingPricing, counter.MissingPricing, 0),
     bestRejectedReason: first(counter.bestRejectedReason, counter.BestRejectedReason, counter.topSkipReason, counter.TopSkipReason)
   };
 }
