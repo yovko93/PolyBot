@@ -2794,19 +2794,6 @@ static bool IsVisibleTrade(TradeLogEntryDto t, OpportunityFilteringOptions _)
     return t.Edge > 0 && t.ExpectedProfit > 0;
 }
 
-public class MultiTextWriter(TextWriter original, Action<string> mirror) : TextWriter
-{
-    public override Encoding Encoding => Encoding.UTF8;
-    public override void WriteLine(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return;
-        var enriched = ProcessRunContext.EnrichLogLine(value);
-        original.WriteLine(enriched);
-        mirror(enriched);
-    }
-}
-
-
 static void EmitMultiStrategySummary(BotRuntimeState state, TradingBotOptions options)
 {
     if (!options.StrategyOrchestrator.Enabled) return;
@@ -2827,6 +2814,20 @@ static void EmitMultiStrategySummary(BotRuntimeState state, TradingBotOptions op
     var bestEdge = best.Counter is null ? "N/A" : best.Counter.BestEdge!.Value.ToString("0.####");
     Console.WriteLine($"[MULTI_STRATEGY_SUMMARY] ActiveStrategies={string.Join("|", configured.Select(x => x.Name))} PaperEligibleStrategies={string.Join("|", paper)} ShadowStrategies={string.Join("|", shadow)} TotalCandidates={configured.Sum(x => x.Counter!.Candidates)} TotalPositive={configured.Sum(x => x.Counter!.PositiveEdges)} TotalExecutionReady={configured.Sum(x => x.Counter!.ExecutionReady)} TotalShadowWouldOpen={configured.Sum(x => x.Counter!.ShadowWouldOpen)} TotalPaperOpened={configured.Sum(x => x.Counter!.PaperOpened)} BestStrategy={bestStrategy} BestAfterSafetyEdge={bestEdge} PaperDiagnosticsLimitedEligible={health.PaperDiagnosticsLimitedEligible.ToString().ToLowerInvariant()} OrderbookStableNow={health.OrderbookStableNow.ToString().ToLowerInvariant()} ReducedUniverseOrderbookStableNow={health.ReducedUniverseOrderbookStableNow.ToString().ToLowerInvariant()}");
 }
+
+
+public class MultiTextWriter(TextWriter original, Action<string> mirror) : TextWriter
+{
+    public override Encoding Encoding => Encoding.UTF8;
+    public override void WriteLine(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return;
+        var enriched = ProcessRunContext.EnrichLogLine(value);
+        original.WriteLine(enriched);
+        mirror(enriched);
+    }
+}
+
 
 public sealed record PersistedHealthyDiscoverySnapshot(string ProcessRunId, DateTime CreatedAtUtc, int ActiveCount, int RawCount, IReadOnlyList<PersistedHealthyMarket> Markets);
 public sealed record PersistedHealthyMarket(string Id, string Question, string? ConditionId, IReadOnlyList<string> Outcomes, IReadOnlyList<string> ClobTokenIds, bool? Active, bool? Closed, bool? Archived, bool? AcceptingOrdersSnake, bool? AcceptingOrders, decimal? Liquidity, decimal? Volume24hr);
