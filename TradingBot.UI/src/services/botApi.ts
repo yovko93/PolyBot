@@ -69,6 +69,7 @@ export const getSingleMarketPaperExecutions = async (signal?: AbortSignal): Prom
 export const getPaperAccount = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/paper/account', null, signal);
 export const getPaperSettlements = async (signal?: AbortSignal): Promise<any[]> => safeRequest<any[]>('/paper/settlements', [], signal);
 export const getAllowlistRepairReport = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/verified-allowlist-repair-report?limit=50', null, signal);
+export const getAutoCandidateVerification = async (signal?: AbortSignal): Promise<any[]> => safeRequest<any[]>('/auto-candidate-verification?limit=5', [], signal);
 export const pauseScanner = async (): Promise<BotControlState> => mapControls(await request('/controls/pause', undefined, { method: 'POST' }));
 export const resumeScanner = async (): Promise<BotControlState> => mapControls(await request('/controls/resume', undefined, { method: 'POST' }));
 
