@@ -705,6 +705,16 @@ public sealed record RuntimeHealthSnapshot(
             SingleMarketAfterSafetyEdge0To1bp: buckets.ZeroTo1bp,
             SingleMarketAfterSafetyEdge1bpTo5bp: buckets.OnebpTo5bp,
             SingleMarketAfterSafetyEdgeAbove5bp: buckets.Above5bp,
+            OpportunityFamilyRankingEnabled: state.OpportunityFamilyRanking?.Enabled ?? false,
+            OpportunityFamilyBuckets: state.OpportunityFamilyRanking?.Buckets ?? 0,
+            OpportunityFamilyBestPricedFamily: state.OpportunityFamilyRanking?.BestPricedFamily ?? "N/A",
+            OpportunityFamilyBestPricedAfterSafetyEdge: state.OpportunityFamilyRanking?.BestPricedAfterSafetyEdge,
+            OpportunityFamilyBestUnpricedFamily: state.OpportunityFamilyRanking?.BestUnpricedFamily ?? "N/A",
+            OpportunityFamilyBestUnpricedVerificationScore: state.OpportunityFamilyRanking?.BestUnpricedVerificationScore ?? 0,
+            OpportunityFamilyClosestToBreakEvenCount: state.OpportunityFamilyRanking?.ClosestToBreakEvenCount ?? 0,
+            OpportunityFamilyPositiveFamilies: state.OpportunityFamilyRanking?.PositiveFamilies ?? 0,
+            OpportunityFamilyExecutableFamilies: state.OpportunityFamilyRanking?.ExecutableFamilies ?? 0,
+            OpportunityFamilyTopFamilies: state.OpportunityFamilyRanking is null ? Array.Empty<TradingBot.Services.OpportunityFamilySummary>() : state.OpportunityFamilyRanking.PricedFamilies.Concat(state.OpportunityFamilyRanking.UnpricedFamilies).Take(5).ToArray(),
             StrategyCounters: state.StrategyCountersSnapshot());
     }
 
