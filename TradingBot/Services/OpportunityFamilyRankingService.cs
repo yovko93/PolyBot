@@ -144,7 +144,7 @@ public static class OpportunityFamilyRankingService
             var reason = Reason(x.DataQualityReason ?? x.RejectedReason);
             var dataQualityRejected = !string.IsNullOrWhiteSpace(x.DataQualityReason) || IsDataQualityReason(reason);
             var missingPricing = IsMissingPricingReason(reason);
-            var validPriced = !dataQualityRejected && !missingPricing && !IsInvalidPricedReason(reason) && x.AfterSafetyEdge.HasValue;
+            var validPriced = !dataQualityRejected && !missingPricing && !IsInvalidPricedReason(reason);
             return new Sample("SingleMarketBuyBoth", "SingleMarketBuyBoth", ClassifyEvent(x.Title), "binary", 2, "High", reason, Status(reason, validPriced, x.AfterSafetyEdge), x.MarketId, x.Title, x.RawEdge, x.AfterCostEdge, x.AfterSafetyEdge, 100, validPriced, validPriced, validPriced, dataQualityRejected, missingPricing, validPriced && x.AfterSafetyEdge > 0, validPriced && x.ExecutableQty > 0 && x.FillPassed && x.DepthPassed && x.RiskPassed && x.PaperDiagnosticsLimitedGatePassed, false, false);
         }));
 

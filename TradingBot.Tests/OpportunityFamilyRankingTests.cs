@@ -35,7 +35,7 @@ public class OpportunityFamilyRankingTests
         Assert.Equal("PositiveFamilyWithoutValidPositiveCandidate", consistent.RankingConsistencyReason);
     }
 
-    private static SingleMarketOpportunityAuditDto Audit(string marketId, decimal rawEdge, decimal afterSafetyEdge, string rejectedReason)
+    private static TradingBot.Models.SingleMarketOpportunityAuditDto Audit(string marketId, decimal rawEdge, decimal afterSafetyEdge, string rejectedReason)
         => new(
             marketId,
             $"condition-{marketId}",
