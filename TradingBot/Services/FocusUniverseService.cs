@@ -63,12 +63,41 @@ public sealed class FocusUniverseService
     private void Upsert(OpportunityFamilySummary c, bool refresh)
     {
         var now = DateTime.UtcNow; var id = $"{c.Strategy}|{c.BestMarketOrGroupKey}"; var edge = c.BestAfterSafetyEdge!.Value;
-        _items.TryGetValue(id, out var prev); var previous = prev?.CurrentAfterSafetyEdge; var delta = previous.HasValue ? edge - previous.Value : null;
+        _items.TryGetValue(id, out var prev);
+        decimal? previous = prev?.CurrentAfterSafetyEdge;
+        decimal? delta = previous.HasValue ? edge - previous.Value : null;
         var trend = !previous.HasValue ? "New" : delta > 0.0001m ? "Improving" : delta < -0.0001m ? "Worsening" : "Stable";
         if (prev is null) _admitted++; else if (refresh) _refreshed++;
         _items[id] = new FocusUniverseItem(id, prev?.FirstSeenUtc ?? now, now, c.Strategy, c.FamilyType, c.BestMarketOrGroupKey, c.BestTitle, c.BestRawEdge, c.BestAfterCostEdge, edge, Math.Max(prev?.BestObservedAfterSafetyEdge ?? edge, edge), Math.Min(prev?.WorstObservedAfterSafetyEdge ?? edge, edge), previous, delta, trend, (prev?.Observations ?? 0) + 1, 0, c.TopRejectedReason, true, c.ExecutionReady > 0, c.ShadowWouldOpen > 0, c.PaperOpened > 0, c.RecommendedAction);
     }
     private void EvictToCap(int cap){ cap=Math.Max(0,cap); foreach(var k in _items.Values.OrderBy(x=>x.CurrentAfterSafetyEdge).ThenBy(x=>x.LastSeenUtc).Take(Math.Max(0,_items.Count-cap)).Select(x=>x.WatchlistId).ToArray()){_items.Remove(k);_evicted++;}}
-    private FocusUniverseSnapshot Snapshot(bool enabled, RuntimeHealthSnapshot h){ var items=_items.Values.OrderByDescending(x=>x.CurrentAfterSafetyEdge).ToArray(); var exec=Math.Min(items.Count(x=>x.ExecutionReady), h.StrategyCounters.Values.Sum(x=>x.ExecutionReady)); var paper=Math.Min(items.Count(x=>x.PaperOpened), h.PaperExecutionsCount); var best=items.FirstOrDefault(); var positive=h.StrategyCounters.Values.Sum(x=>x.PositiveEdges); var consistent=exec<=h.StrategyCounters.Values.Sum(x=>x.ExecutionReady)&&paper<=h.PaperExecutionsCount&&!(best?.CurrentAfterSafetyEdge>0&&positive==0); return new(enabled,items.Length,_admitted,_evicted,_refreshed,_skipped,items.Count(x=>x.EdgeTrend=="Improving"),items.Count(x=>x.EdgeTrend=="Worsening"),items.Count(x=>x.EdgeTrend=="Stable"),best?.Strategy??"N/A",best?.CurrentAfterSafetyEdge,best?.EdgeDelta,items.Count(x=>x.CurrentAfterSafetyEdge>=_options.FocusUniverse.MinCandidateAfterSafetyEdge),exec,paper,consistent,items);}
+    private FocusUniverseSnapshot Snapshot(bool enabled, RuntimeHealthSnapshot h)
+    {
+        var items = _items.Values.OrderByDescending(x => x.CurrentAfterSafetyEdge).ToArray();
+        var strategyExecutionReady = h.StrategyCounters.Values.Sum(x => x.ExecutionReady);
+        var executionReady = Math.Min(items.Count(x => x.ExecutionReady), strategyExecutionReady > int.MaxValue ? int.MaxValue : (int)strategyExecutionReady);
+        var paperOpened = Math.Min(items.Count(x => x.PaperOpened), h.PaperExecutionsCount);
+        var best = items.FirstOrDefault();
+        var positive = h.StrategyCounters.Values.Sum(x => x.PositiveEdges);
+        var consistent = executionReady <= strategyExecutionReady && paperOpened <= h.PaperExecutionsCount && !(best?.CurrentAfterSafetyEdge > 0 && positive == 0);
+        return new(
+            enabled,
+            items.Length,
+            _admitted,
+            _evicted,
+            _refreshed,
+            _skipped,
+            items.Count(x => x.EdgeTrend == "Improving"),
+            items.Count(x => x.EdgeTrend == "Worsening"),
+            items.Count(x => x.EdgeTrend == "Stable"),
+            best?.Strategy ?? "N/A",
+            best?.CurrentAfterSafetyEdge,
+            best?.EdgeDelta,
+            items.Count(x => x.CurrentAfterSafetyEdge >= _options.FocusUniverse.MinCandidateAfterSafetyEdge),
+            executionReady,
+            paperOpened,
+            consistent,
+            items);
+    }
     private void TryExport(FocusUniverseSnapshot s, RuntimeHealthSnapshot h, string root){ try{ var path=Path.Combine(root,"exports/focus-universe-watchlist-latest.json"); Directory.CreateDirectory(Path.GetDirectoryName(path)!); var payload=new{generatedAtUtc=DateTime.UtcNow,h.ProcessRunId,h.Uptime,enabled=s.Enabled,maxWatchlistItems=_options.FocusUniverse.MaxWatchlistItems,maxRefreshPerCycle=_options.FocusUniverse.MaxRefreshPerCycle,minCandidateAfterSafetyEdge=_options.FocusUniverse.MinCandidateAfterSafetyEdge,h.PaperDiagnosticsLimitedEligible,h.OrderbookStableNow,h.ReducedUniverseOrderbookStableNow,watchlistSize=s.WatchlistSize,admitted=s.Admitted,evicted=s.Evicted,refreshed=s.Refreshed,skippedByOrderbookHealth=s.SkippedByOrderbookHealth,improving=s.Improving,worsening=s.Worsening,stable=s.Stable,bestAfterSafetyEdge=s.BestAfterSafetyEdge,closestToBreakEvenCount=s.ClosestToBreakEvenCount,executionReady=s.ExecutionReady,paperOpened=s.PaperOpened,items=s.Items.Select((x,i)=>new{rank=i+1,x.WatchlistId,x.Strategy,x.FamilyType,marketIdGroupKey=x.MarketIdOrGroupKey,x.Title,x.CurrentAfterSafetyEdge,x.BestObservedAfterSafetyEdge,x.PreviousAfterSafetyEdge,x.EdgeDelta,x.EdgeTrend,x.Observations,x.LastRejectedReason,x.ExecutionReady,x.ShadowWouldOpen,x.PaperOpened,x.RecommendedAction})}; var json=JsonSerializer.Serialize(payload,new JsonSerializerOptions{WriteIndented=true,PropertyNamingPolicy=JsonNamingPolicy.CamelCase}); var tmp=path+".tmp"; for(var i=0;i<3;i++){try{File.WriteAllText(tmp,json);File.Move(tmp,path,true);break;}catch when(i<2){Thread.Sleep(50);}}}catch(Exception ex){Console.WriteLine($"[FOCUS_UNIVERSE_EXPORT_WARNING] Error={ex.Message}");}}
 }
