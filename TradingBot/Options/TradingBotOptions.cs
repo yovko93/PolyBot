@@ -102,6 +102,7 @@ public class TradingBotOptions
     public StrategyOrchestratorOptions StrategyOrchestrator { get; set; } = new();
     public AutoCandidatePricingOptions AutoCandidatePricing { get; set; } = new();
     public FocusUniverseOptions FocusUniverse { get; set; } = new();
+    public EdgeTransitionOptions EdgeTransition { get; set; } = new();
     public Dictionary<string, OpportunityStrategyConfig> Strategies { get; set; } = StrategyDefaults();
 
     private static Dictionary<string, OpportunityStrategyConfig> StrategyDefaults() => new(StringComparer.OrdinalIgnoreCase)
@@ -126,6 +127,21 @@ public class FocusUniverseOptions
     public bool UseSharedOrderbookCache { get; set; } = true;
     public bool DiagnosticsOnly { get; set; } = true;
     public bool ExportEnabled { get; set; } = true;
+}
+
+public class EdgeTransitionOptions
+{
+    public bool Enabled { get; set; } = false;
+    public int MinObservations { get; set; } = 3;
+    public decimal NearBreakEvenThreshold { get; set; } = -0.003m;
+    public decimal AlertThreshold { get; set; } = -0.001m;
+    public decimal PositiveThreshold { get; set; } = 0m;
+    public decimal MinImprovementDelta { get; set; } = 0.001m;
+    public int StableWindowObservations { get; set; } = 3;
+    public int MaxTrackedTransitions { get; set; } = 100;
+    public bool ExportEnabled { get; set; } = true;
+    public bool RequireFocusUniverse { get; set; } = true;
+    public bool DiagnosticsOnly { get; set; } = true;
 }
 
 public class AutoCandidatePricingOptions

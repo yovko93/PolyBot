@@ -486,6 +486,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     Console.WriteLine($"[MULTI_STRATEGY_ORCHESTRATOR] Enabled={options.StrategyOrchestrator.Enabled.ToString().ToLowerInvariant()} MaxConcurrentStrategies={options.StrategyOrchestrator.MaxConcurrentStrategies} MaxConcurrentOrderbookConsumers={options.StrategyOrchestrator.MaxConcurrentOrderbookConsumers} Strategies=SingleMarketBuyBoth:{singleConfig.Mode}|VerifiedMultiOutcome:{verifiedConfig.Mode}|AutoCandidateMultiOutcome:{autoConfig.Mode}|MultiOutcomeNearMiss:{nearMissConfig.Mode}|ExperimentalMultiOutcome:{experimentalConfig.Mode}");
     var singleMarketFullCycle = new SingleMarketFullCycleSummaryAggregator(options.SingleMarketArb);
     var focusUniverse = new FocusUniverseService(options);
+    var edgeTransition = new EdgeTransitionService(options);
 
     var config = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory).AddJsonFile("appsettings.json", optional: true).Build();
     config.GetSection(CrossExchangeOptions.SectionName).Bind(crossOptions);
@@ -2198,7 +2199,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     state.SetOpportunityFamilyRanking(familyRanking);
                     var familyHealth = RuntimeHealthSnapshot.From(state, options);
                     OpportunityFamilyRankingService.WriteExportAtomic(Path.Combine(shadowExportDir, "opportunity-family-ranking-latest.json"), OpportunityFamilyRankingService.ToExport(familyRanking, familyHealth));
-                    state.SetFocusUniverse(focusUniverse.Update(familyRanking, familyHealth, contentRootPath));
+                    var focusSnapshot = focusUniverse.Update(familyRanking, familyHealth, contentRootPath);
+                    state.SetFocusUniverse(focusSnapshot);
+                    state.SetEdgeTransition(edgeTransition.Update(focusSnapshot, RuntimeHealthSnapshot.From(state, options), contentRootPath));
                     var familyLog = $"[OPPORTUNITY_FAMILY_RANKING] PricedBuckets={familyRanking.PricedFamilies.Count} UnpricedBuckets={familyRanking.UnpricedFamilies.Count} BestPricedFamily={familyRanking.BestPricedFamily} BestPricedAfterSafetyEdge={(familyRanking.BestPricedAfterSafetyEdge.HasValue ? familyRanking.BestPricedAfterSafetyEdge.Value.ToString("0.####") : "N/A")} BestUnpricedFamily={familyRanking.BestUnpricedFamily} BestUnpricedVerificationScore={familyRanking.BestUnpricedVerificationScore} ClosestToBreakEvenCount={familyRanking.ClosestToBreakEvenCount} PositiveFamilies={familyRanking.PositiveFamilies} ExecutableFamilies={familyRanking.ExecutableFamilies} InvalidRawSpikeFamilies={familyRanking.InvalidRawSpikeFamiliesCount} InvalidRawSpikeBestEdge={(familyRanking.InvalidRawSpikeBestEdge.HasValue ? familyRanking.InvalidRawSpikeBestEdge.Value.ToString("0.####") : "N/A")} InvalidRawSpikeTopReason={familyRanking.InvalidRawSpikeTopReason} Consistent={familyRanking.RankingConsistent.ToString().ToLowerInvariant()} TopRecommendedAction={familyRanking.TopRecommendedAction}";
                     if (!familyRanking.RankingConsistent)
                         Console.WriteLine($"[OPPORTUNITY_FAMILY_RANKING_CONSISTENCY_WARNING] Reason={familyRanking.RankingConsistencyReason} BestPricedFamily={familyRanking.BestPricedFamily} BestPricedAfterSafetyEdge={(familyRanking.BestPricedAfterSafetyEdge.HasValue ? familyRanking.BestPricedAfterSafetyEdge.Value.ToString("0.####") : "N/A")} TotalPositive={familyCounterSnapshot.Values.Sum(x => x.PositiveEdges)} SingleMarketValidAfterSafetyPositive={state.SingleMarketSnapshot.Summary.ValidAfterSafetyPositive}");
