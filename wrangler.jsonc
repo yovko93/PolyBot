@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "polybot",
+  "compatibility_date": "2026-06-29",
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "TradingBot.UI"
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ]
+}
