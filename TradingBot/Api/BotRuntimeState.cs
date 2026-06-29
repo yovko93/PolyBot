@@ -22,6 +22,7 @@ public class BotRuntimeState
     public object[] MultiOutcomeReviewReport { get; private set; } = Array.Empty<object>();
     public VerifiedBasketScreenerDto? VerifiedBasketScreener { get; private set; }
     public OpportunityFamilyRankingSnapshot? OpportunityFamilyRanking { get; private set; }
+    public FocusUniverseSnapshot? FocusUniverse { get; private set; }
     public RiskStateDto Risk { get; private set; } = new(100,5,0.003m,0.25m,300,0,5,0,100,new(),true,true,true,true,DateTime.UtcNow,0);
     public BotControlStateDto Controls { get; private set; } = new(false, "RUNNING", DateTime.UtcNow, 0);
     public SingleMarketArbSnapshotDto SingleMarketSnapshot { get; private set; } = new(DateTime.UtcNow, 0, new SingleMarketScanSummaryDto(DateTime.UtcNow, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null, null, "None", 0, new Dictionary<string,int>(), new Dictionary<string,int>()), Array.Empty<SingleMarketArbOpportunityDto>(), Array.Empty<SingleMarketNearMissDto>(), Array.Empty<SingleMarketOpportunityAuditDto>(), Array.Empty<SingleMarketDataQualityRejectSampleDto>(), Array.Empty<SingleMarketPaperExecutionDto>());
@@ -335,6 +336,7 @@ public class BotRuntimeState
     public void SetMultiOutcomeReviewReport(IEnumerable<object> items){lock(_gate) MultiOutcomeReviewReport = items.Take(_runtime.MaxRejectedCandidateSamples).ToArray();}
     public void SetVerifiedBasketScreener(VerifiedBasketScreenerDto? d){lock(_gate) VerifiedBasketScreener=d;}
     public void SetOpportunityFamilyRanking(OpportunityFamilyRankingSnapshot? d){lock(_gate) OpportunityFamilyRanking=d;}
+    public void SetFocusUniverse(FocusUniverseSnapshot? d){lock(_gate) FocusUniverse=d;}
     public void SetControls(BotControlStateDto c){lock(_gate) Controls=c;}
     public void SetSingleMarketSnapshot(SingleMarketArbSnapshotDto snapshot)
     {
