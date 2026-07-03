@@ -103,6 +103,7 @@ public class TradingBotOptions
     public AutoCandidatePricingOptions AutoCandidatePricing { get; set; } = new();
     public FocusUniverseOptions FocusUniverse { get; set; } = new();
     public EdgeTransitionOptions EdgeTransition { get; set; } = new();
+    public EdgeCompressionOptions EdgeCompression { get; set; } = new();
     public Dictionary<string, OpportunityStrategyConfig> Strategies { get; set; } = StrategyDefaults();
 
     private static Dictionary<string, OpportunityStrategyConfig> StrategyDefaults() => new(StringComparer.OrdinalIgnoreCase)
@@ -141,6 +142,18 @@ public class EdgeTransitionOptions
     public int MaxTrackedTransitions { get; set; } = 100;
     public bool ExportEnabled { get; set; } = true;
     public bool RequireFocusUniverse { get; set; } = true;
+    public bool DiagnosticsOnly { get; set; } = true;
+}
+
+public class EdgeCompressionOptions
+{
+    public bool Enabled { get; set; } = false;
+    public bool RequireFocusUniverse { get; set; } = true;
+    public bool RequireEdgeTransition { get; set; } = true;
+    public int MaxItems { get; set; } = 100;
+    public decimal NearBreakEvenThreshold { get; set; } = -0.003m;
+    public int CompressionWindowObservations { get; set; } = 5;
+    public bool ExportEnabled { get; set; } = true;
     public bool DiagnosticsOnly { get; set; } = true;
 }
 

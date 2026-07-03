@@ -487,6 +487,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var singleMarketFullCycle = new SingleMarketFullCycleSummaryAggregator(options.SingleMarketArb);
     var focusUniverse = new FocusUniverseService(options);
     var edgeTransition = new EdgeTransitionService(options);
+    var edgeCompression = new EdgeCompressionService(options);
 
     var config = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory).AddJsonFile("appsettings.json", optional: true).Build();
     config.GetSection(CrossExchangeOptions.SectionName).Bind(crossOptions);
@@ -2201,7 +2202,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     OpportunityFamilyRankingService.WriteExportAtomic(Path.Combine(shadowExportDir, "opportunity-family-ranking-latest.json"), OpportunityFamilyRankingService.ToExport(familyRanking, familyHealth));
                     var focusSnapshot = focusUniverse.Update(familyRanking, familyHealth, contentRootPath);
                     state.SetFocusUniverse(focusSnapshot);
-                    state.SetEdgeTransition(edgeTransition.Update(focusSnapshot, RuntimeHealthSnapshot.From(state, options), contentRootPath));
+                    var transitionSnapshot = edgeTransition.Update(focusSnapshot, RuntimeHealthSnapshot.From(state, options), contentRootPath);
+                    state.SetEdgeTransition(transitionSnapshot);
+                    state.SetEdgeCompression(edgeCompression.Update(focusSnapshot, transitionSnapshot, RuntimeHealthSnapshot.From(state, options), contentRootPath));
                     var familyLog = $"[OPPORTUNITY_FAMILY_RANKING] PricedBuckets={familyRanking.PricedFamilies.Count} UnpricedBuckets={familyRanking.UnpricedFamilies.Count} BestPricedFamily={familyRanking.BestPricedFamily} BestPricedAfterSafetyEdge={(familyRanking.BestPricedAfterSafetyEdge.HasValue ? familyRanking.BestPricedAfterSafetyEdge.Value.ToString("0.####") : "N/A")} BestUnpricedFamily={familyRanking.BestUnpricedFamily} BestUnpricedVerificationScore={familyRanking.BestUnpricedVerificationScore} ClosestToBreakEvenCount={familyRanking.ClosestToBreakEvenCount} PositiveFamilies={familyRanking.PositiveFamilies} ExecutableFamilies={familyRanking.ExecutableFamilies} InvalidRawSpikeFamilies={familyRanking.InvalidRawSpikeFamiliesCount} InvalidRawSpikeBestEdge={(familyRanking.InvalidRawSpikeBestEdge.HasValue ? familyRanking.InvalidRawSpikeBestEdge.Value.ToString("0.####") : "N/A")} InvalidRawSpikeTopReason={familyRanking.InvalidRawSpikeTopReason} Consistent={familyRanking.RankingConsistent.ToString().ToLowerInvariant()} TopRecommendedAction={familyRanking.TopRecommendedAction}";
                     if (!familyRanking.RankingConsistent)
                         Console.WriteLine($"[OPPORTUNITY_FAMILY_RANKING_CONSISTENCY_WARNING] Reason={familyRanking.RankingConsistencyReason} BestPricedFamily={familyRanking.BestPricedFamily} BestPricedAfterSafetyEdge={(familyRanking.BestPricedAfterSafetyEdge.HasValue ? familyRanking.BestPricedAfterSafetyEdge.Value.ToString("0.####") : "N/A")} TotalPositive={familyCounterSnapshot.Values.Sum(x => x.PositiveEdges)} SingleMarketValidAfterSafetyPositive={state.SingleMarketSnapshot.Summary.ValidAfterSafetyPositive}");
