@@ -11,6 +11,10 @@ public class TradingBotOptions
     [Range(1, int.MaxValue)] public int ScanIntervalMs { get; set; } = 3000;
     [Range(1, int.MaxValue)] public int MaxConcurrentRequests { get; set; } = 5;
     public string Mode { get; set; } = "AllPaginatedRolling";
+    public string RuntimeProfile { get; set; } = string.Empty;
+    public string RuntimeProfileRequested { get; set; } = string.Empty;
+    public string RuntimeProfileSource { get; set; } = "Default";
+    public string[] RuntimeProfileOverrides { get; set; } = Array.Empty<string>();
     [Range(0, int.MaxValue)] public int MaxMarketsToDiscover { get; set; } = 0;
     [Range(1, int.MaxValue)] public int AbsoluteMaxMarketsSafetyCap { get; set; } = 10000;
     [Range(1, int.MaxValue)] public int DiscoveryPageSize { get; set; } = 200;
@@ -90,6 +94,7 @@ public class TradingBotOptions
     public AllowlistRepairOptions AllowlistRepair { get; set; } = new();
     public RuntimeStateOptions RuntimeState { get; set; } = new();
     public SingleMarketArbOptions SingleMarketArb { get; set; } = new();
+    public SingleMarketOpportunityAuditOptions SingleMarketOpportunityAudit { get; set; } = new();
     public MarketDiscoveryOptions MarketDiscovery { get; set; } = new();
     public bool DiscoveryPartialDiagnosticsOnly { get; set; } = false;
     public MarketDiscoveryOptions Discovery { get => MarketDiscovery; set => MarketDiscovery = value ?? new(); }
@@ -105,6 +110,7 @@ public class TradingBotOptions
     public EdgeTransitionOptions EdgeTransition { get; set; } = new();
     public EdgeCompressionOptions EdgeCompression { get; set; } = new();
     public SpreadMicrostructureOptions SpreadMicrostructure { get; set; } = new();
+    public OpportunityFamilyRankingOptions OpportunityFamilyRanking { get; set; } = new();
     public Dictionary<string, OpportunityStrategyConfig> Strategies { get; set; } = StrategyDefaults();
 
     private static Dictionary<string, OpportunityStrategyConfig> StrategyDefaults() => new(StringComparer.OrdinalIgnoreCase)
@@ -154,6 +160,14 @@ public class EdgeCompressionOptions
     public int MaxItems { get; set; } = 100;
     public decimal NearBreakEvenThreshold { get; set; } = -0.003m;
     public int CompressionWindowObservations { get; set; } = 5;
+    public bool ExportEnabled { get; set; } = true;
+    public bool DiagnosticsOnly { get; set; } = true;
+}
+
+public class OpportunityFamilyRankingOptions
+{
+    public bool Enabled { get; set; } = false;
+    public int MaxFamilies { get; set; } = 100;
     public bool ExportEnabled { get; set; } = true;
     public bool DiagnosticsOnly { get; set; } = true;
 }
@@ -602,6 +616,14 @@ public class AllowlistRepairLockedGroupOptions
     public string GroupKey { get; set; } = string.Empty;
     public string Reason { get; set; } = string.Empty;
     public bool AllowPatchPreview { get; set; } = false;
+}
+
+public class SingleMarketOpportunityAuditOptions
+{
+    public bool Enabled { get; set; } = false;
+    public bool NearMissExportEnabled { get; set; } = true;
+    public int NearMissTopN { get; set; } = 50;
+    public bool EmitCycleSummary { get; set; } = true;
 }
 
 public class SingleMarketArbOptions

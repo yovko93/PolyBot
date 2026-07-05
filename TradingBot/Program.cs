@@ -14,6 +14,7 @@ using TradingBot.Services.MultiOutcome;
 
 var originalOut = Console.Out;
 var builder = WebApplication.CreateBuilder(args);
+var runtimeProfileResolution = RuntimeProfileService.Resolve(args, builder.Configuration);
 
 builder.Services.AddCors(o => o.AddPolicy("ui", p => p.WithOrigins("http://localhost:5173", "http://127.0.0.1:5173").AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
 builder.Services.AddSignalR();
@@ -23,6 +24,7 @@ builder.Services.AddOptions<TradingBotOptions>()
     .Bind(builder.Configuration.GetSection(TradingBotOptions.LegacyScannerSectionName))
     .ValidateDataAnnotations()
     .ValidateOnStart();
+builder.Services.Configure<TradingBotOptions>(o => { RuntimeProfileService.Apply(o, runtimeProfileResolution); RuntimeProfileService.ApplyCliOverrides(o, args); });
 builder.Services.AddOptions<CrossExchangeOptions>().Bind(builder.Configuration.GetSection(CrossExchangeOptions.SectionName)).ValidateDataAnnotations();
 builder.Services.AddOptions<ExchangeFeesOptions>().Bind(builder.Configuration.GetSection(ExchangeFeesOptions.SectionName)).ValidateDataAnnotations();
 builder.Services.AddOptions<KalshiOptions>().Bind(builder.Configuration.GetSection(KalshiOptions.SectionName)).ValidateDataAnnotations();
@@ -49,6 +51,9 @@ builder.Services.AddSingleton<IBotUiLogger, BotUiLogger>();
 var app = builder.Build();
 app.UseCors("ui");
 var options = app.Services.GetRequiredService<IOptions<TradingBotOptions>>().Value;
+RuntimeProfileService.ValidateSafety(options);
+RuntimeProfileService.Export(options, ProcessRunContext.ProcessRunId, app.Environment.ContentRootPath);
+Console.WriteLine(RuntimeProfileService.StartupLog(options));
 var startupDiscoveryMode = ResolveEffectiveDiscoveryMode(options);
 var sourceAuditOnlySources = ResolveConfigSource(builder.Configuration, "TradingBot:Discovery:SourceAuditOnly", "TradingBot:MarketDiscovery:SourceAuditOnly", "Scanner:Discovery:SourceAuditOnly", "Scanner:MarketDiscovery:SourceAuditOnly");
 var reducedUniverseSources = ResolveConfigSource(builder.Configuration, "TradingBot:Discovery:AllowReducedUniverseDiagnosticsOnly", "TradingBot:MarketDiscovery:AllowReducedUniverseDiagnosticsOnly", "Scanner:Discovery:AllowReducedUniverseDiagnosticsOnly", "Scanner:MarketDiscovery:AllowReducedUniverseDiagnosticsOnly");
@@ -301,6 +306,7 @@ state.SetDiscoveryGuardState(
 var quietLogGate = app.Services.GetRequiredService<QuietLogGate>();
 var logger = app.Services.GetRequiredService<IBotUiLogger>();
 options = app.Services.GetRequiredService<IOptions<TradingBotOptions>>().Value;
+logger.LogInfo("startup", RuntimeProfileService.StartupLog(options));
 foreach (var strategyEntry in options.Strategies.Where(x => x.Value.Enabled && x.Value.Mode != StrategyMode.Disabled))
     state.RecordStrategyResult(new OpportunityStrategyScanResult(strategyEntry.Key, strategyEntry.Value.Mode));
 quietLogGate.ConfigureBounds(options.RuntimeMemory.MaxQuietLogGateEntries, TimeSpan.FromMinutes(options.RuntimeMemory.QuietLogGateTtlMinutes));

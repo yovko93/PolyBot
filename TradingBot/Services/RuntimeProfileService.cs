@@ -1,0 +1,84 @@
+using System.Text.Json;
+using Microsoft.Extensions.Configuration;
+using TradingBot.Options;
+
+namespace TradingBot.Services;
+
+public sealed record RuntimeProfileResolution(string RequestedProfile,string AppliedProfile,string ProfileSource,IReadOnlyList<string> Overrides);
+
+public static class RuntimeProfileService
+{
+    public const string ReducedDiagnosticsFullStack = "ReducedDiagnosticsFullStack";
+    public static RuntimeProfileResolution Resolve(string[] args, IConfiguration config)
+    {
+        var cli = ReadProfileAlias(args);
+        var cfg = config["TradingBot:RuntimeProfile"];
+        var requested = !string.IsNullOrWhiteSpace(cli) ? cli! : !string.IsNullOrWhiteSpace(cfg) ? cfg! : string.Empty;
+        var source = !string.IsNullOrWhiteSpace(cli) ? "CLI" : !string.IsNullOrWhiteSpace(cfg) ? "Config" : "Default";
+        var applied = string.Equals(requested, ReducedDiagnosticsFullStack, StringComparison.OrdinalIgnoreCase) ? ReducedDiagnosticsFullStack : string.Empty;
+        return new(requested, applied, source, FindOverrides(args));
+    }
+
+    public static void Apply(TradingBotOptions o, RuntimeProfileResolution r)
+    {
+        o.RuntimeProfileRequested = r.RequestedProfile;
+        o.RuntimeProfile = r.AppliedProfile;
+        o.RuntimeProfileSource = r.ProfileSource;
+        o.RuntimeProfileOverrides = r.Overrides.ToArray();
+        if (!string.Equals(r.AppliedProfile, ReducedDiagnosticsFullStack, StringComparison.OrdinalIgnoreCase)) return;
+        o.MarketDiscovery.SourceAuditOnly=false; o.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly=true; o.MarketDiscovery.ReducedUniverseRequireExplicitFlag=true; o.MarketDiscovery.ReducedUniverseBlockPaper=false; o.MarketDiscovery.ReducedUniverseMaxMarkets=2000; o.MarketDiscovery.ReducedUniverseSource="GammaOffset";
+        o.StrategyOrchestrator.Enabled=true; o.StrategyOrchestrator.MaxConcurrentStrategies=4; o.StrategyOrchestrator.MaxConcurrentOrderbookConsumers=1;
+        o.Strategies["SingleMarketBuyBoth"]=new(true,StrategyMode.PaperEligible,100); o.Strategies["VerifiedMultiOutcome"]=new(true,StrategyMode.ShadowPaperEligible,50); o.Strategies["AutoCandidateMultiOutcome"]=new(true,StrategyMode.ShadowPaperEligible,25); o.Strategies["MultiOutcomeNearMiss"]=new(true,StrategyMode.DiagnosticsOnly,10); o.Strategies["ExperimentalMultiOutcome"]=new(false,StrategyMode.Disabled,0);
+        o.PaperDiagnosticsLimited.Enabled=true; o.PaperDiagnosticsLimited.RequireExplicitFlag=true; o.PaperDiagnosticsLimited.AllowedStrategy="SingleMarketBuyBoth"; o.PaperDiagnosticsLimited.MaxOpenPositions=1; o.PaperDiagnosticsLimited.MaxPaperNotionalPerTrade=5m; o.PaperDiagnosticsLimited.MaxPaperTotalExposure=5m; o.PaperDiagnosticsLimited.MaxPaperOpensPerHour=1; o.PaperDiagnosticsLimited.MinEdgeOverride=0.01m;
+        o.SingleMarketOpportunityAudit.Enabled=true; o.SingleMarketOpportunityAudit.NearMissExportEnabled=true; o.SingleMarketOpportunityAudit.NearMissTopN=50; o.SingleMarketOpportunityAudit.EmitCycleSummary=true; o.SingleMarketArb.AuditBelowMinEdgeEvents=true; o.SingleMarketArb.TopNearMissCount=50; o.SingleMarketArb.LogBatchSummaries=true;
+        o.EnableLiveExecution=false; o.EnablePaperTrading=true; o.PaperOnly=true; o.TradingMode.LiveTradingEnabled=false; o.TradingMode.PaperTradingEnabled=true; o.TradingMode.PaperPhase=2; o.PaperPhaseValidation.Enabled=false; o.PaperSettlementValidation.Enabled=false;
+        o.AutoCandidatePricing.Enabled=true; o.AutoCandidatePricing.MaxCandidatesPerCycle=25; o.AutoCandidatePricing.RequireOrderbookStableNow=true; o.AutoCandidatePricing.RequireReducedUniverseOrderbookStableNow=true; o.AutoCandidatePricing.DiagnosticsOnly=true;
+        o.OpportunityFamilyRanking.Enabled=true; o.OpportunityFamilyRanking.MaxFamilies=100; o.OpportunityFamilyRanking.ExportEnabled=true;
+        o.FocusUniverse.Enabled=true; o.FocusUniverse.MaxWatchlistItems=50; o.FocusUniverse.MaxRefreshPerCycle=10; o.FocusUniverse.MinCandidateAfterSafetyEdge=-0.01m; o.FocusUniverse.RequireValidPriced=true; o.FocusUniverse.RequireOrderbookStableNow=true; o.FocusUniverse.RequireReducedUniverseOrderbookStableNow=true; o.FocusUniverse.UseSharedOrderbookCache=true; o.FocusUniverse.DiagnosticsOnly=true; o.FocusUniverse.ExportEnabled=true;
+        o.EdgeTransition.Enabled=true; o.EdgeTransition.MinObservations=3; o.EdgeTransition.NearBreakEvenThreshold=-0.003m; o.EdgeTransition.AlertThreshold=-0.001m; o.EdgeTransition.PositiveThreshold=0m; o.EdgeTransition.MinImprovementDelta=0.001m; o.EdgeTransition.StableWindowObservations=3; o.EdgeTransition.MaxTrackedTransitions=100; o.EdgeTransition.ExportEnabled=true; o.EdgeTransition.RequireFocusUniverse=true; o.EdgeTransition.DiagnosticsOnly=true;
+        o.EdgeCompression.Enabled=true; o.EdgeCompression.RequireFocusUniverse=true; o.EdgeCompression.RequireEdgeTransition=true; o.EdgeCompression.MaxItems=100; o.EdgeCompression.NearBreakEvenThreshold=-0.003m; o.EdgeCompression.CompressionWindowObservations=5; o.EdgeCompression.ExportEnabled=true; o.EdgeCompression.DiagnosticsOnly=true;
+        o.SpreadMicrostructure.Enabled=true; o.SpreadMicrostructure.RequireFocusUniverse=true; o.SpreadMicrostructure.RequireEdgeCompression=true; o.SpreadMicrostructure.MaxItems=50; o.SpreadMicrostructure.RequireOrderbookStableNow=true; o.SpreadMicrostructure.RequireReducedUniverseOrderbookStableNow=true; o.SpreadMicrostructure.UseSharedOrderbookCache=true; o.SpreadMicrostructure.DepthLevels=3; o.SpreadMicrostructure.NearMoveThreshold=0.003m; o.SpreadMicrostructure.ExportEnabled=true; o.SpreadMicrostructure.DiagnosticsOnly=true;
+        o.AllowlistRepair.RefreshPreview.AutoApply=false; ValidateSafety(o);
+    }
+
+    public static void ApplyCliOverrides(TradingBotOptions o, string[] args)
+    {
+        var requested=o.RuntimeProfileRequested; var applied=o.RuntimeProfile; var source=o.RuntimeProfileSource; var overrides=o.RuntimeProfileOverrides;
+        var cli = new ConfigurationBuilder().AddCommandLine(args).Build();
+        cli.GetSection(TradingBotOptions.SectionName).Bind(o);
+        o.RuntimeProfileRequested=requested; o.RuntimeProfile=applied; o.RuntimeProfileSource=source; o.RuntimeProfileOverrides=overrides;
+        ValidateSafety(o);
+    }
+
+    public static void ValidateSafety(TradingBotOptions o)
+    {
+        if (!string.Equals(o.RuntimeProfile, ReducedDiagnosticsFullStack, StringComparison.OrdinalIgnoreCase)) return;
+        var violations = new List<string>();
+        if (o.TradingMode.LiveTradingEnabled || o.EnableLiveExecution) violations.Add("LiveTradingEnabledMustBeFalse");
+        if (!o.PaperDiagnosticsLimited.Enabled) violations.Add("PaperDiagnosticsLimitedMustBeEnabled");
+        if (!string.Equals(o.PaperDiagnosticsLimited.AllowedStrategy,"SingleMarketBuyBoth",StringComparison.OrdinalIgnoreCase)) violations.Add("AllowedStrategyMustBeSingleMarketBuyBoth");
+        if (Mode(o,"SingleMarketBuyBoth")!=StrategyMode.PaperEligible) violations.Add("SingleMarketBuyBothMustBePaperEligible");
+        if (Mode(o,"VerifiedMultiOutcome")==StrategyMode.PaperEligible) violations.Add("VerifiedMultiOutcomeMustNotBePaperEligible");
+        if (Mode(o,"AutoCandidateMultiOutcome")==StrategyMode.PaperEligible) violations.Add("AutoCandidateMultiOutcomeMustNotBePaperEligible");
+        if (Mode(o,"ExperimentalMultiOutcome")!=StrategyMode.Disabled) violations.Add("ExperimentalMultiOutcomeMustBeDisabled");
+        if (!o.AutoCandidatePricing.DiagnosticsOnly||!o.FocusUniverse.DiagnosticsOnly||!o.EdgeTransition.DiagnosticsOnly||!o.EdgeCompression.DiagnosticsOnly||!o.SpreadMicrostructure.DiagnosticsOnly) violations.Add("AnalyticsLayersMustBeDiagnosticsOnly");
+        if (o.AllowlistRepair.RefreshPreview.AutoApply) violations.Add("AllowlistRefreshAutoApplyMustBeFalse");
+        if (violations.Count==0) return; var msg=string.Join("|",violations); Console.WriteLine($"[RUNTIME_PROFILE_SAFETY_VIOLATION] Profile={o.RuntimeProfile} Violations={msg}"); throw new InvalidOperationException($"Runtime profile safety validation failed: {msg}");
+    }
+
+    public static string StartupLog(TradingBotOptions o)
+    {
+        var paper=string.Join("|", o.Strategies.Where(x=>x.Value.Mode==StrategyMode.PaperEligible&&x.Value.Enabled).Select(x=>x.Key));
+        var shadow=string.Join("|", o.Strategies.Where(x=>x.Value.Mode==StrategyMode.ShadowPaperEligible&&x.Value.Enabled).Select(x=>x.Key));
+        return $"[RUNTIME_PROFILE] RequestedProfile={N(o.RuntimeProfileRequested)} AppliedProfile={N(o.RuntimeProfile)} ProfileSource={o.RuntimeProfileSource} SafetyProfile={N(o.RuntimeProfile)} LiveTradingEnabled={o.TradingMode.LiveTradingEnabled.ToString().ToLowerInvariant()} PaperTradingEnabled={o.TradingMode.PaperTradingEnabled.ToString().ToLowerInvariant()} PaperEligibleStrategies={paper} ShadowStrategies={shadow} DiagnosticsOnlyLayers=AutoCandidatePricing|OpportunityFamilyRanking|FocusUniverse|EdgeTransition|EdgeCompression|SpreadMicrostructure ProfileOverridesCount={o.RuntimeProfileOverrides.Length} ProfileOverrides=[{string.Join("|",o.RuntimeProfileOverrides)}]";
+    }
+
+    public static void Export(TradingBotOptions o,string processRunId,string root)
+    {
+        try{var path=Path.Combine(root,"exports/effective-runtime-config-latest.json");Directory.CreateDirectory(Path.GetDirectoryName(path)!);var payload=new{processRunId,generatedAtUtc=DateTime.UtcNow,requestedProfile=o.RuntimeProfileRequested,appliedProfile=o.RuntimeProfile,profileSource=o.RuntimeProfileSource,profileOverrides=o.RuntimeProfileOverrides,safety=new{liveTradingEnabled=o.TradingMode.LiveTradingEnabled||o.EnableLiveExecution,signingAllowed=false,paperTradingEnabled=o.TradingMode.PaperTradingEnabled&&o.EnablePaperTrading,paperDiagnosticsLimitedEnabled=o.PaperDiagnosticsLimited.Enabled,allowedPaperStrategy=o.PaperDiagnosticsLimited.AllowedStrategy,strategyModes=o.Strategies.ToDictionary(x=>x.Key,x=>x.Value.Mode.ToString()),diagnosticsOnlyLayers=new{autoCandidatePricing=o.AutoCandidatePricing.DiagnosticsOnly,opportunityFamilyRanking=o.OpportunityFamilyRanking.DiagnosticsOnly,focusUniverse=o.FocusUniverse.DiagnosticsOnly,edgeTransition=o.EdgeTransition.DiagnosticsOnly,edgeCompression=o.EdgeCompression.DiagnosticsOnly,spreadMicrostructure=o.SpreadMicrostructure.DiagnosticsOnly}},config=new{o.MarketDiscovery,o.StrategyOrchestrator,o.Strategies,o.PaperDiagnosticsLimited,o.SingleMarketOpportunityAudit,o.SingleMarketArb,o.TradingMode,o.PaperPhaseValidation,o.PaperSettlementValidation,o.AutoCandidatePricing,o.OpportunityFamilyRanking,o.FocusUniverse,o.EdgeTransition,o.EdgeCompression,o.SpreadMicrostructure}};var json=JsonSerializer.Serialize(payload,new JsonSerializerOptions{WriteIndented=true,PropertyNamingPolicy=JsonNamingPolicy.CamelCase});var tmp=path+".tmp";for(var i=0;i<3;i++){try{File.WriteAllText(tmp,json);File.Move(tmp,path,true);break;}catch(IOException) when(i<2){Thread.Sleep(50);}}}catch(Exception ex){Console.WriteLine($"[RUNTIME_PROFILE_EXPORT_WARNING] Error={ex.Message}");}
+    }
+    private static StrategyMode Mode(TradingBotOptions o,string k)=>o.Strategies.TryGetValue(k,out var v)?v.Mode:StrategyMode.Disabled;
+    private static string N(string? s)=>string.IsNullOrWhiteSpace(s)?"None":s!;
+    private static string? ReadProfileAlias(string[] args){for(var i=0;i<args.Length;i++){var a=args[i]; if(a.Equals("--profile",StringComparison.OrdinalIgnoreCase)&&i+1<args.Length)return args[i+1]; if(a.StartsWith("--profile=",StringComparison.OrdinalIgnoreCase))return a[10..];}return null;}
+    private static IReadOnlyList<string> FindOverrides(string[] args)=>args.Select((a,i)=>a.Equals("--profile",StringComparison.OrdinalIgnoreCase)?"":a).Where(a=>a.StartsWith("--TradingBot:",StringComparison.OrdinalIgnoreCase)&&!a.StartsWith("--TradingBot:RuntimeProfile",StringComparison.OrdinalIgnoreCase)).Select(a=>a[2..].Split('=')[0]).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x=>x,StringComparer.OrdinalIgnoreCase).ToArray();
+}
