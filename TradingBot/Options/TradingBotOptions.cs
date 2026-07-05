@@ -104,6 +104,7 @@ public class TradingBotOptions
     public FocusUniverseOptions FocusUniverse { get; set; } = new();
     public EdgeTransitionOptions EdgeTransition { get; set; } = new();
     public EdgeCompressionOptions EdgeCompression { get; set; } = new();
+    public SpreadMicrostructureOptions SpreadMicrostructure { get; set; } = new();
     public Dictionary<string, OpportunityStrategyConfig> Strategies { get; set; } = StrategyDefaults();
 
     private static Dictionary<string, OpportunityStrategyConfig> StrategyDefaults() => new(StringComparer.OrdinalIgnoreCase)
@@ -153,6 +154,21 @@ public class EdgeCompressionOptions
     public int MaxItems { get; set; } = 100;
     public decimal NearBreakEvenThreshold { get; set; } = -0.003m;
     public int CompressionWindowObservations { get; set; } = 5;
+    public bool ExportEnabled { get; set; } = true;
+    public bool DiagnosticsOnly { get; set; } = true;
+}
+
+public class SpreadMicrostructureOptions
+{
+    public bool Enabled { get; set; } = false;
+    public bool RequireFocusUniverse { get; set; } = true;
+    public bool RequireEdgeCompression { get; set; } = true;
+    public int MaxItems { get; set; } = 50;
+    public bool RequireOrderbookStableNow { get; set; } = true;
+    public bool RequireReducedUniverseOrderbookStableNow { get; set; } = true;
+    public bool UseSharedOrderbookCache { get; set; } = true;
+    public int DepthLevels { get; set; } = 3;
+    public decimal NearMoveThreshold { get; set; } = 0.003m;
     public bool ExportEnabled { get; set; } = true;
     public bool DiagnosticsOnly { get; set; } = true;
 }

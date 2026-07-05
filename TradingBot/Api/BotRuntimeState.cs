@@ -25,6 +25,7 @@ public class BotRuntimeState
     public FocusUniverseSnapshot? FocusUniverse { get; private set; }
     public EdgeTransitionSnapshot? EdgeTransition { get; private set; }
     public EdgeCompressionSnapshot? EdgeCompression { get; private set; }
+    public SpreadMicrostructureSnapshot? SpreadMicrostructure { get; private set; }
     public RiskStateDto Risk { get; private set; } = new(100,5,0.003m,0.25m,300,0,5,0,100,new(),true,true,true,true,DateTime.UtcNow,0);
     public BotControlStateDto Controls { get; private set; } = new(false, "RUNNING", DateTime.UtcNow, 0);
     public SingleMarketArbSnapshotDto SingleMarketSnapshot { get; private set; } = new(DateTime.UtcNow, 0, new SingleMarketScanSummaryDto(DateTime.UtcNow, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null, null, "None", 0, new Dictionary<string,int>(), new Dictionary<string,int>()), Array.Empty<SingleMarketArbOpportunityDto>(), Array.Empty<SingleMarketNearMissDto>(), Array.Empty<SingleMarketOpportunityAuditDto>(), Array.Empty<SingleMarketDataQualityRejectSampleDto>(), Array.Empty<SingleMarketPaperExecutionDto>());
@@ -341,6 +342,7 @@ public class BotRuntimeState
     public void SetFocusUniverse(FocusUniverseSnapshot? d){lock(_gate) FocusUniverse=d;}
     public void SetEdgeTransition(EdgeTransitionSnapshot? d){lock(_gate) EdgeTransition=d;}
     public void SetEdgeCompression(EdgeCompressionSnapshot? d){lock(_gate) EdgeCompression=d;}
+    public void SetSpreadMicrostructure(SpreadMicrostructureSnapshot? d){lock(_gate) SpreadMicrostructure=d;}
     public void SetControls(BotControlStateDto c){lock(_gate) Controls=c;}
     public void SetSingleMarketSnapshot(SingleMarketArbSnapshotDto snapshot)
     {
