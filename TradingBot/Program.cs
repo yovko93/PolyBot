@@ -14,6 +14,7 @@ using TradingBot.Services.MultiOutcome;
 
 var originalOut = Console.Out;
 var builder = WebApplication.CreateBuilder(args);
+var runtimeProfileResolution = RuntimeProfileService.Resolve(args, builder.Configuration);
 
 builder.Services.AddCors(o => o.AddPolicy("ui", p => p.WithOrigins("http://localhost:5173", "http://127.0.0.1:5173").AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
 builder.Services.AddSignalR();
@@ -23,6 +24,7 @@ builder.Services.AddOptions<TradingBotOptions>()
     .Bind(builder.Configuration.GetSection(TradingBotOptions.LegacyScannerSectionName))
     .ValidateDataAnnotations()
     .ValidateOnStart();
+builder.Services.Configure<TradingBotOptions>(o => { RuntimeProfileService.Apply(o, runtimeProfileResolution); RuntimeProfileService.ApplyCliOverrides(o, args); });
 builder.Services.AddOptions<CrossExchangeOptions>().Bind(builder.Configuration.GetSection(CrossExchangeOptions.SectionName)).ValidateDataAnnotations();
 builder.Services.AddOptions<ExchangeFeesOptions>().Bind(builder.Configuration.GetSection(ExchangeFeesOptions.SectionName)).ValidateDataAnnotations();
 builder.Services.AddOptions<KalshiOptions>().Bind(builder.Configuration.GetSection(KalshiOptions.SectionName)).ValidateDataAnnotations();
@@ -49,6 +51,9 @@ builder.Services.AddSingleton<IBotUiLogger, BotUiLogger>();
 var app = builder.Build();
 app.UseCors("ui");
 var options = app.Services.GetRequiredService<IOptions<TradingBotOptions>>().Value;
+RuntimeProfileService.ValidateSafety(options);
+RuntimeProfileService.Export(options, ProcessRunContext.ProcessRunId, app.Environment.ContentRootPath);
+Console.WriteLine(RuntimeProfileService.StartupLog(options));
 var startupDiscoveryMode = ResolveEffectiveDiscoveryMode(options);
 var sourceAuditOnlySources = ResolveConfigSource(builder.Configuration, "TradingBot:Discovery:SourceAuditOnly", "TradingBot:MarketDiscovery:SourceAuditOnly", "Scanner:Discovery:SourceAuditOnly", "Scanner:MarketDiscovery:SourceAuditOnly");
 var reducedUniverseSources = ResolveConfigSource(builder.Configuration, "TradingBot:Discovery:AllowReducedUniverseDiagnosticsOnly", "TradingBot:MarketDiscovery:AllowReducedUniverseDiagnosticsOnly", "Scanner:Discovery:AllowReducedUniverseDiagnosticsOnly", "Scanner:MarketDiscovery:AllowReducedUniverseDiagnosticsOnly");
@@ -301,6 +306,7 @@ state.SetDiscoveryGuardState(
 var quietLogGate = app.Services.GetRequiredService<QuietLogGate>();
 var logger = app.Services.GetRequiredService<IBotUiLogger>();
 options = app.Services.GetRequiredService<IOptions<TradingBotOptions>>().Value;
+logger.LogInfo("startup", RuntimeProfileService.StartupLog(options));
 foreach (var strategyEntry in options.Strategies.Where(x => x.Value.Enabled && x.Value.Mode != StrategyMode.Disabled))
     state.RecordStrategyResult(new OpportunityStrategyScanResult(strategyEntry.Key, strategyEntry.Value.Mode));
 quietLogGate.ConfigureBounds(options.RuntimeMemory.MaxQuietLogGateEntries, TimeSpan.FromMinutes(options.RuntimeMemory.QuietLogGateTtlMinutes));
@@ -488,6 +494,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var focusUniverse = new FocusUniverseService(options);
     var edgeTransition = new EdgeTransitionService(options);
     var edgeCompression = new EdgeCompressionService(options);
+    var spreadMicrostructure = new SpreadMicrostructureService(options, orderbookService);
 
     var config = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory).AddJsonFile("appsettings.json", optional: true).Build();
     config.GetSection(CrossExchangeOptions.SectionName).Bind(crossOptions);
@@ -2204,7 +2211,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     state.SetFocusUniverse(focusSnapshot);
                     var transitionSnapshot = edgeTransition.Update(focusSnapshot, RuntimeHealthSnapshot.From(state, options), contentRootPath);
                     state.SetEdgeTransition(transitionSnapshot);
-                    state.SetEdgeCompression(edgeCompression.Update(focusSnapshot, transitionSnapshot, RuntimeHealthSnapshot.From(state, options), contentRootPath));
+                    var edgeCompressionSnapshot = edgeCompression.Update(focusSnapshot, transitionSnapshot, RuntimeHealthSnapshot.From(state, options), contentRootPath);
+                    state.SetEdgeCompression(edgeCompressionSnapshot);
+                    var spreadMarketById = discoveredMarkets.Where(x => !string.IsNullOrWhiteSpace(x.id)).GroupBy(x => x.id, StringComparer.OrdinalIgnoreCase).ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+                    state.SetSpreadMicrostructure(spreadMicrostructure.Update(focusSnapshot, edgeCompressionSnapshot, RuntimeHealthSnapshot.From(state, options), spreadMarketById, contentRootPath));
                     var familyLog = $"[OPPORTUNITY_FAMILY_RANKING] PricedBuckets={familyRanking.PricedFamilies.Count} UnpricedBuckets={familyRanking.UnpricedFamilies.Count} BestPricedFamily={familyRanking.BestPricedFamily} BestPricedAfterSafetyEdge={(familyRanking.BestPricedAfterSafetyEdge.HasValue ? familyRanking.BestPricedAfterSafetyEdge.Value.ToString("0.####") : "N/A")} BestUnpricedFamily={familyRanking.BestUnpricedFamily} BestUnpricedVerificationScore={familyRanking.BestUnpricedVerificationScore} ClosestToBreakEvenCount={familyRanking.ClosestToBreakEvenCount} PositiveFamilies={familyRanking.PositiveFamilies} ExecutableFamilies={familyRanking.ExecutableFamilies} InvalidRawSpikeFamilies={familyRanking.InvalidRawSpikeFamiliesCount} InvalidRawSpikeBestEdge={(familyRanking.InvalidRawSpikeBestEdge.HasValue ? familyRanking.InvalidRawSpikeBestEdge.Value.ToString("0.####") : "N/A")} InvalidRawSpikeTopReason={familyRanking.InvalidRawSpikeTopReason} Consistent={familyRanking.RankingConsistent.ToString().ToLowerInvariant()} TopRecommendedAction={familyRanking.TopRecommendedAction}";
                     if (!familyRanking.RankingConsistent)
                         Console.WriteLine($"[OPPORTUNITY_FAMILY_RANKING_CONSISTENCY_WARNING] Reason={familyRanking.RankingConsistencyReason} BestPricedFamily={familyRanking.BestPricedFamily} BestPricedAfterSafetyEdge={(familyRanking.BestPricedAfterSafetyEdge.HasValue ? familyRanking.BestPricedAfterSafetyEdge.Value.ToString("0.####") : "N/A")} TotalPositive={familyCounterSnapshot.Values.Sum(x => x.PositiveEdges)} SingleMarketValidAfterSafetyPositive={state.SingleMarketSnapshot.Summary.ValidAfterSafetyPositive}");

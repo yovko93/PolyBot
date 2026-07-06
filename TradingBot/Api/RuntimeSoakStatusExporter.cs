@@ -268,6 +268,23 @@ public static class RuntimeSoakStatusExporter
             edgeCompressionConsistent = health.EdgeCompressionConsistent,
             strategyCompact = string.Join(",", health.StrategyCounters.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Select(x => $"{x.Key}:{x.Value.Mode}:scan={x.Value.Scanned}:books={x.Value.Books}:paper={x.Value.PaperOpened}:faults={x.Value.Faults}")),
             verifiedPricingUnavailableGroups,
+            spreadMicrostructureEnabled = health.SpreadMicrostructureEnabled,
+            spreadMicrostructureItems = health.SpreadMicrostructureItems,
+            spreadMicrostructureSkippedByOrderbookHealth = health.SpreadMicrostructureSkippedByOrderbookHealth,
+            spreadMicrostructureWideAskSpread = health.SpreadMicrostructureWideAskSpread,
+            spreadMicrostructureThinTopBook = health.SpreadMicrostructureThinTopBook,
+            spreadMicrostructureBothWideAndThin = health.SpreadMicrostructureBothWideAndThin,
+            spreadMicrostructureAlreadyNearExecutable = health.SpreadMicrostructureAlreadyNearExecutable,
+            spreadMicrostructureDepthSufficient = health.SpreadMicrostructureDepthSufficient,
+            spreadMicrostructureBestStrategy = health.SpreadMicrostructureBestStrategy,
+            spreadMicrostructureBestAfterSafetyEdge = health.SpreadMicrostructureBestAfterSafetyEdge,
+            spreadMicrostructureBestMoveNeededToBreakEven = health.SpreadMicrostructureBestMoveNeededToBreakEven,
+            spreadMicrostructureMedianMoveNeededToBreakEven = health.SpreadMicrostructureMedianMoveNeededToBreakEven,
+            spreadMicrostructureP95MoveNeededToBreakEven = health.SpreadMicrostructureP95MoveNeededToBreakEven,
+            spreadMicrostructureMinTicksToBreakEven = health.SpreadMicrostructureMinTicksToBreakEven,
+            spreadMicrostructureMedianTicksToBreakEven = health.SpreadMicrostructureMedianTicksToBreakEven,
+            spreadMicrostructureDominantCause = health.SpreadMicrostructureDominantCause,
+            spreadMicrostructureConsistent = health.SpreadMicrostructureConsistent,
             orderbookStable = health.OrderbookCircuitBreakerState == "Closed"
                 && (health.BatchBookRequests <= 0 ? 0d : (double)health.BatchBookBadRequests / health.BatchBookRequests) <= options.Soak.MaxBatchBookBadRequestRate
                 && trend.BatchBookBadRequestsDeltaLastHour <= options.Soak.MaxBatchBookBadRequestsPerHour
