@@ -157,6 +157,12 @@ public class BotRuntimeState
     private int _memoryCriticals;
     private DateTime? _lastMemoryCriticalAt;
     private bool _scannerPausedByMemoryGuard;
+    private long _signalRPayloadTrimmedTotal;
+    private long _signalRPayloadTrimmedLogged;
+    private long _signalRPayloadTrimmedSuppressed;
+    private string _signalRPayloadTrimmedLastEvent = string.Empty;
+    private int _signalRPayloadTrimmedLastItemsBefore;
+    private int _signalRPayloadTrimmedLastItemsAfter;
     private int _runtimeStatusExportWriteFailures;
     private int _runtimeStatusExportReadFailures;
     private int _runtimeStatusExportRecoveredCount;
@@ -328,6 +334,13 @@ public class BotRuntimeState
     public int RuntimeStatusExportConsecutiveFailures => Volatile.Read(ref _runtimeStatusExportConsecutiveFailures);
     public string RuntimeStatusExportLastFailureReason => _runtimeStatusExportLastFailureReason;
     public bool RuntimeStatusExportStable => RuntimeStatusExportConsecutiveFailures < 3;
+    public long SignalRPayloadTrimmedTotal => Volatile.Read(ref _signalRPayloadTrimmedTotal);
+    public long SignalRPayloadTrimmedLogged => Volatile.Read(ref _signalRPayloadTrimmedLogged);
+    public long SignalRPayloadTrimmedSuppressed => Volatile.Read(ref _signalRPayloadTrimmedSuppressed);
+    public string SignalRPayloadTrimmedLastEvent => _signalRPayloadTrimmedLastEvent;
+    public int SignalRPayloadTrimmedLastItemsBefore => Volatile.Read(ref _signalRPayloadTrimmedLastItemsBefore);
+    public int SignalRPayloadTrimmedLastItemsAfter => Volatile.Read(ref _signalRPayloadTrimmedLastItemsAfter);
+    public bool SignalRLogNoiseControlConsistent => SignalRPayloadTrimmedTotal == SignalRPayloadTrimmedLogged + SignalRPayloadTrimmedSuppressed;
     public IReadOnlyDictionary<string, int> PaperPretradeRejectsByReason { get { lock (_paperCountersGate) return new Dictionary<string, int>(_paperPretradeRejectsByReason, StringComparer.OrdinalIgnoreCase); } }
     public long NextSeq()=>Interlocked.Increment(ref _seq);
     public void SetStatus(BotStatusDto s){lock(_gate) Status=s;}
@@ -413,6 +426,14 @@ public class BotRuntimeState
         _scannerPausedByMemoryGuard = scannerPaused;
     }
     public void SetScannerPausedByMemoryGuard(bool paused) => _scannerPausedByMemoryGuard = paused;
+    public void RecordSignalRPayloadTrimmed(string eventName, int itemsBefore, int itemsAfter, bool logged)
+    {
+        Interlocked.Increment(ref _signalRPayloadTrimmedTotal);
+        if (logged) Interlocked.Increment(ref _signalRPayloadTrimmedLogged); else Interlocked.Increment(ref _signalRPayloadTrimmedSuppressed);
+        _signalRPayloadTrimmedLastEvent = eventName;
+        Interlocked.Exchange(ref _signalRPayloadTrimmedLastItemsBefore, itemsBefore);
+        Interlocked.Exchange(ref _signalRPayloadTrimmedLastItemsAfter, itemsAfter);
+    }
     public void RecordRuntimeStatusExportFailure(bool write, string reason)
     {
         if (write) Interlocked.Increment(ref _runtimeStatusExportWriteFailures);

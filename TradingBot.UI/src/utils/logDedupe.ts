@@ -49,7 +49,13 @@ export const logContentDedupeKey = (log: LogLike): string => {
   return `${bucket}|${normalizeLogCategory(log)}|${hashString(log.message ?? '')}`;
 };
 
+export const isSuppressedSignalRPayloadTrimLog = (log: LogLike): boolean => {
+  const message = log.message ?? '';
+  return message.includes('[SIGNALR_PAYLOAD_TRIMMED]') && !message.includes('[SIGNALR_PAYLOAD_TRIMMED_SUMMARY]');
+};
+
 export const addLogDeduped = <T extends LogLike>(current: T[], next: T, max: number): T[] => {
+  if (isSuppressedSignalRPayloadTrimLog(next)) return current;
   if (!isCriticalLog(next)) {
     const idKey = next.id ? logDedupeKey(next) : undefined;
     const contentKey = logContentDedupeKey(next);
@@ -62,6 +68,7 @@ export const dedupeLogSnapshot = <T extends LogLike>(logs: T[], max: number): T[
   const seen = new Set<string>();
   const deduped: T[] = [];
   for (const log of logs) {
+    if (isSuppressedSignalRPayloadTrimLog(log)) continue;
     if (!isCriticalLog(log)) {
       const idKey = log.id ? logDedupeKey(log) : undefined;
       const contentKey = logContentDedupeKey(log);

@@ -99,6 +99,7 @@ public class TradingBotOptions
     public bool DiscoveryPartialDiagnosticsOnly { get; set; } = false;
     public MarketDiscoveryOptions Discovery { get => MarketDiscovery; set => MarketDiscovery = value ?? new(); }
     public SignalROptions SignalR { get; set; } = new();
+    public SignalRLogNoiseControlOptions SignalRLogNoiseControl { get; set; } = new();
     public RuntimeHealthOptions RuntimeHealth { get; set; } = new();
     public RuntimeMemoryOptions RuntimeMemory { get; set; } = new();
     public CacheOptions Caches { get; set; } = new();
@@ -707,6 +708,16 @@ public class SignalROptions
     public int MaxRecentLogsToBroadcast { get; set; } = 100;
     public int MaxDiagnosticsItemsToBroadcast { get; set; } = 50;
     public int MaxPayloadBytes { get; set; } = 262144;
+}
+
+public class SignalRLogNoiseControlOptions
+{
+    public bool Enabled { get; set; } = true;
+    public bool SuppressPayloadTrimmed { get; set; } = true;
+    public int PayloadTrimmedSummaryIntervalSeconds { get; set; } = 60;
+    public int PayloadTrimmedFirstNPerRun { get; set; } = 3;
+    public bool ExportCounters { get; set; } = true;
+    public bool DiagnosticsOnly { get; set; } = true;
 }
 
 public class RuntimeHealthOptions
