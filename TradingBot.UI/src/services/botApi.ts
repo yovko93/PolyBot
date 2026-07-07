@@ -65,6 +65,7 @@ export const getExecutionAudit = async (signal?: AbortSignal): Promise<any[]> =>
 export const getDryRunOrderPlans = async (signal?: AbortSignal): Promise<any[]> => keepLatest(await safeRequest<any[]>('/dry-run-order-plans?limit=100', [], signal), UIDataLimits.MaxDiagnosticsRows);
 export const getSingleMarketArbs = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/single-market-arbs', null, signal);
 export const getRuntimeHealth = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/runtime-health', null, signal);
+export const getDiagnosticsDashboard = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/diagnostics-dashboard', null, signal);
 export const getSingleMarketPaperExecutions = async (signal?: AbortSignal): Promise<any[]> => keepLatest(await safeRequest<any[]>('/single-market-paper-executions?limit=100', [], signal), 100);
 export const getPaperAccount = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/paper/account', null, signal);
 export const getPaperSettlements = async (signal?: AbortSignal): Promise<any[]> => safeRequest<any[]>('/paper/settlements', [], signal);
@@ -90,6 +91,7 @@ type BotEventHandlers = {
   onSingleMarketPaperExecutions: (x: any[]) => void;
   onPaperAccount: (x: any | null) => void;
   onRuntimeHealth: (x: any | null) => void;
+  onDiagnosticsDashboard: (x: any | null) => void;
 };
 
 
@@ -115,13 +117,13 @@ export const subscribeToBotEvents = async (handlers: BotEventHandlers): Promise<
     pollController?.abort();
     pollController = new AbortController();
     try {
-      const [status, opportunities, positions, trades, scanner, risk, logs, equity, controls, singleMarketArbs, singleMarketPaperExecutions, paperAccount, runtimeHealth] = await Promise.all([
-        getBotStatus(pollController.signal), getOpportunities(pollController.signal), getPositions(pollController.signal), getTradeLogs(pollController.signal), getScannerStats(pollController.signal), getRisk(pollController.signal), getTerminalLogs(pollController.signal), getEquity(pollController.signal), getControls(pollController.signal), getSingleMarketArbs(pollController.signal), getSingleMarketPaperExecutions(pollController.signal), getPaperAccount(pollController.signal), getRuntimeHealth(pollController.signal)
+      const [status, opportunities, positions, trades, scanner, risk, logs, equity, controls, singleMarketArbs, singleMarketPaperExecutions, paperAccount, runtimeHealth, diagnosticsDashboard] = await Promise.all([
+        getBotStatus(pollController.signal), getOpportunities(pollController.signal), getPositions(pollController.signal), getTradeLogs(pollController.signal), getScannerStats(pollController.signal), getRisk(pollController.signal), getTerminalLogs(pollController.signal), getEquity(pollController.signal), getControls(pollController.signal), getSingleMarketArbs(pollController.signal), getSingleMarketPaperExecutions(pollController.signal), getPaperAccount(pollController.signal), getRuntimeHealth(pollController.signal), getDiagnosticsDashboard(pollController.signal)
       ]);
       handlers.onStatus(status); handlers.onOpportunities(opportunities); handlers.onPositions(positions); handlers.onTrades(trades);
       if (scanner) handlers.onScanner(scanner); if (risk) handlers.onRisk(risk);
       keepLatest(logs, Math.min(50, UIDataLimits.MaxRecentLogs)).forEach(handlers.onLog); handlers.onEquity(keepLatest(equity, UIDataLimits.MaxChartPoints));
-      handlers.onControls(controls); handlers.onSingleMarketArbs(singleMarketArbs); handlers.onSingleMarketPaperExecutions(singleMarketPaperExecutions); handlers.onPaperAccount(paperAccount); handlers.onRuntimeHealth(runtimeHealth); handlers.onConnectionState('CONNECTED');
+      handlers.onControls(controls); handlers.onSingleMarketArbs(singleMarketArbs); handlers.onSingleMarketPaperExecutions(singleMarketPaperExecutions); handlers.onPaperAccount(paperAccount); handlers.onRuntimeHealth(runtimeHealth); handlers.onDiagnosticsDashboard(diagnosticsDashboard); handlers.onConnectionState('CONNECTED');
     } catch {
       handlers.onConnectionState('DISCONNECTED');
     } finally {

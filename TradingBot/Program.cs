@@ -47,6 +47,7 @@ builder.Services.AddSingleton<DryRunLiveExecutor>();
 builder.Services.AddSingleton(sp => new BotRuntimeState(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value.RuntimeState));
 builder.Services.AddSingleton<TextWriter>(originalOut);
 builder.Services.AddSingleton<IBotUiLogger, BotUiLogger>();
+builder.Services.AddSingleton(sp => new DiagnosticsDashboardService(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value));
 
 var app = builder.Build();
 app.UseCors("ui");
@@ -261,6 +262,7 @@ app.MapPost("/api/bot/controls/resume", async (BotRuntimeState s, IHubContext<Bo
 app.MapGet("/api/bot/logs/recent", (BotRuntimeState s, int? limit) => s.Logs().TakeLast(Math.Clamp(limit ?? 300, 1, 1000)).ToArray());
 app.MapGet("/api/bot/equity", (BotRuntimeState s, int? limit) => s.Equity().TakeLast(Math.Clamp(limit ?? 500, 1, 1000)).ToArray());
 app.MapGet("/api/bot/runtime-health", (BotRuntimeState s, QuietLogGate q, IOptions<TradingBotOptions> o) => { s.SetQuietLogGateStats(q.Snapshot()); if (ProcessRunContext.ValidateOrderbookCounters(s.OrderBookServiceStats) is string mismatchReason) Console.WriteLine(ProcessRunContext.FormatMismatchLog(mismatchReason, s.OrderBookServiceStats)); return Results.Ok(RuntimeHealthSnapshot.From(s, o.Value)); });
+app.MapGet("/api/bot/diagnostics-dashboard", (BotRuntimeState s, DiagnosticsDashboardService d) => Results.Ok(d.Build(s)));
 app.MapHub<BotHub>("/hubs/bot");
 
 var apiTask = app.RunAsync(listenUrl);
@@ -399,10 +401,10 @@ if (paperConfigError)
     return;
 }
 
-await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>(), app.Services.GetRequiredService<VerifiedBasketDryRunOrderBuilder>(), app.Services.GetRequiredService<DryRunFillSimulator>(), app.Services.GetRequiredService<AllowlistRepairService>(), app.Services.GetRequiredService<AllowlistRepairLockProvider>(), app.Services.GetRequiredService<MemoryGuard>(), quietLogGate, app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value, options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping);
+await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>(), app.Services.GetRequiredService<VerifiedBasketDryRunOrderBuilder>(), app.Services.GetRequiredService<DryRunFillSimulator>(), app.Services.GetRequiredService<AllowlistRepairService>(), app.Services.GetRequiredService<AllowlistRepairLockProvider>(), app.Services.GetRequiredService<MemoryGuard>(), app.Services.GetRequiredService<DiagnosticsDashboardService>(), quietLogGate, app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value, options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping);
 await apiTask;
 
-static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, VerifiedBasketExecutionCoordinator verifiedExecution, VerifiedBasketDryRunOrderBuilder dryRunBuilder, DryRunFillSimulator fillSimulator, AllowlistRepairService allowlistRepairService, AllowlistRepairLockProvider lockProvider, MemoryGuard memoryGuard, QuietLogGate quietLogGate, ExecutionOptions executionOptions, TradingBotOptions options, OpportunityFilteringOptions filtering, string contentRootPath, CancellationToken stoppingToken)
+static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, VerifiedBasketExecutionCoordinator verifiedExecution, VerifiedBasketDryRunOrderBuilder dryRunBuilder, DryRunFillSimulator fillSimulator, AllowlistRepairService allowlistRepairService, AllowlistRepairLockProvider lockProvider, MemoryGuard memoryGuard, DiagnosticsDashboardService diagnosticsDashboard, QuietLogGate quietLogGate, ExecutionOptions executionOptions, TradingBotOptions options, OpportunityFilteringOptions filtering, string contentRootPath, CancellationToken stoppingToken)
 {
     var scannerInstanceId = Guid.NewGuid().ToString("N");
     var scannerStartedAt = DateTime.UtcNow;
@@ -495,7 +497,6 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var edgeTransition = new EdgeTransitionService(options);
     var edgeCompression = new EdgeCompressionService(options);
     var spreadMicrostructure = new SpreadMicrostructureService(options, orderbookService);
-
     var config = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory).AddJsonFile("appsettings.json", optional: true).Build();
     config.GetSection(CrossExchangeOptions.SectionName).Bind(crossOptions);
     config.GetSection(ExchangeFeesOptions.SectionName).Bind(feeOptions);
@@ -2215,6 +2216,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     state.SetEdgeCompression(edgeCompressionSnapshot);
                     var spreadMarketById = discoveredMarkets.Where(x => !string.IsNullOrWhiteSpace(x.id)).GroupBy(x => x.id, StringComparer.OrdinalIgnoreCase).ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
                     state.SetSpreadMicrostructure(spreadMicrostructure.Update(focusSnapshot, edgeCompressionSnapshot, RuntimeHealthSnapshot.From(state, options), spreadMarketById, contentRootPath));
+                    var diagnosticsDashboardWritten = diagnosticsDashboard.TryWrite(state, contentRootPath, out var diagnosticsDashboardSnapshot);
+                    diagnosticsDashboard.MaybeLogSummary(diagnosticsDashboardSnapshot, diagnosticsDashboardWritten);
                     var familyLog = $"[OPPORTUNITY_FAMILY_RANKING] PricedBuckets={familyRanking.PricedFamilies.Count} UnpricedBuckets={familyRanking.UnpricedFamilies.Count} BestPricedFamily={familyRanking.BestPricedFamily} BestPricedAfterSafetyEdge={(familyRanking.BestPricedAfterSafetyEdge.HasValue ? familyRanking.BestPricedAfterSafetyEdge.Value.ToString("0.####") : "N/A")} BestUnpricedFamily={familyRanking.BestUnpricedFamily} BestUnpricedVerificationScore={familyRanking.BestUnpricedVerificationScore} ClosestToBreakEvenCount={familyRanking.ClosestToBreakEvenCount} PositiveFamilies={familyRanking.PositiveFamilies} ExecutableFamilies={familyRanking.ExecutableFamilies} InvalidRawSpikeFamilies={familyRanking.InvalidRawSpikeFamiliesCount} InvalidRawSpikeBestEdge={(familyRanking.InvalidRawSpikeBestEdge.HasValue ? familyRanking.InvalidRawSpikeBestEdge.Value.ToString("0.####") : "N/A")} InvalidRawSpikeTopReason={familyRanking.InvalidRawSpikeTopReason} Consistent={familyRanking.RankingConsistent.ToString().ToLowerInvariant()} TopRecommendedAction={familyRanking.TopRecommendedAction}";
                     if (!familyRanking.RankingConsistent)
                         Console.WriteLine($"[OPPORTUNITY_FAMILY_RANKING_CONSISTENCY_WARNING] Reason={familyRanking.RankingConsistencyReason} BestPricedFamily={familyRanking.BestPricedFamily} BestPricedAfterSafetyEdge={(familyRanking.BestPricedAfterSafetyEdge.HasValue ? familyRanking.BestPricedAfterSafetyEdge.Value.ToString("0.####") : "N/A")} TotalPositive={familyCounterSnapshot.Values.Sum(x => x.PositiveEdges)} SingleMarketValidAfterSafetyPositive={state.SingleMarketSnapshot.Summary.ValidAfterSafetyPositive}");
@@ -2944,13 +2947,6 @@ static bool IsMissingPricingReason(string? reason)
            || reason.Contains("MissingNoAsk", StringComparison.OrdinalIgnoreCase)
            || reason.Contains("MissingLeg", StringComparison.OrdinalIgnoreCase)
            || reason.Contains("MissingPricing", StringComparison.OrdinalIgnoreCase));
-
-static bool IsInvalidBestCandidateReason(string? reason)
-{
-    if (string.IsNullOrWhiteSpace(reason)) return true;
-    var invalid = new[] { "AutoCandidateUnverified", "ReviewOnly", "DiagnosticsOnly", "MissingYesAsk", "MissingNoAsk", "MissingLeg", "VerifiedGroupNotFoundInDiscoveredPool", "VerifiedGroupMissingBecauseDiscoveryIncomplete", "ResolverMissingConfiguredGroup", "SuspiciousYesNoAskSum", "DataQualityRejected", "N/A" };
-    return invalid.Any(x => reason.Equals(x, StringComparison.OrdinalIgnoreCase) || reason.Contains(x, StringComparison.OrdinalIgnoreCase));
-}
 
 static string InvalidCategory(string? reason)
     => string.IsNullOrWhiteSpace(reason) ? "N/A"
