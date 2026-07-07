@@ -401,10 +401,10 @@ if (paperConfigError)
     return;
 }
 
-await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>(), app.Services.GetRequiredService<VerifiedBasketDryRunOrderBuilder>(), app.Services.GetRequiredService<DryRunFillSimulator>(), app.Services.GetRequiredService<AllowlistRepairService>(), app.Services.GetRequiredService<AllowlistRepairLockProvider>(), app.Services.GetRequiredService<MemoryGuard>(), quietLogGate, app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value, options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping);
+await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>(), app.Services.GetRequiredService<VerifiedBasketDryRunOrderBuilder>(), app.Services.GetRequiredService<DryRunFillSimulator>(), app.Services.GetRequiredService<AllowlistRepairService>(), app.Services.GetRequiredService<AllowlistRepairLockProvider>(), app.Services.GetRequiredService<MemoryGuard>(), app.Services.GetRequiredService<DiagnosticsDashboardService>(), quietLogGate, app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value, options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping);
 await apiTask;
 
-static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, VerifiedBasketExecutionCoordinator verifiedExecution, VerifiedBasketDryRunOrderBuilder dryRunBuilder, DryRunFillSimulator fillSimulator, AllowlistRepairService allowlistRepairService, AllowlistRepairLockProvider lockProvider, MemoryGuard memoryGuard, QuietLogGate quietLogGate, ExecutionOptions executionOptions, TradingBotOptions options, OpportunityFilteringOptions filtering, string contentRootPath, CancellationToken stoppingToken)
+static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, VerifiedBasketExecutionCoordinator verifiedExecution, VerifiedBasketDryRunOrderBuilder dryRunBuilder, DryRunFillSimulator fillSimulator, AllowlistRepairService allowlistRepairService, AllowlistRepairLockProvider lockProvider, MemoryGuard memoryGuard, DiagnosticsDashboardService diagnosticsDashboard, QuietLogGate quietLogGate, ExecutionOptions executionOptions, TradingBotOptions options, OpportunityFilteringOptions filtering, string contentRootPath, CancellationToken stoppingToken)
 {
     var scannerInstanceId = Guid.NewGuid().ToString("N");
     var scannerStartedAt = DateTime.UtcNow;
@@ -497,8 +497,6 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var edgeTransition = new EdgeTransitionService(options);
     var edgeCompression = new EdgeCompressionService(options);
     var spreadMicrostructure = new SpreadMicrostructureService(options, orderbookService);
-    var diagnosticsDashboard = app.Services.GetRequiredService<DiagnosticsDashboardService>();
-
     var config = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory).AddJsonFile("appsettings.json", optional: true).Build();
     config.GetSection(CrossExchangeOptions.SectionName).Bind(crossOptions);
     config.GetSection(ExchangeFeesOptions.SectionName).Bind(feeOptions);
@@ -2949,13 +2947,6 @@ static bool IsMissingPricingReason(string? reason)
            || reason.Contains("MissingNoAsk", StringComparison.OrdinalIgnoreCase)
            || reason.Contains("MissingLeg", StringComparison.OrdinalIgnoreCase)
            || reason.Contains("MissingPricing", StringComparison.OrdinalIgnoreCase));
-
-static bool IsInvalidBestCandidateReason(string? reason)
-{
-    if (string.IsNullOrWhiteSpace(reason)) return true;
-    var invalid = new[] { "AutoCandidateUnverified", "ReviewOnly", "DiagnosticsOnly", "MissingYesAsk", "MissingNoAsk", "MissingLeg", "VerifiedGroupNotFoundInDiscoveredPool", "VerifiedGroupMissingBecauseDiscoveryIncomplete", "ResolverMissingConfiguredGroup", "SuspiciousYesNoAskSum", "DataQualityRejected", "N/A" };
-    return invalid.Any(x => reason.Equals(x, StringComparison.OrdinalIgnoreCase) || reason.Contains(x, StringComparison.OrdinalIgnoreCase));
-}
 
 static string InvalidCategory(string? reason)
     => string.IsNullOrWhiteSpace(reason) ? "N/A"

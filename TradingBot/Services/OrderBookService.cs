@@ -335,9 +335,10 @@ public class OrderBookService : IOrderBookProvider
             }
             remaining.Add(market);
         }
-        var capped = maxMarkets.HasValue && remaining.Count > maxMarkets.Value;
-        var cappedCount = capped ? remaining.Count - maxMarkets.Value : 0;
-        if (capped) remaining = remaining.Take(maxMarkets.Value).ToList();
+        var maxMarketCount = maxMarkets.GetValueOrDefault();
+        var capped = maxMarkets.HasValue && remaining.Count > maxMarketCount;
+        var cappedCount = capped ? remaining.Count - maxMarketCount : 0;
+        if (capped) remaining = remaining.Take(maxMarketCount).ToList();
         if (skippedMarketQuarantine > 0)
         {
             Interlocked.Add(ref _marketsSkippedByMarketOrderbookQuarantine, skippedMarketQuarantine);
