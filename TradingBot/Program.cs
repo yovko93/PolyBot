@@ -2587,7 +2587,7 @@ static T[] TrimPayload<T>(BotRuntimeState state, string eventName, T[] items, Tr
 {
     var result = SignalRPayloadGuard.Trim(items, options.SignalR);
     if (result.Trimmed)
-        Console.WriteLine($"[SIGNALR_PAYLOAD_TRIMMED] Event={eventName} ItemsBefore={result.ItemsBefore} ItemsAfter={result.ItemsAfter}");
+        SignalRLogNoiseController.HandlePayloadTrimmed(state, eventName, result.ItemsBefore, result.ItemsAfter, options);
     return result.Items;
 }
 
