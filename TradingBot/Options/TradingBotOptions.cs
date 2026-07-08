@@ -62,6 +62,7 @@ public class TradingBotOptions
     public TradingModeOptions TradingMode { get; set; } = new();
     public PaperRiskOptions PaperRisk { get; set; } = new();
     public PaperDiagnosticsLimitedOptions PaperDiagnosticsLimited { get; set; } = new();
+    public PaperPhase1DiscoveryFallbackOptions PaperPhase1DiscoveryFallback { get; set; } = new();
     public VerifiedBasketArbOptions VerifiedBasketArb { get; set; } = new();
     public PaperPhase2Options PaperPhase2 { get; set; } = new();
     public PaperPhaseValidationOptions PaperPhaseValidation { get; set; } = new();
@@ -275,6 +276,19 @@ public class PaperDiagnosticsLimitedOptions
     public bool RequireNoBadRequestDeltas { get; set; } = true;
     public bool RequireNoSigningAttempts { get; set; } = true;
     public bool RequireLiveTradingFalse { get; set; } = true;
+}
+
+
+public class PaperPhase1DiscoveryFallbackOptions
+{
+    public bool Enabled { get; set; } = true;
+    public string RequireProfile { get; set; } = "ReducedDiagnosticsPaperPhase1";
+    public string SnapshotPath { get; set; } = "exports/reduced-universe-last-healthy-snapshot.json";
+    public int MaxSnapshotAgeHours { get; set; } = 24;
+    public int MinMarkets { get; set; } = 500;
+    public bool RequireExplicitFlag { get; set; } = true;
+    public bool AllowWhenGammaTimeout { get; set; } = true;
+    public bool DiagnosticsOnly { get; set; } = false;
 }
 
 public class VerifiedBasketArbOptions
