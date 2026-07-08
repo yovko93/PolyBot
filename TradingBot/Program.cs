@@ -365,6 +365,8 @@ _ = Task.Run(async () =>
             var trend = RuntimeHealthTrendTracker.RecordAndAnalyze(health, options.RuntimeHealth);
             Console.WriteLine(health.ToLogLine());
             ExportRuntimeSoakStatus(state, options, app.Environment.ContentRootPath);
+            PaperPhase1ReadinessExporter.ExportLatest(health, app.Environment.ContentRootPath);
+            PaperPhase1ReadinessExporter.MaybeLog(health, options);
             lastSoakStatusLoggedAt = DateTime.UtcNow;
             Console.WriteLine(RuntimeHealthTrendTracker.ToSoakStatusLogLine(health, trend, options, state));
         }
@@ -815,8 +817,11 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         discoverySourceAuditScannerSafeSources = audit.ScannerSafeSources;
         discoverySourceAuditRecommendedAction = audit.RecommendedAction;
         UpdateDiscoveryGuardRuntimeState();
-        Console.WriteLine(RuntimeHealthSnapshot.From(state, options).ToLogLine());
-        Console.WriteLine(RuntimeHealthTrendTracker.ToSoakStatusLogLine(RuntimeHealthSnapshot.From(state, options), RuntimeHealthTrendTracker.Current(options.RuntimeHealth), options, state));
+        var phase1Health = RuntimeHealthSnapshot.From(state, options);
+        Console.WriteLine(phase1Health.ToLogLine());
+        Console.WriteLine(RuntimeHealthTrendTracker.ToSoakStatusLogLine(phase1Health, RuntimeHealthTrendTracker.Current(options.RuntimeHealth), options, state));
+        PaperPhase1ReadinessExporter.ExportLatest(phase1Health, contentRootPath);
+        PaperPhase1ReadinessExporter.MaybeLog(phase1Health, options);
         return;
     }
     Console.WriteLine($"[ALLOWLIST] Loaded verified multi-outcome groups: {multiOutcomeValidator.LoadedAllowlistCount}");

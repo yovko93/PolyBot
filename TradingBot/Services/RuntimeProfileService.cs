@@ -9,13 +9,14 @@ public sealed record RuntimeProfileResolution(string RequestedProfile,string App
 public static class RuntimeProfileService
 {
     public const string ReducedDiagnosticsFullStack = "ReducedDiagnosticsFullStack";
+    public const string ReducedDiagnosticsPaperPhase1 = "ReducedDiagnosticsPaperPhase1";
     public static RuntimeProfileResolution Resolve(string[] args, IConfiguration config)
     {
         var cli = ReadProfileAlias(args);
         var cfg = config["TradingBot:RuntimeProfile"];
         var requested = !string.IsNullOrWhiteSpace(cli) ? cli! : !string.IsNullOrWhiteSpace(cfg) ? cfg! : string.Empty;
         var source = !string.IsNullOrWhiteSpace(cli) ? "CLI" : !string.IsNullOrWhiteSpace(cfg) ? "Config" : "Default";
-        var applied = string.Equals(requested, ReducedDiagnosticsFullStack, StringComparison.OrdinalIgnoreCase) ? ReducedDiagnosticsFullStack : string.Empty;
+        var applied = string.Equals(requested, ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase) ? ReducedDiagnosticsPaperPhase1 : string.Equals(requested, ReducedDiagnosticsFullStack, StringComparison.OrdinalIgnoreCase) ? ReducedDiagnosticsFullStack : string.Empty;
         return new(requested, applied, source, FindOverrides(args));
     }
 
@@ -25,13 +26,13 @@ public static class RuntimeProfileService
         o.RuntimeProfile = r.AppliedProfile;
         o.RuntimeProfileSource = r.ProfileSource;
         o.RuntimeProfileOverrides = r.Overrides.ToArray();
-        if (!string.Equals(r.AppliedProfile, ReducedDiagnosticsFullStack, StringComparison.OrdinalIgnoreCase)) return;
+        if (!string.Equals(r.AppliedProfile, ReducedDiagnosticsFullStack, StringComparison.OrdinalIgnoreCase) && !string.Equals(r.AppliedProfile, ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase)) return;
         o.MarketDiscovery.SourceAuditOnly=false; o.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly=true; o.MarketDiscovery.ReducedUniverseRequireExplicitFlag=true; o.MarketDiscovery.ReducedUniverseBlockPaper=false; o.MarketDiscovery.ReducedUniverseMaxMarkets=2000; o.MarketDiscovery.ReducedUniverseSource="GammaOffset";
         o.StrategyOrchestrator.Enabled=true; o.StrategyOrchestrator.MaxConcurrentStrategies=4; o.StrategyOrchestrator.MaxConcurrentOrderbookConsumers=1;
         o.Strategies["SingleMarketBuyBoth"]=new(true,StrategyMode.PaperEligible,100); o.Strategies["VerifiedMultiOutcome"]=new(true,StrategyMode.ShadowPaperEligible,50); o.Strategies["AutoCandidateMultiOutcome"]=new(true,StrategyMode.ShadowPaperEligible,25); o.Strategies["MultiOutcomeNearMiss"]=new(true,StrategyMode.DiagnosticsOnly,10); o.Strategies["ExperimentalMultiOutcome"]=new(false,StrategyMode.Disabled,0);
         o.PaperDiagnosticsLimited.Enabled=true; o.PaperDiagnosticsLimited.RequireExplicitFlag=true; o.PaperDiagnosticsLimited.AllowedStrategy="SingleMarketBuyBoth"; o.PaperDiagnosticsLimited.MaxOpenPositions=1; o.PaperDiagnosticsLimited.MaxPaperNotionalPerTrade=5m; o.PaperDiagnosticsLimited.MaxPaperTotalExposure=5m; o.PaperDiagnosticsLimited.MaxPaperOpensPerHour=1; o.PaperDiagnosticsLimited.MinEdgeOverride=0.01m;
         o.SingleMarketOpportunityAudit.Enabled=true; o.SingleMarketOpportunityAudit.NearMissExportEnabled=true; o.SingleMarketOpportunityAudit.NearMissTopN=50; o.SingleMarketOpportunityAudit.EmitCycleSummary=true; o.SingleMarketArb.AuditBelowMinEdgeEvents=true; o.SingleMarketArb.TopNearMissCount=50; o.SingleMarketArb.LogBatchSummaries=true;
-        o.EnableLiveExecution=false; o.EnablePaperTrading=true; o.PaperOnly=true; o.TradingMode.LiveTradingEnabled=false; o.TradingMode.PaperTradingEnabled=true; o.TradingMode.PaperPhase=2; o.PaperPhaseValidation.Enabled=false; o.PaperSettlementValidation.Enabled=false;
+        o.EnableLiveExecution=false; o.EnablePaperTrading=true; o.PaperOnly=true; o.TradingMode.LiveTradingEnabled=false; o.TradingMode.PaperTradingEnabled=true; o.TradingMode.PaperPhase= string.Equals(r.AppliedProfile, ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase) ? 1 : 2; o.PaperPhaseValidation.Enabled=false; o.PaperSettlementValidation.Enabled=false;
         o.AutoCandidatePricing.Enabled=true; o.AutoCandidatePricing.MaxCandidatesPerCycle=25; o.AutoCandidatePricing.RequireOrderbookStableNow=true; o.AutoCandidatePricing.RequireReducedUniverseOrderbookStableNow=true; o.AutoCandidatePricing.DiagnosticsOnly=true;
         o.OpportunityFamilyRanking.Enabled=true; o.OpportunityFamilyRanking.MaxFamilies=100; o.OpportunityFamilyRanking.ExportEnabled=true;
         o.FocusUniverse.Enabled=true; o.FocusUniverse.MaxWatchlistItems=50; o.FocusUniverse.MaxRefreshPerCycle=10; o.FocusUniverse.MinCandidateAfterSafetyEdge=-0.01m; o.FocusUniverse.RequireValidPriced=true; o.FocusUniverse.RequireOrderbookStableNow=true; o.FocusUniverse.RequireReducedUniverseOrderbookStableNow=true; o.FocusUniverse.UseSharedOrderbookCache=true; o.FocusUniverse.DiagnosticsOnly=true; o.FocusUniverse.ExportEnabled=true;
@@ -54,7 +55,7 @@ public static class RuntimeProfileService
 
     public static void ValidateSafety(TradingBotOptions o)
     {
-        if (!string.Equals(o.RuntimeProfile, ReducedDiagnosticsFullStack, StringComparison.OrdinalIgnoreCase)) return;
+        if (!string.Equals(o.RuntimeProfile, ReducedDiagnosticsFullStack, StringComparison.OrdinalIgnoreCase) && !string.Equals(o.RuntimeProfile, ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase)) return;
         var violations = new List<string>();
         if (o.TradingMode.LiveTradingEnabled || o.EnableLiveExecution) violations.Add("LiveTradingEnabledMustBeFalse");
         if (!o.PaperDiagnosticsLimited.Enabled) violations.Add("PaperDiagnosticsLimitedMustBeEnabled");
