@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using TradingBot.Api;
 using TradingBot.Options;
 
 namespace TradingBot.Services;
