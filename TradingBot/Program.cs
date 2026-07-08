@@ -674,48 +674,42 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         rejectReason = "None";
         var cfg = options.PaperPhase1DiscoveryFallback;
         var path = ReducedUniverseSnapshotPath();
-        bool Reject(string reason, double? ageHours = null, int markets = 0)
-        {
-            rejectReason = reason;
-            Console.WriteLine($"[PAPER_PHASE1_DISCOVERY_FALLBACK_REJECTED] Reason={reason} SnapshotAgeHours={(ageHours?.ToString("0.##") ?? "N/A")} Markets={markets} ProcessRunId={ProcessRunContext.ProcessRunId}");
-            return false;
-        }
-        if (!cfg.Enabled) return Reject("Disabled");
-        if (!string.Equals(options.RuntimeProfile, cfg.RequireProfile, StringComparison.OrdinalIgnoreCase)) return Reject("ProfileMismatch");
-        if (options.TradingMode.LiveTradingEnabled || options.EnableLiveExecution) return Reject("LiveTradingEnabled");
-        if (!options.TradingMode.PaperTradingEnabled || !options.EnablePaperTrading) return Reject("PaperTradingDisabled");
-        if (LiveTradingGuard.SigningAttempts != 0) return Reject("SigningAttemptsDetected");
-        if (cfg.RequireExplicitFlag && (!options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly || (options.MarketDiscovery.ReducedUniverseRequireExplicitFlag && !options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly))) return Reject("ExplicitFlagMissing");
+        if (!cfg.Enabled) return RejectPaperPhase1DiscoveryFallback(out rejectReason, "Disabled");
+        if (!string.Equals(options.RuntimeProfile, cfg.RequireProfile, StringComparison.OrdinalIgnoreCase)) return RejectPaperPhase1DiscoveryFallback(out rejectReason, "ProfileMismatch");
+        if (options.TradingMode.LiveTradingEnabled || options.EnableLiveExecution) return RejectPaperPhase1DiscoveryFallback(out rejectReason, "LiveTradingEnabled");
+        if (!options.TradingMode.PaperTradingEnabled || !options.EnablePaperTrading) return RejectPaperPhase1DiscoveryFallback(out rejectReason, "PaperTradingDisabled");
+        if (LiveTradingGuard.SigningAttempts != 0) return RejectPaperPhase1DiscoveryFallback(out rejectReason, "SigningAttemptsDetected");
+        if (cfg.RequireExplicitFlag && (!options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly || (options.MarketDiscovery.ReducedUniverseRequireExplicitFlag && !options.MarketDiscovery.AllowReducedUniverseDiagnosticsOnly))) return RejectPaperPhase1DiscoveryFallback(out rejectReason, "ExplicitFlagMissing");
         var gammaFailed = attemptSummary.StoppedReason?.Contains("Timeout", StringComparison.OrdinalIgnoreCase) == true
             || attemptSummary.LastDiscoveryError?.Contains("Timeout", StringComparison.OrdinalIgnoreCase) == true
             || attemptSummary.DiscoveryLastFailureKind.Contains("Timeout", StringComparison.OrdinalIgnoreCase)
             || attemptSummary.StoppedReason?.Contains("GammaOffsetCapIncomplete", StringComparison.OrdinalIgnoreCase) == true
             || attemptSummary.LastDiscoveryError?.Contains("GammaOffsetCapIncomplete", StringComparison.OrdinalIgnoreCase) == true
             || attemptSummary.DiscoveryLastFailureKind.Contains("GammaOffsetCapIncomplete", StringComparison.OrdinalIgnoreCase);
-        if (cfg.AllowWhenGammaTimeout && !gammaFailed) return Reject("LiveDiscoveryFailureNotAllowed");
-        if (activeDiscoveryMarkets >= cfg.MinMarkets) return Reject("LiveDiscoverySufficient");
-        if (!File.Exists(path)) return Reject("SnapshotMissing");
+        if (cfg.AllowWhenGammaTimeout && !gammaFailed) return RejectPaperPhase1DiscoveryFallback(out rejectReason, "LiveDiscoveryFailureNotAllowed");
+        if (activeDiscoveryMarkets >= cfg.MinMarkets) return RejectPaperPhase1DiscoveryFallback(out rejectReason, "LiveDiscoverySufficient");
+        if (!File.Exists(path)) return RejectPaperPhase1DiscoveryFallback(out rejectReason, "SnapshotMissing");
         ReducedUniverseHealthySnapshot? snapshot;
         try { snapshot = Newtonsoft.Json.JsonConvert.DeserializeObject<ReducedUniverseHealthySnapshot>(File.ReadAllText(path)); }
-        catch (Exception ex) { return Reject($"SnapshotReadError:{ex.Message.Replace(' ', '_')}"); }
-        if (snapshot is null) return Reject("InvalidSchema");
+        catch (Exception ex) { return RejectPaperPhase1DiscoveryFallback(out rejectReason, $"SnapshotReadError:{ex.Message.Replace(' ', '_')}"); }
+        if (snapshot is null) return RejectPaperPhase1DiscoveryFallback(out rejectReason, "InvalidSchema");
         var age = DateTime.UtcNow - snapshot.GeneratedAtUtc;
         var ageHours = Math.Max(0, age.TotalHours);
-        if (age > TimeSpan.FromHours(Math.Max(1, cfg.MaxSnapshotAgeHours))) return Reject("SnapshotTooOld", ageHours, snapshot.MarketCount);
-        if (snapshot.MarketCount < cfg.MinMarkets) return Reject("SnapshotTooSmall", ageHours, snapshot.MarketCount);
-        if (!snapshot.Integrity.UniqueMarketIds || !snapshot.Integrity.ValidTokenIds || !snapshot.Integrity.MarketCountMatches) return Reject("SnapshotIntegrityInvalid", ageHours, snapshot.MarketCount);
-        if (!string.Equals(snapshot.Source, "GammaOffset", StringComparison.OrdinalIgnoreCase)) return Reject("SnapshotSourceMismatch", ageHours, snapshot.MarketCount);
-        if (!string.Equals(snapshot.DiscoveryMode, "ReducedUniverseDiagnosticsOnly", StringComparison.OrdinalIgnoreCase)) return Reject("SnapshotDiscoveryModeMismatch", ageHours, snapshot.MarketCount);
+        if (age > TimeSpan.FromHours(Math.Max(1, cfg.MaxSnapshotAgeHours))) return RejectPaperPhase1DiscoveryFallback(out rejectReason, "SnapshotTooOld", ageHours, snapshot.MarketCount);
+        if (snapshot.MarketCount < cfg.MinMarkets) return RejectPaperPhase1DiscoveryFallback(out rejectReason, "SnapshotTooSmall", ageHours, snapshot.MarketCount);
+        if (!snapshot.Integrity.UniqueMarketIds || !snapshot.Integrity.ValidTokenIds || !snapshot.Integrity.MarketCountMatches) return RejectPaperPhase1DiscoveryFallback(out rejectReason, "SnapshotIntegrityInvalid", ageHours, snapshot.MarketCount);
+        if (!string.Equals(snapshot.Source, "GammaOffset", StringComparison.OrdinalIgnoreCase)) return RejectPaperPhase1DiscoveryFallback(out rejectReason, "SnapshotSourceMismatch", ageHours, snapshot.MarketCount);
+        if (!string.Equals(snapshot.DiscoveryMode, "ReducedUniverseDiagnosticsOnly", StringComparison.OrdinalIgnoreCase)) return RejectPaperPhase1DiscoveryFallback(out rejectReason, "SnapshotDiscoveryModeMismatch", ageHours, snapshot.MarketCount);
         if (!string.Equals(options.PaperDiagnosticsLimited.AllowedStrategy, "SingleMarketBuyBoth", StringComparison.OrdinalIgnoreCase)
             || options.PaperDiagnosticsLimited.MaxOpenPositions != 1
             || options.PaperDiagnosticsLimited.MaxPaperNotionalPerTrade != 5m
             || options.PaperDiagnosticsLimited.MaxPaperTotalExposure != 5m
             || options.PaperDiagnosticsLimited.MaxPaperOpensPerHour != 1
-            || options.PaperDiagnosticsLimited.MinEdgeOverride != 0.01m) return Reject("SafeLimitsMismatch", ageHours, snapshot.MarketCount);
+            || options.PaperDiagnosticsLimited.MinEdgeOverride != 0.01m) return RejectPaperPhase1DiscoveryFallback(out rejectReason, "SafeLimitsMismatch", ageHours, snapshot.MarketCount);
         var restored = snapshot.Markets.Select(m => new Market { id = m.MarketId, conditionId = m.ConditionId, question = m.Question, active = m.Active, closed = m.Closed, archived = m.Archived, clobTokenIds = (m.TokenIds ?? Array.Empty<string>()).ToList(), outcomes = (m.Outcomes ?? Array.Empty<string>()).ToList() }).Where(m => !string.IsNullOrWhiteSpace(m.id) && m.clobTokenIds.Count >= 2).ToList();
-        if (restored.Count < cfg.MinMarkets) return Reject("SnapshotTooSmall", ageHours, restored.Count);
+        if (restored.Count < cfg.MinMarkets) return RejectPaperPhase1DiscoveryFallback(out rejectReason, "SnapshotTooSmall", ageHours, restored.Count);
         reducedUniverseFilter = orderbookService.FilterReducedUniverseOrderbookEligibleMarkets(restored);
-        if (reducedUniverseFilter.EligibleMarkets < cfg.MinMarkets) return Reject("SnapshotEligibleTooSmall", ageHours, reducedUniverseFilter.EligibleMarkets);
+        if (reducedUniverseFilter.EligibleMarkets < cfg.MinMarkets) return RejectPaperPhase1DiscoveryFallback(out rejectReason, "SnapshotEligibleTooSmall", ageHours, reducedUniverseFilter.EligibleMarkets);
         discoveredMarkets = reducedUniverseFilter.Markets.ToList();
         discoveryUsingLastHealthySnapshot = true;
         discoveryPersistedSnapshotLoaded = true;
@@ -3085,6 +3079,13 @@ static string InvalidCategory(string? reason)
         : reason.Contains("DataQuality", StringComparison.OrdinalIgnoreCase) || reason.Contains("Suspicious", StringComparison.OrdinalIgnoreCase) ? "DataQualityRejected"
         : reason;
 
+
+static bool RejectPaperPhase1DiscoveryFallback(out string rejectReason, string reason, double? ageHours = null, int markets = 0)
+{
+    rejectReason = reason;
+    Console.WriteLine($"[PAPER_PHASE1_DISCOVERY_FALLBACK_REJECTED] Reason={reason} SnapshotAgeHours={(ageHours?.ToString("0.##") ?? "N/A")} Markets={markets} ProcessRunId={ProcessRunContext.ProcessRunId}");
+    return false;
+}
 
 public class MultiTextWriter(TextWriter original, Action<string> mirror) : TextWriter
 {
