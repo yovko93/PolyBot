@@ -66,6 +66,7 @@ export const getDryRunOrderPlans = async (signal?: AbortSignal): Promise<any[]> 
 export const getSingleMarketArbs = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/single-market-arbs', null, signal);
 export const getRuntimeHealth = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/runtime-health', null, signal);
 export const getDiagnosticsDashboard = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/diagnostics-dashboard', null, signal);
+export const getDiagnosticsDashboardHistory = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/diagnostics-dashboard-history', null, signal);
 export const getSingleMarketPaperExecutions = async (signal?: AbortSignal): Promise<any[]> => keepLatest(await safeRequest<any[]>('/single-market-paper-executions?limit=100', [], signal), 100);
 export const getPaperAccount = async (signal?: AbortSignal): Promise<any | null> => safeRequest<any | null>('/paper/account', null, signal);
 export const getPaperSettlements = async (signal?: AbortSignal): Promise<any[]> => safeRequest<any[]>('/paper/settlements', [], signal);

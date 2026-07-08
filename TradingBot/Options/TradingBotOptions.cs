@@ -101,6 +101,7 @@ public class TradingBotOptions
     public SignalROptions SignalR { get; set; } = new();
     public SignalRLogNoiseControlOptions SignalRLogNoiseControl { get; set; } = new();
     public DiagnosticsDashboardOptions DiagnosticsDashboard { get; set; } = new();
+    public DiagnosticsDashboardHistoryOptions DiagnosticsDashboardHistory { get; set; } = new();
     public RuntimeHealthOptions RuntimeHealth { get; set; } = new();
     public RuntimeMemoryOptions RuntimeMemory { get; set; } = new();
     public CacheOptions Caches { get; set; } = new();
@@ -133,6 +134,22 @@ public class DiagnosticsDashboardOptions
     public bool IncludeTopItems { get; set; } = true;
     public int TopItemsLimit { get; set; } = 10;
     public int WriteIntervalSeconds { get; set; } = 15;
+    public bool DiagnosticsOnly { get; set; } = true;
+}
+
+public class DiagnosticsDashboardHistoryOptions
+{
+    public bool Enabled { get; set; } = true;
+    public bool RequireDiagnosticsDashboard { get; set; } = true;
+    public bool ExportEnabled { get; set; } = true;
+    public string HistoryPath { get; set; } = "exports/diagnostics-dashboard-history-latest.json";
+    public string JsonlPath { get; set; } = "exports/diagnostics-dashboard-history.jsonl";
+    public string CsvPath { get; set; } = "exports/diagnostics-dashboard-history.csv";
+    public int SampleIntervalSeconds { get; set; } = 60;
+    public int MaxInMemorySamples { get; set; } = 1440;
+    public int MaxJsonlFileMb { get; set; } = 50;
+    public bool CsvEnabled { get; set; } = true;
+    public bool JsonlEnabled { get; set; } = true;
     public bool DiagnosticsOnly { get; set; } = true;
 }
 
