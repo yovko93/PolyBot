@@ -18,6 +18,14 @@ public static class PaperPhase1ReadinessExporter
         armed = h.PaperPhase1Armed,
         readiness = h.PaperPhase1Readiness,
         readinessReason = h.PaperPhase1ReadinessReason,
+        readinessLastEvaluatedUtc = h.PaperPhase1ReadinessLastEvaluatedUtc,
+        readinessEvaluationCount = h.PaperPhase1ReadinessEvaluationCount,
+        readinessCurrentBlockingReasons = h.PaperPhase1ReadinessCurrentBlockingReasons,
+        readinessUsedCurrentMemoryStable = h.PaperPhase1ReadinessUsedCurrentMemoryStable,
+        readinessUsedCurrentWarmupComplete = h.PaperPhase1ReadinessUsedCurrentWarmupComplete,
+        readinessUsedCurrentLogVolumeStable = h.PaperPhase1ReadinessUsedCurrentLogVolumeStable,
+        readinessUsedCurrentReducedUniversePaperAllowed = h.PaperPhase1ReadinessUsedCurrentReducedUniversePaperAllowed,
+        staleReasonClearedCount = h.PaperPhase1ReadinessStaleReasonClearedCount,
         allowedStrategy = h.PaperPhase1AllowedStrategy,
         liveTradingDisabled = h.PaperPhase1LiveTradingDisabled,
         signingDisabled = h.PaperPhase1SigningDisabled,
@@ -48,10 +56,14 @@ public static class PaperPhase1ReadinessExporter
     {
         var now = DateTime.UtcNow;
         var interval = TimeSpan.FromSeconds(Math.Max(1, options.DiagnosticsDashboard.WriteIntervalSeconds));
+        if (h.PaperPhase1ReadinessReason.Contains("MemoryNotStable", StringComparison.OrdinalIgnoreCase) && h.PaperPhase1ReadinessUsedCurrentMemoryStable && h.PaperPhase1ReadinessUsedCurrentWarmupComplete)
+        {
+            Console.WriteLine($"[PAPER_PHASE1_READINESS_STALE_REASON_WARNING] Reason=MemoryNotStableButCurrentMemoryStable MemoryStable={h.PaperPhase1ReadinessUsedCurrentMemoryStable.ToString().ToLowerInvariant()} WarmupComplete={h.PaperPhase1ReadinessUsedCurrentWarmupComplete.ToString().ToLowerInvariant()} ScannerPausedByMemoryGuard=false ProcessRunId={h.ProcessRunId}");
+        }
         if (now - _lastReadinessLogUtc >= interval)
         {
             _lastReadinessLogUtc = now;
-            Console.WriteLine($"[PAPER_PHASE1_READINESS] Enabled={h.PaperPhase1Enabled.ToString().ToLowerInvariant()} Profile={h.RuntimeProfile} Armed={h.PaperPhase1Armed.ToString().ToLowerInvariant()} Readiness={h.PaperPhase1Readiness.ToString().ToLowerInvariant()} Reason={h.PaperPhase1ReadinessReason} AllowedStrategy={h.PaperPhase1AllowedStrategy} MaxOpenPositions={h.PaperPhase1MaxOpenPositions} MaxNotional={h.PaperPhase1MaxNotionalPerTrade:0.####} MaxExposure={h.PaperPhase1MaxTotalExposure:0.####} MinEdge={h.PaperPhase1MinEdge:0.####} LiveTradingDisabled={h.PaperPhase1LiveTradingDisabled.ToString().ToLowerInvariant()} SigningDisabled={h.PaperPhase1SigningDisabled.ToString().ToLowerInvariant()} ReducedUniversePaperExplicitlyAllowed={h.PaperPhase1ReducedUniversePaperExplicitlyAllowed.ToString().ToLowerInvariant()} FallbackAccepted={h.PaperPhase1DiscoveryFallbackAccepted.ToString().ToLowerInvariant()} UsingPersistedSnapshot={h.PaperPhase1UsingPersistedSnapshot.ToString().ToLowerInvariant()} ProcessRunId={h.ProcessRunId}");
+            Console.WriteLine($"[PAPER_PHASE1_READINESS] Enabled={h.PaperPhase1Enabled.ToString().ToLowerInvariant()} Profile={h.RuntimeProfile} Armed={h.PaperPhase1Armed.ToString().ToLowerInvariant()} Readiness={h.PaperPhase1Readiness.ToString().ToLowerInvariant()} Reason={h.PaperPhase1ReadinessReason} AllowedStrategy={h.PaperPhase1AllowedStrategy} MaxOpenPositions={h.PaperPhase1MaxOpenPositions} MaxNotional={h.PaperPhase1MaxNotionalPerTrade:0.####} MaxExposure={h.PaperPhase1MaxTotalExposure:0.####} MinEdge={h.PaperPhase1MinEdge:0.####} LiveTradingDisabled={h.PaperPhase1LiveTradingDisabled.ToString().ToLowerInvariant()} SigningDisabled={h.PaperPhase1SigningDisabled.ToString().ToLowerInvariant()} ReducedUniversePaperExplicitlyAllowed={h.PaperPhase1ReducedUniversePaperExplicitlyAllowed.ToString().ToLowerInvariant()} ReadinessLastEvaluatedUtc={h.PaperPhase1ReadinessLastEvaluatedUtc:O} ReadinessEvaluationCount={h.PaperPhase1ReadinessEvaluationCount} CurrentBlockingReasons={h.PaperPhase1ReadinessCurrentBlockingReasons} FallbackAccepted={h.PaperPhase1DiscoveryFallbackAccepted.ToString().ToLowerInvariant()} UsingPersistedSnapshot={h.PaperPhase1UsingPersistedSnapshot.ToString().ToLowerInvariant()} ProcessRunId={h.ProcessRunId}");
         }
         if (now - _lastGateLogUtc >= interval)
         {
