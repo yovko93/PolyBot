@@ -63,6 +63,7 @@ public class TradingBotOptions
     public PaperRiskOptions PaperRisk { get; set; } = new();
     public PaperDiagnosticsLimitedOptions PaperDiagnosticsLimited { get; set; } = new();
     public PaperPhase1DiscoveryFallbackOptions PaperPhase1DiscoveryFallback { get; set; } = new();
+    public PaperPhase1EligibilityLadderOptions PaperPhase1EligibilityLadder { get; set; } = new();
     public VerifiedBasketArbOptions VerifiedBasketArb { get; set; } = new();
     public PaperPhase2Options PaperPhase2 { get; set; } = new();
     public PaperPhaseValidationOptions PaperPhaseValidation { get; set; } = new();
@@ -278,6 +279,21 @@ public class PaperDiagnosticsLimitedOptions
     public bool RequireLiveTradingFalse { get; set; } = true;
 }
 
+
+
+public class PaperPhase1EligibilityLadderOptions
+{
+    public bool Enabled { get; set; } = false;
+    public bool ExportEnabled { get; set; } = false;
+    public string ExportPath { get; set; } = "exports/paper-phase1-near-eligible-latest.json";
+    public int MaxItems { get; set; } = 250;
+    public decimal NearEdgeWindow { get; set; } = 0.015m;
+    public bool TrackValidPricedOnly { get; set; } = true;
+    public bool IncludeInvalidTopReasons { get; set; } = true;
+    public bool IncludeMissingPricingSummary { get; set; } = true;
+    public bool IncludeGateBreakdown { get; set; } = true;
+    public bool DiagnosticsOnly { get; set; } = true;
+}
 
 public class PaperPhase1DiscoveryFallbackOptions
 {

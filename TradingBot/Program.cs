@@ -366,6 +366,7 @@ _ = Task.Run(async () =>
             Console.WriteLine(health.ToLogLine());
             ExportRuntimeSoakStatus(state, options, app.Environment.ContentRootPath);
             PaperPhase1ReadinessExporter.ExportLatest(health, app.Environment.ContentRootPath);
+            PaperPhase1EligibilityLadderExporter.ExportLatest(state, options, health, app.Environment.ContentRootPath);
             PaperPhase1ReadinessExporter.MaybeLog(health, options);
             lastSoakStatusLoggedAt = DateTime.UtcNow;
             Console.WriteLine(RuntimeHealthTrendTracker.ToSoakStatusLogLine(health, trend, options, state));
@@ -922,6 +923,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         Console.WriteLine(phase1Health.ToLogLine());
         Console.WriteLine(RuntimeHealthTrendTracker.ToSoakStatusLogLine(phase1Health, RuntimeHealthTrendTracker.Current(options.RuntimeHealth), options, state));
         PaperPhase1ReadinessExporter.ExportLatest(phase1Health, contentRootPath);
+        PaperPhase1EligibilityLadderExporter.ExportLatest(state, options, phase1Health, contentRootPath);
         PaperPhase1ReadinessExporter.MaybeLog(phase1Health, options);
         return;
     }
