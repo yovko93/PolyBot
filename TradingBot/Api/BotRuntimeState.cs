@@ -476,7 +476,7 @@ public class BotRuntimeState
         if (exportQueueCount is int eq) Interlocked.Exchange(ref _exportQueueCount, eq);
         if (patchPreviewItemsCount is int pp) Interlocked.Exchange(ref _patchPreviewItemsCount, pp);
     }
-    public void ApplyReadinessInvariantCorrections(bool sourceAuditOnly)
+    public void ApplyReadinessInvariantCorrections(bool sourceAuditOnly, TradingBot.Options.TradingBotOptions? options = null)
     {
         var reasons = new List<string>();
         var scannerSafe = DiscoveryScannerSafeSourceAvailable;
@@ -496,10 +496,17 @@ public class BotRuntimeState
         }
         if (!DiscoveryHealthy)
         {
-            if (DiscoveryStable || LongRunStable) reasons.Add("UnhealthyDiscoveryRequiresUnstableRuntime");
+            var expectedReducedUniverseGlobalBlock = options is not null
+                && string.Equals(options.RuntimeProfile, TradingBot.Services.RuntimeProfileService.ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(DiscoverySelectedSource, "ReducedUniverseDiagnosticsOnly", StringComparison.OrdinalIgnoreCase)
+                && AllowReducedUniverseDiagnosticsOnly
+                && ReducedUniverseExplicitFlagSatisfied
+                && !TradingReadiness
+                && (SoakReadiness.Equals("Blocked", StringComparison.OrdinalIgnoreCase) || SoakReadiness.Equals("BlockedReducedUniverseDiagnosticsOnly", StringComparison.OrdinalIgnoreCase));
+            if ((DiscoveryStable || LongRunStable) && !expectedReducedUniverseGlobalBlock) reasons.Add("UnhealthyDiscoveryRequiresUnstableRuntime");
             Interlocked.Exchange(ref _discoveryStable, 0);
             Interlocked.Exchange(ref _longRunStable, 0);
-            if (string.IsNullOrWhiteSpace(_longRunBlockingReason) || _longRunBlockingReason == "None") _longRunBlockingReason = "DiscoveryUnavailable";
+            if (string.IsNullOrWhiteSpace(_longRunBlockingReason) || _longRunBlockingReason == "None") _longRunBlockingReason = expectedReducedUniverseGlobalBlock ? "ExpectedReducedUniverseGlobalBlock" : "DiscoveryUnavailable";
         }
         if (DiscoverySelectedSource.Equals("Blocked", StringComparison.OrdinalIgnoreCase) && SoakReadiness.Equals("Ready", StringComparison.OrdinalIgnoreCase))
         {

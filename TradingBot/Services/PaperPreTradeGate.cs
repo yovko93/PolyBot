@@ -52,6 +52,26 @@ public sealed class PaperPreTradeGate(TradingBotOptions options)
     {
         if (!_options.TradingMode.PaperTradingEnabled || !_options.EnablePaperTrading) return Reject("PaperTradingDisabled");
         if (_options.TradingMode.LiveTradingEnabled || _options.EnableLiveExecution) return Reject("LiveTradingEnabled");
+        if (_options.TradingMode.PaperPhase == 1)
+        {
+            var p = _options.PaperDiagnosticsLimited;
+            if (!string.Equals(_options.RuntimeProfile, RuntimeProfileService.ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase)) return Reject("PaperPhase1ProfileNotActive");
+            if (!p.Enabled) return Reject("PaperDiagnosticsLimitedDisabled");
+            if (!string.Equals(o.Strategy, "SingleMarketBuyBoth", StringComparison.OrdinalIgnoreCase)) { Console.WriteLine($"[PAPER_PHASE1_CRITICAL_BLOCK] Reason=NonAllowedStrategyPaperAttempt Strategy={o.Strategy} ProcessRunId={TradingBot.Api.ProcessRunContext.ProcessRunId}"); return Reject("NonAllowedStrategyPaperAttempt"); }
+            if (!string.Equals(p.AllowedStrategy, "SingleMarketBuyBoth", StringComparison.OrdinalIgnoreCase)) return Reject("AllowedStrategyMismatch");
+            if (!_options.Strategies.TryGetValue("SingleMarketBuyBoth", out var singleMode) || singleMode.Mode != StrategyMode.PaperEligible) return Reject("SingleMarketModeNotPaperEligible");
+            if (_options.Strategies.Where(x => !x.Key.Equals("SingleMarketBuyBoth", StringComparison.OrdinalIgnoreCase)).Any(x => x.Value.Mode == StrategyMode.PaperEligible)) return Reject("NonAllowedStrategyPaperEligible");
+            if (a.OpenPositionsTotal >= p.MaxOpenPositions) return Reject("MaxOpenPositionsReached");
+            if (a.TotalExposure + o.Notional > p.MaxPaperTotalExposure) return Reject("MaxPaperTotalExposureExceeded");
+            if (o.Notional > p.MaxPaperNotionalPerTrade) return Reject("MaxPaperNotionalPerTradeExceeded");
+            if (a.HourlyOpenCount >= p.MaxPaperOpensPerHour) return Reject("MaxPaperOpensPerHourReached");
+            if (o.ExpectedProfit <= 0 || o.Notional <= 0 || (o.ExpectedProfit / o.Notional) < p.MinEdgeOverride) return Reject("BelowMinEdge");
+            if (!o.StableEdgePassed) return Reject("EdgeUnstable");
+            if (!o.FillSimulationPassed) return Reject("FillSimulationFailed");
+            if (!o.DataQualityPassed) return Reject("DataQualityFailed");
+            if (o.DuplicatePositionOpen) return Reject("DuplicateOpenPosition");
+            if (o.CooldownActive) return Reject("CooldownActive");
+        }
         if (!o.PaperOnly || !_options.PaperOnly) return Reject("PaperOnlyRequired");
         if (o.StrategyKind == PaperStrategyKind.SingleMarket && !_options.PaperRisk.AllowSingleMarketPaper) return Reject("StrategyNotAllowed");
         if (o.StrategyKind == PaperStrategyKind.VerifiedBasket && !_options.PaperRisk.AllowVerifiedBasketPaper) return Reject("StrategyNotAllowed");

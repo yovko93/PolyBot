@@ -13,6 +13,9 @@ public sealed class DiagnosticsDashboardHistoryService(TradingBotOptions options
     private readonly List<DiagnosticsDashboardHistorySample> _samples = new();
     private DateTime _lastSampleUtc = DateTime.MinValue;
     private DateTime _lastWarningUtc = DateTime.MinValue;
+    private DateTime _lastWriteWarningUtc = DateTime.MinValue;
+    public static bool DiagnosticsDashboardHistoryLastWriteOk { get; private set; } = true;
+    public static string DiagnosticsDashboardHistoryLastWriteError { get; private set; } = "None";
     public static DiagnosticsDashboardHistoryTrend CurrentTrend { get; private set; } = new(false, 0, null, null, null, null, null, null, null, null, null, null, true);
     public object CurrentHistory => BuildHistory();
 
@@ -63,10 +66,57 @@ public sealed class DiagnosticsDashboardHistoryService(TradingBotOptions options
         L(j,"edgeTransition.tracked"), L(j,"edgeTransition.improving"), L(j,"edgeTransition.worsening"), L(j,"edgeTransition.stableNearBreakEven"), L(j,"edgeTransition.alertCandidates"), L(j,"edgeTransition.positiveCandidates"), N(j,"edgeTransition.bestCurrentEdge"),
         L(j,"edgeCompression.items"), L(j,"edgeCompression.nearBreakEven"), L(j,"edgeCompression.rawPositive"), L(j,"edgeCompression.afterCostPositive"), L(j,"edgeCompression.afterSafetyPositive"), N(j,"edgeCompression.bestDistanceToBreakEven"), S(j,"edgeCompression.dominantDragComponent"),
         L(j,"spreadMicrostructure.items"), L(j,"spreadMicrostructure.alreadyNearExecutable"), L(j,"spreadMicrostructure.thinTopBook"), L(j,"spreadMicrostructure.depthSufficient"), N(j,"spreadMicrostructure.bestMoveNeededToBreakEven"), N(j,"spreadMicrostructure.medianMoveNeededToBreakEven"), L(j,"spreadMicrostructure.minTicksToBreakEven"), S(j,"spreadMicrostructure.dominantCause"),
-        L(j,"signalR.payloadTrimmedTotal"), L(j,"signalR.payloadTrimmedSuppressed"), L(j,"allowlist.healthy"), L(j,"allowlist.monitoringOnly"), L(j,"allowlist.reviewOnly"), B(j,"allowlist.refreshAutoApply"));
+        L(j,"signalR.payloadTrimmedTotal"), L(j,"signalR.payloadTrimmedSuppressed"), L(j,"allowlist.healthy"), L(j,"allowlist.monitoringOnly"), L(j,"allowlist.reviewOnly"), B(j,"allowlist.refreshAutoApply"), L(j,"paperPhase1EligibilityLadder.validPriced"), L(j,"paperPhase1EligibilityLadder.nearBreakEven"), L(j,"paperPhase1EligibilityLadder.positiveAfterSafety"), L(j,"paperPhase1EligibilityLadder.paperEligible"), N(j,"paperPhase1EligibilityLadder.bestAfterSafetyEdge"), N(j,"paperPhase1EligibilityLadder.bestDistanceToMinEdge"), S(j,"paperPhase1EligibilityLadder.topBlockingReason"));
 
     private object BuildHistory() { lock(_lock) return new { generatedAtUtc=DateTime.UtcNow, processRunId=ProcessRunContext.ProcessRunId, enabled=options.DiagnosticsDashboardHistory.Enabled, diagnosticsOnly=options.DiagnosticsDashboardHistory.DiagnosticsOnly, sampleIntervalSeconds=options.DiagnosticsDashboardHistory.SampleIntervalSeconds, sampleCount=_samples.Count, oldestSampleUtc=_samples.FirstOrDefault()?.TimestampUtc, newestSampleUtc=_samples.LastOrDefault()?.TimestampUtc, overallConsistent=CurrentTrend.Consistent, warnings=Array.Empty<string>(), samples=_samples.ToArray() }; }
-    private void WriteLatest(string root) { try { var p=PathFor(root, options.DiagnosticsDashboardHistory.HistoryPath); Directory.CreateDirectory(Path.GetDirectoryName(p)!); var json=JsonSerializer.Serialize(BuildHistory(), JsonOpts(true)); File.WriteAllText(p+".tmp", json); File.Move(p+".tmp", p, true); } catch(Exception ex) { Console.WriteLine($"[DIAGNOSTICS_DASHBOARD_HISTORY_WARNING] Reason=LatestWriteFailed Error={ex.Message}"); } }
+    private void WriteLatest(string root)
+    {
+        Exception? lastError = null;
+        try
+        {
+            var path = PathFor(root, options.DiagnosticsDashboardHistory.HistoryPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var json = JsonSerializer.Serialize(BuildHistory(), JsonOpts(true));
+            for (var attempt = 1; attempt <= 3; attempt++)
+            {
+                var tmp = $"{path}.{Guid.NewGuid():N}.tmp";
+                try
+                {
+                    File.WriteAllText(tmp, json);
+                    File.Move(tmp, path, true);
+                    DiagnosticsDashboardHistoryLastWriteOk = true;
+                    DiagnosticsDashboardHistoryLastWriteError = "None";
+                    return;
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    lastError = ex;
+                    try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                    Thread.Sleep(TimeSpan.FromMilliseconds(25 * attempt));
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex;
+                    try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                    break;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            lastError = ex;
+        }
+
+        DiagnosticsDashboardHistoryLastWriteOk = false;
+        DiagnosticsDashboardHistoryLastWriteError = lastError?.Message ?? "Unknown";
+        WarnLatestWriteFailed(DateTime.UtcNow, DiagnosticsDashboardHistoryLastWriteError);
+    }
+    private void WarnLatestWriteFailed(DateTime now, string error)
+    {
+        if (now - _lastWriteWarningUtc < TimeSpan.FromMinutes(5)) return;
+        _lastWriteWarningUtc = now;
+        Console.WriteLine($"[DIAGNOSTICS_DASHBOARD_HISTORY_WARNING] Reason=LatestWriteFailed Error={error}");
+    }
     private void AppendJsonl(string root, DiagnosticsDashboardHistorySample s) { try { var p=PathFor(root, options.DiagnosticsDashboardHistory.JsonlPath); Directory.CreateDirectory(Path.GetDirectoryName(p)!); if (File.Exists(p) && new FileInfo(p).Length > Math.Max(1, options.DiagnosticsDashboardHistory.MaxJsonlFileMb)*1024L*1024L) File.Move(p, Path.Combine(Path.GetDirectoryName(p)!, $"diagnostics-dashboard-history-{DateTime.UtcNow:yyyyMMdd-HHmmss}.jsonl"), true); File.AppendAllText(p, JsonSerializer.Serialize(s, JsonOpts(false)) + Environment.NewLine); } catch(Exception ex) { Console.WriteLine($"[DIAGNOSTICS_DASHBOARD_HISTORY_WARNING] Reason=JsonlAppendFailed Error={ex.Message}"); } }
     private void AppendCsv(string root, DiagnosticsDashboardHistorySample s) { try { var p=PathFor(root, options.DiagnosticsDashboardHistory.CsvPath); Directory.CreateDirectory(Path.GetDirectoryName(p)!); var exists=File.Exists(p); using var w=new StreamWriter(p, true, Encoding.UTF8); if(!exists) w.WriteLine(string.Join(',', CsvFields.Select(x=>x.Name))); w.WriteLine(string.Join(',', CsvFields.Select(x=>Csv(x.GetValue(s))))); } catch(Exception ex) { Console.WriteLine($"[DIAGNOSTICS_DASHBOARD_HISTORY_WARNING] Reason=CsvAppendFailed Error={ex.Message}"); } }
     private DiagnosticsDashboardHistoryTrend ComputeTrendLocked(bool enabled) { var o=_samples.FirstOrDefault(); var p=_samples.Count>1?_samples[^2]:o; var n=_samples.LastOrDefault(); decimal? edge=n?.SingleMarketBestAfterSafetyEdge??n?.EdgeTransitionBestCurrentEdge; decimal? oe=o is null?null:o.SingleMarketBestAfterSafetyEdge??o.EdgeTransitionBestCurrentEdge; decimal? pe=p is null?null:p.SingleMarketBestAfterSafetyEdge??p.EdgeTransitionBestCurrentEdge; decimal? mv=n?.SpreadBestMoveNeededToBreakEven; return new(enabled,_samples.Count,o?.TimestampUtc,n?.TimestampUtc, edge-oe, edge-pe, mv-(o?.SpreadBestMoveNeededToBreakEven), mv-(p?.SpreadBestMoveNeededToBreakEven), n?.SlopeMbPerMin, (n?.SignalRPayloadTrimmedSuppressed??0)-(o?.SignalRPayloadTrimmedSuppressed??0), (n?.FocusWatchlistSize??0)-(o?.FocusWatchlistSize??0), (n?.BatchBookBadRequests??0)-(o?.BatchBookBadRequests??0), n?.OverallConsistent ?? true); }
@@ -78,4 +128,4 @@ public sealed class DiagnosticsDashboardHistoryService(TradingBotOptions options
 
 public sealed record DiagnosticsDashboardHistoryTrend(bool Enabled,int Samples,DateTime? OldestSampleUtc,DateTime? NewestSampleUtc,decimal? EdgeBestDeltaFromOldest,decimal? EdgeBestDeltaFromPrevious,decimal? MoveNeededDeltaFromOldest,decimal? MoveNeededDeltaFromPrevious,double? MemorySlopeLatest,long? SignalRTrimSuppressedDelta,long? FocusWatchlistDelta,long? OrderbookBadRequestsDelta,bool Consistent);
 
-public sealed record DiagnosticsDashboardHistorySample(DateTime TimestampUtc,string ProcessRunId,double UptimeSeconds,long SnapshotSequence,string RuntimeProfile,bool OverallConsistent,int Warnings,bool WarmupComplete,bool MemoryStable,bool LogVolumeStable,double ProcessMb,double DeltaMb,double SlopeMbPerMin,bool OrderbookStableNow,bool ReducedUniverseOrderbookStableNow,long BatchBookRequests,long BatchBookBadRequests,long BatchBookInvalidTokens,long PostBreakerBadRequestsDeltaWindow,bool PaperDiagnosticsLimitedEligible,long PaperOpened,long PaperOpenPositions,double PaperExposure,long LiveTradingBlocked,long SigningAttempts,decimal? SingleMarketBestRawEdge,decimal? SingleMarketBestAfterCostEdge,decimal? SingleMarketBestAfterSafetyEdge,long SingleMarketPositiveAfterSafety,long SingleMarketExecutionReady,long TotalCandidates,long TotalPositive,long TotalExecutionReady,long TotalPaperOpened,long FocusWatchlistSize,long FocusAdmitted,long FocusEvicted,long FocusRefreshed,decimal? FocusBestAfterSafetyEdge,long EdgeTransitionTracked,long EdgeTransitionImproving,long EdgeTransitionWorsening,long EdgeTransitionStableNearBreakEven,long EdgeTransitionAlertCandidates,long EdgeTransitionPositiveCandidates,decimal? EdgeTransitionBestCurrentEdge,long EdgeCompressionItems,long EdgeCompressionNearBreakEven,long EdgeCompressionRawPositive,long EdgeCompressionAfterCostPositive,long EdgeCompressionAfterSafetyPositive,decimal? EdgeCompressionBestDistanceToBreakEven,string EdgeCompressionDominantDragComponent,long SpreadMicrostructureItems,long SpreadAlreadyNearExecutable,long SpreadThinTopBook,long SpreadDepthSufficient,decimal? SpreadBestMoveNeededToBreakEven,decimal? SpreadMedianMoveNeededToBreakEven,long SpreadMinTicksToBreakEven,string SpreadDominantCause,long SignalRPayloadTrimmedTotal,long SignalRPayloadTrimmedSuppressed,long AllowlistHealthy,long AllowlistMonitoringOnly,long AllowlistReviewOnly,bool AllowlistRefreshAutoApply);
+public sealed record DiagnosticsDashboardHistorySample(DateTime TimestampUtc,string ProcessRunId,double UptimeSeconds,long SnapshotSequence,string RuntimeProfile,bool OverallConsistent,int Warnings,bool WarmupComplete,bool MemoryStable,bool LogVolumeStable,double ProcessMb,double DeltaMb,double SlopeMbPerMin,bool OrderbookStableNow,bool ReducedUniverseOrderbookStableNow,long BatchBookRequests,long BatchBookBadRequests,long BatchBookInvalidTokens,long PostBreakerBadRequestsDeltaWindow,bool PaperDiagnosticsLimitedEligible,long PaperOpened,long PaperOpenPositions,double PaperExposure,long LiveTradingBlocked,long SigningAttempts,decimal? SingleMarketBestRawEdge,decimal? SingleMarketBestAfterCostEdge,decimal? SingleMarketBestAfterSafetyEdge,long SingleMarketPositiveAfterSafety,long SingleMarketExecutionReady,long TotalCandidates,long TotalPositive,long TotalExecutionReady,long TotalPaperOpened,long FocusWatchlistSize,long FocusAdmitted,long FocusEvicted,long FocusRefreshed,decimal? FocusBestAfterSafetyEdge,long EdgeTransitionTracked,long EdgeTransitionImproving,long EdgeTransitionWorsening,long EdgeTransitionStableNearBreakEven,long EdgeTransitionAlertCandidates,long EdgeTransitionPositiveCandidates,decimal? EdgeTransitionBestCurrentEdge,long EdgeCompressionItems,long EdgeCompressionNearBreakEven,long EdgeCompressionRawPositive,long EdgeCompressionAfterCostPositive,long EdgeCompressionAfterSafetyPositive,decimal? EdgeCompressionBestDistanceToBreakEven,string EdgeCompressionDominantDragComponent,long SpreadMicrostructureItems,long SpreadAlreadyNearExecutable,long SpreadThinTopBook,long SpreadDepthSufficient,decimal? SpreadBestMoveNeededToBreakEven,decimal? SpreadMedianMoveNeededToBreakEven,long SpreadMinTicksToBreakEven,string SpreadDominantCause,long SignalRPayloadTrimmedTotal,long SignalRPayloadTrimmedSuppressed,long AllowlistHealthy,long AllowlistMonitoringOnly,long AllowlistReviewOnly,bool AllowlistRefreshAutoApply,long PaperPhase1LadderValidPriced,long PaperPhase1LadderNearBreakEven,long PaperPhase1LadderPositiveAfterSafety,long PaperPhase1LadderPaperEligible,decimal? PaperPhase1LadderBestAfterSafetyEdge,decimal? PaperPhase1LadderBestDistanceToMinEdge,string PaperPhase1LadderTopBlockingReason);
