@@ -27,6 +27,16 @@ public static class PaperPhase1ReadinessExporter
         readinessUsedCurrentReducedUniversePaperAllowed = h.PaperPhase1ReadinessUsedCurrentReducedUniversePaperAllowed,
         staleReasonClearedCount = h.PaperPhase1ReadinessStaleReasonClearedCount,
         allowedStrategy = h.PaperPhase1AllowedStrategy,
+        globalTradingReadiness = h.GlobalTradingReadiness,
+        globalTradingReadinessReason = h.GlobalTradingReadinessReason,
+        globalSoakReadiness = h.GlobalSoakReadiness,
+        globalSoakReadinessReason = h.GlobalSoakReadinessReason,
+        localPaperPhase1Readiness = h.LocalPaperPhase1Readiness,
+        localPaperPhase1ReadinessReason = h.LocalPaperPhase1ReadinessReason,
+        discoveryInvariantScope = h.DiscoveryInvariantScope,
+        diagnosticsCounterMismatchPaperBlocking = h.DiagnosticsCounterMismatchPaperBlocking,
+        diagnosticsCounterMismatchBlockingCount = h.DiagnosticsCounterMismatchBlockingCount,
+        diagnosticsCounterMismatchNonBlockingCount = h.DiagnosticsCounterMismatchNonBlockingCount,
         liveTradingDisabled = h.PaperPhase1LiveTradingDisabled,
         signingDisabled = h.PaperPhase1SigningDisabled,
         reducedUniversePaperExplicitlyAllowed = h.PaperPhase1ReducedUniversePaperExplicitlyAllowed,
@@ -63,7 +73,7 @@ public static class PaperPhase1ReadinessExporter
         if (now - _lastReadinessLogUtc >= interval)
         {
             _lastReadinessLogUtc = now;
-            Console.WriteLine($"[PAPER_PHASE1_READINESS] Enabled={h.PaperPhase1Enabled.ToString().ToLowerInvariant()} Profile={h.RuntimeProfile} Armed={h.PaperPhase1Armed.ToString().ToLowerInvariant()} Readiness={h.PaperPhase1Readiness.ToString().ToLowerInvariant()} Reason={h.PaperPhase1ReadinessReason} AllowedStrategy={h.PaperPhase1AllowedStrategy} MaxOpenPositions={h.PaperPhase1MaxOpenPositions} MaxNotional={h.PaperPhase1MaxNotionalPerTrade:0.####} MaxExposure={h.PaperPhase1MaxTotalExposure:0.####} MinEdge={h.PaperPhase1MinEdge:0.####} LiveTradingDisabled={h.PaperPhase1LiveTradingDisabled.ToString().ToLowerInvariant()} SigningDisabled={h.PaperPhase1SigningDisabled.ToString().ToLowerInvariant()} ReducedUniversePaperExplicitlyAllowed={h.PaperPhase1ReducedUniversePaperExplicitlyAllowed.ToString().ToLowerInvariant()} ReadinessLastEvaluatedUtc={h.PaperPhase1ReadinessLastEvaluatedUtc:O} ReadinessEvaluationCount={h.PaperPhase1ReadinessEvaluationCount} CurrentBlockingReasons={h.PaperPhase1ReadinessCurrentBlockingReasons} FallbackAccepted={h.PaperPhase1DiscoveryFallbackAccepted.ToString().ToLowerInvariant()} UsingPersistedSnapshot={h.PaperPhase1UsingPersistedSnapshot.ToString().ToLowerInvariant()} ProcessRunId={h.ProcessRunId}");
+            Console.WriteLine($"[PAPER_PHASE1_READINESS] Enabled={h.PaperPhase1Enabled.ToString().ToLowerInvariant()} Profile={h.RuntimeProfile} Armed={h.PaperPhase1Armed.ToString().ToLowerInvariant()} Readiness={h.PaperPhase1Readiness.ToString().ToLowerInvariant()} Reason={h.PaperPhase1ReadinessReason} AllowedStrategy={h.PaperPhase1AllowedStrategy} MaxOpenPositions={h.PaperPhase1MaxOpenPositions} MaxNotional={h.PaperPhase1MaxNotionalPerTrade:0.####} MaxExposure={h.PaperPhase1MaxTotalExposure:0.####} MinEdge={h.PaperPhase1MinEdge:0.####} LiveTradingDisabled={h.PaperPhase1LiveTradingDisabled.ToString().ToLowerInvariant()} SigningDisabled={h.PaperPhase1SigningDisabled.ToString().ToLowerInvariant()} ReducedUniversePaperExplicitlyAllowed={h.PaperPhase1ReducedUniversePaperExplicitlyAllowed.ToString().ToLowerInvariant()} ReadinessLastEvaluatedUtc={h.PaperPhase1ReadinessLastEvaluatedUtc:O} ReadinessEvaluationCount={h.PaperPhase1ReadinessEvaluationCount} CurrentBlockingReasons={h.PaperPhase1ReadinessCurrentBlockingReasons} GlobalTradingReadiness={h.GlobalTradingReadiness.ToString().ToLowerInvariant()} GlobalSoakReadiness={h.GlobalSoakReadiness} DiscoveryInvariantScope={h.DiscoveryInvariantScope} DiagnosticsCounterMismatchPaperBlocking={h.DiagnosticsCounterMismatchPaperBlocking.ToString().ToLowerInvariant()} DiagnosticsCounterMismatchBlockingCount={h.DiagnosticsCounterMismatchBlockingCount} DiagnosticsCounterMismatchNonBlockingCount={h.DiagnosticsCounterMismatchNonBlockingCount} FallbackAccepted={h.PaperPhase1DiscoveryFallbackAccepted.ToString().ToLowerInvariant()} UsingPersistedSnapshot={h.PaperPhase1UsingPersistedSnapshot.ToString().ToLowerInvariant()} ProcessRunId={h.ProcessRunId}");
         }
         if (now - _lastGateLogUtc >= interval)
         {
