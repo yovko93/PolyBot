@@ -497,7 +497,7 @@ public class BotRuntimeState
         if (!DiscoveryHealthy)
         {
             var expectedReducedUniverseGlobalBlock = options is not null
-                && string.Equals(options.RuntimeProfile, TradingBot.Services.RuntimeProfileService.ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase)
+                && (string.Equals(options.RuntimeProfile, TradingBot.Services.RuntimeProfileService.ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase) || string.Equals(options.RuntimeProfile, TradingBot.Services.RuntimeProfileService.ReducedDiagnosticsPaperPhase1Canary, StringComparison.OrdinalIgnoreCase))
                 && string.Equals(DiscoverySelectedSource, "ReducedUniverseDiagnosticsOnly", StringComparison.OrdinalIgnoreCase)
                 && AllowReducedUniverseDiagnosticsOnly
                 && ReducedUniverseExplicitFlagSatisfied

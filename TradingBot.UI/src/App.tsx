@@ -199,8 +199,10 @@ export default function App() {
   const paperPhase1Limits = paperPhase1.limits ?? {};
   const paperPhase1Opened = Number(first(paperPhase1Counters.paperOpened, runtime(health, 'paperPhase1PaperOpened'), 0));
   const paperPhase1Armed = first(paperPhase1.armed, runtime(health, 'paperPhase1Armed'), false) === true;
+  const paperPhase1Canary = dashboard?.paperPhase1Canary ?? {};
+  const canaryActive = first(paperPhase1Canary.enabled, runtime(health, 'paperPhase1CanaryEnabled'), false) === true;
   const paperPhase1Rows = [
-    ['Label', 'Paper only — no live orders, no signing.'],
+    ['Label', canaryActive ? 'Synthetic canary — not a real market.' : 'Paper only — no live orders, no signing.'],
     ['State', paperPhase1Armed ? 'Armed' : 'Not armed'],
     ['Readiness reason', first(paperPhase1.readinessReason, runtime(health, 'paperPhase1ReadinessReason'), '-')],
     ['Readiness evaluated', first(paperPhase1.readinessLastEvaluatedUtc, runtime(health, 'paperPhase1ReadinessLastEvaluatedUtc'), '-')],
@@ -217,6 +219,16 @@ export default function App() {
     ['Open positions', openPositions.length],
     ['Exposure', money(Number(first(runtime(health, 'paperTotalExposure'), paper.totalExposure, locked, 0)))],
     ['Expected PnL', money(Number(first(runtime(health, 'paperExpectedProfit'), d.status?.expectedProfit, paper.expectedProfit, 0)))],
+    ['Canary enabled', String(first(paperPhase1Canary.enabled, runtime(health, 'paperPhase1CanaryEnabled'), false))],
+    ['Canary attempted', String(first(paperPhase1Canary.attempted, runtime(health, 'paperPhase1CanaryAttempted'), false))],
+    ['Canary opened', String(first(paperPhase1Canary.opened, runtime(health, 'paperPhase1CanaryOpened'), false))],
+    ['Canary settled', String(first(paperPhase1Canary.settled, runtime(health, 'paperPhase1CanarySettled'), false))],
+    ['Canary PositionId', first(paperPhase1Canary.positionId, runtime(health, 'paperPhase1CanaryPositionId'), 'None')],
+    ['Canary expected profit', money(Number(first(paperPhase1Canary.expectedProfit, runtime(health, 'paperPhase1CanaryExpectedProfit'), 0)))],
+    ['Canary realized PnL', money(Number(first(paperPhase1Canary.realizedPnl, runtime(health, 'paperPhase1CanaryRealizedPnl'), 0)))],
+    ['Canary synthetic only', String(first(paperPhase1Canary.syntheticOnly, runtime(health, 'paperPhase1CanarySyntheticOnly'), true))],
+    ['Canary real order sent', String(first(paperPhase1Canary.realOrderSent, runtime(health, 'paperPhase1CanaryRealOrderSent'), false))],
+    ['Canary signing attempted', String(first(paperPhase1Canary.signingAttempted, runtime(health, 'paperPhase1CanarySigningAttempted'), false))],
     ['Status message', paperPhase1Opened > 0 ? 'Open paper position present.' : 'Paper engine armed. No eligible positive-edge candidate yet.']
   ];
 

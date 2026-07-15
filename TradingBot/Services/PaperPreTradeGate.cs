@@ -55,7 +55,7 @@ public sealed class PaperPreTradeGate(TradingBotOptions options)
         if (_options.TradingMode.PaperPhase == 1)
         {
             var p = _options.PaperDiagnosticsLimited;
-            if (!string.Equals(_options.RuntimeProfile, RuntimeProfileService.ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase)) return Reject("PaperPhase1ProfileNotActive");
+            if (!(string.Equals(_options.RuntimeProfile, RuntimeProfileService.ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase) || string.Equals(_options.RuntimeProfile, RuntimeProfileService.ReducedDiagnosticsPaperPhase1Canary, StringComparison.OrdinalIgnoreCase))) return Reject("PaperPhase1ProfileNotActive");
             if (!p.Enabled) return Reject("PaperDiagnosticsLimitedDisabled");
             if (!string.Equals(o.Strategy, "SingleMarketBuyBoth", StringComparison.OrdinalIgnoreCase)) { Console.WriteLine($"[PAPER_PHASE1_CRITICAL_BLOCK] Reason=NonAllowedStrategyPaperAttempt Strategy={o.Strategy} ProcessRunId={TradingBot.Api.ProcessRunContext.ProcessRunId}"); return Reject("NonAllowedStrategyPaperAttempt"); }
             if (!string.Equals(p.AllowedStrategy, "SingleMarketBuyBoth", StringComparison.OrdinalIgnoreCase)) return Reject("AllowedStrategyMismatch");

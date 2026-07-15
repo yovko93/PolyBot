@@ -14,6 +14,10 @@ public class TradingBotOptions
     public string RuntimeProfile { get; set; } = string.Empty;
     public string RuntimeProfileRequested { get; set; } = string.Empty;
     public string RuntimeProfileSource { get; set; } = "Default";
+    public bool RuntimeProfileFound { get; set; } = false;
+    public bool RuntimeProfileApplied { get; set; } = false;
+    public string RuntimeProfileResolutionReason { get; set; } = "NoProfileRequested";
+    public string[] KnownRuntimeProfiles { get; set; } = Array.Empty<string>();
     public string[] RuntimeProfileOverrides { get; set; } = Array.Empty<string>();
     [Range(0, int.MaxValue)] public int MaxMarketsToDiscover { get; set; } = 0;
     [Range(1, int.MaxValue)] public int AbsoluteMaxMarketsSafetyCap { get; set; } = 10000;
@@ -64,6 +68,7 @@ public class TradingBotOptions
     public PaperDiagnosticsLimitedOptions PaperDiagnosticsLimited { get; set; } = new();
     public PaperPhase1DiscoveryFallbackOptions PaperPhase1DiscoveryFallback { get; set; } = new();
     public PaperPhase1EligibilityLadderOptions PaperPhase1EligibilityLadder { get; set; } = new();
+    public PaperPhase1SyntheticCanaryOptions PaperPhase1SyntheticCanary { get; set; } = new();
     public VerifiedBasketArbOptions VerifiedBasketArb { get; set; } = new();
     public PaperPhase2Options PaperPhase2 { get; set; } = new();
     public PaperPhaseValidationOptions PaperPhaseValidation { get; set; } = new();
@@ -305,6 +310,30 @@ public class PaperPhase1DiscoveryFallbackOptions
     public bool RequireExplicitFlag { get; set; } = true;
     public bool AllowWhenGammaTimeout { get; set; } = true;
     public bool DiagnosticsOnly { get; set; } = false;
+}
+
+public class PaperPhase1SyntheticCanaryOptions
+{
+    public bool Enabled { get; set; } = false;
+    public string RequireProfile { get; set; } = "ReducedDiagnosticsPaperPhase1";
+    public bool RequireExplicitFlag { get; set; } = true;
+    public bool RunOnce { get; set; } = true;
+    public bool OpenSyntheticPosition { get; set; } = true;
+    public bool SettleSyntheticPosition { get; set; } = true;
+    public int SettlementDelaySeconds { get; set; } = 30;
+    public decimal Notional { get; set; } = 5m;
+    public decimal Quantity { get; set; } = 5m;
+    public decimal YesAsk { get; set; } = 0.49m;
+    public decimal NoAsk { get; set; } = 0.49m;
+    public decimal RawEdge { get; set; } = 0.02m;
+    public decimal AfterCostEdge { get; set; } = 0.018m;
+    public decimal AfterSafetyEdge { get; set; } = 0.015m;
+    public decimal ExpectedPayout { get; set; } = 5.10m;
+    public decimal ExpectedProfit { get; set; } = 0.10m;
+    public string SyntheticMarketId { get; set; } = "CANARY-PHASE1-MARKET";
+    public string SyntheticYesTokenId { get; set; } = "CANARY-PHASE1-YES";
+    public string SyntheticNoTokenId { get; set; } = "CANARY-PHASE1-NO";
+    public string ExportPath { get; set; } = "exports/paper-phase1-canary-latest.json";
 }
 
 public class VerifiedBasketArbOptions
