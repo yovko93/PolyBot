@@ -489,7 +489,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var executionJournal = new ExecutionJournal(executionJournalPath);
     var positionBook = new PaperPositionBook(Path.Combine(AppContext.BaseDirectory, "data", "paper-positions.csv"));
     var paper = new PaperTradingEngine(executionPolicy, executionJournal, executionDecisionService, positionBook, options);
-    var paperPhase1Canary = new PaperPhase1SyntheticCanaryService(options, paper, positionBook, contentRootPath);
+    var paperPhase1Canary = new PaperPhase1SyntheticCanaryService(options, paper, contentRootPath);
     var paperValidationHarness = new PaperPhaseValidationHarness();
     paperValidationHarness.TryRun(options, paper, positionBook, state, contentRootPath);
     var paperSettlementValidationHarness = new PaperSettlementValidationHarness();
@@ -2342,9 +2342,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     OpportunityFamilyRankingService.WriteExportAtomic(Path.Combine(shadowExportDir, "opportunity-family-ranking-latest.json"), OpportunityFamilyRankingService.ToExport(familyRanking, familyHealth));
                     var focusSnapshot = focusUniverse.Update(familyRanking, familyHealth, contentRootPath);
                     state.SetFocusUniverse(focusSnapshot);
-                    var transitionSnapshot = edgeTransition.Update(focusSnapshot, RuntimeHealthSnapshot.From(state, options), contentRootPath, paperPhase1Canary);
+                    var transitionSnapshot = edgeTransition.Update(focusSnapshot, RuntimeHealthSnapshot.From(state, options), contentRootPath);
                     state.SetEdgeTransition(transitionSnapshot);
-                    var edgeCompressionSnapshot = edgeCompression.Update(focusSnapshot, transitionSnapshot, RuntimeHealthSnapshot.From(state, options), contentRootPath, paperPhase1Canary);
+                    var edgeCompressionSnapshot = edgeCompression.Update(focusSnapshot, transitionSnapshot, RuntimeHealthSnapshot.From(state, options), contentRootPath);
                     state.SetEdgeCompression(edgeCompressionSnapshot);
                     var spreadMarketById = discoveredMarkets.Where(x => !string.IsNullOrWhiteSpace(x.id)).GroupBy(x => x.id, StringComparer.OrdinalIgnoreCase).ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
                     state.SetSpreadMicrostructure(spreadMicrostructure.Update(focusSnapshot, edgeCompressionSnapshot, RuntimeHealthSnapshot.From(state, options), spreadMarketById, contentRootPath));

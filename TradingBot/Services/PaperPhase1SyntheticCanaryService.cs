@@ -6,7 +6,7 @@ using TradingBot.Options;
 
 namespace TradingBot.Services;
 
-public sealed class PaperPhase1SyntheticCanaryService(TradingBotOptions options, PaperTradingEngine paper, PaperPositionBook book, string contentRootPath)
+public sealed class PaperPhase1SyntheticCanaryService(TradingBotOptions options, PaperTradingEngine paper, string contentRootPath)
 {
     public static PaperPhase1SyntheticCanaryState Current { get; private set; } = new();
     private bool _attempted;
