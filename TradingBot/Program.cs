@@ -489,7 +489,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var executionJournal = new ExecutionJournal(executionJournalPath);
     var positionBook = new PaperPositionBook(Path.Combine(AppContext.BaseDirectory, "data", "paper-positions.csv"));
     var paper = new PaperTradingEngine(executionPolicy, executionJournal, executionDecisionService, positionBook, options);
-    var paperPhase1Canary = new PaperPhase1SyntheticCanaryService(options, paper, contentRootPath);
+    var paperPhase1Canary = new PaperPhase1SyntheticCanaryService(options, paper, positionBook, contentRootPath);
     var paperValidationHarness = new PaperPhaseValidationHarness();
     paperValidationHarness.TryRun(options, paper, positionBook, state, contentRootPath);
     var paperSettlementValidationHarness = new PaperSettlementValidationHarness();
@@ -2985,6 +2985,7 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
     state.ReplacePaperSettlements(pb.Settlements);
     state.SetPaperSettlementCounters(paper.SettlementRejects, paper.DuplicateSettlementSuppressions);
     paperPhase1Canary.Tick(state);
+    state.ReplacePositions(pb.OpenPositions.Concat(pb.ClosedPositions).Take(200).Select(pz => PaperPositionDtoFactory.ToDto(pz, state.NextSeq())));
     state.SetStatus(new BotStatusDto("PAPER", !state.Controls.IsPaused, "CONNECTED", paper.Balance, paper.LockedCapital, paper.Equity, paper.RealizedPnl, paper.ExpectedProfit, pb.OpenPositions.Count, top.Count, DateTime.UtcNow, DateTime.UtcNow));
     state.SetPaperOpenCountLastHour(paper.HourlyOpenCount);
     state.SetPaperOpenPositionKeys(pb.OpenPositions.Select(x => x.GroupKey));
