@@ -25,7 +25,7 @@ public sealed class PaperPhase1SyntheticCanaryService(TradingBotOptions options,
 
             if (cfg.RunOnce && Current.Attempted)
             {
-                Export(CurrentPosition(), Current.Settled);
+                Export(state, CurrentPosition(), Current.Settled);
                 LogSummaryIfComplete(state);
                 return;
             }
@@ -33,7 +33,7 @@ public sealed class PaperPhase1SyntheticCanaryService(TradingBotOptions options,
             if (!IsProfileActive || !cfg.Enabled)
             {
                 Current = Current with { RejectedReason = cfg.Enabled ? "ProfileNotActive" : "Disabled" };
-                Export(null, false);
+                Export(state, null, false);
                 return;
             }
 
@@ -43,7 +43,7 @@ public sealed class PaperPhase1SyntheticCanaryService(TradingBotOptions options,
             if (reason != "None")
             {
                 Block(reason);
-                Export(null, false);
+                Export(state, null, false);
                 return;
             }
 
@@ -51,7 +51,7 @@ public sealed class PaperPhase1SyntheticCanaryService(TradingBotOptions options,
             if (duplicateReason != "None")
             {
                 SuppressDuplicate(duplicateReason, state.ProcessRunId);
-                Export(CurrentPosition(), Current.Settled);
+                Export(state, CurrentPosition(), Current.Settled);
                 return;
             }
 
@@ -69,14 +69,13 @@ public sealed class PaperPhase1SyntheticCanaryService(TradingBotOptions options,
         if (pos is null)
         {
             Block(openReject);
-            Export(null, false);
+            Export(state, null, false);
             return;
         }
 
-        state.RecordPaperExecution();
         Current = Current with { Opened = true, OpenSucceeded = 1, PaperOpened = 1, Rejected = false, RejectedReason = "None", PositionId = pos.PositionId, ExpectedProfit = cfg.ExpectedProfit, OpenPositions = book.OpenPositions.Count, Exposure = book.OpenPositions.Sum(x => x.TotalCost) };
         Console.WriteLine($"[PAPER_PHASE1_CANARY_OPENED] PositionId={pos.PositionId} RunOnce={cfg.RunOnce.ToString().ToLowerInvariant()} OpenAttempts={Current.OpenAttempts} Notional={cfg.Notional:0.####} ExpectedProfit={cfg.ExpectedProfit:0.####} AfterSafetyEdge={cfg.AfterSafetyEdge:0.####} SyntheticOnly=true ProcessRunId={state.ProcessRunId}");
-        Export(pos, false);
+        Export(state, pos, false);
     }
 
     private void Settle(BotRuntimeState state)
@@ -86,7 +85,7 @@ public sealed class PaperPhase1SyntheticCanaryService(TradingBotOptions options,
         if (!result.Accepted) return;
         Current = Current with { Settled = true, CanarySettledUtc = DateTime.UtcNow, PaperClosed = 1, OpenPositions = book.OpenPositions.Count, Exposure = book.OpenPositions.Sum(x => x.TotalCost), RealizedPnl = cfg.ExpectedProfit };
         Console.WriteLine($"[PAPER_PHASE1_CANARY_SETTLED] PositionId={Current.PositionId} PaperOpened={Current.PaperOpened} PaperClosed={Current.PaperClosed} OpenPositions={Current.OpenPositions} Exposure={Current.Exposure:0.####} RealizedPayout={cfg.ExpectedPayout:0.####} RealizedPnl={cfg.ExpectedProfit:0.####} ProcessRunId={state.ProcessRunId}");
-        Export(result.Position, true);
+        Export(state, result.Position, true);
         LogSummaryIfComplete(state);
     }
 
@@ -142,15 +141,20 @@ public sealed class PaperPhase1SyntheticCanaryService(TradingBotOptions options,
     {
         if (_summaryLogged || !Current.Settled) return;
         _summaryLogged = true;
-        Console.WriteLine($"[PAPER_PHASE1_CANARY_SUMMARY] Enabled={Current.Enabled.ToString().ToLowerInvariant()} ProfileActive={Current.ProfileActive.ToString().ToLowerInvariant()} RunOnce={Current.RunOnce.ToString().ToLowerInvariant()} Attempted={Current.Attempted.ToString().ToLowerInvariant()} Opened={Current.Opened.ToString().ToLowerInvariant()} Settled={Current.Settled.ToString().ToLowerInvariant()} DuplicateSuppressions={Current.DuplicateSuppressions} OpenAttempts={Current.OpenAttempts} OpenSucceeded={Current.OpenSucceeded} PaperOpened={Current.PaperOpened} PaperClosed={Current.PaperClosed} OpenPositions={book.OpenPositions.Count} Exposure={book.OpenPositions.Sum(x => x.TotalCost):0.####} RealizedPnl={Current.RealizedPnl:0.####} Consistent={Current.Consistent.ToString().ToLowerInvariant()} ProcessRunId={state.ProcessRunId}");
+        Console.WriteLine($"[PAPER_PHASE1_CANARY_SUMMARY] Enabled={Current.Enabled.ToString().ToLowerInvariant()} ProfileActive={Current.ProfileActive.ToString().ToLowerInvariant()} RunOnce={Current.RunOnce.ToString().ToLowerInvariant()} Attempted={Current.Attempted.ToString().ToLowerInvariant()} Opened={Current.Opened.ToString().ToLowerInvariant()} Settled={Current.Settled.ToString().ToLowerInvariant()} DuplicateSuppressions={Current.DuplicateSuppressions} OpenAttempts={Current.OpenAttempts} OpenSucceeded={Current.OpenSucceeded} PaperOpened={Current.PaperOpened} PaperClosed={Current.PaperClosed} OpenPositions={book.OpenPositions.Count} Exposure={book.OpenPositions.Sum(x => x.TotalCost):0.####} RealizedPnl={Current.RealizedPnl:0.####} Consistent={Current.Consistent.ToString().ToLowerInvariant()} GlobalOpenAttempts={state.PaperExecutionsCount} GlobalOpenSucceeded={state.PaperExecutionsCount} GlobalPaperOpened={state.PaperExecutionsCount} GlobalPaperExecutions={state.PaperExecutionsCount} GlobalPaperClosed={state.PaperClosedPositions} GlobalOpenPositions={state.PaperOpenPositions} GlobalExposure={state.PaperTotalExposure:0.####} GlobalRealizedPnl={state.PaperRealizedPnl:0.####} ProcessRunId={state.ProcessRunId}");
     }
 
-    private void Export(PaperPosition? position, bool settled)
+    private void Export(BotRuntimeState state, PaperPosition? position, bool settled)
     {
         var cfg = options.PaperPhase1SyntheticCanary;
         var openPositions = book.OpenPositions.Count;
+        var closedPositions = book.ClosedPositions.Count;
         var exposure = book.OpenPositions.Sum(x => x.TotalCost);
-        var payload = new { generatedAtUtc = DateTime.UtcNow, processRunId = ProcessRunContext.ProcessRunId, enabled = Current.Enabled, profile = options.RuntimeProfile, attempted = Current.Attempted, opened = Current.Opened, settled = Current.Settled, rejected = Current.Rejected, rejectedReason = Current.RejectedReason, positionId = Current.PositionId, runOnce = cfg.RunOnce, attemptedThisRun = Current.Attempted, openedThisRun = Current.Opened, settledThisRun = Current.Settled, duplicateSuppressions = Current.DuplicateSuppressions, lastDuplicateReason = Current.LastDuplicateReason, openAttempts = Current.OpenAttempts, openSucceeded = Current.OpenSucceeded, paperOpened = Current.PaperOpened, paperClosed = Current.PaperClosed, openPositions, exposure, realizedPnl = Current.RealizedPnl, consistent = Current.Consistent, consistencyReason = Current.ConsistencyReason, candidate = new { candidateId = "CANARY-PHASE1-CANDIDATE", dedupeKey = $"CANARY-PHASE1-CANDIDATE|{ProcessRunContext.ProcessRunId}", marketId = cfg.SyntheticMarketId, isSyntheticCanary = true, strategy = "SingleMarketBuyBoth", yesAsk = cfg.YesAsk, noAsk = cfg.NoAsk, sumAsk = cfg.YesAsk + cfg.NoAsk, afterSafetyEdge = cfg.AfterSafetyEdge, notional = cfg.Notional, expectedProfit = cfg.ExpectedProfit }, position, settlement = new { scheduled = cfg.SettleSyntheticPosition, settlementDelaySeconds = cfg.SettlementDelaySeconds, settled = Current.Settled, realizedPnl = Current.RealizedPnl }, safety = new { liveTradingDisabled = true, signingDisabled = LiveTradingGuard.SigningAttempts == 0, realOrderSent = false, realMarketUsed = false, syntheticOnly = true } };
+        var globalConsistent = state.PaperExecutionsCount == state.PaperClosedPositions + state.PaperOpenPositions;
+        var canary = new { openAttempts = Current.OpenAttempts, openSucceeded = Current.OpenSucceeded, paperOpened = Current.PaperOpened, paperClosed = Current.PaperClosed, openPositions, exposure, realizedPnl = Current.RealizedPnl, consistent = Current.Consistent };
+        var globalPaperCounters = new { paperPhase1OpenAttempts = state.PaperExecutionsCount, paperPhase1OpenSucceeded = state.PaperExecutionsCount, paperPhase1PaperOpened = state.PaperExecutionsCount, paperDiagnosticsLimitedPaperOpened = state.PaperExecutionsCount, paperExecutions = state.PaperExecutionsCount, paperOpened = state.PaperExecutionsCount, paperClosed = closedPositions, paperOpenPositions = openPositions, paperExposure = exposure, paperRealizedPnl = paper.RealizedPnl, consistent = globalConsistent };
+        var counterDedupe = new { sourceOfTruth = state.PaperCounterSourceOfTruth, duplicateSuppressions = state.PaperCounterDuplicateSuppressions, lastDuplicateExecutionId = state.PaperCounterLastDuplicateExecutionId, countedExecutionIds = state.PaperCounterCountedExecutionIds, syntheticCanaryCountedExecutions = state.PaperCounterSyntheticCanaryCountedExecutions, realScannerCountedExecutions = state.PaperCounterRealScannerCountedExecutions };
+        var payload = new { generatedAtUtc = DateTime.UtcNow, processRunId = ProcessRunContext.ProcessRunId, enabled = Current.Enabled, profile = options.RuntimeProfile, attempted = Current.Attempted, opened = Current.Opened, settled = Current.Settled, rejected = Current.Rejected, rejectedReason = Current.RejectedReason, positionId = Current.PositionId, runOnce = cfg.RunOnce, attemptedThisRun = Current.Attempted, openedThisRun = Current.Opened, settledThisRun = Current.Settled, duplicateSuppressions = Current.DuplicateSuppressions, lastDuplicateReason = Current.LastDuplicateReason, openAttempts = Current.OpenAttempts, openSucceeded = Current.OpenSucceeded, paperOpened = Current.PaperOpened, paperClosed = Current.PaperClosed, openPositions, exposure, realizedPnl = Current.RealizedPnl, consistent = Current.Consistent && globalConsistent, consistencyReason = Current.ConsistencyReason, canary, globalPaperCounters, counterDedupe, candidate = new { candidateId = "CANARY-PHASE1-CANDIDATE", dedupeKey = $"CANARY-PHASE1-CANDIDATE|{ProcessRunContext.ProcessRunId}", marketId = cfg.SyntheticMarketId, isSyntheticCanary = true, strategy = "SingleMarketBuyBoth", yesAsk = cfg.YesAsk, noAsk = cfg.NoAsk, sumAsk = cfg.YesAsk + cfg.NoAsk, afterSafetyEdge = cfg.AfterSafetyEdge, notional = cfg.Notional, expectedProfit = cfg.ExpectedProfit }, position, settlement = new { scheduled = cfg.SettleSyntheticPosition, settlementDelaySeconds = cfg.SettlementDelaySeconds, settled = Current.Settled, realizedPnl = Current.RealizedPnl }, safety = new { liveTradingDisabled = true, signingDisabled = LiveTradingGuard.SigningAttempts == 0, realOrderSent = false, realMarketUsed = false, syntheticOnly = true } };
         var path = Path.IsPathRooted(cfg.ExportPath) ? cfg.ExportPath : Path.Combine(contentRootPath, cfg.ExportPath);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));

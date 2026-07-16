@@ -138,5 +138,5 @@ public sealed class PaperSettlementValidationHarness
 public static class PaperPositionDtoFactory
 {
     public static PaperPositionDto ToDto(PaperPosition p, long seq)
-        => new(p.PositionId, p.OpenedAtUtc, p.ClosedAtUtc, p.Strategy, p.GroupKey, p.Legs.Select(l => $"{l.Outcome}:{l.Question}").ToList(), p.Quantity, p.TotalCost, p.CostPerBasket, p.GuaranteedPayout, p.Quantity * p.Legs.Count, p.GrossEdgeAtOpen, p.NetEdgeAtOpen, p.ExpectedProfit, p.LockedCapital, p.ActiveProfile, p.Source, p.CurrentNoAskSum, p.CurrentExitValue, p.UnrealizedPnl, p.MtmStatus, p.MissingExitPrices, p.RealizedPayout, p.RealizedProfit, p.OpenedFromSimulatedFills, p.FillSimulationId, p.Status.ToString().ToUpperInvariant(), seq);
+        => new(p.PositionId, p.OpenedAtUtc, p.ClosedAtUtc, p.Strategy, p.GroupKey, p.Legs.Select(l => $"{l.Outcome}:{l.Question}").ToList(), p.Quantity, p.TotalCost, p.CostPerBasket, p.GuaranteedPayout, p.Quantity * p.Legs.Count, p.GrossEdgeAtOpen, p.NetEdgeAtOpen, p.ExpectedProfit, p.LockedCapital, p.ActiveProfile, p.Source, p.CurrentNoAskSum, p.CurrentExitValue, p.UnrealizedPnl, p.MtmStatus, p.MissingExitPrices, p.RealizedPayout, p.RealizedProfit, p.OpenedFromSimulatedFills, p.FillSimulationId, p.Status.ToString().ToUpperInvariant(), seq, p.IsSyntheticCanary, p.SourceCandidateId, p.ProcessRunId);
 }
