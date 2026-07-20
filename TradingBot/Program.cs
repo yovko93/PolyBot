@@ -65,6 +65,7 @@ builder.Services.AddSingleton(sp => new DiagnosticsDashboardHistoryService(sp.Ge
 var app = builder.Build();
 app.UseCors("ui");
 var options = app.Services.GetRequiredService<IOptions<TradingBotOptions>>().Value;
+FormulaDiagnostics.Configure(options.FormulaDiagnostics);
 RuntimeProfileService.ValidateSafety(options);
 RuntimeProfileService.Export(options, ProcessRunContext.ProcessRunId, app.Environment.ContentRootPath);
 Console.WriteLine(RuntimeProfileService.StartupLog(options));
@@ -1472,7 +1473,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 Console.WriteLine($"[VERIFIED_SENSITIVITY] Group={g.GroupKey} Actual={breakdown.SensitivityScenarios.Actual} ZeroFees={breakdown.SensitivityScenarios.ZeroFees} ZeroSlippage={breakdown.SensitivityScenarios.ZeroSlippage} ZeroFeesZeroSlippage={breakdown.SensitivityScenarios.ZeroFeesZeroSlippage} RawOnly={breakdown.SensitivityScenarios.RawOnly} HalfCosts={breakdown.SensitivityScenarios.HalfFeesHalfSlippage}");
                         }
                         if (formula.FormulaWarnings.Count > 0)
-                            Console.WriteLine($"[FORMULA_WARNING] {string.Join(" | ", formula.FormulaWarnings)}");
+                            Console.WriteLine($"[FORMULA_WARNING] {string.Join(" | ", formula.FormulaWarnings)} ProcessRunId={ProcessRunContext.ProcessRunId}");
                         if (!formula.IsValid)
                         {
                             skipReason = formula.SkipReason is "InvalidGuaranteedPayoutFormula" or "InvalidPriceNormalization" or "InvalidBasketCost" ? "FormulaOrNormalizationError" : formula.SkipReason;
