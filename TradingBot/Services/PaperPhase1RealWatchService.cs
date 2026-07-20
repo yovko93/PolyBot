@@ -34,7 +34,9 @@ public sealed class PaperPhase1RealWatchService(TradingBotOptions options)
         lock (_sync)
         {
             RefreshLifecycle();
-            var best = PaperPhase1EligibilityLadderExporter.LatestTopNearEligible.Select(JsonSerializer.SerializeToElement).FirstOrDefault();
+            var best = PaperPhase1EligibilityLadderExporter.LatestTopNearEligible
+                .Select(item => JsonSerializer.SerializeToElement(item))
+                .FirstOrDefault();
             var candidateId = best.ValueKind == JsonValueKind.Object && best.TryGetProperty("candidateId", out var c) ? c.GetString() ?? "None" : "None";
             var marketId = best.ValueKind == JsonValueKind.Object && best.TryGetProperty("marketId", out var m) ? m.GetString() ?? "None" : "None";
             var profileActive = string.Equals(options.RuntimeProfile, RuntimeProfileService.ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase);

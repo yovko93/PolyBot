@@ -425,10 +425,10 @@ if (paperConfigError)
     return;
 }
 
-await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>(), app.Services.GetRequiredService<VerifiedBasketDryRunOrderBuilder>(), app.Services.GetRequiredService<DryRunFillSimulator>(), app.Services.GetRequiredService<AllowlistRepairService>(), app.Services.GetRequiredService<AllowlistRepairLockProvider>(), app.Services.GetRequiredService<MemoryGuard>(), app.Services.GetRequiredService<DiagnosticsDashboardService>(), app.Services.GetRequiredService<DiagnosticsDashboardHistoryService>(), quietLogGate, app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value, options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping);
+await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>(), app.Services.GetRequiredService<VerifiedBasketDryRunOrderBuilder>(), app.Services.GetRequiredService<DryRunFillSimulator>(), app.Services.GetRequiredService<AllowlistRepairService>(), app.Services.GetRequiredService<AllowlistRepairLockProvider>(), app.Services.GetRequiredService<MemoryGuard>(), app.Services.GetRequiredService<DiagnosticsDashboardService>(), app.Services.GetRequiredService<DiagnosticsDashboardHistoryService>(), app.Services.GetRequiredService<PaperPhase1RealWatchService>(), quietLogGate, app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value, options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping);
 await apiTask;
 
-static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, VerifiedBasketExecutionCoordinator verifiedExecution, VerifiedBasketDryRunOrderBuilder dryRunBuilder, DryRunFillSimulator fillSimulator, AllowlistRepairService allowlistRepairService, AllowlistRepairLockProvider lockProvider, MemoryGuard memoryGuard, DiagnosticsDashboardService diagnosticsDashboard, DiagnosticsDashboardHistoryService diagnosticsDashboardHistory, QuietLogGate quietLogGate, ExecutionOptions executionOptions, TradingBotOptions options, OpportunityFilteringOptions filtering, string contentRootPath, CancellationToken stoppingToken)
+static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, VerifiedBasketExecutionCoordinator verifiedExecution, VerifiedBasketDryRunOrderBuilder dryRunBuilder, DryRunFillSimulator fillSimulator, AllowlistRepairService allowlistRepairService, AllowlistRepairLockProvider lockProvider, MemoryGuard memoryGuard, DiagnosticsDashboardService diagnosticsDashboard, DiagnosticsDashboardHistoryService diagnosticsDashboardHistory, PaperPhase1RealWatchService paperPhase1RealWatch, QuietLogGate quietLogGate, ExecutionOptions executionOptions, TradingBotOptions options, OpportunityFilteringOptions filtering, string contentRootPath, CancellationToken stoppingToken)
 {
     var scannerInstanceId = Guid.NewGuid().ToString("N");
     var scannerStartedAt = DateTime.UtcNow;
@@ -501,7 +501,6 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var positionBook = new PaperPositionBook(Path.Combine(AppContext.BaseDirectory, "data", "paper-positions.csv"));
     var paper = new PaperTradingEngine(executionPolicy, executionJournal, executionDecisionService, positionBook, options);
     var paperPhase1Canary = new PaperPhase1SyntheticCanaryService(options, paper, positionBook, contentRootPath);
-    var paperPhase1RealWatch = app.Services.GetRequiredService<PaperPhase1RealWatchService>();
     paperPhase1RealWatch.Attach(paper, positionBook, state);
     var paperValidationHarness = new PaperPhaseValidationHarness();
     paperValidationHarness.TryRun(options, paper, positionBook, state, contentRootPath);
