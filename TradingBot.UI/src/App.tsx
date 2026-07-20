@@ -202,7 +202,7 @@ export default function App() {
   const paperPhase1Canary = dashboard?.paperPhase1Canary ?? {};
   const canaryActive = first(paperPhase1Canary.enabled, runtime(health, 'paperPhase1CanaryEnabled'), false) === true;
   const paperPhase1Rows = [
-    ['Label', canaryActive ? 'Synthetic canary — not a real market.' : 'Paper only — no live orders, no signing.'],
+    ['Label', canaryActive ? 'Synthetic Canary Test — not a real market.' : 'Paper only — no live orders, no signing.'],
     ['State', paperPhase1Armed ? 'Armed' : 'Not armed'],
     ['Readiness reason', first(paperPhase1.readinessReason, runtime(health, 'paperPhase1ReadinessReason'), '-')],
     ['Readiness evaluated', first(paperPhase1.readinessLastEvaluatedUtc, runtime(health, 'paperPhase1ReadinessLastEvaluatedUtc'), '-')],
@@ -239,6 +239,8 @@ export default function App() {
     ['Canary global Exposure', money(Number(first(paperPhase1Canary.globalExposure, runtime(health, 'paperTotalExposure'), 0)))],
     ['Canary counter source', first(paperPhase1Canary.counterSourceOfTruth, runtime(health, 'paperCounterSourceOfTruth'), 'PaperPositionManager')],
     ['Canary counter duplicate suppressions', first(paperPhase1Canary.counterDuplicateSuppressions, runtime(health, 'paperCounterDuplicateSuppressions'), 0)],
+    ['Canary audit logs consistent', String(first(paperPhase1Canary.auditConsistent, runtime(health, 'paperCounterAuditConsistent'), true))],
+    ['Canary increment logs written', first(paperPhase1Canary.incrementLogsWritten, runtime(health, 'paperCounterIncrementLogsWritten'), 0)],
     ...(first(paperPhase1Canary.consistent, runtime(health, 'paperPhase1CanaryConsistent'), true) === false ? [['Canary warning', 'Canary accounting inconsistent — check duplicate open/settlement balance.']] : []),
     ...(first(paperPhase1Canary.globalCounterBalanced, true) === false ? [['Canary counter warning', 'Paper counter imbalance detected.']] : []),
     ['Canary synthetic only', String(first(paperPhase1Canary.syntheticOnly, runtime(health, 'paperPhase1CanarySyntheticOnly'), true))],
@@ -385,7 +387,8 @@ export default function App() {
       <Metric label="Mode" value={d.status?.mode ?? `PaperPhase ${runtime(health, 'paperPhase') ?? 'PaperOnly'}`} tone="cyan" />
       <Metric label="Trading" value={tradingState} tone={tradingState === 'Paper limited' ? 'cyan' : tradingState === 'Strategy blocked' ? 'yellow' : 'green'} />
       <Metric label="Discovery" value={backendConnected ? discoveryLabel(health, scanner, d.controls) : 'Waiting'} tone={backendConnected ? (d.controls?.isPaused || runtime(health, 'discoveryReducedUniverse') ? 'yellow' : 'cyan') : 'yellow'} />
-      <Metric label="Readiness" value={backendConnected ? readinessLabel(health, d.controls) : 'No backend'} tone={backendConnected ? (runtime(health, 'tradingReadiness') ? 'green' : 'yellow') : 'yellow'} />
+      <Metric label="Readiness" value={backendConnected ? readinessLabel(health, d.controls) : 'No backend'} tone={backendConnected ? (canaryActive ? 'cyan' : runtime(health, 'tradingReadiness') ? 'green' : 'yellow') : 'yellow'} />
+      {canaryActive ? <Metric label="Profile" value="Synthetic Canary Test" tone="cyan" /> : null}
       <Metric label="P/L" value={money(pnl)} tone={pnl < 0 ? 'red' : 'green'} />
       <Metric label="Diagnostics" value={diagnosticsState} tone={diagnosticsState === 'Diagnostics OK' ? 'green' : diagnosticsState === 'Diagnostics Warning' ? 'yellow' : 'red'} />
     </header>
@@ -496,6 +499,7 @@ function discoveryLabel(health: any, scanner: any, controls: any) {
 }
 function readinessLabel(health: any, controls: any) {
   const mode = String(first(runtime(health, 'discoveryMode'), runtime(health, 'discoverySelectedSource'), '')).toLowerCase();
+  if (String(runtime(health, 'runtimeProfile') ?? '').toLowerCase() === 'reduceddiagnosticspaperphase1canary') return 'Synthetic Canary Test';
   if (controls?.isPaused) return 'Paused';
   if (runtime(health, 'discoverySourceAuditOnly')) return 'SourceAuditOnly';
   if (mode === 'reduceduniversediagnosticsonly' || runtime(health, 'discoveryReducedUniverse')) return 'Blocked / Reduced diagnostics';

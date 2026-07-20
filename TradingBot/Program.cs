@@ -52,7 +52,11 @@ builder.Services.AddSingleton<MemoryGuard>();
 builder.Services.AddSingleton<QuietLogGate>();
 builder.Services.AddSingleton<IExchangeOrderExecutor, DisabledExchangeOrderExecutor>();
 builder.Services.AddSingleton<DryRunLiveExecutor>();
-builder.Services.AddSingleton(sp => new BotRuntimeState(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value.RuntimeState));
+builder.Services.AddSingleton(sp =>
+{
+    var configured = sp.GetRequiredService<IOptions<TradingBotOptions>>().Value;
+    return new BotRuntimeState(configured.RuntimeState, configured.PaperCounterAudit);
+});
 builder.Services.AddSingleton<TextWriter>(originalOut);
 builder.Services.AddSingleton<IBotUiLogger, BotUiLogger>();
 builder.Services.AddSingleton(sp => new DiagnosticsDashboardService(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value));

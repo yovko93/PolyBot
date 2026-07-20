@@ -69,6 +69,7 @@ public class TradingBotOptions
     public PaperPhase1DiscoveryFallbackOptions PaperPhase1DiscoveryFallback { get; set; } = new();
     public PaperPhase1EligibilityLadderOptions PaperPhase1EligibilityLadder { get; set; } = new();
     public PaperPhase1SyntheticCanaryOptions PaperPhase1SyntheticCanary { get; set; } = new();
+    public PaperCounterAuditOptions PaperCounterAudit { get; set; } = new();
     public VerifiedBasketArbOptions VerifiedBasketArb { get; set; } = new();
     public PaperPhase2Options PaperPhase2 { get; set; } = new();
     public PaperPhaseValidationOptions PaperPhaseValidation { get; set; } = new();
@@ -334,6 +335,13 @@ public class PaperPhase1SyntheticCanaryOptions
     public string SyntheticYesTokenId { get; set; } = "CANARY-PHASE1-YES";
     public string SyntheticNoTokenId { get; set; } = "CANARY-PHASE1-NO";
     public string ExportPath { get; set; } = "exports/paper-phase1-canary-latest.json";
+}
+
+public sealed class PaperCounterAuditOptions
+{
+    public bool Enabled { get; set; } = true;
+    public bool LogDuplicateSuppressions { get; set; } = true;
+    [Range(0, int.MaxValue)] public int MaxDuplicateSuppressionLogsPerExecution { get; set; } = 1;
 }
 
 public class VerifiedBasketArbOptions

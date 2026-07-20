@@ -11,9 +11,11 @@ public class BotRuntimeState
 {
     private readonly object _gate = new();
     private readonly RuntimeStateOptions _runtime;
+    private readonly PaperCounterAuditOptions _paperCounterAudit;
     private long _seq;
-    public BotRuntimeState() : this(new RuntimeStateOptions()) { }
-    public BotRuntimeState(RuntimeStateOptions runtime) { _runtime = runtime; }
+    public BotRuntimeState() : this(new RuntimeStateOptions(), new PaperCounterAuditOptions()) { }
+    public BotRuntimeState(RuntimeStateOptions runtime) : this(runtime, new PaperCounterAuditOptions()) { }
+    public BotRuntimeState(RuntimeStateOptions runtime, PaperCounterAuditOptions paperCounterAudit) { _runtime = runtime; _paperCounterAudit = paperCounterAudit; }
     public BotStatusDto Status { get; private set; } = new("DRY_RUN", false, "DISCONNECTED", 1000, 0, 1000, 0, 0, 0, 0, DateTime.UtcNow, DateTime.UtcNow);
     public ScannerStatsDto ScannerStats { get; private set; } = new(0,0,0,0,0,0,0,0,0,0,0,0,DateTime.UtcNow,DateTime.UtcNow,null,0,0,0,0,0,0,0,DateTime.UtcNow,DateTime.UtcNow,0,0,0,0,0,0,0,0,0,0,0,0,null,0,0,0,0,0,0,0,null,0);
     public TradingBot.Models.OpportunityDiagnosticsSnapshot? OpportunityDiagnostics { get; private set; }
@@ -154,6 +156,13 @@ public class BotRuntimeState
     private int _paperCounterCountedExecutionIds;
     private int _paperCounterSyntheticCanaryCountedExecutions;
     private int _paperCounterRealScannerCountedExecutions;
+    private readonly object _paperCounterAuditGate = new();
+    private readonly HashSet<string> _paperCounterIncrementLogs = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _paperCounterDuplicateSuppressionLogs = new(StringComparer.OrdinalIgnoreCase);
+    private int _paperCounterDuplicateIncrementLogSuppressions;
+    private int _paperCounterDuplicateSuppressionLogsWritten;
+    private string _paperCounterLastIncrementExecutionId = "None";
+    private string _paperCounterLastSuppressedDuplicateExecutionId = "None";
     private int _paperSettlementRejects;
     private int _paperDuplicateSettlementSuppressions;
     private readonly object _paperCountersGate = new();
@@ -335,6 +344,13 @@ public class BotRuntimeState
     public int PaperCounterCountedExecutionIds => Volatile.Read(ref _paperCounterCountedExecutionIds);
     public int PaperCounterSyntheticCanaryCountedExecutions => Volatile.Read(ref _paperCounterSyntheticCanaryCountedExecutions);
     public int PaperCounterRealScannerCountedExecutions => Volatile.Read(ref _paperCounterRealScannerCountedExecutions);
+    public bool PaperCounterAuditEnabled => _paperCounterAudit.Enabled;
+    public int PaperCounterIncrementLogsWritten { get { lock (_paperCounterAuditGate) return _paperCounterIncrementLogs.Count; } }
+    public int PaperCounterDuplicateIncrementLogSuppressions => Volatile.Read(ref _paperCounterDuplicateIncrementLogSuppressions);
+    public int PaperCounterDuplicateSuppressionLogsWritten => Volatile.Read(ref _paperCounterDuplicateSuppressionLogsWritten);
+    public string PaperCounterLastIncrementExecutionId { get { lock (_paperCounterAuditGate) return _paperCounterLastIncrementExecutionId; } }
+    public string PaperCounterLastSuppressedDuplicateExecutionId { get { lock (_paperCounterAuditGate) return _paperCounterLastSuppressedDuplicateExecutionId; } }
+    public bool PaperCounterAuditConsistent => !_paperCounterAudit.Enabled || PaperCounterIncrementLogsWritten == PaperCounterCountedExecutionIds;
     public int MemoryWarnings => Volatile.Read(ref _memoryWarnings);
     public int MemoryCriticals => Volatile.Read(ref _memoryCriticals);
     public DateTime? LastMemoryCriticalAt => _lastMemoryCriticalAt;
@@ -411,11 +427,11 @@ public class BotRuntimeState
             {
                 duplicates++;
                 lastDuplicate = executionId;
-                Console.WriteLine($"[PAPER_COUNTER_DUPLICATE_SUPPRESSED] ExecutionId={executionId} PositionId={p.Id} SourceKind={sourceKind} Reason=AlreadyCounted ProcessRunId={ProcessRunId}");
+                AuditPaperCounter(executionId, p.Id, sourceKind, counted.Count);
                 continue;
             }
             if (p.IsSyntheticCanary) syntheticCounted++; else realCounted++;
-            Console.WriteLine($"[PAPER_COUNTER_INCREMENTED] ExecutionId={executionId} PositionId={p.Id} SourceKind={sourceKind} PaperOpened={counted.Count} PaperExecutions={counted.Count + Volatile.Read(ref _paperExecutionsCount)} ProcessRunId={ProcessRunId}");
+            AuditPaperCounter(executionId, p.Id, sourceKind, counted.Count);
         }
         Interlocked.Exchange(ref _paperOpenEvents, counted.Count);
         Interlocked.Exchange(ref _paperCloseEvents, closeEvents);
@@ -424,6 +440,28 @@ public class BotRuntimeState
         Interlocked.Exchange(ref _paperCounterCountedExecutionIds, counted.Count);
         Interlocked.Exchange(ref _paperCounterSyntheticCanaryCountedExecutions, syntheticCounted);
         Interlocked.Exchange(ref _paperCounterRealScannerCountedExecutions, realCounted);
+    }
+
+    private void AuditPaperCounter(string executionId, string positionId, string sourceKind, int paperOpened)
+    {
+        if (!_paperCounterAudit.Enabled) return;
+        lock (_paperCounterAuditGate)
+        {
+            if (_paperCounterIncrementLogs.Add(executionId))
+            {
+                _paperCounterLastIncrementExecutionId = executionId;
+                Console.WriteLine($"[PAPER_COUNTER_INCREMENTED] ExecutionId={executionId} PositionId={positionId} SourceKind={sourceKind} PaperOpened={paperOpened} PaperExecutions={paperOpened + Volatile.Read(ref _paperExecutionsCount)} ProcessRunId={ProcessRunId}");
+                return;
+            }
+
+            Interlocked.Increment(ref _paperCounterDuplicateIncrementLogSuppressions);
+            _paperCounterLastSuppressedDuplicateExecutionId = executionId;
+            _paperCounterDuplicateSuppressionLogs.TryGetValue(executionId, out var writtenForExecution);
+            if (!_paperCounterAudit.LogDuplicateSuppressions || writtenForExecution >= _paperCounterAudit.MaxDuplicateSuppressionLogsPerExecution) return;
+            _paperCounterDuplicateSuppressionLogs[executionId] = writtenForExecution + 1;
+            Interlocked.Increment(ref _paperCounterDuplicateSuppressionLogsWritten);
+            Console.WriteLine($"[PAPER_COUNTER_DUPLICATE_SUPPRESSED] ExecutionId={executionId} PositionId={positionId} SourceKind={sourceKind} Reason=AlreadyCounted ProcessRunId={ProcessRunId}");
+        }
     }
     public void ReplacePaperSettlements(IEnumerable<PaperSettlementRecord> items){while(_paperSettlements.TryDequeue(out _)){} foreach(var i in items.Take(500)) _paperSettlements.Enqueue(i); Trim(_paperSettlements,500);}
     public void ClearTransientLogBuffers()
