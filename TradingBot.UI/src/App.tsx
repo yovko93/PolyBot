@@ -199,8 +199,10 @@ export default function App() {
   const paperPhase1Limits = paperPhase1.limits ?? {};
   const paperPhase1Opened = Number(first(paperPhase1Counters.paperOpened, runtime(health, 'paperPhase1PaperOpened'), 0));
   const paperPhase1Armed = first(paperPhase1.armed, runtime(health, 'paperPhase1Armed'), false) === true;
+  const paperPhase1Canary = dashboard?.paperPhase1Canary ?? {};
+  const canaryActive = first(paperPhase1Canary.enabled, runtime(health, 'paperPhase1CanaryEnabled'), false) === true;
   const paperPhase1Rows = [
-    ['Label', 'Paper only — no live orders, no signing.'],
+    ['Label', canaryActive ? 'Synthetic Canary Test — not a real market.' : 'Paper only — no live orders, no signing.'],
     ['State', paperPhase1Armed ? 'Armed' : 'Not armed'],
     ['Readiness reason', first(paperPhase1.readinessReason, runtime(health, 'paperPhase1ReadinessReason'), '-')],
     ['Readiness evaluated', first(paperPhase1.readinessLastEvaluatedUtc, runtime(health, 'paperPhase1ReadinessLastEvaluatedUtc'), '-')],
@@ -217,6 +219,33 @@ export default function App() {
     ['Open positions', openPositions.length],
     ['Exposure', money(Number(first(runtime(health, 'paperTotalExposure'), paper.totalExposure, locked, 0)))],
     ['Expected PnL', money(Number(first(runtime(health, 'paperExpectedProfit'), d.status?.expectedProfit, paper.expectedProfit, 0)))],
+    ['Canary enabled', String(first(paperPhase1Canary.enabled, runtime(health, 'paperPhase1CanaryEnabled'), false))],
+    ['Canary attempted', String(first(paperPhase1Canary.attempted, runtime(health, 'paperPhase1CanaryAttempted'), false))],
+    ['Canary opened', String(first(paperPhase1Canary.opened, runtime(health, 'paperPhase1CanaryOpened'), false))],
+    ['Canary settled', String(first(paperPhase1Canary.settled, runtime(health, 'paperPhase1CanarySettled'), false))],
+    ['Canary PositionId', first(paperPhase1Canary.positionId, runtime(health, 'paperPhase1CanaryPositionId'), 'None')],
+    ['Canary expected profit', money(Number(first(paperPhase1Canary.expectedProfit, runtime(health, 'paperPhase1CanaryExpectedProfit'), 0)))],
+    ['Canary realized PnL', money(Number(first(paperPhase1Canary.realizedPnl, runtime(health, 'paperPhase1CanaryRealizedPnl'), 0)))],
+    ['Canary RunOnce', String(first(paperPhase1Canary.runOnce, runtime(health, 'paperPhase1CanaryRunOnce'), true))],
+    ['Canary duplicate suppressions', first(paperPhase1Canary.duplicateSuppressions, runtime(health, 'paperPhase1CanaryDuplicateSuppressions'), 0)],
+    ['Canary consistency reason', first(paperPhase1Canary.consistencyReason, runtime(health, 'paperPhase1CanaryConsistencyReason'), 'None')],
+    ['Canary attempts / opened', `${first(paperPhase1Canary.openAttempts, runtime(health, 'paperPhase1CanaryOpenAttempts'), 0)} / ${first(paperPhase1Canary.paperOpened, runtime(health, 'paperPhase1CanaryPaperOpened'), 0)}`],
+    ['Canary closed / open pos', `${first(paperPhase1Canary.paperClosed, runtime(health, 'paperPhase1CanaryPaperClosed'), 0)} / ${first(paperPhase1Canary.openPositions, runtime(health, 'paperPhase1CanaryOpenPositions'), 0)}`],
+    ['Canary exposure', money(Number(first(paperPhase1Canary.exposure, runtime(health, 'paperPhase1CanaryExposure'), 0)))],
+    ['Canary global balance', `${first(paperPhase1Canary.globalPaperOpened, runtime(health, 'paperDiagnosticsLimitedPaperOpened'), 0)} opened = ${first(paperPhase1Canary.globalPaperClosed, runtime(health, 'paperClosedPositions'), 0)} closed + ${first(paperPhase1Canary.globalOpenPositions, runtime(health, 'paperOpenPositions'), 0)} open`],
+    ['Canary global PaperOpened', first(paperPhase1Canary.globalPaperOpened, runtime(health, 'paperDiagnosticsLimitedPaperOpened'), 0)],
+    ['Canary global PaperClosed', first(paperPhase1Canary.globalPaperClosed, runtime(health, 'paperClosedPositions'), 0)],
+    ['Canary global OpenPositions', first(paperPhase1Canary.globalOpenPositions, runtime(health, 'paperOpenPositions'), 0)],
+    ['Canary global Exposure', money(Number(first(paperPhase1Canary.globalExposure, runtime(health, 'paperTotalExposure'), 0)))],
+    ['Canary counter source', first(paperPhase1Canary.counterSourceOfTruth, runtime(health, 'paperCounterSourceOfTruth'), 'PaperPositionManager')],
+    ['Canary counter duplicate suppressions', first(paperPhase1Canary.counterDuplicateSuppressions, runtime(health, 'paperCounterDuplicateSuppressions'), 0)],
+    ['Canary audit logs consistent', String(first(paperPhase1Canary.auditConsistent, runtime(health, 'paperCounterAuditConsistent'), true))],
+    ['Canary increment logs written', first(paperPhase1Canary.incrementLogsWritten, runtime(health, 'paperCounterIncrementLogsWritten'), 0)],
+    ...(first(paperPhase1Canary.consistent, runtime(health, 'paperPhase1CanaryConsistent'), true) === false ? [['Canary warning', 'Canary accounting inconsistent — check duplicate open/settlement balance.']] : []),
+    ...(first(paperPhase1Canary.globalCounterBalanced, true) === false ? [['Canary counter warning', 'Paper counter imbalance detected.']] : []),
+    ['Canary synthetic only', String(first(paperPhase1Canary.syntheticOnly, runtime(health, 'paperPhase1CanarySyntheticOnly'), true))],
+    ['Canary real order sent', String(first(paperPhase1Canary.realOrderSent, runtime(health, 'paperPhase1CanaryRealOrderSent'), false))],
+    ['Canary signing attempted', String(first(paperPhase1Canary.signingAttempted, runtime(health, 'paperPhase1CanarySigningAttempted'), false))],
     ['Status message', paperPhase1Opened > 0 ? 'Open paper position present.' : 'Paper engine armed. No eligible positive-edge candidate yet.']
   ];
 
@@ -358,7 +387,8 @@ export default function App() {
       <Metric label="Mode" value={d.status?.mode ?? `PaperPhase ${runtime(health, 'paperPhase') ?? 'PaperOnly'}`} tone="cyan" />
       <Metric label="Trading" value={tradingState} tone={tradingState === 'Paper limited' ? 'cyan' : tradingState === 'Strategy blocked' ? 'yellow' : 'green'} />
       <Metric label="Discovery" value={backendConnected ? discoveryLabel(health, scanner, d.controls) : 'Waiting'} tone={backendConnected ? (d.controls?.isPaused || runtime(health, 'discoveryReducedUniverse') ? 'yellow' : 'cyan') : 'yellow'} />
-      <Metric label="Readiness" value={backendConnected ? readinessLabel(health, d.controls) : 'No backend'} tone={backendConnected ? (runtime(health, 'tradingReadiness') ? 'green' : 'yellow') : 'yellow'} />
+      <Metric label="Readiness" value={backendConnected ? readinessLabel(health, d.controls) : 'No backend'} tone={backendConnected ? (canaryActive ? 'cyan' : runtime(health, 'tradingReadiness') ? 'green' : 'yellow') : 'yellow'} />
+      {canaryActive ? <Metric label="Profile" value="Synthetic Canary Test" tone="cyan" /> : null}
       <Metric label="P/L" value={money(pnl)} tone={pnl < 0 ? 'red' : 'green'} />
       <Metric label="Diagnostics" value={diagnosticsState} tone={diagnosticsState === 'Diagnostics OK' ? 'green' : diagnosticsState === 'Diagnostics Warning' ? 'yellow' : 'red'} />
     </header>
@@ -469,6 +499,7 @@ function discoveryLabel(health: any, scanner: any, controls: any) {
 }
 function readinessLabel(health: any, controls: any) {
   const mode = String(first(runtime(health, 'discoveryMode'), runtime(health, 'discoverySelectedSource'), '')).toLowerCase();
+  if (String(runtime(health, 'runtimeProfile') ?? '').toLowerCase() === 'reduceddiagnosticspaperphase1canary') return 'Synthetic Canary Test';
   if (controls?.isPaused) return 'Paused';
   if (runtime(health, 'discoverySourceAuditOnly')) return 'SourceAuditOnly';
   if (mode === 'reduceduniversediagnosticsonly' || runtime(health, 'discoveryReducedUniverse')) return 'Blocked / Reduced diagnostics';

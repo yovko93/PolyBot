@@ -243,6 +243,70 @@ public class PaperPositionBook
         return position;
     }
 
+    public PaperPosition? AddSyntheticCanaryPosition(
+        string positionId,
+        string marketId,
+        string yesTokenId,
+        string noTokenId,
+        decimal yesAsk,
+        decimal noAsk,
+        decimal quantity,
+        decimal notional,
+        decimal expectedPayout,
+        decimal expectedProfit,
+        decimal rawEdge,
+        decimal afterSafetyEdge,
+        string sourceCandidateId,
+        string processRunId)
+    {
+        var position = new PaperPosition
+        {
+            PositionId = positionId,
+            OpenedAtUtc = DateTime.UtcNow,
+            Engine = "PaperPhase1SyntheticCanary",
+            Strategy = "SingleMarketBuyBoth",
+            GroupKey = marketId,
+            Quantity = quantity,
+            TotalCost = notional,
+            CostPerBasket = yesAsk + noAsk,
+            GuaranteedPayout = expectedPayout,
+            EdgePerShare = rawEdge,
+            ExpectedProfit = expectedProfit,
+            GrossEdgeAtOpen = rawEdge,
+            NetEdgeAtOpen = afterSafetyEdge,
+            LockedCapital = notional,
+            ActiveProfile = "PaperPhase1SyntheticCanary",
+            Source = "PaperPhase1SyntheticCanary",
+            IsSyntheticCanary = true,
+            SourceCandidateId = sourceCandidateId,
+            ProcessRunId = processRunId,
+            OpenedFromSimulatedFills = true,
+            FillSimulationId = $"synthetic-canary-{processRunId}",
+            CurrentNoAskSum = yesAsk + noAsk,
+            CurrentExitValue = null,
+            UnrealizedPnl = 0m,
+            MtmStatus = "SyntheticCanary",
+            MissingExitPrices = 0,
+            Status = PaperPositionStatus.Open,
+            Legs = new List<PaperPositionLeg>
+            {
+                new(marketId, "Synthetic Paper Phase 1 Canary", yesTokenId, yesAsk, quantity, quantity * yesAsk),
+                new(marketId, "Synthetic Paper Phase 1 Canary", noTokenId, noAsk, quantity, quantity * noAsk)
+            }
+        };
+        lock (_lock)
+        {
+            if (IsBlockedNoLock(position.PositionId, out var reason))
+            {
+                Console.WriteLine(reason);
+                return null;
+            }
+            _openPositions[position.PositionId] = position;
+            AppendCsv(position);
+        }
+        return position;
+    }
+
     private static string BuildTwoLegPositionId(
         ArbOpportunity opportunity,
         string engine)

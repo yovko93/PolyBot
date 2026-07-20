@@ -103,9 +103,9 @@ public class MultiOutcomeGroupArbEngine
                 Market: m,
                 Group: ExtractGroup(m.question)
             ))
-            .Where(x => x.Group != null)
+            .Where(x => x.Group is not null)
             .Select(x => new GroupedMarket(x.Market, x.Group!))
-            .GroupBy(x => x.Group.GroupKey)
+            .GroupBy(x => x.Group!.GroupKey)
             .Where(g => g.Count() >= 2)
             .ToList();
     }

@@ -11,9 +11,11 @@ public class BotRuntimeState
 {
     private readonly object _gate = new();
     private readonly RuntimeStateOptions _runtime;
+    private readonly PaperCounterAuditOptions _paperCounterAudit;
     private long _seq;
-    public BotRuntimeState() : this(new RuntimeStateOptions()) { }
-    public BotRuntimeState(RuntimeStateOptions runtime) { _runtime = runtime; }
+    public BotRuntimeState() : this(new RuntimeStateOptions(), new PaperCounterAuditOptions()) { }
+    public BotRuntimeState(RuntimeStateOptions runtime) : this(runtime, new PaperCounterAuditOptions()) { }
+    public BotRuntimeState(RuntimeStateOptions runtime, PaperCounterAuditOptions paperCounterAudit) { _runtime = runtime; _paperCounterAudit = paperCounterAudit; }
     public BotStatusDto Status { get; private set; } = new("DRY_RUN", false, "DISCONNECTED", 1000, 0, 1000, 0, 0, 0, 0, DateTime.UtcNow, DateTime.UtcNow);
     public ScannerStatsDto ScannerStats { get; private set; } = new(0,0,0,0,0,0,0,0,0,0,0,0,DateTime.UtcNow,DateTime.UtcNow,null,0,0,0,0,0,0,0,DateTime.UtcNow,DateTime.UtcNow,0,0,0,0,0,0,0,0,0,0,0,0,null,0,0,0,0,0,0,0,null,0);
     public TradingBot.Models.OpportunityDiagnosticsSnapshot? OpportunityDiagnostics { get; private set; }
@@ -149,6 +151,18 @@ public class BotRuntimeState
     private int _paperExecutionsCount;
     private int _paperOpenEvents;
     private int _paperCloseEvents;
+    private int _paperCounterDuplicateSuppressions;
+    private string _paperCounterLastDuplicateExecutionId = "None";
+    private int _paperCounterCountedExecutionIds;
+    private int _paperCounterSyntheticCanaryCountedExecutions;
+    private int _paperCounterRealScannerCountedExecutions;
+    private readonly object _paperCounterAuditGate = new();
+    private readonly HashSet<string> _paperCounterIncrementLogs = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _paperCounterDuplicateSuppressionLogs = new(StringComparer.OrdinalIgnoreCase);
+    private int _paperCounterDuplicateIncrementLogSuppressions;
+    private int _paperCounterDuplicateSuppressionLogsWritten;
+    private string _paperCounterLastIncrementExecutionId = "None";
+    private string _paperCounterLastSuppressedDuplicateExecutionId = "None";
     private int _paperSettlementRejects;
     private int _paperDuplicateSettlementSuppressions;
     private readonly object _paperCountersGate = new();
@@ -324,6 +338,19 @@ public class BotRuntimeState
     public int PaperLifecycleEvents => PaperOpenEvents + PaperCloseEvents;
     public long LiveTradingBlockedCount => TradingBot.Services.LiveTradingGuard.BlockedCount;
     public int PaperExecutionsCount => Math.Max(PaperOpenEvents, SingleMarketExecutionsCount) + Volatile.Read(ref _paperExecutionsCount);
+    public string PaperCounterSourceOfTruth => "PaperPositionManager";
+    public int PaperCounterDuplicateSuppressions => Volatile.Read(ref _paperCounterDuplicateSuppressions);
+    public string PaperCounterLastDuplicateExecutionId => _paperCounterLastDuplicateExecutionId;
+    public int PaperCounterCountedExecutionIds => Volatile.Read(ref _paperCounterCountedExecutionIds);
+    public int PaperCounterSyntheticCanaryCountedExecutions => Volatile.Read(ref _paperCounterSyntheticCanaryCountedExecutions);
+    public int PaperCounterRealScannerCountedExecutions => Volatile.Read(ref _paperCounterRealScannerCountedExecutions);
+    public bool PaperCounterAuditEnabled => _paperCounterAudit.Enabled;
+    public int PaperCounterIncrementLogsWritten { get { lock (_paperCounterAuditGate) return _paperCounterIncrementLogs.Count; } }
+    public int PaperCounterDuplicateIncrementLogSuppressions => Volatile.Read(ref _paperCounterDuplicateIncrementLogSuppressions);
+    public int PaperCounterDuplicateSuppressionLogsWritten => Volatile.Read(ref _paperCounterDuplicateSuppressionLogsWritten);
+    public string PaperCounterLastIncrementExecutionId { get { lock (_paperCounterAuditGate) return _paperCounterLastIncrementExecutionId; } }
+    public string PaperCounterLastSuppressedDuplicateExecutionId { get { lock (_paperCounterAuditGate) return _paperCounterLastSuppressedDuplicateExecutionId; } }
+    public bool PaperCounterAuditConsistent => !_paperCounterAudit.Enabled || PaperCounterIncrementLogsWritten == PaperCounterCountedExecutionIds;
     public int MemoryWarnings => Volatile.Read(ref _memoryWarnings);
     public int MemoryCriticals => Volatile.Read(ref _memoryCriticals);
     public DateTime? LastMemoryCriticalAt => _lastMemoryCriticalAt;
@@ -382,10 +409,59 @@ public class BotRuntimeState
         var materialized = items.Take(_runtime.MaxPaperPositions).ToArray();
         foreach(var i in materialized) _positions.Enqueue(i);
         Trim(_positions,_runtime.MaxPaperPositions);
-        var openEvents = materialized.Count(p => p.Status.Equals("OPEN", StringComparison.OrdinalIgnoreCase) || p.Status.Equals("CLOSED", StringComparison.OrdinalIgnoreCase) || p.Status.Equals("CANCELLED", StringComparison.OrdinalIgnoreCase));
-        var closeEvents = materialized.Count(p => p.Status.Equals("CLOSED", StringComparison.OrdinalIgnoreCase));
-        Interlocked.Exchange(ref _paperOpenEvents, openEvents);
+        var counted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var duplicates = 0;
+        var lastDuplicate = "None";
+        var syntheticCounted = 0;
+        var realCounted = 0;
+        var closeEvents = 0;
+        foreach (var p in materialized)
+        {
+            if (p.Status.Equals("CLOSED", StringComparison.OrdinalIgnoreCase)) closeEvents++;
+            if (!p.Status.Equals("OPEN", StringComparison.OrdinalIgnoreCase) && !p.Status.Equals("CLOSED", StringComparison.OrdinalIgnoreCase) && !p.Status.Equals("CANCELLED", StringComparison.OrdinalIgnoreCase)) continue;
+            var sourceKind = p.IsSyntheticCanary ? "SyntheticCanary" : "RealScanner";
+            var executionId = p.IsSyntheticCanary && !string.IsNullOrWhiteSpace(p.SourceCandidateId) && !string.IsNullOrWhiteSpace(p.ProcessRunId)
+                ? $"{p.SourceCandidateId}|{p.ProcessRunId}"
+                : string.IsNullOrWhiteSpace(p.SourceCandidateId) ? p.Id : $"{p.SourceCandidateId}|{p.ProcessRunId ?? ProcessRunId}";
+            if (!counted.Add(executionId))
+            {
+                duplicates++;
+                lastDuplicate = executionId;
+                AuditPaperCounter(executionId, p.Id, sourceKind, counted.Count);
+                continue;
+            }
+            if (p.IsSyntheticCanary) syntheticCounted++; else realCounted++;
+            AuditPaperCounter(executionId, p.Id, sourceKind, counted.Count);
+        }
+        Interlocked.Exchange(ref _paperOpenEvents, counted.Count);
         Interlocked.Exchange(ref _paperCloseEvents, closeEvents);
+        Interlocked.Exchange(ref _paperCounterDuplicateSuppressions, duplicates);
+        _paperCounterLastDuplicateExecutionId = lastDuplicate;
+        Interlocked.Exchange(ref _paperCounterCountedExecutionIds, counted.Count);
+        Interlocked.Exchange(ref _paperCounterSyntheticCanaryCountedExecutions, syntheticCounted);
+        Interlocked.Exchange(ref _paperCounterRealScannerCountedExecutions, realCounted);
+    }
+
+    private void AuditPaperCounter(string executionId, string positionId, string sourceKind, int paperOpened)
+    {
+        if (!_paperCounterAudit.Enabled) return;
+        lock (_paperCounterAuditGate)
+        {
+            if (_paperCounterIncrementLogs.Add(executionId))
+            {
+                _paperCounterLastIncrementExecutionId = executionId;
+                Console.WriteLine($"[PAPER_COUNTER_INCREMENTED] ExecutionId={executionId} PositionId={positionId} SourceKind={sourceKind} PaperOpened={paperOpened} PaperExecutions={paperOpened + Volatile.Read(ref _paperExecutionsCount)} ProcessRunId={ProcessRunId}");
+                return;
+            }
+
+            Interlocked.Increment(ref _paperCounterDuplicateIncrementLogSuppressions);
+            _paperCounterLastSuppressedDuplicateExecutionId = executionId;
+            _paperCounterDuplicateSuppressionLogs.TryGetValue(executionId, out var writtenForExecution);
+            if (!_paperCounterAudit.LogDuplicateSuppressions || writtenForExecution >= _paperCounterAudit.MaxDuplicateSuppressionLogsPerExecution) return;
+            _paperCounterDuplicateSuppressionLogs[executionId] = writtenForExecution + 1;
+            Interlocked.Increment(ref _paperCounterDuplicateSuppressionLogsWritten);
+            Console.WriteLine($"[PAPER_COUNTER_DUPLICATE_SUPPRESSED] ExecutionId={executionId} PositionId={positionId} SourceKind={sourceKind} Reason=AlreadyCounted ProcessRunId={ProcessRunId}");
+        }
     }
     public void ReplacePaperSettlements(IEnumerable<PaperSettlementRecord> items){while(_paperSettlements.TryDequeue(out _)){} foreach(var i in items.Take(500)) _paperSettlements.Enqueue(i); Trim(_paperSettlements,500);}
     public void ClearTransientLogBuffers()
@@ -497,7 +573,7 @@ public class BotRuntimeState
         if (!DiscoveryHealthy)
         {
             var expectedReducedUniverseGlobalBlock = options is not null
-                && string.Equals(options.RuntimeProfile, TradingBot.Services.RuntimeProfileService.ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase)
+                && (string.Equals(options.RuntimeProfile, TradingBot.Services.RuntimeProfileService.ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase) || string.Equals(options.RuntimeProfile, TradingBot.Services.RuntimeProfileService.ReducedDiagnosticsPaperPhase1Canary, StringComparison.OrdinalIgnoreCase))
                 && string.Equals(DiscoverySelectedSource, "ReducedUniverseDiagnosticsOnly", StringComparison.OrdinalIgnoreCase)
                 && AllowReducedUniverseDiagnosticsOnly
                 && ReducedUniverseExplicitFlagSatisfied

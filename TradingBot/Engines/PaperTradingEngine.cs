@@ -100,6 +100,24 @@ public class PaperTradingEngine
         return false;
     }
 
+    public PaperPosition? OpenSyntheticCanary(string positionId, string marketId, string yesTokenId, string noTokenId, decimal yesAsk, decimal noAsk, decimal quantity, decimal notional, decimal expectedPayout, decimal expectedProfit, decimal rawEdge, decimal afterSafetyEdge, string sourceCandidateId, string processRunId, out string rejectReason)
+    {
+        lock (_lock)
+        {
+            rejectReason = "None";
+            if (_positionBook is null) { rejectReason = "PositionBookMissing"; return null; }
+            var gateOpportunity = new PaperPreTradeOpportunity("SingleMarketBuyBoth", marketId, PaperStrategyKind.SingleMarket, true, notional, expectedProfit, true, true, true, true, DuplicatePositionOpen: HasOpenPaperPosition(marketId, "SingleMarketBuyBoth"));
+            if (!ValidatePaperOpen(gateOpportunity, out rejectReason)) return null;
+            var position = _positionBook.AddSyntheticCanaryPosition(positionId, marketId, yesTokenId, noTokenId, yesAsk, noAsk, quantity, notional, expectedPayout, expectedProfit, rawEdge, afterSafetyEdge, sourceCandidateId, processRunId);
+            if (position is null) { rejectReason = "DuplicateOpenPosition"; return null; }
+            Balance -= notional;
+            LockedCapital += notional;
+            ExpectedProfit += expectedProfit;
+            MarkPaperOpened(marketId, PaperStrategyKind.SingleMarket);
+            return position;
+        }
+    }
+
     public PaperDuplicateSuppressionDiagnostics GetSingleMarketDuplicateDiagnostics(string marketId, string strategy)
     {
         lock (_lock)

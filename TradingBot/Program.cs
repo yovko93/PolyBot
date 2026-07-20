@@ -15,6 +15,14 @@ using TradingBot.Services.MultiOutcome;
 var originalOut = Console.Out;
 var builder = WebApplication.CreateBuilder(args);
 var runtimeProfileResolution = RuntimeProfileService.Resolve(args, builder.Configuration);
+Console.WriteLine(RuntimeProfileService.RegistryLog());
+Console.WriteLine(RuntimeProfileService.ResolutionLog(runtimeProfileResolution));
+if (runtimeProfileResolution.ProfileRequested && !runtimeProfileResolution.ProfileFound)
+{
+    Console.WriteLine(RuntimeProfileService.ResolutionErrorLog(runtimeProfileResolution));
+    Environment.ExitCode = 2;
+    return;
+}
 
 builder.Services.AddCors(o => o.AddPolicy("ui", p => p.WithOrigins("http://localhost:5173", "http://127.0.0.1:5173").AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
 builder.Services.AddSignalR();
@@ -44,7 +52,11 @@ builder.Services.AddSingleton<MemoryGuard>();
 builder.Services.AddSingleton<QuietLogGate>();
 builder.Services.AddSingleton<IExchangeOrderExecutor, DisabledExchangeOrderExecutor>();
 builder.Services.AddSingleton<DryRunLiveExecutor>();
-builder.Services.AddSingleton(sp => new BotRuntimeState(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value.RuntimeState));
+builder.Services.AddSingleton(sp =>
+{
+    var configured = sp.GetRequiredService<IOptions<TradingBotOptions>>().Value;
+    return new BotRuntimeState(configured.RuntimeState, configured.PaperCounterAudit);
+});
 builder.Services.AddSingleton<TextWriter>(originalOut);
 builder.Services.AddSingleton<IBotUiLogger, BotUiLogger>();
 builder.Services.AddSingleton(sp => new DiagnosticsDashboardService(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value));
@@ -481,6 +493,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var executionJournal = new ExecutionJournal(executionJournalPath);
     var positionBook = new PaperPositionBook(Path.Combine(AppContext.BaseDirectory, "data", "paper-positions.csv"));
     var paper = new PaperTradingEngine(executionPolicy, executionJournal, executionDecisionService, positionBook, options);
+    var paperPhase1Canary = new PaperPhase1SyntheticCanaryService(options, paper, positionBook, contentRootPath);
     var paperValidationHarness = new PaperPhaseValidationHarness();
     paperValidationHarness.TryRun(options, paper, positionBook, state, contentRootPath);
     var paperSettlementValidationHarness = new PaperSettlementValidationHarness();
@@ -636,7 +649,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         var stats = orderbookService.GetStats();
         var runtimeHealth = RuntimeHealthSnapshot.From(state, options);
         var profileOk = string.Equals(options.RuntimeProfile, RuntimeProfileService.ReducedDiagnosticsFullStack, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(options.RuntimeProfile, RuntimeProfileService.ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase);
+            || (string.Equals(options.RuntimeProfile, RuntimeProfileService.ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase) || string.Equals(options.RuntimeProfile, RuntimeProfileService.ReducedDiagnosticsPaperPhase1Canary, StringComparison.OrdinalIgnoreCase));
         var stable = filter.Markets.Count > 0
             && filter.EligibleMarkets > 0
             && stats.BatchBadRequests == 0
@@ -2530,7 +2543,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             monitor.FlushCsv();
             SetScannerStage("ExportWrite", "SyncRuntimeState");
             UpdateDiscoveryGuardRuntimeState();
-            SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, filtered.Count, started, null, scanStats, filtering, lastDiscoverySummary, rollingOffset, options.ScanBatchSize, discoveredMarkets.Count, discoveryStartedAt, discoveryCompletedAt, emptyCycles, options.MarketScanLimit, effectiveMarketLimit, options.MaxMarketsToDiscover, options, poolLimitReason, multiOutcomeReport, contentRootPath);
+            SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, filtered.Count, started, null, scanStats, filtering, lastDiscoverySummary, rollingOffset, options.ScanBatchSize, discoveredMarkets.Count, discoveryStartedAt, discoveryCompletedAt, emptyCycles, options.MarketScanLimit, effectiveMarketLimit, options.MaxMarketsToDiscover, options, poolLimitReason, multiOutcomeReport, contentRootPath, paperPhase1Canary);
             if (options.Caches.ClearOrderbookCacheAfterScan) orderbookService.ClearExpiredCache();
             state.SetRuntimeCounts(repairHistoryCount: allowlistRepairService.RepairHistorySnapshotCount, dryRunOrderPlansCount: verifiedExecution.DryRunPlanCount, fillSimulationsCount: verifiedExecution.FillSimulationCount, executionAuditCount: verifiedExecution.AuditCount, orderbookCacheCount: orderbookService.CacheEntryCount, marketCacheCount: discoveredMarkets.Count);
             memoryGuard.Check(state, options, () => { orderbookService.ClearAllCache(); orderbookService.TrimAllBoundedStores(); quietLogGate.TrimExpired(); }, contentRootPath);
@@ -2599,7 +2612,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 Console.WriteLine($"[SCANNER_FAULTED] Reason=RepeatedSameException Type={scannerError.Type} Count={scannerError.SameExceptionCount} Action=Paused");
             }
             SetScannerStage("ExportWrite", "SyncRuntimeState");
-            SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, 0, started, lastError, new SingleMarketScanStats(0,0,0,0,0,0,0,0), filtering, lastDiscoverySummary, rollingOffset, options.ScanBatchSize, discoveredMarkets.Count, discoveryStartedAt, discoveryCompletedAt, emptyCycles, options.MarketScanLimit, 0, options.MaxMarketsToDiscover, options, "Error", new MultiOutcomeGroupArbEngine.MultiOutcomeScanReport(0,0,0,0,0,0,0,0m,0m,0m,string.Empty,"Error",new Dictionary<string,int>(),Array.Empty<MultiOutcomeGroupArbEngine.RejectedSample>(),Array.Empty<MultiOutcomeGroupArbEngine.CandidateGroupReview>()), contentRootPath);
+            SyncRuntimeState(state, monitor, positionBook, executionJournalPath, executionPolicy, orderbookService, paper, 0, started, lastError, new SingleMarketScanStats(0,0,0,0,0,0,0,0), filtering, lastDiscoverySummary, rollingOffset, options.ScanBatchSize, discoveredMarkets.Count, discoveryStartedAt, discoveryCompletedAt, emptyCycles, options.MarketScanLimit, 0, options.MaxMarketsToDiscover, options, "Error", new MultiOutcomeGroupArbEngine.MultiOutcomeScanReport(0,0,0,0,0,0,0,0m,0m,0m,string.Empty,"Error",new Dictionary<string,int>(),Array.Empty<MultiOutcomeGroupArbEngine.RejectedSample>(),Array.Empty<MultiOutcomeGroupArbEngine.CandidateGroupReview>()), contentRootPath, paperPhase1Canary);
             var backoff = scannerErrors.NextBackoff(scannerError.Faulted);
             await Task.Delay(backoff, stoppingToken);
             if (scannerError.Faulted) continue;
@@ -2816,7 +2829,7 @@ static string ResolveConfigSource(IConfiguration configuration, params string[] 
     return matches.Count == 0 ? "Default" : string.Join("|", matches);
 }
 
-static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, PaperPositionBook pb, string executionJournalPath, ExecutionPolicy p, OrderBookService obs, PaperTradingEngine paper, int marketsScanned, DateTime scanStart, string? lastError, SingleMarketScanStats scanStats, OpportunityFilteringOptions filtering, MarketDiscoverySummary discovery, int rollingOffset, int batchSize, int totalDiscovered, DateTime discoveryStartedAt, DateTime discoveryCompletedAt, int emptyCycles, int configuredMarketScanLimit, int effectiveMarketLimit, int configuredMaxMarketsToDiscover, TradingBotOptions options, string poolLimitReason, MultiOutcomeGroupArbEngine.MultiOutcomeScanReport multiOutcomeReport, string contentRootPath)
+static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, PaperPositionBook pb, string executionJournalPath, ExecutionPolicy p, OrderBookService obs, PaperTradingEngine paper, int marketsScanned, DateTime scanStart, string? lastError, SingleMarketScanStats scanStats, OpportunityFilteringOptions filtering, MarketDiscoverySummary discovery, int rollingOffset, int batchSize, int totalDiscovered, DateTime discoveryStartedAt, DateTime discoveryCompletedAt, int emptyCycles, int configuredMarketScanLimit, int effectiveMarketLimit, int configuredMaxMarketsToDiscover, TradingBotOptions options, string poolLimitReason, MultiOutcomeGroupArbEngine.MultiOutcomeScanReport multiOutcomeReport, string contentRootPath, PaperPhase1SyntheticCanaryService paperPhase1Canary)
 {
     var top = monitor.GetTopCycleRecords(200, executableOnly: false);
     var skippedPositive = top.Count(x => !x.IsExecutable && x.EdgePerShare > 0 && x.ExpectedProfit > 0);
@@ -2975,6 +2988,13 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
     state.SetPaperOpenMarketIds(pb.OpenPositions.SelectMany(x => x.Legs.Select(l => l.MarketId)).Distinct(StringComparer.OrdinalIgnoreCase));
     state.ReplacePaperSettlements(pb.Settlements);
     state.SetPaperSettlementCounters(paper.SettlementRejects, paper.DuplicateSettlementSuppressions);
+    paperPhase1Canary.Tick(state);
+    state.ReplacePositions(pb.OpenPositions.Concat(pb.ClosedPositions).Take(200).Select(pz => PaperPositionDtoFactory.ToDto(pz, state.NextSeq())));
+    state.SetStatus(new BotStatusDto("PAPER", !state.Controls.IsPaused, "CONNECTED", paper.Balance, paper.LockedCapital, paper.Equity, paper.RealizedPnl, paper.ExpectedProfit, pb.OpenPositions.Count, top.Count, DateTime.UtcNow, DateTime.UtcNow));
+    state.SetPaperOpenCountLastHour(paper.HourlyOpenCount);
+    state.SetPaperOpenPositionKeys(pb.OpenPositions.Select(x => x.GroupKey));
+    state.SetPaperOpenMarketIds(pb.OpenPositions.SelectMany(x => x.Legs.Select(l => l.MarketId)).Distinct(StringComparer.OrdinalIgnoreCase));
+    state.ReplacePaperSettlements(pb.Settlements);
     var exportsRoot = Path.Combine(contentRootPath, "exports");
     PaperAccountExporter.ExportLatest(exportsRoot, paper, pb, state.SingleMarketExecutions(), paper.BlockedCountsByReason);
     PaperOpportunityFunnelExporter.ExportLatest(exportsRoot, PaperOpportunityFunnelExporter.Build(options, state, scanStats, multiOutcomeReport, marketsScanned, !discovery.DiscoveryHealthy && discovery.ActiveMarketsAvailable < options.MarketDiscovery.MinHealthyActiveMarkets));
