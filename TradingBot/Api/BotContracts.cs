@@ -1,5 +1,7 @@
 namespace TradingBot.Api;
 
+public sealed record PaperPhase1SettlementRequest(string PositionId, decimal RealizedPayout, string Reason);
+
 public record BotStatusDto(string Mode,bool ScannerActive,string ConnectionStatus,decimal Cash,decimal LockedCapital,decimal Equity,decimal RealizedPnl,decimal ExpectedProfit,int OpenPositions,int SignalCount,DateTime LastScanTime,DateTime LastHeartbeat);
 public record OpportunityDto(string Id,DateTime Timestamp,int Rank,string Strategy,string Group,string Market,string Side,decimal EdgePerShare,decimal ExpectedProfit,decimal CostOrProceeds,decimal GuaranteedPayout,decimal QtyAvailable,bool Executable,string Status,string? Reason,long Sequence);
 public record TradeLogEntryDto(string Id,DateTime Timestamp,string Strategy,string Side,string Market,decimal Amount,decimal Price,decimal Edge,decimal ExpectedProfit,string Status,string? Reason,long Sequence);

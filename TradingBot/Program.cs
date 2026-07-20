@@ -59,7 +59,8 @@ builder.Services.AddSingleton(sp =>
 });
 builder.Services.AddSingleton<TextWriter>(originalOut);
 builder.Services.AddSingleton<IBotUiLogger, BotUiLogger>();
-builder.Services.AddSingleton(sp => new DiagnosticsDashboardService(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value));
+builder.Services.AddSingleton(sp => new PaperPhase1RealWatchService(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value));
+builder.Services.AddSingleton(sp => new DiagnosticsDashboardService(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value, sp.GetRequiredService<PaperPhase1RealWatchService>()));
 builder.Services.AddSingleton(sp => new DiagnosticsDashboardHistoryService(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value));
 
 var app = builder.Build();
@@ -124,6 +125,11 @@ app.MapGet("/api/bot/paper/account", (BotRuntimeState s) => Results.Ok(new
 app.MapGet("/api/bot/paper/positions", (BotRuntimeState s) => s.Positions());
 app.MapGet("/api/bot/paper/executions", (BotRuntimeState s) => s.SingleMarketExecutions().Cast<object>().Concat(s.Trades().Where(t => string.Equals(t.Status, "PAPER_EXECUTED", StringComparison.OrdinalIgnoreCase)).Cast<object>()).TakeLast(300).ToArray());
 app.MapGet("/api/bot/paper/settlements", (BotRuntimeState s) => s.PaperSettlementsRecords().TakeLast(300).ToArray());
+app.MapPost("/api/bot/paper/phase1/settle", (PaperPhase1SettlementRequest request, PaperPhase1RealWatchService watch) =>
+{
+    var result = watch.SettlePaperPhase1Position(request.PositionId, request.RealizedPayout, request.Reason);
+    return result.Accepted ? Results.Ok(result) : Results.BadRequest(result);
+});
 app.MapGet("/api/bot/verified-allowlist-health", (IHostEnvironment env) =>
 {
     var path = Path.Combine(env.ContentRootPath, "exports/verified-allowlist-health-latest.json");
@@ -495,6 +501,8 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var positionBook = new PaperPositionBook(Path.Combine(AppContext.BaseDirectory, "data", "paper-positions.csv"));
     var paper = new PaperTradingEngine(executionPolicy, executionJournal, executionDecisionService, positionBook, options);
     var paperPhase1Canary = new PaperPhase1SyntheticCanaryService(options, paper, positionBook, contentRootPath);
+    var paperPhase1RealWatch = app.Services.GetRequiredService<PaperPhase1RealWatchService>();
+    paperPhase1RealWatch.Attach(paper, positionBook, state);
     var paperValidationHarness = new PaperPhaseValidationHarness();
     paperValidationHarness.TryRun(options, paper, positionBook, state, contentRootPath);
     var paperSettlementValidationHarness = new PaperSettlementValidationHarness();
@@ -507,7 +515,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var autoConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "AutoCandidateMultiOutcome");
     var nearMissConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "MultiOutcomeNearMiss");
     var experimentalConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "ExperimentalMultiOutcome");
-    var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketFees, options.SingleMarketSlippage, monitor, sizing, options.SingleMarketArb, state, contentRootPath, verifiedExecution, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate, opportunityExecutionQueue, singleConfig.Mode, options);
+    var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketFees, options.SingleMarketSlippage, monitor, sizing, options.SingleMarketArb, state, contentRootPath, verifiedExecution, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate, opportunityExecutionQueue, singleConfig.Mode, options, paperPhase1RealWatch);
     var singleMarketStrategy = new SingleMarketBuyBothOpportunityStrategy(singleMarketArb);
     var strategyOrchestrator = new StrategyOrchestrator(new IOpportunityStrategy[] { singleMarketStrategy, new NullOpportunityStrategy("MultiOutcomeNearMiss") }, options, state.RecordStrategyResult);
     Console.WriteLine($"[MULTI_STRATEGY_ORCHESTRATOR] Enabled={options.StrategyOrchestrator.Enabled.ToString().ToLowerInvariant()} MaxConcurrentStrategies={options.StrategyOrchestrator.MaxConcurrentStrategies} MaxConcurrentOrderbookConsumers={options.StrategyOrchestrator.MaxConcurrentOrderbookConsumers} Strategies=SingleMarketBuyBoth:{singleConfig.Mode}|VerifiedMultiOutcome:{verifiedConfig.Mode}|AutoCandidateMultiOutcome:{autoConfig.Mode}|MultiOutcomeNearMiss:{nearMissConfig.Mode}|ExperimentalMultiOutcome:{experimentalConfig.Mode}");
