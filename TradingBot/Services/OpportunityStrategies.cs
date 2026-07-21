@@ -54,7 +54,9 @@ public sealed class SingleMarketBuyBothOpportunityStrategy : IOpportunityStrateg
             BestCandidateValid: stats.BestEdgeSeen.HasValue,
             BestCandidatePriced: stats.BestEdgeSeen.HasValue,
             BestCandidateExecutableLike: stats.ExecutionReady > 0,
-            BestCandidateReason: stats.BestEdgeSeen.HasValue ? (topSkip.Key ?? "Priced") : (topSkip.Key ?? "N/A"));
+            BestCandidateReason: stats.BestEdgeSeen.HasValue
+                ? PaperPhase1PositiveReconciliationService.NormalizeBestReason(topSkip.Key ?? "Priced", stats.BestEdgeSeen, 0.01m)
+                : (topSkip.Key ?? "N/A"));
     }
 }
 

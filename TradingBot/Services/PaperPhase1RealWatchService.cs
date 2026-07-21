@@ -49,12 +49,24 @@ public sealed class PaperPhase1RealWatchService(TradingBotOptions options)
         }
     }
 
+    public void ApplyReconciliation(PaperPhase1PositiveReconciliationState reconciliation)
+    {
+        lock (_sync)
+        {
+            var lifecycleConsistent = Current.ConsistencyReason is "None" or "PositiveCandidateReconciliationMissing";
+            Current = Current with { Consistent = lifecycleConsistent && reconciliation.Consistent,
+                ConsistencyReason = !lifecycleConsistent ? Current.ConsistencyReason : reconciliation.MismatchBlocking ? "PositiveCandidateReconciliationMissing" : "None" };
+            Latest = Current;
+        }
+    }
+
     public bool AllowRealOpen(string candidateId, string marketId, decimal afterSafetyEdge, out string reason)
     {
         lock (_sync)
         {
             reason = !string.Equals(options.RuntimeProfile, RuntimeProfileService.ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase) ? "ProfileNotReducedDiagnosticsPaperPhase1"
                 : options.PaperPhase1SyntheticCanary.Enabled ? "SyntheticCanaryEnabled"
+                : PaperPhase1PositiveReconciliationService.Latest.MismatchBlocking ? "PositiveCandidateReconciliationMissing"
                 : afterSafetyEdge < options.PaperDiagnosticsLimited.MinEdgeOverride ? "BelowMinEdge"
                 : options.TradingMode.LiveTradingEnabled || options.EnableLiveExecution ? "LiveTradingEnabled"
                 : LiveTradingGuard.SigningAttempts > 0 ? "SigningAttemptDetected"

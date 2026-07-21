@@ -60,7 +60,8 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddSingleton<TextWriter>(originalOut);
 builder.Services.AddSingleton<IBotUiLogger, BotUiLogger>();
 builder.Services.AddSingleton(sp => new PaperPhase1RealWatchService(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value));
-builder.Services.AddSingleton(sp => new DiagnosticsDashboardService(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value, sp.GetRequiredService<PaperPhase1RealWatchService>()));
+builder.Services.AddSingleton(sp => new PaperPhase1PositiveReconciliationService(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value));
+builder.Services.AddSingleton(sp => new DiagnosticsDashboardService(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value, sp.GetRequiredService<PaperPhase1RealWatchService>(), sp.GetRequiredService<PaperPhase1PositiveReconciliationService>()));
 builder.Services.AddSingleton(sp => new DiagnosticsDashboardHistoryService(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value));
 
 var app = builder.Build();
@@ -3084,7 +3085,7 @@ static void EmitMultiStrategySummary(BotRuntimeState state, TradingBotOptions op
         .FirstOrDefault();
     var bestStrategy = bestValidPriced.Counter is null ? "N/A" : bestValidPriced.Name;
     var bestEdge = bestValidPriced.Counter is null ? "N/A" : bestValidPriced.Counter.BestEdge!.Value.ToString("0.####");
-    var bestReason = bestValidPriced.Counter is null ? "NoValidPricedCandidate" : bestValidPriced.Counter.BestCandidateReason;
+    var bestReason = bestValidPriced.Counter is null ? "NoValidPricedCandidate" : PaperPhase1PositiveReconciliationService.NormalizeBestReason(bestValidPriced.Counter.BestCandidateReason, bestValidPriced.Counter.BestEdge, health.PaperPhase1MinEdge);
     var bestExecutableStrategy = bestExecutable.Counter is null ? "N/A" : bestExecutable.Name;
     var bestExecutableEdge = bestExecutable.Counter is null ? "N/A" : bestExecutable.Counter.BestEdge!.Value.ToString("0.####");
     var shadowVerifiedLike = configured.Where(x => x.Counter is not null).Sum(x => x.Counter!.VerificationHigh + x.Counter!.VerificationMedium);
