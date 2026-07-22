@@ -934,7 +934,11 @@ public class SingleMarketOrderBookArbEngine
     }
 
     private SingleMarketOpportunityAuditDto AuditNearMiss(BinaryOrderBookSnapshot book, string? conditionId, decimal yes, decimal no, decimal rawCost, decimal rawEdge, decimal afterCostEdge, decimal afterSafetyEdge, decimal availableQty, decimal executableQty, decimal notionalAtCap, string rejectedReason, string? dataQualityReason, bool fillPassed, bool depthPassed, bool riskPassed, bool paperDiagnosticsLimitedGatePassed)
-        => new(book.MarketId, conditionId, book.Question, yes, no, rawCost, rawEdge, afterCostEdge, afterSafetyEdge, availableQty, executableQty, notionalAtCap, rejectedReason, dataQualityReason, fillPassed, depthPassed, riskPassed, paperDiagnosticsLimitedGatePassed, DateTime.UtcNow);
+    {
+        var audit = new SingleMarketOpportunityAuditDto(book.MarketId, conditionId, book.Question, yes, no, rawCost, rawEdge, afterCostEdge, afterSafetyEdge, availableQty, executableQty, notionalAtCap, rejectedReason, dataQualityReason, fillPassed, depthPassed, riskPassed, paperDiagnosticsLimitedGatePassed, DateTime.UtcNow);
+        PaperPhase1PositiveCaptureService.Observe(book, audit, _scanId);
+        return audit;
+    }
 
     private SingleMarketDataQualityRejectSampleDto Sample(BinaryOrderBookSnapshot book, string? conditionId, decimal yes, decimal no, decimal raw, string reason, decimal edge)
         => new(DateTime.UtcNow, book.MarketId, conditionId, book.Question, reason, yes == 0m ? null : yes, no == 0m ? null : no, raw, edge);
