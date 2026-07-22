@@ -69,6 +69,7 @@ public class TradingBotOptions
     public PaperPhase1DiscoveryFallbackOptions PaperPhase1DiscoveryFallback { get; set; } = new();
     public PaperPhase1EligibilityLadderOptions PaperPhase1EligibilityLadder { get; set; } = new();
     public PaperPhase1SyntheticCanaryOptions PaperPhase1SyntheticCanary { get; set; } = new();
+    public PaperPhase1RealSettlementOptions PaperPhase1RealSettlement { get; set; } = new();
     public PaperCounterAuditOptions PaperCounterAudit { get; set; } = new();
     public VerifiedBasketArbOptions VerifiedBasketArb { get; set; } = new();
     public PaperPhase2Options PaperPhase2 { get; set; } = new();
@@ -110,6 +111,7 @@ public class TradingBotOptions
     public SignalRLogNoiseControlOptions SignalRLogNoiseControl { get; set; } = new();
     public DiagnosticsDashboardOptions DiagnosticsDashboard { get; set; } = new();
     public DiagnosticsDashboardHistoryOptions DiagnosticsDashboardHistory { get; set; } = new();
+    public FormulaDiagnosticsOptions FormulaDiagnostics { get; set; } = new();
     public RuntimeHealthOptions RuntimeHealth { get; set; } = new();
     public RuntimeMemoryOptions RuntimeMemory { get; set; } = new();
     public CacheOptions Caches { get; set; } = new();
@@ -132,6 +134,23 @@ public class TradingBotOptions
         ["MultiOutcomeNearMiss"] = new(true, StrategyMode.DiagnosticsOnly, 10),
         ["ExperimentalMultiOutcome"] = new(false, StrategyMode.Disabled, 0)
     };
+}
+
+public sealed class PaperPhase1RealSettlementOptions
+{
+    public bool Enabled { get; set; } = true;
+    public bool AutoSettle { get; set; } = false;
+    public bool AllowManualSettle { get; set; } = true;
+    public string ExportPath { get; set; } = "exports/paper-phase1-real-settlement-latest.json";
+}
+
+public class FormulaDiagnosticsOptions
+{
+    public bool Enabled { get; set; } = true;
+    public bool SuppressExpectedCostAdjustedWarnings { get; set; } = true;
+    public decimal WarningTolerance { get; set; } = 0.005m;
+    public int LogFirstN { get; set; } = 3;
+    public int SummaryIntervalSeconds { get; set; } = 60;
 }
 
 public class DiagnosticsDashboardOptions

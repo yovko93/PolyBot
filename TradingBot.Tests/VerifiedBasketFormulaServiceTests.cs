@@ -1,3 +1,4 @@
+using TradingBot.Services;
 using TradingBot.Services.MultiOutcome;
 using Xunit;
 
@@ -5,6 +6,19 @@ namespace TradingBot.Tests;
 
 public class VerifiedBasketFormulaServiceTests
 {
+    [Fact]
+    public void Cost_adjusted_edge_slightly_below_minus_one_is_non_blocking()
+    {
+        FormulaDiagnostics.Configure(new TradingBot.Options.FormulaDiagnosticsOptions { WarningTolerance = 0.005m, LogFirstN = 3 });
+        var blockingBefore = FormulaDiagnostics.Current.WarningsBlocking;
+        var legs = new[] { new ResolvedNoAsk("a", "a", 1m, 1m, "DirectNoAsk", null, null, "na", DateTime.UtcNow, false, null), new ResolvedNoAsk("b", "b", 1m, 1m, "DirectNoAsk", null, null, "nb", DateTime.UtcNow, false, null) };
+
+        var result = VerifiedBasketFormulaService.Evaluate(legs, 0m, 0m, 0.001m);
+
+        Assert.True(result.IsValid);
+        Assert.Contains(result.FormulaWarnings, warning => warning.Contains("Classification=NonBlockingCostAdjustedEdgeRange"));
+        Assert.Equal(blockingBefore, FormulaDiagnostics.Current.WarningsBlocking);
+    }
     [Fact]
     public void N3_formula_is_correct()
     {

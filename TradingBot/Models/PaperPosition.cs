@@ -44,10 +44,11 @@ public class PaperPosition
     public decimal FillAdjustedNetEdgePerBasket => NetEdgeAtOpen;
     public decimal LockedCapital { get; set; }
     public string ActiveProfile { get; init; } = "";
-    public string Source { get; init; } = "";
+    public string Source { get; set; } = "";
+    public string SourceKind { get; set; } = "";
     public bool IsSyntheticCanary { get; init; }
-    public string SourceCandidateId { get; init; } = "";
-    public string ProcessRunId { get; init; } = "";
+    public string SourceCandidateId { get; set; } = "";
+    public string ProcessRunId { get; set; } = "";
     public bool OpenedFromSimulatedFills { get; init; }
     public string? FillSimulationId { get; init; }
 

@@ -1,6 +1,7 @@
 ﻿using System.Globalization;
 using System.Text;
 using TradingBot.Models;
+using TradingBot.Api;
 
 namespace TradingBot.Services;
 
@@ -183,7 +184,7 @@ public class PaperPositionBook
     {
         var position = new PaperPosition
         {
-            PositionId = BuildTwoLegPositionId(opportunity, engine),
+            PositionId = engine.Equals("SingleMarketBuyBoth", StringComparison.OrdinalIgnoreCase) ? $"PAPER-PHASE1-{PaperPhase1RealWatchService.ExecutionId($"SingleMarketBuyBoth:{opportunity.Leg1.MarketId}", opportunity.Leg1.MarketId)}" : BuildTwoLegPositionId(opportunity, engine),
             OpenedAtUtc = DateTime.UtcNow,
             Engine = engine,
             Strategy = opportunity.Strategy,
@@ -199,6 +200,9 @@ public class PaperPositionBook
             LockedCapital = totalCost,
             ActiveProfile = "SingleMarketPaperOnly",
             Source = engine,
+            IsSyntheticCanary = false,
+            SourceCandidateId = "",
+            ProcessRunId = "",
             OpenedFromSimulatedFills = engine.Equals("SingleMarketBuyBoth", StringComparison.OrdinalIgnoreCase),
             FillSimulationId = engine.Equals("SingleMarketBuyBoth", StringComparison.OrdinalIgnoreCase) ? Guid.NewGuid().ToString("N") : null,
             CurrentNoAskSum = opportunity.CostPerShare,

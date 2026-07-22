@@ -18,8 +18,20 @@ public sealed class VerifiedBasketFormulaService
         var fees = feePerLeg * legs;
         var slip = slippagePerLeg * legs;
         var net = gross - fees - slip - safetyBufferPerGroup;
-        if (gross < -1m || net < -1m)
-            warnings.Add($"NetEdge outside expected range. Legs={legs} ExpectedMinEdge=-1 Actual={net}");
+        var tolerance = FormulaDiagnostics.WarningTolerance;
+        if (legs == 2 && (gross < -1m - tolerance || gross > 1m + tolerance))
+        {
+            var warning = new FormulaWarningDetail("BinaryTwoLegBuyBoth", "SingleMarketBuyBoth", "RawEdge", -1m, 1m, gross, tolerance, true, "BlockingRawEdgeRange");
+            FormulaDiagnostics.Report(warning);
+            warnings.Add(warning.ToString());
+        }
+        var costAdjustedMin = -1m - fees - slip - safetyBufferPerGroup - tolerance;
+        if (legs == 2 && (net < -1m || net > 1m + tolerance))
+        {
+            var blocking = net < costAdjustedMin || net > 1m + tolerance;
+            var warning = new FormulaWarningDetail("BinaryTwoLegBuyBoth", "SingleMarketBuyBoth", "AfterSafetyEdge", costAdjustedMin, 1m, net, tolerance, blocking, blocking ? "BlockingCostAdjustedEdgeRange" : "NonBlockingCostAdjustedEdgeRange");
+            if (FormulaDiagnostics.Report(warning)) warnings.Add(warning.ToString());
+        }
         return new(true, "None", warnings, guaranteed, noAskSum, asks.Min(), asks.Max(), asks.Average(), gross, fees, slip, safetyBufferPerGroup, net);
     }
 }

@@ -59,12 +59,15 @@ builder.Services.AddSingleton(sp =>
 });
 builder.Services.AddSingleton<TextWriter>(originalOut);
 builder.Services.AddSingleton<IBotUiLogger, BotUiLogger>();
-builder.Services.AddSingleton(sp => new DiagnosticsDashboardService(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value));
+builder.Services.AddSingleton(sp => new PaperPhase1RealWatchService(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value));
+builder.Services.AddSingleton(sp => new PaperPhase1PositiveReconciliationService(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value));
+builder.Services.AddSingleton(sp => new DiagnosticsDashboardService(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value, sp.GetRequiredService<PaperPhase1RealWatchService>(), sp.GetRequiredService<PaperPhase1PositiveReconciliationService>()));
 builder.Services.AddSingleton(sp => new DiagnosticsDashboardHistoryService(sp.GetRequiredService<IOptions<TradingBotOptions>>().Value));
 
 var app = builder.Build();
 app.UseCors("ui");
 var options = app.Services.GetRequiredService<IOptions<TradingBotOptions>>().Value;
+FormulaDiagnostics.Configure(options.FormulaDiagnostics);
 RuntimeProfileService.ValidateSafety(options);
 RuntimeProfileService.Export(options, ProcessRunContext.ProcessRunId, app.Environment.ContentRootPath);
 Console.WriteLine(RuntimeProfileService.StartupLog(options));
@@ -123,6 +126,11 @@ app.MapGet("/api/bot/paper/account", (BotRuntimeState s) => Results.Ok(new
 app.MapGet("/api/bot/paper/positions", (BotRuntimeState s) => s.Positions());
 app.MapGet("/api/bot/paper/executions", (BotRuntimeState s) => s.SingleMarketExecutions().Cast<object>().Concat(s.Trades().Where(t => string.Equals(t.Status, "PAPER_EXECUTED", StringComparison.OrdinalIgnoreCase)).Cast<object>()).TakeLast(300).ToArray());
 app.MapGet("/api/bot/paper/settlements", (BotRuntimeState s) => s.PaperSettlementsRecords().TakeLast(300).ToArray());
+app.MapPost("/api/bot/paper/phase1/settle", (PaperPhase1SettlementRequest request, PaperPhase1RealWatchService watch) =>
+{
+    var result = watch.SettlePaperPhase1Position(request.PositionId, request.RealizedPayout, request.Reason);
+    return result.Accepted ? Results.Ok(result) : Results.BadRequest(result);
+});
 app.MapGet("/api/bot/verified-allowlist-health", (IHostEnvironment env) =>
 {
     var path = Path.Combine(env.ContentRootPath, "exports/verified-allowlist-health-latest.json");
@@ -418,10 +426,10 @@ if (paperConfigError)
     return;
 }
 
-await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>(), app.Services.GetRequiredService<VerifiedBasketDryRunOrderBuilder>(), app.Services.GetRequiredService<DryRunFillSimulator>(), app.Services.GetRequiredService<AllowlistRepairService>(), app.Services.GetRequiredService<AllowlistRepairLockProvider>(), app.Services.GetRequiredService<MemoryGuard>(), app.Services.GetRequiredService<DiagnosticsDashboardService>(), app.Services.GetRequiredService<DiagnosticsDashboardHistoryService>(), quietLogGate, app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value, options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping);
+await RunScannerAsync(state, logger, app.Services.GetRequiredService<IHubContext<BotHub>>(), app.Services.GetRequiredService<VerifiedBasketExecutionCoordinator>(), app.Services.GetRequiredService<VerifiedBasketDryRunOrderBuilder>(), app.Services.GetRequiredService<DryRunFillSimulator>(), app.Services.GetRequiredService<AllowlistRepairService>(), app.Services.GetRequiredService<AllowlistRepairLockProvider>(), app.Services.GetRequiredService<MemoryGuard>(), app.Services.GetRequiredService<DiagnosticsDashboardService>(), app.Services.GetRequiredService<DiagnosticsDashboardHistoryService>(), app.Services.GetRequiredService<PaperPhase1RealWatchService>(), quietLogGate, app.Services.GetRequiredService<IOptions<ExecutionOptions>>().Value, options, app.Services.GetRequiredService<IOptions<OpportunityFilteringOptions>>().Value, app.Environment.ContentRootPath, app.Lifetime.ApplicationStopping);
 await apiTask;
 
-static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, VerifiedBasketExecutionCoordinator verifiedExecution, VerifiedBasketDryRunOrderBuilder dryRunBuilder, DryRunFillSimulator fillSimulator, AllowlistRepairService allowlistRepairService, AllowlistRepairLockProvider lockProvider, MemoryGuard memoryGuard, DiagnosticsDashboardService diagnosticsDashboard, DiagnosticsDashboardHistoryService diagnosticsDashboardHistory, QuietLogGate quietLogGate, ExecutionOptions executionOptions, TradingBotOptions options, OpportunityFilteringOptions filtering, string contentRootPath, CancellationToken stoppingToken)
+static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, IHubContext<BotHub> hub, VerifiedBasketExecutionCoordinator verifiedExecution, VerifiedBasketDryRunOrderBuilder dryRunBuilder, DryRunFillSimulator fillSimulator, AllowlistRepairService allowlistRepairService, AllowlistRepairLockProvider lockProvider, MemoryGuard memoryGuard, DiagnosticsDashboardService diagnosticsDashboard, DiagnosticsDashboardHistoryService diagnosticsDashboardHistory, PaperPhase1RealWatchService paperPhase1RealWatch, QuietLogGate quietLogGate, ExecutionOptions executionOptions, TradingBotOptions options, OpportunityFilteringOptions filtering, string contentRootPath, CancellationToken stoppingToken)
 {
     var scannerInstanceId = Guid.NewGuid().ToString("N");
     var scannerStartedAt = DateTime.UtcNow;
@@ -494,6 +502,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var positionBook = new PaperPositionBook(Path.Combine(AppContext.BaseDirectory, "data", "paper-positions.csv"));
     var paper = new PaperTradingEngine(executionPolicy, executionJournal, executionDecisionService, positionBook, options);
     var paperPhase1Canary = new PaperPhase1SyntheticCanaryService(options, paper, positionBook, contentRootPath);
+    paperPhase1RealWatch.Attach(paper, positionBook, state);
     var paperValidationHarness = new PaperPhaseValidationHarness();
     paperValidationHarness.TryRun(options, paper, positionBook, state, contentRootPath);
     var paperSettlementValidationHarness = new PaperSettlementValidationHarness();
@@ -506,7 +515,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var autoConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "AutoCandidateMultiOutcome");
     var nearMissConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "MultiOutcomeNearMiss");
     var experimentalConfig = StrategyOrchestrator.ResolveConfig(options.Strategies, "ExperimentalMultiOutcome");
-    var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketFees, options.SingleMarketSlippage, monitor, sizing, options.SingleMarketArb, state, contentRootPath, verifiedExecution, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate, opportunityExecutionQueue, singleConfig.Mode, options);
+    var singleMarketArb = new SingleMarketOrderBookArbEngine(orderbookService, options.MinEdgePerShare, options.SingleMarketFees, options.SingleMarketSlippage, monitor, sizing, options.SingleMarketArb, state, contentRootPath, verifiedExecution, options.Diagnostics.OperationalQuietMode, options.Logging, quietLogGate, opportunityExecutionQueue, singleConfig.Mode, options, paperPhase1RealWatch);
     var singleMarketStrategy = new SingleMarketBuyBothOpportunityStrategy(singleMarketArb);
     var strategyOrchestrator = new StrategyOrchestrator(new IOpportunityStrategy[] { singleMarketStrategy, new NullOpportunityStrategy("MultiOutcomeNearMiss") }, options, state.RecordStrategyResult);
     Console.WriteLine($"[MULTI_STRATEGY_ORCHESTRATOR] Enabled={options.StrategyOrchestrator.Enabled.ToString().ToLowerInvariant()} MaxConcurrentStrategies={options.StrategyOrchestrator.MaxConcurrentStrategies} MaxConcurrentOrderbookConsumers={options.StrategyOrchestrator.MaxConcurrentOrderbookConsumers} Strategies=SingleMarketBuyBoth:{singleConfig.Mode}|VerifiedMultiOutcome:{verifiedConfig.Mode}|AutoCandidateMultiOutcome:{autoConfig.Mode}|MultiOutcomeNearMiss:{nearMissConfig.Mode}|ExperimentalMultiOutcome:{experimentalConfig.Mode}");
@@ -1472,7 +1481,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 Console.WriteLine($"[VERIFIED_SENSITIVITY] Group={g.GroupKey} Actual={breakdown.SensitivityScenarios.Actual} ZeroFees={breakdown.SensitivityScenarios.ZeroFees} ZeroSlippage={breakdown.SensitivityScenarios.ZeroSlippage} ZeroFeesZeroSlippage={breakdown.SensitivityScenarios.ZeroFeesZeroSlippage} RawOnly={breakdown.SensitivityScenarios.RawOnly} HalfCosts={breakdown.SensitivityScenarios.HalfFeesHalfSlippage}");
                         }
                         if (formula.FormulaWarnings.Count > 0)
-                            Console.WriteLine($"[FORMULA_WARNING] {string.Join(" | ", formula.FormulaWarnings)}");
+                            Console.WriteLine($"[FORMULA_WARNING] {string.Join(" | ", formula.FormulaWarnings)} ProcessRunId={ProcessRunContext.ProcessRunId}");
                         if (!formula.IsValid)
                         {
                             skipReason = formula.SkipReason is "InvalidGuaranteedPayoutFormula" or "InvalidPriceNormalization" or "InvalidBasketCost" ? "FormulaOrNormalizationError" : formula.SkipReason;
@@ -3076,7 +3085,7 @@ static void EmitMultiStrategySummary(BotRuntimeState state, TradingBotOptions op
         .FirstOrDefault();
     var bestStrategy = bestValidPriced.Counter is null ? "N/A" : bestValidPriced.Name;
     var bestEdge = bestValidPriced.Counter is null ? "N/A" : bestValidPriced.Counter.BestEdge!.Value.ToString("0.####");
-    var bestReason = bestValidPriced.Counter is null ? "NoValidPricedCandidate" : bestValidPriced.Counter.BestCandidateReason;
+    var bestReason = bestValidPriced.Counter is null ? "NoValidPricedCandidate" : PaperPhase1PositiveReconciliationService.NormalizeBestReason(bestValidPriced.Counter.BestCandidateReason, bestValidPriced.Counter.BestEdge, health.PaperPhase1MinEdge);
     var bestExecutableStrategy = bestExecutable.Counter is null ? "N/A" : bestExecutable.Name;
     var bestExecutableEdge = bestExecutable.Counter is null ? "N/A" : bestExecutable.Counter.BestEdge!.Value.ToString("0.####");
     var shadowVerifiedLike = configured.Where(x => x.Counter is not null).Sum(x => x.Counter!.VerificationHigh + x.Counter!.VerificationMedium);

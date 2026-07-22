@@ -31,6 +31,7 @@ public class SingleMarketOrderBookArbEngine
     private readonly QuietLogGate? _quietLogGate;
     private readonly OpportunityExecutionQueue? _executionQueue;
     private readonly StrategyMode _strategyMode;
+    private readonly PaperPhase1RealWatchService? _realWatch;
     private readonly object _gate = new();
     private readonly Dictionary<string, MarketStability> _stability = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> _cooldownUntil = new(StringComparer.OrdinalIgnoreCase);
@@ -65,7 +66,8 @@ public class SingleMarketOrderBookArbEngine
         QuietLogGate? quietLogGate = null,
         OpportunityExecutionQueue? executionQueue = null,
         StrategyMode strategyMode = StrategyMode.PaperEligible,
-        TradingBotOptions? botOptions = null)
+        TradingBotOptions? botOptions = null,
+        PaperPhase1RealWatchService? realWatch = null)
     {
         _orderBooks = orderBooks;
         _options = options ?? new SingleMarketArbOptions { MinEdgePerShare = minEdgePerShare };
@@ -85,6 +87,7 @@ public class SingleMarketOrderBookArbEngine
         _quietLogGate = quietLogGate;
         _executionQueue = executionQueue;
         _strategyMode = strategyMode;
+        _realWatch = realWatch;
     }
 
     public async Task<SingleMarketScanStats> ScanAsync(List<Market> markets, PaperTradingEngine paper, SemaphoreSlim semaphore, CancellationToken ct = default)
@@ -349,6 +352,12 @@ public class SingleMarketOrderBookArbEngine
             Console.WriteLine($"[PAPER_OPEN_IN_FLIGHT] MarketId={book.MarketId} PositionKey=single-market:{book.MarketId} TtlSeconds={ttlSeconds}");
             _state?.SetPaperInFlightOpens(paper.PaperInFlightOpenCount);
             var opportunity = new ArbOpportunity(new ArbLeg(book.MarketId, book.Question, "YES", fill.YesAveragePrice, book.YesAsk.Size), new ArbLeg(book.MarketId, book.Question, "NO", fill.NoAveragePrice, book.NoAsk.Size), quantity, fill.SimulatedCost / quantity, fill.AdjustedEdgePerShare, fill.ExpectedProfit, 1.0, "SingleMarketBuyBoth", StrategyName);
+            var candidateId = $"SingleMarketBuyBoth:{book.MarketId}:{_scanId}";
+            if (_realWatch is not null && _botOptions is not null && (_botOptions.RuntimeProfile.Equals(RuntimeProfileService.ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase) || _botOptions.RuntimeProfile.Equals(RuntimeProfileService.ReducedDiagnosticsPaperPhase1Canary, StringComparison.OrdinalIgnoreCase)) && !_realWatch.AllowRealOpen(candidateId, book.MarketId, fill.AdjustedEdgePerShare, out var watchReason))
+            {
+                paper.ClearSingleMarketOpenInFlight(book.MarketId);
+                return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,watchReason,null);
+            }
             var equityBefore = paper.Equity;
             var executed = _executionQueue == null
                 ? paper.RecordArbitrage(opportunity)
@@ -360,6 +369,7 @@ public class SingleMarketOrderBookArbEngine
                     _ => Task.FromResult(paper.RecordArbitrage(opportunity))), ct);
             if (!executed)
             {
+                _realWatch?.RecordOpenResult(candidateId, book.MarketId, fill.AdjustedEdgePerShare, fill.SimulatedCost, fill.ExpectedProfit, false);
                 paper.ClearSingleMarketOpenInFlight(book.MarketId);
                 _state?.SetPaperInFlightOpens(paper.PaperInFlightOpenCount);
                 diagnostics.AddReject("PaperOpenBlocked");
@@ -367,11 +377,12 @@ public class SingleMarketOrderBookArbEngine
                 Console.WriteLine($"[SINGLE_MARKET_PAPER_OPEN_BLOCKED] MarketId={book.MarketId} Reason=PaperRejected");
                 return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,"PaperRejected",null);
             }
+            _realWatch?.RecordOpenResult(candidateId, book.MarketId, fill.AdjustedEdgePerShare, fill.SimulatedCost, fill.ExpectedProfit, true);
             paper.ClearSingleMarketOpenInFlight(book.MarketId);
             _state?.SetPaperInFlightOpens(paper.PaperInFlightOpenCount);
             diagnostics.IncrementPaperOpened();
             RecordOpened(book.MarketId);
-            var execution = new SingleMarketPaperExecutionDto(Guid.NewGuid().ToString("N"), DateTime.UtcNow, book.MarketId, book.Question, StrategyName, quantity, fill.YesAveragePrice, fill.NoAveragePrice, fill.SimulatedCost, fill.AdjustedEdgePerShare, fill.ExpectedProfit, paper.Balance, paper.LockedCapital, paper.Equity, "Opened", true);
+            var execution = new SingleMarketPaperExecutionDto(PaperPhase1RealWatchService.ExecutionId(candidateId, book.MarketId), DateTime.UtcNow, book.MarketId, book.Question, StrategyName, quantity, fill.YesAveragePrice, fill.NoAveragePrice, fill.SimulatedCost, fill.AdjustedEdgePerShare, fill.ExpectedProfit, paper.Balance, paper.LockedCapital, paper.Equity, "Opened", true);
             _state?.AddSingleMarketExecution(execution);
             diagnostics.AddExecution(execution);
             LogExecutionDecision(book.MarketId, fill.AdjustedEdgePerShare, quantity, fill.SimulatedCost, fill.ExpectedProfit, "OpenPaper", "Ok", $"single-market:{book.MarketId}");
