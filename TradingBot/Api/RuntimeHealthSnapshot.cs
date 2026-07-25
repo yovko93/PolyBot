@@ -475,7 +475,6 @@ public sealed record RuntimeHealthSnapshot(
     public decimal? BestInvalidArtifactAfterSafetyEdge => PositiveCapture.BestInvalidArtifactAfterSafetyEdge;
     public decimal? BestStrategySummaryAfterSafetyEdge => PositiveReconciliation.StrategyBestAfterSafetyEdge;
     public decimal? BestRealWatchAfterSafetyEdge => PositiveReconciliation.RealWatchBestAfterSafetyEdge;
-    public decimal? BestExecutableLikeAfterSafetyEdge => PositiveReconciliation.TopCandidates.Where(x=>x.DepthSufficient && x.FillPassed).Select(x=>(decimal?)x.AfterSafetyEdge).Max();
     public bool PaperPhase1PositiveReconciliationEnabled => PositiveReconciliation.Enabled;
     public long PaperPhase1StrategyPositiveAfterSafety => PositiveReconciliation.StrategyPositiveAfterSafety;
     public decimal? PaperPhase1StrategyBestAfterSafetyEdge => PositiveReconciliation.StrategyBestAfterSafetyEdge;
