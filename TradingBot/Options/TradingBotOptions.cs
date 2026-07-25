@@ -66,6 +66,7 @@ public class TradingBotOptions
     public TradingModeOptions TradingMode { get; set; } = new();
     public PaperRiskOptions PaperRisk { get; set; } = new();
     public PaperDiagnosticsLimitedOptions PaperDiagnosticsLimited { get; set; } = new();
+    public PaperPhase1PositiveCaptureOptions PaperPhase1PositiveCapture { get; set; } = new();
     public PaperPhase1DiscoveryFallbackOptions PaperPhase1DiscoveryFallback { get; set; } = new();
     public PaperPhase1EligibilityLadderOptions PaperPhase1EligibilityLadder { get; set; } = new();
     public PaperPhase1SyntheticCanaryOptions PaperPhase1SyntheticCanary { get; set; } = new();
@@ -142,6 +143,16 @@ public sealed class PaperPhase1RealSettlementOptions
     public bool AutoSettle { get; set; } = false;
     public bool AllowManualSettle { get; set; } = true;
     public string ExportPath { get; set; } = "exports/paper-phase1-real-settlement-latest.json";
+}
+
+public sealed class PaperPhase1PositiveCaptureOptions
+{
+    public bool IncludeInvalidArtifactsInMainExport { get; set; } = false;
+    public bool InvalidArtifactExportEnabled { get; set; } = true;
+    [Range(1, 3600)] public int SummaryIntervalSeconds { get; set; } = 60;
+    [Range(0, 100)] public int LogFirstNValidPerInterval { get; set; } = 5;
+    [Range(0, 100)] public int LogFirstNInvalidArtifactsPerInterval { get; set; } = 5;
+    public bool SuppressRepeatedSummary { get; set; } = true;
 }
 
 public class FormulaDiagnosticsOptions
