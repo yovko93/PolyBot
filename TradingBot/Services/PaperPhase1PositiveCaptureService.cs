@@ -103,8 +103,21 @@ public static class PaperPhase1PositiveCaptureService
         }
     }
 
-    public static bool IsValidOpenCandidate(string candidateId) { lock(Sync) => Valid.Any(x=>x.CandidateId==candidateId && x.IsValidClean); }
-    public static bool IsInvalidArtifact(string candidateId) { lock(Sync) => Invalid.Any(x=>x.CandidateId==candidateId); }
+    public static bool IsValidOpenCandidate(string candidateId)
+    {
+        lock (Sync)
+        {
+            return Valid.Any(x => x.CandidateId == candidateId && x.IsValidClean);
+        }
+    }
+
+    public static bool IsInvalidArtifact(string candidateId)
+    {
+        lock (Sync)
+        {
+            return Invalid.Any(x => x.CandidateId == candidateId);
+        }
+    }
 
     public static void MarkOpen(string candidateId, bool attempted, bool opened, string positionId)
     {
