@@ -358,11 +358,11 @@ public class SingleMarketOrderBookArbEngine
             _ = AuditNearMiss(book, market.conditionId, yes, no, rawCost, validRawEdge, edge,
                 fill.AdjustedEdgePerShare, quantityAvailable, quantity, fill.SimulatedCost, "None", null,
                 true, true, true, true);
-            if (_botOptions is not null && (_botOptions.RuntimeProfile.Equals(RuntimeProfileService.ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase) || _botOptions.RuntimeProfile.Equals(RuntimeProfileService.ReducedDiagnosticsPaperPhase1Canary, StringComparison.OrdinalIgnoreCase)) && !PaperPhase1PositiveCaptureService.IsValidOpenCandidate(candidateId))
+            if (_botOptions is not null && (_botOptions.RuntimeProfile.Equals(RuntimeProfileService.ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase) || _botOptions.RuntimeProfile.Equals(RuntimeProfileService.ReducedDiagnosticsPaperPhase1Canary, StringComparison.OrdinalIgnoreCase)) && !PaperPhase1PositiveCaptureService.AcceptIntoRealWatch(candidateId))
             {
                 paper.ClearSingleMarketOpenInFlight(book.MarketId);
-                Console.WriteLine($"[PAPER_PHASE1_REAL_OPEN_BLOCKED] CandidateId={candidateId} Reason=ValidPositiveCaptureRequired ProcessRunId={ProcessRunContext.ProcessRunId}");
-                return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,"ValidPositiveCaptureRequired",null);
+                Console.WriteLine($"[PAPER_PHASE1_REAL_OPEN_BLOCKED] CandidateId={candidateId} Reason=PaperEligiblePositiveRequired ProcessRunId={ProcessRunContext.ProcessRunId}");
+                return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,"PaperEligiblePositiveRequired",null);
             }
             if (_realWatch is not null && _botOptions is not null && (_botOptions.RuntimeProfile.Equals(RuntimeProfileService.ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase) || _botOptions.RuntimeProfile.Equals(RuntimeProfileService.ReducedDiagnosticsPaperPhase1Canary, StringComparison.OrdinalIgnoreCase)) && !_realWatch.AllowRealOpen(candidateId, book.MarketId, fill.AdjustedEdgePerShare, out var watchReason))
             {
