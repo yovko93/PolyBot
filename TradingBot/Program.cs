@@ -76,6 +76,23 @@ if (replayIndex >= 0)
 }
 FormulaDiagnostics.Configure(options.FormulaDiagnostics);
 RuntimeProfileService.ValidateSafety(options);
+var contractFixtureEnabled = args.Contains("--paper-phase1-contract-fixture", StringComparer.OrdinalIgnoreCase);
+if (contractFixtureEnabled)
+{
+    try
+    {
+        var fixtureState = PaperPhase1ContractFixtureService.RunFromCli(options, app.Environment.ContentRootPath,
+            args.Contains("--dry-replay-only", StringComparer.OrdinalIgnoreCase),
+            args.Contains("--allow-fixture-paper-open", StringComparer.OrdinalIgnoreCase));
+        Environment.ExitCode = fixtureState.Consistent ? 0 : 2;
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[PAPER_PHASE1_CONTRACT_FIXTURE_REJECTED] Reason={ex.Message.Replace(' ', '_')}");
+        Environment.ExitCode = 2;
+    }
+    return;
+}
 RuntimeProfileService.Export(options, ProcessRunContext.ProcessRunId, app.Environment.ContentRootPath);
 Console.WriteLine(RuntimeProfileService.StartupLog(options));
 var startupDiscoveryMode = ResolveEffectiveDiscoveryMode(options);
