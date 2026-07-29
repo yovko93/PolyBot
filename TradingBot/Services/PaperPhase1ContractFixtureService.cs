@@ -2,6 +2,7 @@ using System.Text.Json;
 using TradingBot.Models;
 using TradingBot.Options;
 using TradingBot.Engines;
+using TradingBot.Api;
 
 namespace TradingBot.Services;
 
