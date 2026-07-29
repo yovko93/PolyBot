@@ -80,6 +80,32 @@ public class PaperPositionBook
         }
     }
 
+    public PaperPosition? AddContractFixturePosition(decimal afterSafetyEdge, decimal minEdge, decimal notional)
+    {
+        if (afterSafetyEdge < minEdge || minEdge != .01m || notional > 5m || notional <= 0m) return null;
+        var quantity = notional / .988m;
+        var position = new PaperPosition
+        {
+            PositionId = $"PAPER-PHASE1-{Guid.NewGuid():N}", OpenedAtUtc = DateTime.UtcNow,
+            Engine = "SingleMarketBuyBoth", Strategy = "SingleMarketBuyBoth", GroupKey = "single-market:fixture-market",
+            Quantity = quantity, TotalCost = notional, CostPerBasket = .988m, GuaranteedPayout = quantity,
+            EdgePerShare = afterSafetyEdge, ExpectedProfit = quantity * afterSafetyEdge,
+            GrossEdgeAtOpen = afterSafetyEdge, NetEdgeAtOpen = afterSafetyEdge, LockedCapital = notional,
+            ActiveProfile = "SingleMarketPaperOnly", Source = "RealScannerFixture", SourceKind = "RealScannerFixture",
+            IsSyntheticCanary = false, SourceCandidateId = "SingleMarketBuyBoth:fixture-market:contract",
+            ProcessRunId = ProcessRunContext.ProcessRunId, OpenedFromSimulatedFills = true,
+            FillSimulationId = "contract-fixture", CurrentNoAskSum = .988m, MtmStatus = "Incomplete",
+            MissingExitPrices = 2, Status = PaperPositionStatus.Open,
+            Legs = [new("fixture-market", "Contract fixture", "YES", .494m, quantity, notional/2), new("fixture-market", "Contract fixture", "NO", .494m, quantity, notional/2)]
+        };
+        lock (_lock)
+        {
+            if (_openPositions.Count >= 1 || OpenTotalCost + notional > 5m || IsBlockedNoLock(position.PositionId, out _)) return null;
+            _openPositions[position.PositionId] = position; AppendCsv(position);
+        }
+        return position;
+    }
+
     private bool IsBlockedNoLock(string positionId, out string reason)
     {
         var now = DateTime.UtcNow;

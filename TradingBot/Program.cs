@@ -76,6 +76,36 @@ if (replayIndex >= 0)
 }
 FormulaDiagnostics.Configure(options.FormulaDiagnostics);
 RuntimeProfileService.ValidateSafety(options);
+var contractFixtureEnabled = args.Contains("--paper-phase1-contract-fixture", StringComparer.OrdinalIgnoreCase);
+if (contractFixtureEnabled)
+{
+    try
+    {
+        decimal? fixtureRealizedPayout = null;
+        var payoutIndex = Array.FindIndex(args, x => x.Equals("--settle-realized-payout", StringComparison.OrdinalIgnoreCase));
+        if (payoutIndex >= 0)
+        {
+            if (payoutIndex + 1 >= args.Length || !decimal.TryParse(args[payoutIndex + 1], System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var parsedPayout))
+                throw new InvalidOperationException("Invalid --settle-realized-payout value.");
+            fixtureRealizedPayout = parsedPayout;
+        }
+        var reasonIndex = Array.FindIndex(args, x => x.Equals("--settle-reason", StringComparison.OrdinalIgnoreCase));
+        var fixtureSettlementReason = reasonIndex >= 0 && reasonIndex + 1 < args.Length ? args[reasonIndex + 1] : "FixtureContractSettlement";
+        var fixtureState = PaperPhase1ContractFixtureService.RunFromCli(options, app.Environment.ContentRootPath,
+            args.Contains("--dry-replay-only", StringComparer.OrdinalIgnoreCase),
+            args.Contains("--allow-fixture-paper-open", StringComparer.OrdinalIgnoreCase),
+            args.Contains("--settle-fixture-paper-position", StringComparer.OrdinalIgnoreCase),
+            fixtureRealizedPayout, fixtureSettlementReason);
+        var settlementRequested = args.Contains("--settle-fixture-paper-position", StringComparer.OrdinalIgnoreCase);
+        Environment.ExitCode = fixtureState.Consistent && (!settlementRequested || fixtureState.SettlementSucceeded) ? 0 : 2;
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[PAPER_PHASE1_CONTRACT_FIXTURE_REJECTED] Reason={ex.Message.Replace(' ', '_')}");
+        Environment.ExitCode = 2;
+    }
+    return;
+}
 RuntimeProfileService.Export(options, ProcessRunContext.ProcessRunId, app.Environment.ContentRootPath);
 Console.WriteLine(RuntimeProfileService.StartupLog(options));
 var startupDiscoveryMode = ResolveEffectiveDiscoveryMode(options);
@@ -389,10 +419,14 @@ _ = Task.Run(async () =>
             if (ProcessRunContext.ValidateOrderbookCounters(state.OrderBookServiceStats) is string mismatchReason)
                 Console.WriteLine(ProcessRunContext.FormatMismatchLog(mismatchReason, state.OrderBookServiceStats));
             var health = RuntimeHealthSnapshot.From(state, options);
+            PaperPhase1RealReadinessMonitor.Evaluate(health);
             var trend = RuntimeHealthTrendTracker.RecordAndAnalyze(health, options.RuntimeHealth);
             Console.WriteLine(health.ToLogLine());
+            Console.WriteLine(PaperPhase1RealReadinessMonitor.AlertLog(health.ProcessRunId));
+            Console.WriteLine(PaperPhase1RealReadinessMonitor.SoakLog(health.ProcessRunId));
             ExportRuntimeSoakStatus(state, options, app.Environment.ContentRootPath);
             PaperPhase1ReadinessExporter.ExportLatest(health, app.Environment.ContentRootPath);
+            PaperPhase1RealReadinessMonitor.Export(health, app.Environment.ContentRootPath);
             PaperPhase1EligibilityLadderExporter.ExportLatest(state, options, health, app.Environment.ContentRootPath);
             PaperPhase1ReadinessExporter.MaybeLog(health, options);
             lastSoakStatusLoggedAt = DateTime.UtcNow;
@@ -949,9 +983,11 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         discoverySourceAuditRecommendedAction = audit.RecommendedAction;
         UpdateDiscoveryGuardRuntimeState();
         var phase1Health = RuntimeHealthSnapshot.From(state, options);
+        PaperPhase1RealReadinessMonitor.Evaluate(phase1Health);
         Console.WriteLine(phase1Health.ToLogLine());
         Console.WriteLine(RuntimeHealthTrendTracker.ToSoakStatusLogLine(phase1Health, RuntimeHealthTrendTracker.Current(options.RuntimeHealth), options, state));
         PaperPhase1ReadinessExporter.ExportLatest(phase1Health, contentRootPath);
+        PaperPhase1RealReadinessMonitor.Export(phase1Health, contentRootPath);
         PaperPhase1EligibilityLadderExporter.ExportLatest(state, options, phase1Health, contentRootPath);
         PaperPhase1ReadinessExporter.MaybeLog(phase1Health, options);
         return;
