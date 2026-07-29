@@ -389,10 +389,14 @@ _ = Task.Run(async () =>
             if (ProcessRunContext.ValidateOrderbookCounters(state.OrderBookServiceStats) is string mismatchReason)
                 Console.WriteLine(ProcessRunContext.FormatMismatchLog(mismatchReason, state.OrderBookServiceStats));
             var health = RuntimeHealthSnapshot.From(state, options);
+            PaperPhase1RealReadinessMonitor.Evaluate(health);
             var trend = RuntimeHealthTrendTracker.RecordAndAnalyze(health, options.RuntimeHealth);
             Console.WriteLine(health.ToLogLine());
+            Console.WriteLine(PaperPhase1RealReadinessMonitor.AlertLog(health.ProcessRunId));
+            Console.WriteLine(PaperPhase1RealReadinessMonitor.SoakLog(health.ProcessRunId));
             ExportRuntimeSoakStatus(state, options, app.Environment.ContentRootPath);
             PaperPhase1ReadinessExporter.ExportLatest(health, app.Environment.ContentRootPath);
+            PaperPhase1RealReadinessMonitor.Export(health, app.Environment.ContentRootPath);
             PaperPhase1EligibilityLadderExporter.ExportLatest(state, options, health, app.Environment.ContentRootPath);
             PaperPhase1ReadinessExporter.MaybeLog(health, options);
             lastSoakStatusLoggedAt = DateTime.UtcNow;
@@ -949,9 +953,11 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         discoverySourceAuditRecommendedAction = audit.RecommendedAction;
         UpdateDiscoveryGuardRuntimeState();
         var phase1Health = RuntimeHealthSnapshot.From(state, options);
+        PaperPhase1RealReadinessMonitor.Evaluate(phase1Health);
         Console.WriteLine(phase1Health.ToLogLine());
         Console.WriteLine(RuntimeHealthTrendTracker.ToSoakStatusLogLine(phase1Health, RuntimeHealthTrendTracker.Current(options.RuntimeHealth), options, state));
         PaperPhase1ReadinessExporter.ExportLatest(phase1Health, contentRootPath);
+        PaperPhase1RealReadinessMonitor.Export(phase1Health, contentRootPath);
         PaperPhase1EligibilityLadderExporter.ExportLatest(state, options, phase1Health, contentRootPath);
         PaperPhase1ReadinessExporter.MaybeLog(phase1Health, options);
         return;

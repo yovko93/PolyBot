@@ -16,6 +16,7 @@ public static class RuntimeSoakStatusExporter
     public static string Export(BotRuntimeState state, TradingBotOptions options, string contentRootPath)
     {
         var health = RuntimeHealthSnapshot.From(state, options);
+        TradingBot.Services.PaperPhase1RealReadinessMonitor.Evaluate(health);
         var logs = state.Logs();
         var trend = RuntimeHealthTrendTracker.Current(options.RuntimeHealth);
         var warmupMinutes = Math.Max(0, options.RuntimeHealth.WarmupMinutes);
@@ -28,6 +29,37 @@ public static class RuntimeSoakStatusExporter
             startedAtUtc = health.StartedAtUtc,
             scannerInstanceId = health.ScannerInstanceId,
             diagnosticsCounterMismatchCount = health.DiagnosticsCounterMismatchCount,
+            paperPhase1RealSoakEnabled = health.PaperPhase1RealSoakEnabled,
+            paperPhase1RealSoakStartedUtc = health.PaperPhase1RealSoakStartedUtc,
+            paperPhase1RealSoakUptime = health.PaperPhase1RealSoakUptime,
+            paperPhase1RealSoakProfileActive = health.PaperPhase1RealSoakProfileActive,
+            paperPhase1RealSoakReadinessStable = health.PaperPhase1RealSoakReadinessStable,
+            paperPhase1RealSoakReadinessStableMinutes = health.PaperPhase1RealSoakReadinessStableMinutes,
+            paperPhase1RealSoakOrderbookStableMinutes = health.PaperPhase1RealSoakOrderbookStableMinutes,
+            paperPhase1RealSoakMemoryStable = health.PaperPhase1RealSoakMemoryStable,
+            paperPhase1RealSoakLogVolumeStable = health.PaperPhase1RealSoakLogVolumeStable,
+            paperPhase1RealSoakNoCounterMismatches = health.PaperPhase1RealSoakNoCounterMismatches,
+            paperPhase1RealSoakNoUnexpectedPaperOpens = health.PaperPhase1RealSoakNoUnexpectedPaperOpens,
+            paperPhase1RealSoakNoSigningAttempts = health.PaperPhase1RealSoakNoSigningAttempts,
+            paperPhase1RealSoakNoLiveTradingBlocks = health.PaperPhase1RealSoakNoLiveTradingBlocks,
+            paperPhase1RealSoakConsistent = health.PaperPhase1RealSoakConsistent,
+            paperPhase1RealSoakConsistencyReason = health.PaperPhase1RealSoakConsistencyReason,
+            paperPhase1RealAlertLevel = health.PaperPhase1RealAlertLevel,
+            paperPhase1RealAlertName = health.PaperPhase1RealAlertName,
+            paperPhase1RealAlertReason = health.PaperPhase1RealAlertReason,
+            paperPhase1RealAlertCandidateId = health.PaperPhase1RealAlertCandidateId,
+            paperPhase1RealAlertMarketId = health.PaperPhase1RealAlertMarketId,
+            paperPhase1RealAlertAfterSafetyEdge = health.PaperPhase1RealAlertAfterSafetyEdge,
+            paperPhase1RealAlertDistanceToMinEdge = health.PaperPhase1RealAlertDistanceToMinEdge,
+            paperPhase1RealAlertFirstBlockingReason = health.PaperPhase1RealAlertFirstBlockingReason,
+            paperPhase1RealAlertLastChangedUtc = health.PaperPhase1RealAlertLastChangedUtc,
+            paperPhase1CleanNearOpenCount = health.PaperPhase1CleanNearOpenCount,
+            paperPhase1CleanNearOpenThresholdDistance = health.PaperPhase1CleanNearOpenThresholdDistance,
+            paperPhase1CleanNearOpenBestCandidateId = health.PaperPhase1CleanNearOpenBestCandidateId,
+            paperPhase1CleanNearOpenBestAfterSafetyEdge = health.PaperPhase1CleanNearOpenBestAfterSafetyEdge,
+            paperPhase1CleanNearOpenBestDistanceToMinEdge = health.PaperPhase1CleanNearOpenBestDistanceToMinEdge,
+            paperPhase1CleanNearOpenFirstBlockingReason = health.PaperPhase1CleanNearOpenFirstBlockingReason,
+            paperPhase1CleanNearOpenAllBlockingReasons = health.PaperPhase1CleanNearOpenAllBlockingReasons,
             diagnosticsCounterMismatchLastReason = health.DiagnosticsCounterMismatchLastReason,
             diagnosticsCounterMismatchBlockingCount = health.DiagnosticsCounterMismatchBlockingCount,
             diagnosticsCounterMismatchNonBlockingCount = health.DiagnosticsCounterMismatchNonBlockingCount,
