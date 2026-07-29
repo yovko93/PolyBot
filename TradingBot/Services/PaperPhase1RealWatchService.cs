@@ -105,11 +105,14 @@ public sealed class PaperPhase1RealWatchService(TradingBotOptions options)
             {
                 var reject = position is null ? "PositionNotFound" : position.IsSyntheticCanary ? "SyntheticCanaryNotAllowed" : "ManualSettlementDisabled";
                 Console.WriteLine($"[PAPER_PHASE1_REAL_SETTLEMENT_REJECTED] PositionId={positionId} Reason={reject} ProcessRunId={ProcessRunContext.ProcessRunId}");
-                var rejected = new PaperSettlementResult(false, reject, position, null); ExportSettlement(rejected, reason); return rejected;
+                var rejected = new PaperSettlementResult(false, reject, position, null);
+                if (_book is not null) PaperPhase1ContractFixtureService.RecordRealSettlement(_book, positionId, realizedPayout, reason, rejected);
+                ExportSettlement(rejected, reason); return rejected;
             }
             var result = _paper.SettlePositionDetailed(positionId, realizedPayout, reason, false);
             if (result.Accepted) { Current = Current with { LastClosedPositionId = positionId, LastSettlementReason = reason }; RefreshLifecycle(); Console.WriteLine($"[PAPER_PHASE1_REAL_SETTLED] PositionId={positionId} RealizedPayout={realizedPayout:0.####} RealizedPnl={result.Position?.RealizedProfit:0.####} Reason={reason} ProcessRunId={ProcessRunContext.ProcessRunId}"); }
             else Console.WriteLine($"[PAPER_PHASE1_REAL_SETTLEMENT_REJECTED] PositionId={positionId} Reason={result.Reason} ProcessRunId={ProcessRunContext.ProcessRunId}");
+            if (_book is not null) PaperPhase1ContractFixtureService.RecordRealSettlement(_book, positionId, realizedPayout, reason, result);
             ExportSettlement(result, reason);
             return result;
         }

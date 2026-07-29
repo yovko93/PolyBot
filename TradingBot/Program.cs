@@ -81,10 +81,20 @@ if (contractFixtureEnabled)
 {
     try
     {
+        decimal? fixtureRealizedPayout = null;
+        var payoutIndex = Array.FindIndex(args, x => x.Equals("--settle-realized-payout", StringComparison.OrdinalIgnoreCase));
+        if (payoutIndex >= 0 && (payoutIndex + 1 >= args.Length || !decimal.TryParse(args[payoutIndex + 1], System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var parsedPayout)))
+            throw new InvalidOperationException("Invalid --settle-realized-payout value.");
+        if (payoutIndex >= 0) fixtureRealizedPayout = parsedPayout;
+        var reasonIndex = Array.FindIndex(args, x => x.Equals("--settle-reason", StringComparison.OrdinalIgnoreCase));
+        var fixtureSettlementReason = reasonIndex >= 0 && reasonIndex + 1 < args.Length ? args[reasonIndex + 1] : "FixtureContractSettlement";
         var fixtureState = PaperPhase1ContractFixtureService.RunFromCli(options, app.Environment.ContentRootPath,
             args.Contains("--dry-replay-only", StringComparer.OrdinalIgnoreCase),
-            args.Contains("--allow-fixture-paper-open", StringComparer.OrdinalIgnoreCase));
-        Environment.ExitCode = fixtureState.Consistent ? 0 : 2;
+            args.Contains("--allow-fixture-paper-open", StringComparer.OrdinalIgnoreCase),
+            args.Contains("--settle-fixture-paper-position", StringComparer.OrdinalIgnoreCase),
+            fixtureRealizedPayout, fixtureSettlementReason);
+        var settlementRequested = args.Contains("--settle-fixture-paper-position", StringComparer.OrdinalIgnoreCase);
+        Environment.ExitCode = fixtureState.Consistent && (!settlementRequested || fixtureState.SettlementSucceeded) ? 0 : 2;
     }
     catch (Exception ex)
     {

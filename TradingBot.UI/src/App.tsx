@@ -294,6 +294,11 @@ export default function App() {
     ['Open attempted', String(runtime(health, 'paperPhase1ContractFixtureOpenAttempted') ?? false)],
     ['Opened', String(runtime(health, 'paperPhase1ContractFixtureOpened') ?? false)],
     ['Position id', runtime(health, 'paperPhase1ContractFixturePositionId') ?? 'None'],
+    ['Settlement requested / succeeded', `${runtime(health, 'paperPhase1RealSettlementRequested') ?? false} / ${runtime(health, 'paperPhase1RealSettlementSucceeded') ?? false}`],
+    ['Realized payout', runtime(health, 'paperPhase1RealSettlementLastRealizedPayout') ?? 'N/A'],
+    ['Realized PnL', runtime(health, 'paperPhase1RealSettlementLastRealizedPnl') ?? 'N/A'],
+    ['Lifecycle balance', `${runtime(health, 'paperPhase1LifecycleBalanceOk') ?? true} (${runtime(health, 'paperPhase1LifecycleBalanceReason') ?? 'None'})`],
+    ['Safety', 'live order sent=false / signing attempted=false'],
     ['Consistency', `${runtime(health, 'paperPhase1ContractFixtureConsistent') ?? true} (${runtime(health, 'paperPhase1ContractFixtureConsistencyReason') ?? 'None'})`]
   ];
   const positiveCaptures = Array.isArray(positiveCapture.topCaptures) ? positiveCapture.topCaptures : [];
