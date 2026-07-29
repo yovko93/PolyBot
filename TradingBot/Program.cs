@@ -77,6 +77,18 @@ if (replayIndex >= 0)
 FormulaDiagnostics.Configure(options.FormulaDiagnostics);
 RuntimeProfileService.ValidateSafety(options);
 var contractFixtureEnabled = args.Contains("--paper-phase1-contract-fixture", StringComparer.OrdinalIgnoreCase);
+var fixtureStateRequested = args.Any(x => x.Equals("--allow-fixture-paper-open", StringComparison.OrdinalIgnoreCase)
+    || x.Equals("--settle-fixture-paper-position", StringComparison.OrdinalIgnoreCase)
+    || x.Equals("--dry-replay-only", StringComparison.OrdinalIgnoreCase)
+    || x.Equals("--settle-realized-payout", StringComparison.OrdinalIgnoreCase)
+    || x.Equals("--settle-reason", StringComparison.OrdinalIgnoreCase));
+if (!contractFixtureEnabled && fixtureStateRequested)
+{
+    PaperPhase1ReleaseStatusService.MarkFixtureLeak(app.Environment.ContentRootPath, options);
+    Console.WriteLine("[PHASE1_FIXTURE_LEAK_BLOCKED] FixtureFlag=false PaperOpenBlocked=true DashboardWarning=FixtureStateWithoutExplicitFlag");
+    Environment.ExitCode = 2;
+    return;
+}
 if (contractFixtureEnabled)
 {
     try
@@ -106,6 +118,8 @@ if (contractFixtureEnabled)
     }
     return;
 }
+PaperPhase1ContractFixtureService.ExportDisabledMarker(app.Environment.ContentRootPath);
+PaperPhase1ReleaseStatusService.InitializeNormalRuntime(options, app.Environment.ContentRootPath);
 RuntimeProfileService.Export(options, ProcessRunContext.ProcessRunId, app.Environment.ContentRootPath);
 Console.WriteLine(RuntimeProfileService.StartupLog(options));
 var startupDiscoveryMode = ResolveEffectiveDiscoveryMode(options);

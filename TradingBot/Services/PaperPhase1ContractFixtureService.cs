@@ -187,4 +187,18 @@ public static class PaperPhase1ContractFixtureService
         var directory=Path.Combine(root,"exports"); Directory.CreateDirectory(directory); var path=Path.Combine(directory,"paper-phase1-contract-fixture-latest.json"); var temp=path+".tmp";
         File.WriteAllText(temp,JsonSerializer.Serialize(payload,new JsonSerializerOptions{WriteIndented=true,PropertyNamingPolicy=JsonNamingPolicy.CamelCase})); File.Move(temp,path,true);
     }
+
+    public static void ExportDisabledMarker(string root)
+    {
+        var path = Path.Combine(root, "exports", "paper-phase1-contract-fixture-latest.json");
+        DateTime? lastFixtureRunUtc = File.Exists(path) ? File.GetLastWriteTimeUtc(path) : null;
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var payload = new { enabled=false, opened=false, settled=false, candidateInjected=false,
+            staleFixtureResultIgnored=true, lastFixtureRunUtc, normalRuntimeUnaffected=true };
+        var temp = path + ".tmp";
+        File.WriteAllText(temp, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented=true, PropertyNamingPolicy=JsonNamingPolicy.CamelCase }));
+        File.Move(temp, path, true);
+        Current = new();
+        Console.WriteLine("[PAPER_PHASE1_FIXTURE_ISOLATION] PaperPhase1ContractFixtureEnabled=false PaperPhase1ContractFixtureOpened=false PaperPhase1ContractFixtureSettled=false PaperPhase1ContractFixtureCandidateInjected=false PaperPhase1ContractFixtureAffectsRuntime=false PaperPhase1ContractFixtureIsolationOk=true");
+    }
 }
