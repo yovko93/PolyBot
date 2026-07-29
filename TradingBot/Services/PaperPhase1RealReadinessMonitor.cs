@@ -52,7 +52,7 @@ public static class PaperPhase1RealReadinessMonitor
                 _ => "RealPaperPositionOpened"
             };
             var candidate = level >= 5 ? h.PaperPhase1RealWatchOpenedPositionId : level >= 4 ? h.PaperPhase1RealWatchLastEligibleCandidateId
-                : level >= 3 ? h.PaperPhase1PositiveBestCandidateId : level >= 2 ? h.PaperPhase1PositiveRealWatchBestCandidateId
+                : level >= 3 ? h.BestExecutableLikeCandidateId : level >= 2 ? h.PaperPhase1PositiveRealWatchBestCandidateId
                 : level == 1 ? h.PaperPhase1PositiveCleanBestCandidateId : h.PaperPhase1RealWatchBestCandidateId;
             var edge = level == 1 ? h.PaperPhase1PositiveCleanBestAfterSafetyEdge : h.PaperPhase1RealWatchBestAfterSafetyEdge;
             var distance = edge.HasValue ? Math.Max(0m, h.PaperPhase1MinEdge - edge.Value) : h.PaperPhase1RealWatchBestDistanceToMinEdge;
@@ -61,7 +61,7 @@ public static class PaperPhase1RealReadinessMonitor
             if (changed) _alertKey = key;
 
             var nearEdge = h.PaperPhase1PositiveCleanBestAfterSafetyEdge;
-            var nearDistance = nearEdge.HasValue ? Math.Max(0m, h.PaperPhase1MinEdge - nearEdge.Value) : null;
+            decimal? nearDistance = nearEdge.HasValue ? Math.Max(0m, h.PaperPhase1MinEdge - nearEdge.Value) : null;
             var near = h.PaperPhase1PositiveCleanCapturesTotal > 0 || nearDistance <= .005m;
             var memory = h.PaperPhase1ReadinessUsedCurrentMemoryStable;
             var logs = h.PaperPhase1ReadinessUsedCurrentLogVolumeStable;
