@@ -1,4 +1,5 @@
 using System.Text.Json;
+using TradingBot.Api;
 using TradingBot.Options;
 
 namespace TradingBot.Services;
