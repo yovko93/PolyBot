@@ -88,6 +88,7 @@ public sealed class PaperPhase1RealWatchService(TradingBotOptions options)
             var position = _book?.OpenPositions.LastOrDefault(x => x.GroupKey.Equals($"single-market:{marketId}", StringComparison.OrdinalIgnoreCase) && !x.IsSyntheticCanary);
             if (position is not null) { position.Source = "RealScanner"; position.SourceKind = "RealScanner"; position.SourceCandidateId = candidateId; position.ProcessRunId = ProcessRunContext.ProcessRunId; }
             Current = Current with { LastOpenResult = opened ? "Opened" : "Failed", OpenSucceeded = Current.OpenSucceeded + (opened ? 1 : 0), OpenFailed = Current.OpenFailed + (opened ? 0 : 1), OpenedPositionId = position?.PositionId ?? "None" };
+            PaperPhase1PositiveCaptureService.MarkOpen(candidateId, true, opened, position?.PositionId ?? "None");
             RefreshLifecycle();
             Latest = Current;
             if (opened) Console.WriteLine($"[PAPER_PHASE1_REAL_OPENED] PositionId={Current.OpenedPositionId} CandidateId={candidateId} MarketId={marketId} Notional={notional:0.####} AfterSafetyEdge={afterSafetyEdge:0.####} ExpectedProfit={expectedProfit:0.####} LiveTradingDisabled=true SigningDisabled=true ProcessRunId={ProcessRunContext.ProcessRunId}");

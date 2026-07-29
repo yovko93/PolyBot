@@ -353,6 +353,17 @@ public class SingleMarketOrderBookArbEngine
             _state?.SetPaperInFlightOpens(paper.PaperInFlightOpenCount);
             var opportunity = new ArbOpportunity(new ArbLeg(book.MarketId, book.Question, "YES", fill.YesAveragePrice, book.YesAsk.Size), new ArbLeg(book.MarketId, book.Question, "NO", fill.NoAveragePrice, book.NoAsk.Size), quantity, fill.SimulatedCost / quantity, fill.AdjustedEdgePerShare, fill.ExpectedProfit, 1.0, "SingleMarketBuyBoth", StrategyName);
             var candidateId = $"SingleMarketBuyBoth:{book.MarketId}:{_scanId}";
+            // Capture the exact final decision snapshot before the real-watch gate. Invalid artifacts are
+            // stored separately and can never satisfy IsValidOpenCandidate.
+            _ = AuditNearMiss(book, market.conditionId, yes, no, rawCost, validRawEdge, edge,
+                fill.AdjustedEdgePerShare, quantityAvailable, quantity, fill.SimulatedCost, "None", null,
+                true, true, true, true);
+            if (_botOptions is not null && (_botOptions.RuntimeProfile.Equals(RuntimeProfileService.ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase) || _botOptions.RuntimeProfile.Equals(RuntimeProfileService.ReducedDiagnosticsPaperPhase1Canary, StringComparison.OrdinalIgnoreCase)) && !PaperPhase1PositiveCaptureService.AcceptIntoRealWatch(candidateId))
+            {
+                paper.ClearSingleMarketOpenInFlight(book.MarketId);
+                Console.WriteLine($"[PAPER_PHASE1_REAL_OPEN_BLOCKED] CandidateId={candidateId} Reason=PaperEligiblePositiveRequired ProcessRunId={ProcessRunContext.ProcessRunId}");
+                return new SingleMarketScanResult(true,true,true,false,adjustedCost,book.Question,edge,"PaperEligiblePositiveRequired",null);
+            }
             if (_realWatch is not null && _botOptions is not null && (_botOptions.RuntimeProfile.Equals(RuntimeProfileService.ReducedDiagnosticsPaperPhase1, StringComparison.OrdinalIgnoreCase) || _botOptions.RuntimeProfile.Equals(RuntimeProfileService.ReducedDiagnosticsPaperPhase1Canary, StringComparison.OrdinalIgnoreCase)) && !_realWatch.AllowRealOpen(candidateId, book.MarketId, fill.AdjustedEdgePerShare, out var watchReason))
             {
                 paper.ClearSingleMarketOpenInFlight(book.MarketId);
@@ -934,7 +945,11 @@ public class SingleMarketOrderBookArbEngine
     }
 
     private SingleMarketOpportunityAuditDto AuditNearMiss(BinaryOrderBookSnapshot book, string? conditionId, decimal yes, decimal no, decimal rawCost, decimal rawEdge, decimal afterCostEdge, decimal afterSafetyEdge, decimal availableQty, decimal executableQty, decimal notionalAtCap, string rejectedReason, string? dataQualityReason, bool fillPassed, bool depthPassed, bool riskPassed, bool paperDiagnosticsLimitedGatePassed)
-        => new(book.MarketId, conditionId, book.Question, yes, no, rawCost, rawEdge, afterCostEdge, afterSafetyEdge, availableQty, executableQty, notionalAtCap, rejectedReason, dataQualityReason, fillPassed, depthPassed, riskPassed, paperDiagnosticsLimitedGatePassed, DateTime.UtcNow);
+    {
+        var audit = new SingleMarketOpportunityAuditDto(book.MarketId, conditionId, book.Question, yes, no, rawCost, rawEdge, afterCostEdge, afterSafetyEdge, availableQty, executableQty, notionalAtCap, rejectedReason, dataQualityReason, fillPassed, depthPassed, riskPassed, paperDiagnosticsLimitedGatePassed, DateTime.UtcNow);
+        PaperPhase1PositiveCaptureService.Observe(book, audit, _scanId);
+        return audit;
+    }
 
     private SingleMarketDataQualityRejectSampleDto Sample(BinaryOrderBookSnapshot book, string? conditionId, decimal yes, decimal no, decimal raw, string reason, decimal edge)
         => new(DateTime.UtcNow, book.MarketId, conditionId, book.Question, reason, yes == 0m ? null : yes, no == 0m ? null : no, raw, edge);

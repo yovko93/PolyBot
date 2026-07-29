@@ -67,6 +67,13 @@ builder.Services.AddSingleton(sp => new DiagnosticsDashboardHistoryService(sp.Ge
 var app = builder.Build();
 app.UseCors("ui");
 var options = app.Services.GetRequiredService<IOptions<TradingBotOptions>>().Value;
+PaperPhase1PositiveCaptureService.Configure(options, app.Environment.ContentRootPath);
+var replayIndex = Array.IndexOf(args, "--replay-paper-phase1-capture");
+if (replayIndex >= 0)
+{
+    if (replayIndex + 1 >= args.Length || !PaperPhase1PositiveCaptureService.Replay(args[replayIndex + 1])) Environment.ExitCode = 2;
+    return;
+}
 FormulaDiagnostics.Configure(options.FormulaDiagnostics);
 RuntimeProfileService.ValidateSafety(options);
 RuntimeProfileService.Export(options, ProcessRunContext.ProcessRunId, app.Environment.ContentRootPath);
