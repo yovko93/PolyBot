@@ -434,6 +434,7 @@ _ = Task.Run(async () =>
                 Console.WriteLine(ProcessRunContext.FormatMismatchLog(mismatchReason, state.OrderBookServiceStats));
             var health = RuntimeHealthSnapshot.From(state, options);
             PaperPhase1RealReadinessMonitor.Evaluate(health);
+            PaperPhase1ReleaseStatusService.Update(health, app.Environment.ContentRootPath);
             var trend = RuntimeHealthTrendTracker.RecordAndAnalyze(health, options.RuntimeHealth);
             Console.WriteLine(health.ToLogLine());
             Console.WriteLine(PaperPhase1RealReadinessMonitor.AlertLog(health.ProcessRunId));
@@ -998,6 +999,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         UpdateDiscoveryGuardRuntimeState();
         var phase1Health = RuntimeHealthSnapshot.From(state, options);
         PaperPhase1RealReadinessMonitor.Evaluate(phase1Health);
+        PaperPhase1ReleaseStatusService.Update(phase1Health, contentRootPath);
         Console.WriteLine(phase1Health.ToLogLine());
         Console.WriteLine(RuntimeHealthTrendTracker.ToSoakStatusLogLine(phase1Health, RuntimeHealthTrendTracker.Current(options.RuntimeHealth), options, state));
         PaperPhase1ReadinessExporter.ExportLatest(phase1Health, contentRootPath);
@@ -3064,6 +3066,7 @@ static void SyncRuntimeState(BotRuntimeState state, OpportunityMonitor monitor, 
     var exportsRoot = Path.Combine(contentRootPath, "exports");
     PaperAccountExporter.ExportLatest(exportsRoot, paper, pb, state.SingleMarketExecutions(), paper.BlockedCountsByReason);
     PaperOpportunityFunnelExporter.ExportLatest(exportsRoot, PaperOpportunityFunnelExporter.Build(options, state, scanStats, multiOutcomeReport, marketsScanned, !discovery.DiscoveryHealthy && discovery.ActiveMarketsAvailable < options.MarketDiscovery.MinHealthyActiveMarkets));
+    PaperPhase1ReleaseStatusService.Update(RuntimeHealthSnapshot.From(state, options), contentRootPath);
     state.AddEquity(new EquityPointDto(DateTime.UtcNow, paper.Equity, state.NextSeq()));
 }
 

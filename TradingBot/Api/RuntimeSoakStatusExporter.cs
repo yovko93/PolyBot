@@ -17,6 +17,7 @@ public static class RuntimeSoakStatusExporter
     {
         var health = RuntimeHealthSnapshot.From(state, options);
         TradingBot.Services.PaperPhase1RealReadinessMonitor.Evaluate(health);
+        TradingBot.Services.PaperPhase1ReleaseStatusService.Update(health, contentRootPath);
         var logs = state.Logs();
         var trend = RuntimeHealthTrendTracker.Current(options.RuntimeHealth);
         var warmupMinutes = Math.Max(0, options.RuntimeHealth.WarmupMinutes);
@@ -40,6 +41,19 @@ public static class RuntimeSoakStatusExporter
             paperPhase1ContractFixtureOpenAttempted = health.PaperPhase1ContractFixtureOpenAttempted,
             paperPhase1ContractFixturePositionId = health.PaperPhase1ContractFixturePositionId,
             paperPhase1ContractFixtureSettled = health.PaperPhase1ContractFixtureSettled,
+            paperPhase1ContractFixtureCandidateInjected = health.PaperPhase1ContractFixtureCandidateInjected,
+            paperPhase1ContractFixtureAffectsRuntime = health.PaperPhase1ContractFixtureAffectsRuntime,
+            paperPhase1ContractFixtureIsolationOk = health.PaperPhase1ContractFixtureIsolationOk,
+            paperPhase1ContractFixtureIsolationReason = health.PaperPhase1ContractFixtureIsolationReason,
+            paperPhase1NormalRuntimeOpened = health.PaperPhase1NormalRuntimeOpened,
+            paperPhase1NormalRuntimeClosed = health.PaperPhase1NormalRuntimeClosed,
+            paperPhase1NormalRuntimeOpenPositions = health.PaperPhase1NormalRuntimeOpenPositions,
+            paperPhase1FixtureOpened = health.PaperPhase1FixtureOpened,
+            paperPhase1FixtureClosed = health.PaperPhase1FixtureClosed,
+            paperPhase1FixtureOpenPositions = health.PaperPhase1FixtureOpenPositions,
+            paperPhase1CanaryOpened = health.PaperPhase1CanaryPaperOpened,
+            paperPhase1CanaryClosed = health.PaperPhase1CanaryClosed,
+            paperPhase1CanaryOpenPositions = health.PaperPhase1CanaryOpenPositions,
             paperPhase1RealSettlementEnabled = health.PaperPhase1RealSettlementEnabled,
             paperPhase1RealSettlementRequested = health.PaperPhase1RealSettlementRequested,
             paperPhase1RealSettlementSucceeded = health.PaperPhase1RealSettlementSucceeded,
@@ -101,7 +115,7 @@ public static class RuntimeSoakStatusExporter
             paperPhase1CanaryRequireProfile = health.PaperPhase1CanaryRequireProfile,
             paperPhase1CanaryRunOnce = health.PaperPhase1CanaryRunOnce,
             paperPhase1CanaryAttempted = health.PaperPhase1CanaryAttempted,
-            paperPhase1CanaryOpened = health.PaperPhase1CanaryOpened,
+            paperPhase1CanaryOpened = health.PaperPhase1CanaryPaperOpened,
             paperPhase1CanarySettled = health.PaperPhase1CanarySettled,
             paperPhase1CanaryRejected = health.PaperPhase1CanaryRejected,
             paperPhase1CanaryRejectedReason = health.PaperPhase1CanaryRejectedReason,
