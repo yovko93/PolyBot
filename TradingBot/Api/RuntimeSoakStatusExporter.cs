@@ -17,7 +17,7 @@ public static class RuntimeSoakStatusExporter
     {
         var health = RuntimeHealthSnapshot.From(state, options);
         TradingBot.Services.PaperPhase1RealReadinessMonitor.Evaluate(health);
-        TradingBot.Services.PaperPhase1ReleaseStatusService.Update(health, contentRootPath);
+        TradingBot.Services.PaperPhase1ReleaseStatusService.Update(health, contentRootPath, options);
         var logs = state.Logs();
         var trend = RuntimeHealthTrendTracker.Current(options.RuntimeHealth);
         var warmupMinutes = Math.Max(0, options.RuntimeHealth.WarmupMinutes);
@@ -45,6 +45,16 @@ public static class RuntimeSoakStatusExporter
             paperPhase1ContractFixtureAffectsRuntime = health.PaperPhase1ContractFixtureAffectsRuntime,
             paperPhase1ContractFixtureIsolationOk = health.PaperPhase1ContractFixtureIsolationOk,
             paperPhase1ContractFixtureIsolationReason = health.PaperPhase1ContractFixtureIsolationReason,
+            paperPhase1ReleaseStatusEnabled = health.PaperPhase1ReleaseStatusEnabled,
+            paperPhase1ReleaseStatusLogIntervalSeconds = health.PaperPhase1ReleaseStatusLogIntervalSeconds,
+            paperPhase1ReleaseStatusLogsWritten = health.PaperPhase1ReleaseStatusLogsWritten,
+            paperPhase1ReleaseStatusLogsSuppressed = health.PaperPhase1ReleaseStatusLogsSuppressed,
+            paperPhase1ReleaseStatusLastEmittedUtc = health.PaperPhase1ReleaseStatusLastEmittedUtc,
+            paperPhase1ReleaseStatusLastChangeReason = health.PaperPhase1ReleaseStatusLastChangeReason,
+            paperPhase1ReleaseStatusConsistent = health.PaperPhase1ReleaseStatusConsistent,
+            paperPhase1ReleaseStatusExportWritten = health.PaperPhase1ReleaseStatusExportWritten,
+            paperPhase1ReleaseStatusExportPath = health.PaperPhase1ReleaseStatusExportPath,
+            paperPhase1ReleaseStatusLastWriteError = health.PaperPhase1ReleaseStatusLastWriteError,
             paperPhase1NormalRuntimeOpened = health.PaperPhase1NormalRuntimeOpened,
             paperPhase1NormalRuntimeClosed = health.PaperPhase1NormalRuntimeClosed,
             paperPhase1NormalRuntimeOpenPositions = health.PaperPhase1NormalRuntimeOpenPositions,

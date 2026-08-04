@@ -199,6 +199,7 @@ export default function App() {
   const releaseState = release.state ?? {};
   const releasePositions = release.positions ?? {};
   const releaseSafety = release.safety ?? {};
+  const releaseRunbook = release.operatorRunbook ?? {};
   const releaseRows = [
     ['Ready for normal runtime', String(release.readyForNormalRuntime ?? false)],
     ['Release mode', release.releaseMode ?? 'PaperOnly'],
@@ -209,7 +210,13 @@ export default function App() {
     ['Fixture isolation', String(releaseSafety.fixtureIsolationOk ?? release.fixtureIsolationOk ?? false)],
     ['Canary disabled', String(releaseSafety.canaryDisabled ?? false)],
     ['Live / signing disabled', `${releaseSafety.liveTradingDisabled ?? false} / ${releaseSafety.signingDisabled ?? false}`],
-    ['Limits', `edge=${releaseSafety.minEdge ?? 0.01} positions=${releaseSafety.maxOpenPositions ?? 1} notional=${releaseSafety.maxNotional ?? 5} exposure=${releaseSafety.maxExposure ?? 5} opens/h=${releaseSafety.maxOpensPerHour ?? 1}`]
+    ['Limits', `edge=${releaseSafety.minEdge ?? 0.01} positions=${releaseSafety.maxOpenPositions ?? 1} notional=${releaseSafety.maxNotional ?? 5} exposure=${releaseSafety.maxExposure ?? 5} opens/h=${releaseSafety.maxOpensPerHour ?? 1}`],
+    ['Release export', `${release.releaseStatusExportWritten ?? false} @ ${release.releaseStatusLastExportUtc ?? '-'}`],
+    ['Release log suppressions', release.releaseStatusLogsSuppressed ?? 0],
+    ['Normal command', releaseRunbook.normalCommand ?? 'dotnet run --project TradingBot -- --profile ReducedDiagnosticsPaperPhase1'],
+    ['Dry replay command', releaseRunbook.dryReplayCommand ?? 'dotnet run --project TradingBot -- --profile ReducedDiagnosticsPaperPhase1 --paper-phase1-contract-fixture --dry-replay-only'],
+    ['Fixture open+settle command', releaseRunbook.fixtureOpenSettleCommand ?? 'dotnet run --project TradingBot -- --profile ReducedDiagnosticsPaperPhase1 --paper-phase1-contract-fixture --allow-fixture-paper-open --settle-fixture-paper-position'],
+    ['Stop condition', releaseRunbook.stopCondition ?? 'SigningAttempts>0 or LiveTradingBlocked>0 or DashboardWarnings>0 or FixtureIsolationOk=false']
   ];
   const paperPhase1Counters = paperPhase1.counters ?? {};
   const paperPhase1Limits = paperPhase1.limits ?? {};
