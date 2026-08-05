@@ -144,7 +144,10 @@ public sealed class PaperPhase1Options
     [Range(1, 3600)] public int ReleaseStatusLogIntervalSeconds { get; set; } = 60;
     public bool ReleaseStatusEmitOnChange { get; set; } = true;
     public bool ReleaseStatusSuppressDuplicates { get; set; } = true;
+    public bool OperatorRunbookEnabled { get; set; } = true;
+    [Range(60, 36000)] public int OperatorRunbookIntervalSeconds { get; set; } = 600;
 }
+
 
 public sealed class PaperPhase1RealSettlementOptions
 {

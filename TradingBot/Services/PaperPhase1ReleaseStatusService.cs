@@ -27,18 +27,30 @@ public sealed record PaperPhase1ReleaseStatus(DateTime GeneratedAtUtc, string Pr
     string ReleaseStatusLastChangeReason = "Startup", bool ReleaseStatusConsistent = true,
     bool ReleaseStatusExportWritten = false, string ReleaseStatusExportPath = "exports/paper-phase1-release-status-latest.json",
     string ReleaseStatusLastWriteError = "None", DateTime? ReleaseStatusLastExportUtc = null,
-    PaperPhase1ReleaseOperatorRunbook? OperatorRunbook = null);
+    PaperPhase1ReleaseOperatorRunbook? OperatorRunbook = null,
+    bool OperatorRunbookEnabled = true, int OperatorRunbookIntervalSeconds = 600,
+    long OperatorRunbookLogsWritten = 0, long OperatorRunbookLogsSuppressed = 0,
+    DateTime? OperatorRunbookLastEmittedUtc = null, string OperatorRunbookLastReason = "Startup",
+    bool OperatorRunbookConsistent = true, string OperatorRunbookConsistencyReason = "None",
+    bool OperatorRunbookExportWritten = false, string OperatorRunbookExportPath = "exports/paper-phase1-operator-runbook-latest.json",
+    string OperatorRunbookLastWriteError = "None", DateTime? OperatorRunbookLastExportUtc = null);
 
 public static class PaperPhase1ReleaseStatusService
 {
     private const string ExportRelativePath = "exports/paper-phase1-release-status-latest.json";
+    private const string RunbookExportRelativePath = "exports/paper-phase1-operator-runbook-latest.json";
     private static readonly object Sync = new();
     private static long _logsWritten;
     private static long _logsSuppressed;
     private static DateTime? _lastEmittedUtc;
-    private static DateTime? _lastRunbookUtc;
     private static string? _lastChangeSignature;
     private static string _lastChangeReason = "Startup";
+    private static long _runbookLogsWritten;
+    private static long _runbookLogsSuppressed;
+    private static DateTime? _lastRunbookUtc;
+    private static int? _lastRunbookAlertLevel;
+    private static bool? _lastRunbookStopActive;
+    private static string _lastRunbookReason = "Startup";
     public static PaperPhase1ReleaseStatus Current { get; private set; } = Empty();
 
     public static void InitializeNormalRuntime(TradingBotOptions options, string root)
@@ -65,6 +77,8 @@ public static class PaperPhase1ReleaseStatusService
         var releaseOptions = options?.PaperPhase1 ?? new PaperPhase1Options();
         var enabled = releaseOptions.ReleaseStatusEnabled;
         var intervalSeconds = Math.Max(1, releaseOptions.ReleaseStatusLogIntervalSeconds);
+        var runbookEnabled = releaseOptions.OperatorRunbookEnabled;
+        var runbookIntervalSeconds = Math.Max(60, releaseOptions.OperatorRunbookIntervalSeconds);
         var now = DateTime.UtcNow;
         var signature = string.Join('|', h.PaperPhase1RealAlertLevel, ready, h.PaperPhase1ContractFixtureIsolationOk,
             h.PaperPhase1NormalRuntimeOpenPositions, h.PaperPhase1PositivePaperEligibleTotal, warnings.Count, h.SigningAttempts, h.LiveTradingBlockedCount);
@@ -75,6 +89,15 @@ public static class PaperPhase1ReleaseStatusService
         var shouldLog = shouldWrite && (!releaseOptions.ReleaseStatusSuppressDuplicates || intervalElapsed || stateChanged);
         if (!shouldWrite && releaseOptions.ReleaseStatusSuppressDuplicates) _logsSuppressed++;
         if (stateChanged) _lastChangeReason = changeReason;
+
+        var runbook = Runbook();
+        var stopActive = h.SigningAttempts > 0 || h.LiveTradingBlockedCount > 0 || warnings.Count > 0 || !h.PaperPhase1ContractFixtureIsolationOk;
+        var runbookReason = RunbookReason(h, warnings.Count, stopActive);
+        var runbookDue = !_lastRunbookUtc.HasValue || now - _lastRunbookUtc.Value >= TimeSpan.FromSeconds(runbookIntervalSeconds);
+        var runbookAlertChanged = _lastRunbookAlertLevel.HasValue && _lastRunbookAlertLevel.Value != h.PaperPhase1RealAlertLevel;
+        var runbookStopAppeared = (!_lastRunbookStopActive.GetValueOrDefault()) && stopActive;
+        var shouldEmitRunbook = runbookEnabled && h.PaperPhase1ProfileActive && (runbookDue || runbookAlertChanged || runbookStopAppeared);
+        if (!shouldEmitRunbook && runbookEnabled && h.PaperPhase1ProfileActive) _runbookLogsSuppressed++;
 
         var status = new PaperPhase1ReleaseStatus(now, h.ProcessRunId, h.RuntimeProfile, "PaperOnly", ready,
             new(h.PaperPhase1Armed, h.PaperPhase1Readiness, h.PaperPhase1RealWatchEnabled,
@@ -93,7 +116,11 @@ public static class PaperPhase1ReleaseStatusService
             h.PaperPhase1ContractFixtureCandidateInjected, h.PaperPhase1ContractFixtureAffectsRuntime,
             h.PaperPhase1ContractFixtureIsolationOk, enabled, intervalSeconds, _logsWritten, _logsSuppressed,
             _lastEmittedUtc, _lastChangeReason, consistent, Current.ReleaseStatusExportWritten, ExportRelativePath,
-            Current.ReleaseStatusLastWriteError, Current.ReleaseStatusLastExportUtc, Runbook());
+            Current.ReleaseStatusLastWriteError, Current.ReleaseStatusLastExportUtc, runbook,
+            runbookEnabled, runbookIntervalSeconds, _runbookLogsWritten, _runbookLogsSuppressed, _lastRunbookUtc,
+            _lastRunbookReason, h.PaperPhase1ProfileActive, h.PaperPhase1ProfileActive ? "None" : "ProfileInactive",
+            Current.OperatorRunbookExportWritten, RunbookExportRelativePath, Current.OperatorRunbookLastWriteError,
+            Current.OperatorRunbookLastExportUtc);
         lock (Sync)
         {
             Current = status;
@@ -111,10 +138,22 @@ public static class PaperPhase1ReleaseStatusService
                 LogExport(Current, result.Path, result.Written, result.Error);
                 if (shouldLog) Log(Current);
             }
-            if (!_lastRunbookUtc.HasValue || now - _lastRunbookUtc.Value >= TimeSpan.FromMinutes(10))
+            if (shouldEmitRunbook)
             {
+                _runbookLogsWritten++;
                 _lastRunbookUtc = now;
-                LogRunbook(Current.OperatorRunbook ?? Runbook());
+                _lastRunbookAlertLevel = h.PaperPhase1RealAlertLevel;
+                _lastRunbookStopActive = stopActive;
+                _lastRunbookReason = runbookReason;
+                Current = Current with { OperatorRunbookLogsWritten = _runbookLogsWritten, OperatorRunbookLastEmittedUtc = _lastRunbookUtc, OperatorRunbookLastReason = _lastRunbookReason };
+                var runbookResult = ExportRunbook(root, Current);
+                Current = Current with { OperatorRunbookExportWritten = runbookResult.Written, OperatorRunbookLastWriteError = runbookResult.Error, OperatorRunbookLastExportUtc = runbookResult.Written ? now : Current.OperatorRunbookLastExportUtc };
+                LogRunbook(Current, runbook);
+            }
+            else if (runbookEnabled && h.PaperPhase1ProfileActive)
+            {
+                _lastRunbookAlertLevel = h.PaperPhase1RealAlertLevel;
+                _lastRunbookStopActive = stopActive;
             }
         }
     }
@@ -144,17 +183,64 @@ public static class PaperPhase1ReleaseStatusService
         }
     }
 
+    private static (bool Written, string Path, string Error) ExportRunbook(string root, PaperPhase1ReleaseStatus status)
+    {
+        var path = Path.Combine(root, RunbookExportRelativePath);
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!); var temp = path + ".tmp";
+            var payload = new
+            {
+                generatedAtUtc = status.GeneratedAtUtc,
+                processRunId = status.ProcessRunId,
+                profile = status.Profile,
+                status = status.OperatorRunbook?.Status ?? "ReadyWaitingForEdge",
+                mode = status.OperatorRunbook?.Mode ?? "PaperOnly",
+                whatToWatch = WatchFields,
+                commands = new
+                {
+                    normal = status.OperatorRunbook?.NormalCommand ?? NormalCommand,
+                    dryReplay = status.OperatorRunbook?.DryReplayCommand ?? DryReplayCommand,
+                    fixtureOpenSettle = status.OperatorRunbook?.FixtureOpenSettleCommand ?? FixtureOpenSettleCommand
+                },
+                stopConditions = StopConditions,
+                expected = new
+                {
+                    currentAlert = status.OperatorRunbook?.ExpectedCurrentAlert ?? "WaitingForEdge",
+                    paperOpened = status.OperatorRunbook?.ExpectedPaperOpened ?? "0 unless real PaperEligiblePositive appears"
+                },
+                consistent = status.OperatorRunbookConsistent
+            };
+            File.WriteAllText(temp, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+            File.Move(temp, path, true);
+            return (true, RunbookExportRelativePath, "None");
+        }
+        catch (Exception ex)
+        {
+            return (false, RunbookExportRelativePath, ex.Message.Replace(' ', '_'));
+        }
+    }
+
     private static void Log(PaperPhase1ReleaseStatus x) => Console.WriteLine($"[PAPER_PHASE1_RELEASE_STATUS] Profile={x.Profile} ReleaseMode={x.ReleaseMode} ReadyForNormalRuntime={B(x.ReadyForNormalRuntime)} Armed={B(x.State.Armed)} Readiness={B(x.State.Readiness)} RealWatchEnabled={B(x.State.RealWatchEnabled)} RealSoakEnabled={B(x.State.RealSoakEnabled)} AlertLevel={x.State.AlertLevel} AlertName={x.State.AlertName} BestRealWatchAfterSafetyEdge={F(x.State.BestRealWatchAfterSafetyEdge)} DistanceToMinEdge={F(x.State.DistanceToMinEdge)} CleanNearOpenCount={x.State.CleanNearOpenCount} PaperEligiblePositiveCount={x.State.PaperEligiblePositiveCount} NormalRuntimeOpened={x.Positions.NormalRuntimeOpened} NormalRuntimeOpenPositions={x.Positions.NormalRuntimeOpenPositions} FixtureIsolationOk={B(x.Safety.FixtureIsolationOk)} CanaryDisabled={B(x.Safety.CanaryDisabled)} LiveTradingDisabled={B(x.Safety.LiveTradingDisabled)} SigningDisabled={B(x.Safety.SigningDisabled)} LimitsOk={B(x.Safety.LimitsOk)} MinEdge={x.Safety.MinEdge:0.####} MaxOpenPositions={x.Safety.MaxOpenPositions} MaxNotional={x.Safety.MaxNotional:0.####} MaxExposure={x.Safety.MaxExposure:0.####} MaxOpensPerHour={x.Safety.MaxOpensPerHour} DashboardWarnings={x.DashboardWarnings.Length} Consistent={B(x.Consistent)} ConsistencyReason={x.ConsistencyReason} ProcessRunId={x.ProcessRunId}");
     private static void LogExport(PaperPhase1ReleaseStatus x, string path, bool written, string error) => Console.WriteLine($"[PAPER_PHASE1_RELEASE_STATUS_EXPORT] Written={B(written)} Path={path} ProcessRunId={x.ProcessRunId} LastWriteError={error}");
-    private static PaperPhase1ReleaseOperatorRunbook Runbook() => new("ReadyWaitingForEdge", "PaperOnly", "AlertLevel|PaperEligiblePositiveCount|PaperOpened|SigningAttempts|LiveTradingBlocked",
-        "dotnet run --project TradingBot -- --profile ReducedDiagnosticsPaperPhase1",
-        "dotnet run --project TradingBot -- --profile ReducedDiagnosticsPaperPhase1 --paper-phase1-contract-fixture --dry-replay-only",
-        "dotnet run --project TradingBot -- --profile ReducedDiagnosticsPaperPhase1 --paper-phase1-contract-fixture --allow-fixture-paper-open --settle-fixture-paper-position",
-        "SigningAttempts>0 or LiveTradingBlocked>0 or DashboardWarnings>0 or FixtureIsolationOk=false",
+    private static void LogRunbook(PaperPhase1ReleaseStatus x, PaperPhase1ReleaseOperatorRunbook r) => Console.WriteLine($"[PAPER_PHASE1_OPERATOR_RUNBOOK] Status={r.Status} Mode={r.Mode} Profile={x.Profile} WhatToWatch={r.WhatToWatch} NormalCommand=\"{r.NormalCommand}\" DryReplayCommand=\"{r.DryReplayCommand}\" FixtureOpenSettleCommand=\"{r.FixtureOpenSettleCommand}\" StopCondition=\"{r.StopCondition}\" ExpectedCurrentAlert={r.ExpectedCurrentAlert} ExpectedPaperOpened=\"{r.ExpectedPaperOpened}\" ProcessRunId={x.ProcessRunId}");
+    private static PaperPhase1ReleaseOperatorRunbook Runbook() => new("ReadyWaitingForEdge", "PaperOnly", string.Join('|', WatchFields),
+        NormalCommand, DryReplayCommand, FixtureOpenSettleCommand, string.Join(" or ", StopConditions),
         "WaitingForEdge", "0 unless real PaperEligiblePositive appears");
-    private static void LogRunbook(PaperPhase1ReleaseOperatorRunbook r) => Console.WriteLine($"[PAPER_PHASE1_OPERATOR_RUNBOOK] Status={r.Status} Mode={r.Mode} WhatToWatch={r.WhatToWatch} NormalCommand=\"{r.NormalCommand}\" DryReplayCommand=\"{r.DryReplayCommand}\" FixtureOpenSettleCommand=\"{r.FixtureOpenSettleCommand}\" StopCondition=\"{r.StopCondition}\" ExpectedCurrentAlert={r.ExpectedCurrentAlert} ExpectedPaperOpened=\"{r.ExpectedPaperOpened}\"");
     private static string ChangeReason(RuntimeHealthSnapshot h, bool ready, int dashboardWarnings, string signature) => _lastChangeSignature is null ? "Startup" :
         !string.Equals(_lastChangeSignature, signature, StringComparison.Ordinal) ? $"AlertLevel={h.PaperPhase1RealAlertLevel};ReadyForNormalRuntime={ready};FixtureIsolationOk={h.PaperPhase1ContractFixtureIsolationOk};NormalRuntimeOpenPositions={h.PaperPhase1NormalRuntimeOpenPositions};PaperEligiblePositiveCount={h.PaperPhase1PositivePaperEligibleTotal};DashboardWarnings={dashboardWarnings};SigningAttempts={h.SigningAttempts};LiveTradingBlocked={h.LiveTradingBlockedCount}" : "Interval";
+    private static string RunbookReason(RuntimeHealthSnapshot h, int dashboardWarnings, bool stopActive)
+    {
+        if (!_lastRunbookUtc.HasValue) return "Startup";
+        if (_lastRunbookAlertLevel.HasValue && _lastRunbookAlertLevel.Value != h.PaperPhase1RealAlertLevel) return "AlertLevelChanged";
+        if (!_lastRunbookStopActive.GetValueOrDefault() && stopActive) return "StopConditionAppeared";
+        return "Interval";
+    }
+    private static readonly string[] WatchFields = ["AlertLevel", "PaperEligiblePositiveCount", "PaperOpened", "SigningAttempts", "LiveTradingBlocked", "DashboardWarnings", "FixtureIsolationOk"];
+    private static readonly string[] StopConditions = ["SigningAttempts>0", "LiveTradingBlocked>0", "DashboardWarnings>0", "FixtureIsolationOk=false"];
+    private const string NormalCommand = "dotnet run --project TradingBot -- --profile ReducedDiagnosticsPaperPhase1";
+    private const string DryReplayCommand = "dotnet run --project TradingBot -- --profile ReducedDiagnosticsPaperPhase1 --paper-phase1-contract-fixture --dry-replay-only";
+    private const string FixtureOpenSettleCommand = "dotnet run --project TradingBot -- --profile ReducedDiagnosticsPaperPhase1 --paper-phase1-contract-fixture --allow-fixture-paper-open --settle-fixture-paper-position";
     private static string B(bool value) => value.ToString().ToLowerInvariant();
     private static string F(decimal? value) => value?.ToString("0.####") ?? "N/A";
     private static PaperPhase1ReleaseStatus Empty() => new(DateTime.UtcNow, ProcessRunContext.ProcessRunId,
