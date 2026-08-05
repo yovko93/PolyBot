@@ -51,6 +51,11 @@ public static class PaperPhase1ReleaseStatusService
     private static int? _lastRunbookAlertLevel;
     private static bool? _lastRunbookStopActive;
     private static string _lastRunbookReason = "Startup";
+    private static readonly string[] WatchFields = ["AlertLevel", "PaperEligiblePositiveCount", "PaperOpened", "SigningAttempts", "LiveTradingBlocked", "DashboardWarnings", "FixtureIsolationOk"];
+    private static readonly string[] StopConditions = ["SigningAttempts>0", "LiveTradingBlocked>0", "DashboardWarnings>0", "FixtureIsolationOk=false"];
+    private const string NormalCommand = "dotnet run --project TradingBot -- --profile ReducedDiagnosticsPaperPhase1";
+    private const string DryReplayCommand = "dotnet run --project TradingBot -- --profile ReducedDiagnosticsPaperPhase1 --paper-phase1-contract-fixture --dry-replay-only";
+    private const string FixtureOpenSettleCommand = "dotnet run --project TradingBot -- --profile ReducedDiagnosticsPaperPhase1 --paper-phase1-contract-fixture --allow-fixture-paper-open --settle-fixture-paper-position";
     public static PaperPhase1ReleaseStatus Current { get; private set; } = Empty();
 
     public static void InitializeNormalRuntime(TradingBotOptions options, string root)
@@ -236,11 +241,6 @@ public static class PaperPhase1ReleaseStatusService
         if (!_lastRunbookStopActive.GetValueOrDefault() && stopActive) return "StopConditionAppeared";
         return "Interval";
     }
-    private static readonly string[] WatchFields = ["AlertLevel", "PaperEligiblePositiveCount", "PaperOpened", "SigningAttempts", "LiveTradingBlocked", "DashboardWarnings", "FixtureIsolationOk"];
-    private static readonly string[] StopConditions = ["SigningAttempts>0", "LiveTradingBlocked>0", "DashboardWarnings>0", "FixtureIsolationOk=false"];
-    private const string NormalCommand = "dotnet run --project TradingBot -- --profile ReducedDiagnosticsPaperPhase1";
-    private const string DryReplayCommand = "dotnet run --project TradingBot -- --profile ReducedDiagnosticsPaperPhase1 --paper-phase1-contract-fixture --dry-replay-only";
-    private const string FixtureOpenSettleCommand = "dotnet run --project TradingBot -- --profile ReducedDiagnosticsPaperPhase1 --paper-phase1-contract-fixture --allow-fixture-paper-open --settle-fixture-paper-position";
     private static string B(bool value) => value.ToString().ToLowerInvariant();
     private static string F(decimal? value) => value?.ToString("0.####") ?? "N/A";
     private static PaperPhase1ReleaseStatus Empty() => new(DateTime.UtcNow, ProcessRunContext.ProcessRunId,
