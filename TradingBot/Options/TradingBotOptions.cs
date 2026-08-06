@@ -66,6 +66,7 @@ public class TradingBotOptions
     public TradingModeOptions TradingMode { get; set; } = new();
     public PaperRiskOptions PaperRisk { get; set; } = new();
     public PaperDiagnosticsLimitedOptions PaperDiagnosticsLimited { get; set; } = new();
+    public PaperPhase1Options PaperPhase1 { get; set; } = new();
     public PaperPhase1PositiveCaptureOptions PaperPhase1PositiveCapture { get; set; } = new();
     public PaperPhase1DiscoveryFallbackOptions PaperPhase1DiscoveryFallback { get; set; } = new();
     public PaperPhase1EligibilityLadderOptions PaperPhase1EligibilityLadder { get; set; } = new();
@@ -136,6 +137,17 @@ public class TradingBotOptions
         ["ExperimentalMultiOutcome"] = new(false, StrategyMode.Disabled, 0)
     };
 }
+
+public sealed class PaperPhase1Options
+{
+    public bool ReleaseStatusEnabled { get; set; } = true;
+    [Range(1, 3600)] public int ReleaseStatusLogIntervalSeconds { get; set; } = 60;
+    public bool ReleaseStatusEmitOnChange { get; set; } = true;
+    public bool ReleaseStatusSuppressDuplicates { get; set; } = true;
+    public bool OperatorRunbookEnabled { get; set; } = true;
+    [Range(60, 36000)] public int OperatorRunbookIntervalSeconds { get; set; } = 600;
+}
+
 
 public sealed class PaperPhase1RealSettlementOptions
 {

@@ -46,7 +46,9 @@ public class PaperPosition
     public string ActiveProfile { get; init; } = "";
     public string Source { get; set; } = "";
     public string SourceKind { get; set; } = "";
+    public bool IsFixture { get; init; }
     public bool IsSyntheticCanary { get; init; }
+    public bool CountsTowardNormalRuntime { get; init; } = true;
     public string SourceCandidateId { get; set; } = "";
     public string ProcessRunId { get; set; } = "";
     public bool OpenedFromSimulatedFills { get; init; }
