@@ -9,14 +9,11 @@ namespace TradingBot.Services;
 public static class Phase1ConsoleLogging
 {
     private static readonly object Sync = new();
-    private static readonly HashSet<string> VerboseEvents = new(StringComparer.OrdinalIgnoreCase)
+    public const string AllowedEvents = "PHASE1_STARTUP|PHASE1_SUMMARY_5M|PHASE1_ALERT_CHANGE|PHASE1_PAPER_OPENED|PHASE1_PAPER_SETTLED|PHASE1_SAFETY_STOP|PHASE1_INVARIANT_FAILURE|ERROR|FATAL";
+    private static readonly HashSet<string> ConsoleAllowlist = new(StringComparer.OrdinalIgnoreCase)
     {
-        "RUNTIME_HEALTH", "SOAK_STATUS", "PAPER_PHASE1_REAL_GATE_TRACE", "MULTI_STRATEGY_SUMMARY",
-        "STRATEGY_SUMMARY", "EDGE_TRANSITION_SUMMARY", "PAPER_PHASE1_INVALID_POSITIVE_ARTIFACT_CAPTURED",
-        "PAPER_PHASE1_POSITIVE_CAPTURE_SUMMARY", "PAPER_PHASE1_INVALID_POSITIVE_ARTIFACT_SUMMARY",
-        "FORMULA_WARNING_SUPPRESSED_SUMMARY", "REDUCED_UNIVERSE_HEALTHY_SNAPSHOT_WRITTEN",
-        "DIAGNOSTICS_DASHBOARD_HISTORY_SUMMARY", "SINGLE_MARKET_EDGE_DISTRIBUTION",
-        "SINGLE_MARKET_FULL_CYCLE_SUMMARY", "SINGLE_MARKET_NEAR_MISS_SUMMARY"
+        "PHASE1_STARTUP", "PHASE1_SUMMARY_5M", "PHASE1_ALERT_CHANGE", "PHASE1_PAPER_OPENED",
+        "PHASE1_PAPER_SETTLED", "PHASE1_SAFETY_STOP", "PHASE1_INVARIANT_FAILURE", "ERROR", "FATAL"
     };
     private static ConsoleLoggingOptions _options = new();
     private static string _root = "";
@@ -26,17 +23,22 @@ public static class Phase1ConsoleLogging
     public static DateTime? LastSummaryUtc { get; private set; }
     public static DateTime? LastImmediateEventUtc { get; private set; }
     public static string LastWriteError { get; private set; } = "None";
+    public static long UnexpectedVerboseEventsPrinted { get; private set; }
+    public static long AlertNoopChangesSuppressed { get; private set; }
+    public static string UnexpectedVerboseEventNames => "None";
+    public static bool StrictModeOk => UnexpectedVerboseEventsPrinted == 0;
+    private static AlertConsoleState? _lastAlert;
     public static string Mode => _options.Mode;
     public static int SummaryIntervalSeconds => _options.SummaryIntervalSeconds;
     public static string VerboseLogPath => _options.VerboseLogPath;
     public static string SummaryLogPath => _options.SummaryLogPath;
-    public static bool Consistent => LastWriteError == "None" && (!IsSummary || !_options.SuppressVerboseEvents || !_options.WriteVerboseEventsToFile || VerboseEventsWritten == VerboseEventsSuppressed);
-    public static string ConsistencyReason => Consistent ? "None" : LastWriteError != "None" ? LastWriteError : "VerboseWriteCountMismatch";
+    public static bool Consistent => StrictModeOk && LastWriteError == "None" && (!IsSummary || !_options.SuppressVerboseEvents || !_options.WriteVerboseEventsToFile || VerboseEventsWritten == VerboseEventsSuppressed);
+    public static string ConsistencyReason => Consistent ? "None" : !StrictModeOk ? "UnexpectedVerboseEventPrinted" : LastWriteError != "None" ? LastWriteError : "VerboseWriteCountMismatch";
     private static bool IsSummary => _options.Mode.Equals("Summary5Min", StringComparison.OrdinalIgnoreCase);
 
     public static TextWriter CreateWriter(TextWriter destination, TradingBotOptions options, string contentRoot)
     {
-        _options = options.Console; _root = contentRoot;
+        _options = options.Console; _root = contentRoot; _lastAlert = null;
         return new FilteringWriter(destination);
     }
 
@@ -47,6 +49,23 @@ public static class Phase1ConsoleLogging
         destination.WriteLine($"[PHASE1_STARTUP] Profile={options.RuntimeProfile} ConsoleMode={options.Console.Mode} SummaryIntervalSeconds={options.Console.SummaryIntervalSeconds} PaperOnly={options.PaperOnly.ToString().ToLowerInvariant()} ReadyForNormalRuntime=true LiveTradingDisabled={(!options.EnableLiveExecution&&!options.TradingMode.LiveTradingEnabled).ToString().ToLowerInvariant()} SigningDisabled=true ProcessRunId={ProcessRunContext.ProcessRunId}");
     }
     public static void EmitImmediate(TextWriter destination, string line) { LastImmediateEventUtc=DateTime.UtcNow; destination.WriteLine(line); }
+
+    public static void ObserveAlert(TextWriter destination, int level, string name, string reason, string candidateId,
+        decimal? edge, bool paperEligible, decimal minEdge, string processRunId)
+    {
+        var next = new AlertConsoleState(level, name, reason, candidateId, edge, paperEligible);
+        var previous = _lastAlert;
+        _lastAlert = next;
+        if (previous is null) return; // Establish the startup baseline; startup is not an alert change.
+        var stateChanged = previous.Level != next.Level
+            || !string.Equals(previous.Name, next.Name, StringComparison.Ordinal)
+            || !string.Equals(previous.Reason, next.Reason, StringComparison.Ordinal)
+            || previous.PaperEligible != next.PaperEligible;
+        var candidateThresholdCrossed = !string.Equals(previous.CandidateId, next.CandidateId, StringComparison.Ordinal)
+            && CrossedThreshold(previous.Edge, next.Edge, 0m, minEdge);
+        if (!stateChanged && !candidateThresholdCrossed) { AlertNoopChangesSuppressed++; return; }
+        EmitImmediate(destination, $"[PHASE1_ALERT_CHANGE] OldLevel={previous.Level} NewLevel={next.Level} Name={next.Name} Reason={next.Reason} CandidateId={next.CandidateId} Edge={next.Edge?.ToString("0.####") ?? "N/A"} PaperEligible={next.PaperEligible.ToString().ToLowerInvariant()} ProcessRunId={processRunId}");
+    }
 
     public static void EmitSummary(TextWriter destination, RuntimeHealthSnapshot h, TradingBotOptions options)
     {
@@ -71,7 +90,7 @@ public static class Phase1ConsoleLogging
         destination.WriteLine($"[PHASE1_SUMMARY_5M] TimeUtc={now:O} Uptime={h.Uptime:c} Profile={options.RuntimeProfile} Mode=PaperOnly Status={status} Alert={h.PaperPhase1RealAlertLevel}/{h.PaperPhase1RealAlertName} BestEdge={best?.ToString("0.####")??"N/A"} DistanceToMinEdge={distance?.ToString("0.####")??"N/A"} CleanNearOpen={h.PaperPhase1CleanNearOpenCount} PaperEligible={h.PaperPhase1LadderPaperEligible} PaperOpened={h.PaperPhase1PaperOpened} OpenPositions={h.PaperOpenPositions} RealizedPnl={h.PaperRealizedPnl:0.####} NormalRuntimeOpened={h.PaperPhase1NormalRuntimeOpened} FixtureIsolationOk={h.PaperPhase1ContractFixtureIsolationOk.ToString().ToLowerInvariant()} SoakStable={h.PaperPhase1RealSoakReadinessStable.ToString().ToLowerInvariant()} OrderbookStable={h.OrderbookStableNow.ToString().ToLowerInvariant()} DashboardWarnings={h.DiagnosticsCounterMismatchCount} SigningAttempts={h.SigningAttempts} LiveTradingBlocked={h.LiveTradingBlockedCount} DiscoveryMode=ReducedUniverseDiagnosticsOnly ReducedUniverseMarkets={h.ReducedUniverseMarkets} CandidatesSeen5m={h.PaperPhase1CandidatesSeen} ValidPriced5m={h.PaperPhase1LadderValidPriced} PositiveAfterSafety5m={h.PaperPhase1LadderPositiveAfterSafety} InvalidArtifacts5m={h.PaperPhase1InvalidPositiveArtifactsTotal} TopReject={h.PaperPhase1LadderTopBlockingReason} TopArtifact={h.PaperPhase1InvalidPositiveArtifactBestFirstReason} ExportsOk={exportsOk.ToString().ToLowerInvariant()} ProcessRunId={h.ProcessRunId}");
     }
 
-    public static string TelemetryFields() => $"ConsoleMode={Mode} ConsoleSummaryIntervalSeconds={SummaryIntervalSeconds} ConsoleSummaryLogsWritten={SummaryLogsWritten} ConsoleVerboseEventsSuppressed={VerboseEventsSuppressed} ConsoleVerboseEventsWritten={VerboseEventsWritten} ConsoleLastSummaryUtc={LastSummaryUtc:O} ConsoleLastImmediateEventUtc={LastImmediateEventUtc:O} ConsoleVerboseLogPath={VerboseLogPath} ConsoleSummaryLogPath={SummaryLogPath} ConsoleLoggingConsistent={Consistent.ToString().ToLowerInvariant()} ConsoleLoggingConsistencyReason={ConsistencyReason}";
+    public static string TelemetryFields() => $"ConsoleMode={Mode} ConsoleSummaryIntervalSeconds={SummaryIntervalSeconds} ConsoleSummaryLogsWritten={SummaryLogsWritten} ConsoleVerboseEventsSuppressed={VerboseEventsSuppressed} ConsoleVerboseEventsWritten={VerboseEventsWritten} ConsoleLastSummaryUtc={LastSummaryUtc:O} ConsoleLastImmediateEventUtc={LastImmediateEventUtc:O} ConsoleVerboseLogPath={VerboseLogPath} ConsoleSummaryLogPath={SummaryLogPath} ConsoleAllowedEvents={AllowedEvents} ConsoleUnexpectedVerboseEventsPrinted={UnexpectedVerboseEventsPrinted} ConsoleUnexpectedVerboseEventNames={UnexpectedVerboseEventNames} ConsoleAlertNoopChangesSuppressed={AlertNoopChangesSuppressed} ConsoleLoggingStrictModeOk={StrictModeOk.ToString().ToLowerInvariant()} ConsoleLoggingConsistent={Consistent.ToString().ToLowerInvariant()} ConsoleLoggingConsistencyReason={ConsistencyReason}";
 
     private static bool AppendJson(string relativePath, object value)
     {
@@ -79,6 +98,7 @@ public static class Phase1ConsoleLogging
         catch(Exception ex) { LastWriteError=ex.GetType().Name+":"+ex.Message; return false; }
     }
     private static string EventName(string line) { var start=line.IndexOf('['); var end=start<0?-1:line.IndexOf(']',start+1); return start>=0&&end>start?line[(start+1)..end]:"UNTAGGED"; }
+    private static bool CrossedThreshold(decimal? oldEdge, decimal? newEdge, params decimal[] thresholds) => oldEdge.HasValue && newEdge.HasValue && thresholds.Any(t => (oldEdge.Value < t && newEdge.Value >= t) || (oldEdge.Value >= t && newEdge.Value < t));
     private static Dictionary<string,object?> Fields(string line)
     {
         var fields = new Dictionary<string,object?>(StringComparer.OrdinalIgnoreCase);
@@ -95,10 +115,13 @@ public static class Phase1ConsoleLogging
             if (_options.Mode.Equals("VerboseLegacy",StringComparison.OrdinalIgnoreCase)) { destination.WriteLine(line); return; }
             if (evt.Equals("PAPER_PHASE1_REAL_OPENED",StringComparison.OrdinalIgnoreCase)) { LastImmediateEventUtc=DateTime.UtcNow; destination.WriteLine(line.Replace("[PAPER_PHASE1_REAL_OPENED]","[PHASE1_PAPER_OPENED]").Replace("AfterSafetyEdge=","Edge=")); return; }
             if (evt.Equals("PAPER_PHASE1_REAL_SETTLED",StringComparison.OrdinalIgnoreCase)) { LastImmediateEventUtc=DateTime.UtcNow; destination.WriteLine(line.Replace("[PAPER_PHASE1_REAL_SETTLED]","[PHASE1_PAPER_SETTLED]").Replace("PaperOpenPositions=","OpenPositions=")); return; }
-            var immediate=evt is "PHASE1_STARTUP" or "PHASE1_ALERT_CHANGE" or "PHASE1_PAPER_OPENED" or "PHASE1_PAPER_SETTLED" or "PHASE1_SAFETY_STOP" or "PHASE1_INVARIANT_FAILURE" or "PHASE1_SUMMARY_5M" || line.Contains("FATAL",StringComparison.OrdinalIgnoreCase) || line.Contains("ERROR",StringComparison.OrdinalIgnoreCase);
+            var immediate=ConsoleAllowlist.Contains(evt) || evt.Contains("FATAL",StringComparison.OrdinalIgnoreCase)
+                || evt.Contains("ERROR",StringComparison.OrdinalIgnoreCase) || line.StartsWith("fail:",StringComparison.OrdinalIgnoreCase)
+                || line.StartsWith("crit:",StringComparison.OrdinalIgnoreCase);
             if (immediate) { LastImmediateEventUtc=DateTime.UtcNow; destination.WriteLine(line); return; }
             VerboseEventsSuppressed++;
             if (_options.WriteVerboseEventsToFile && AppendJson(_options.VerboseLogPath,new { tsUtc=DateTime.UtcNow,processRunId=ProcessRunContext.ProcessRunId,@event=evt,level=line.Contains("WARN",StringComparison.OrdinalIgnoreCase)?"warning":"debug",fields=Fields(line) })) VerboseEventsWritten++;
         }
     }
+    private sealed record AlertConsoleState(int Level, string Name, string Reason, string CandidateId, decimal? Edge, bool PaperEligible);
 }

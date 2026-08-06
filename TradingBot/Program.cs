@@ -429,7 +429,6 @@ _ = Task.Run(async () =>
     try
     {
         DateTime lastSoakStatusLoggedAt = DateTime.MinValue;
-        string lastImmediateAlertKey = string.Empty;
         void LogRuntimeHealthAndSoakStatus()
         {
             state.SetQuietLogGateStats(quietLogGate.Snapshot());
@@ -437,13 +436,10 @@ _ = Task.Run(async () =>
                 Console.WriteLine(ProcessRunContext.FormatMismatchLog(mismatchReason, state.OrderBookServiceStats));
             var health = RuntimeHealthSnapshot.From(state, options);
             var readiness = PaperPhase1RealReadinessMonitor.Evaluate(health);
-            var alertKey = $"{readiness.AlertLevel}|{readiness.AlertName}|{readiness.AlertReason}|{readiness.CandidateId}";
-            if (options.Console.EmitOnStateChange && alertKey != lastImmediateAlertKey)
-            {
-                var oldLevel = string.IsNullOrEmpty(lastImmediateAlertKey) ? "None" : lastImmediateAlertKey.Split('|')[0];
-                Phase1ConsoleLogging.EmitImmediate(consoleDestination, $"[PHASE1_ALERT_CHANGE] OldLevel={oldLevel} NewLevel={readiness.AlertLevel} Name={readiness.AlertName} Reason={readiness.AlertReason} CandidateId={readiness.CandidateId} Edge={readiness.AfterSafetyEdge?.ToString("0.####") ?? "N/A"} PaperEligible={(readiness.AlertLevel >= 4).ToString().ToLowerInvariant()} ProcessRunId={health.ProcessRunId}");
-                lastImmediateAlertKey = alertKey;
-            }
+            if (options.Console.EmitOnStateChange)
+                Phase1ConsoleLogging.ObserveAlert(consoleDestination, readiness.AlertLevel, readiness.AlertName,
+                    readiness.AlertReason, readiness.CandidateId, readiness.AfterSafetyEdge,
+                    readiness.AlertLevel >= 4, health.PaperPhase1MinEdge, health.ProcessRunId);
             PaperPhase1ReleaseStatusService.Update(health, app.Environment.ContentRootPath, options);
             var trend = RuntimeHealthTrendTracker.RecordAndAnalyze(health, options.RuntimeHealth);
             Console.WriteLine($"{health.ToLogLine()} {Phase1ConsoleLogging.TelemetryFields()}");

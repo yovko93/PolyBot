@@ -453,6 +453,11 @@ public sealed record RuntimeHealthSnapshot(
     public string ConsoleSummaryLogPath => TradingBot.Services.Phase1ConsoleLogging.SummaryLogPath;
     public bool ConsoleLoggingConsistent => TradingBot.Services.Phase1ConsoleLogging.Consistent;
     public string ConsoleLoggingConsistencyReason => TradingBot.Services.Phase1ConsoleLogging.ConsistencyReason;
+    public string ConsoleAllowedEvents => TradingBot.Services.Phase1ConsoleLogging.AllowedEvents;
+    public long ConsoleUnexpectedVerboseEventsPrinted => TradingBot.Services.Phase1ConsoleLogging.UnexpectedVerboseEventsPrinted;
+    public string ConsoleUnexpectedVerboseEventNames => TradingBot.Services.Phase1ConsoleLogging.UnexpectedVerboseEventNames;
+    public long ConsoleAlertNoopChangesSuppressed => TradingBot.Services.Phase1ConsoleLogging.AlertNoopChangesSuppressed;
+    public bool ConsoleLoggingStrictModeOk => TradingBot.Services.Phase1ConsoleLogging.StrictModeOk;
     public bool FormulaDiagnosticsEnabled => TradingBot.Services.FormulaDiagnostics.Current.Enabled;
     private TradingBot.Services.PaperPhase1RealWatchState RealWatch => TradingBot.Services.PaperPhase1RealWatchService.Latest;
     private TradingBot.Services.PaperPhase1PositiveReconciliationState PositiveReconciliation => TradingBot.Services.PaperPhase1PositiveReconciliationService.Latest;

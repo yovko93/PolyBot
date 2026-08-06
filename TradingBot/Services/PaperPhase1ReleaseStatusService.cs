@@ -46,6 +46,11 @@ public sealed record PaperPhase1ReleaseStatus(DateTime GeneratedAtUtc, string Pr
     public string ConsoleSummaryLogPath => Phase1ConsoleLogging.SummaryLogPath;
     public bool ConsoleLoggingConsistent => Phase1ConsoleLogging.Consistent;
     public string ConsoleLoggingConsistencyReason => Phase1ConsoleLogging.ConsistencyReason;
+    public string ConsoleAllowedEvents => Phase1ConsoleLogging.AllowedEvents;
+    public long ConsoleUnexpectedVerboseEventsPrinted => Phase1ConsoleLogging.UnexpectedVerboseEventsPrinted;
+    public string ConsoleUnexpectedVerboseEventNames => Phase1ConsoleLogging.UnexpectedVerboseEventNames;
+    public long ConsoleAlertNoopChangesSuppressed => Phase1ConsoleLogging.AlertNoopChangesSuppressed;
+    public bool ConsoleLoggingStrictModeOk => Phase1ConsoleLogging.StrictModeOk;
 }
 
 public static class PaperPhase1ReleaseStatusService
