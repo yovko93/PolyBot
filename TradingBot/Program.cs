@@ -387,7 +387,9 @@ foreach (var strategyEntry in options.Strategies.Where(x => x.Value.Enabled && x
 quietLogGate.ConfigureBounds(options.RuntimeMemory.MaxQuietLogGateEntries, TimeSpan.FromMinutes(options.RuntimeMemory.QuietLogGateTtlMinutes));
 
 state.ClearTransientLogBuffers();
-Console.SetOut(new MultiTextWriter(originalOut, msg => logger.LogInfo("console", msg)));
+var consoleDestination = new MultiTextWriter(originalOut, msg => logger.LogInfo("console", msg));
+Console.SetOut(Phase1ConsoleLogging.CreateWriter(consoleDestination, options, app.Environment.ContentRootPath));
+Phase1ConsoleLogging.EmitStartup(consoleDestination, options);
 Console.WriteLine($"[LOG_BUFFER_RESET] ProcessRunId={ProcessRunContext.ProcessRunId} Reason=FreshProcessStart");
 logger.LogSuccess("startup", $"Bot API listening on {listenUrl}");
 logger.LogSuccess("startup", $"ExecutionMode={options.ExecutionMode}; EnablePaperTrading={options.EnablePaperTrading}; EnableLiveExecution={options.EnableLiveExecution}");
@@ -427,16 +429,24 @@ _ = Task.Run(async () =>
     try
     {
         DateTime lastSoakStatusLoggedAt = DateTime.MinValue;
+        string lastImmediateAlertKey = string.Empty;
         void LogRuntimeHealthAndSoakStatus()
         {
             state.SetQuietLogGateStats(quietLogGate.Snapshot());
             if (ProcessRunContext.ValidateOrderbookCounters(state.OrderBookServiceStats) is string mismatchReason)
                 Console.WriteLine(ProcessRunContext.FormatMismatchLog(mismatchReason, state.OrderBookServiceStats));
             var health = RuntimeHealthSnapshot.From(state, options);
-            PaperPhase1RealReadinessMonitor.Evaluate(health);
+            var readiness = PaperPhase1RealReadinessMonitor.Evaluate(health);
+            var alertKey = $"{readiness.AlertLevel}|{readiness.AlertName}|{readiness.AlertReason}|{readiness.CandidateId}";
+            if (options.Console.EmitOnStateChange && alertKey != lastImmediateAlertKey)
+            {
+                var oldLevel = string.IsNullOrEmpty(lastImmediateAlertKey) ? "None" : lastImmediateAlertKey.Split('|')[0];
+                Phase1ConsoleLogging.EmitImmediate(consoleDestination, $"[PHASE1_ALERT_CHANGE] OldLevel={oldLevel} NewLevel={readiness.AlertLevel} Name={readiness.AlertName} Reason={readiness.AlertReason} CandidateId={readiness.CandidateId} Edge={readiness.AfterSafetyEdge?.ToString("0.####") ?? "N/A"} PaperEligible={(readiness.AlertLevel >= 4).ToString().ToLowerInvariant()} ProcessRunId={health.ProcessRunId}");
+                lastImmediateAlertKey = alertKey;
+            }
             PaperPhase1ReleaseStatusService.Update(health, app.Environment.ContentRootPath, options);
             var trend = RuntimeHealthTrendTracker.RecordAndAnalyze(health, options.RuntimeHealth);
-            Console.WriteLine(health.ToLogLine());
+            Console.WriteLine($"{health.ToLogLine()} {Phase1ConsoleLogging.TelemetryFields()}");
             Console.WriteLine(PaperPhase1RealReadinessMonitor.AlertLog(health.ProcessRunId));
             Console.WriteLine(PaperPhase1RealReadinessMonitor.SoakLog(health.ProcessRunId));
             ExportRuntimeSoakStatus(state, options, app.Environment.ContentRootPath);
@@ -445,7 +455,7 @@ _ = Task.Run(async () =>
             PaperPhase1EligibilityLadderExporter.ExportLatest(state, options, health, app.Environment.ContentRootPath);
             PaperPhase1ReadinessExporter.MaybeLog(health, options);
             lastSoakStatusLoggedAt = DateTime.UtcNow;
-            Console.WriteLine(RuntimeHealthTrendTracker.ToSoakStatusLogLine(health, trend, options, state));
+            Console.WriteLine($"{RuntimeHealthTrendTracker.ToSoakStatusLogLine(health, trend, options, state)} {Phase1ConsoleLogging.TelemetryFields()}");
         }
 
         if (options.RuntimeHealth.LogOnStartup)
@@ -459,6 +469,18 @@ _ = Task.Run(async () =>
     catch (OperationCanceledException) when (app.Lifetime.ApplicationStopping.IsCancellationRequested)
     {
     }
+});
+
+_ = Task.Run(async () =>
+{
+    if (!options.Console.Mode.Equals("Summary5Min", StringComparison.OrdinalIgnoreCase)) return;
+    try
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(options.Console.SummaryIntervalSeconds));
+        while (await timer.WaitForNextTickAsync(app.Lifetime.ApplicationStopping))
+            Phase1ConsoleLogging.EmitSummary(consoleDestination, RuntimeHealthSnapshot.From(state, options), options);
+    }
+    catch (OperationCanceledException) when (app.Lifetime.ApplicationStopping.IsCancellationRequested) { }
 });
 
 _ = Task.Run(async () =>

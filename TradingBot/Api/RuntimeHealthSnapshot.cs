@@ -442,6 +442,17 @@ public sealed record RuntimeHealthSnapshot(
     string ShadowStrategies,
     IReadOnlyDictionary<string, TradingBot.Services.StrategyRuntimeCounterSnapshot> StrategyCounters)
 {
+    public string ConsoleMode => TradingBot.Services.Phase1ConsoleLogging.Mode;
+    public int ConsoleSummaryIntervalSeconds => TradingBot.Services.Phase1ConsoleLogging.SummaryIntervalSeconds;
+    public long ConsoleSummaryLogsWritten => TradingBot.Services.Phase1ConsoleLogging.SummaryLogsWritten;
+    public long ConsoleVerboseEventsSuppressed => TradingBot.Services.Phase1ConsoleLogging.VerboseEventsSuppressed;
+    public long ConsoleVerboseEventsWritten => TradingBot.Services.Phase1ConsoleLogging.VerboseEventsWritten;
+    public DateTime? ConsoleLastSummaryUtc => TradingBot.Services.Phase1ConsoleLogging.LastSummaryUtc;
+    public DateTime? ConsoleLastImmediateEventUtc => TradingBot.Services.Phase1ConsoleLogging.LastImmediateEventUtc;
+    public string ConsoleVerboseLogPath => TradingBot.Services.Phase1ConsoleLogging.VerboseLogPath;
+    public string ConsoleSummaryLogPath => TradingBot.Services.Phase1ConsoleLogging.SummaryLogPath;
+    public bool ConsoleLoggingConsistent => TradingBot.Services.Phase1ConsoleLogging.Consistent;
+    public string ConsoleLoggingConsistencyReason => TradingBot.Services.Phase1ConsoleLogging.ConsistencyReason;
     public bool FormulaDiagnosticsEnabled => TradingBot.Services.FormulaDiagnostics.Current.Enabled;
     private TradingBot.Services.PaperPhase1RealWatchState RealWatch => TradingBot.Services.PaperPhase1RealWatchService.Latest;
     private TradingBot.Services.PaperPhase1PositiveReconciliationState PositiveReconciliation => TradingBot.Services.PaperPhase1PositiveReconciliationService.Latest;

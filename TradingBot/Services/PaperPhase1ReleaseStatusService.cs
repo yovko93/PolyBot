@@ -33,7 +33,20 @@ public sealed record PaperPhase1ReleaseStatus(DateTime GeneratedAtUtc, string Pr
     DateTime? OperatorRunbookLastEmittedUtc = null, string OperatorRunbookLastReason = "Startup",
     bool OperatorRunbookConsistent = true, string OperatorRunbookConsistencyReason = "None",
     bool OperatorRunbookExportWritten = false, string OperatorRunbookExportPath = "exports/paper-phase1-operator-runbook-latest.json",
-    string OperatorRunbookLastWriteError = "None", DateTime? OperatorRunbookLastExportUtc = null);
+    string OperatorRunbookLastWriteError = "None", DateTime? OperatorRunbookLastExportUtc = null)
+{
+    public string ConsoleMode => Phase1ConsoleLogging.Mode;
+    public int ConsoleSummaryIntervalSeconds => Phase1ConsoleLogging.SummaryIntervalSeconds;
+    public long ConsoleSummaryLogsWritten => Phase1ConsoleLogging.SummaryLogsWritten;
+    public long ConsoleVerboseEventsSuppressed => Phase1ConsoleLogging.VerboseEventsSuppressed;
+    public long ConsoleVerboseEventsWritten => Phase1ConsoleLogging.VerboseEventsWritten;
+    public DateTime? ConsoleLastSummaryUtc => Phase1ConsoleLogging.LastSummaryUtc;
+    public DateTime? ConsoleLastImmediateEventUtc => Phase1ConsoleLogging.LastImmediateEventUtc;
+    public string ConsoleVerboseLogPath => Phase1ConsoleLogging.VerboseLogPath;
+    public string ConsoleSummaryLogPath => Phase1ConsoleLogging.SummaryLogPath;
+    public bool ConsoleLoggingConsistent => Phase1ConsoleLogging.Consistent;
+    public string ConsoleLoggingConsistencyReason => Phase1ConsoleLogging.ConsistencyReason;
+}
 
 public static class PaperPhase1ReleaseStatusService
 {
@@ -53,7 +66,7 @@ public static class PaperPhase1ReleaseStatusService
     private static string _lastRunbookReason = "Startup";
     private static readonly string[] WatchFields = ["AlertLevel", "PaperEligiblePositiveCount", "PaperOpened", "SigningAttempts", "LiveTradingBlocked", "DashboardWarnings", "FixtureIsolationOk"];
     private static readonly string[] StopConditions = ["SigningAttempts>0", "LiveTradingBlocked>0", "DashboardWarnings>0", "FixtureIsolationOk=false"];
-    private const string NormalCommand = "dotnet run --project TradingBot -- --profile ReducedDiagnosticsPaperPhase1";
+    private const string NormalCommand = "dotnet run --project TradingBot -- --profile ReducedDiagnosticsPaperPhase1 --console-mode Summary5Min";
     private const string DryReplayCommand = "dotnet run --project TradingBot -- --profile ReducedDiagnosticsPaperPhase1 --paper-phase1-contract-fixture --dry-replay-only";
     private const string FixtureOpenSettleCommand = "dotnet run --project TradingBot -- --profile ReducedDiagnosticsPaperPhase1 --paper-phase1-contract-fixture --allow-fixture-paper-open --settle-fixture-paper-position";
     public static PaperPhase1ReleaseStatus Current { get; private set; } = Empty();
@@ -209,6 +222,11 @@ public static class PaperPhase1ReleaseStatusService
                     fixtureOpenSettle = status.OperatorRunbook?.FixtureOpenSettleCommand ?? FixtureOpenSettleCommand
                 },
                 stopConditions = StopConditions,
+                consoleMode = Phase1ConsoleLogging.Mode,
+                summaryIntervalSeconds = Phase1ConsoleLogging.SummaryIntervalSeconds,
+                verboseLogPath = Phase1ConsoleLogging.VerboseLogPath,
+                summaryLogPath = Phase1ConsoleLogging.SummaryLogPath,
+                toDebugVerbose = "run with Console:Mode=VerboseLegacy or --console-mode VerboseLegacy",
                 expected = new
                 {
                     currentAlert = status.OperatorRunbook?.ExpectedCurrentAlert ?? "WaitingForEdge",
