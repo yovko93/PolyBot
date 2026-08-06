@@ -50,6 +50,12 @@ public sealed record PaperPhase1ReleaseStatus(DateTime GeneratedAtUtc, string Pr
     public long ConsoleUnexpectedVerboseEventsPrinted => Phase1ConsoleLogging.UnexpectedVerboseEventsPrinted;
     public string ConsoleUnexpectedVerboseEventNames => Phase1ConsoleLogging.UnexpectedVerboseEventNames;
     public long ConsoleAlertNoopChangesSuppressed => Phase1ConsoleLogging.AlertNoopChangesSuppressed;
+    public string ConsoleLastSuppressedAlertNoopReason => Phase1ConsoleLogging.LastSuppressedAlertNoopReason;
+    public long ConsoleStartupVerboseEventsSuppressed => Phase1ConsoleLogging.StartupVerboseEventsSuppressed;
+    public string ConsoleStartupVerboseEventNamesSuppressed => Phase1ConsoleLogging.StartupVerboseEventNamesSuppressed;
+    public bool ConsoleRouterInitializedBeforeProfileLogging => Phase1ConsoleLogging.RouterInitializedBeforeProfileLogging;
+    public bool ConsoleRouterInitializedBeforeConfigLogging => Phase1ConsoleLogging.RouterInitializedBeforeConfigLogging;
+    public long ConsoleUnexpectedStartupEventsPrinted => Phase1ConsoleLogging.UnexpectedStartupEventsPrinted;
     public bool ConsoleLoggingStrictModeOk => Phase1ConsoleLogging.StrictModeOk;
 }
 

@@ -1,10 +1,29 @@
 using TradingBot.Options;
 using TradingBot.Services;
+using Microsoft.Extensions.Configuration;
 
 namespace TradingBot.Tests;
 
 public sealed class Phase1ConsoleLoggingTests
 {
+    [Fact]
+    public void EarlyRouterSuppressesProfileAndConfigLogsBeforeNormalStartup()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"polybot-console-{Guid.NewGuid():N}");
+        using var destination = new StringWriter();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection().Build();
+        var writer = Phase1ConsoleLogging.CreateEarlyWriter(destination,
+            ["--profile", "ReducedDiagnosticsPaperPhase1", "--console-mode", "Summary5Min"], configuration, root);
+        writer.WriteLine("[PROFILE_REGISTRY] KnownProfiles=x");
+        writer.WriteLine("[PAPER_MODE] PaperOnly=true");
+        Assert.Equal(string.Empty, destination.ToString());
+        Assert.True(Phase1ConsoleLogging.RouterInitializedBeforeProfileLogging);
+        Assert.True(Phase1ConsoleLogging.RouterInitializedBeforeConfigLogging);
+        Assert.Contains("PROFILE_REGISTRY", Phase1ConsoleLogging.StartupVerboseEventNamesSuppressed);
+        Assert.Contains("PAPER_MODE", File.ReadAllText(Path.Combine(root, "exports/logs/verbose-events.jsonl")));
+        Phase1ConsoleLogging.MarkStartupComplete();
+    }
+
     [Fact]
     public void SummaryModeSuppressesVerboseConsoleAndWritesJsonl()
     {

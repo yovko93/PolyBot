@@ -457,6 +457,12 @@ public sealed record RuntimeHealthSnapshot(
     public long ConsoleUnexpectedVerboseEventsPrinted => TradingBot.Services.Phase1ConsoleLogging.UnexpectedVerboseEventsPrinted;
     public string ConsoleUnexpectedVerboseEventNames => TradingBot.Services.Phase1ConsoleLogging.UnexpectedVerboseEventNames;
     public long ConsoleAlertNoopChangesSuppressed => TradingBot.Services.Phase1ConsoleLogging.AlertNoopChangesSuppressed;
+    public string ConsoleLastSuppressedAlertNoopReason => TradingBot.Services.Phase1ConsoleLogging.LastSuppressedAlertNoopReason;
+    public long ConsoleStartupVerboseEventsSuppressed => TradingBot.Services.Phase1ConsoleLogging.StartupVerboseEventsSuppressed;
+    public string ConsoleStartupVerboseEventNamesSuppressed => TradingBot.Services.Phase1ConsoleLogging.StartupVerboseEventNamesSuppressed;
+    public bool ConsoleRouterInitializedBeforeProfileLogging => TradingBot.Services.Phase1ConsoleLogging.RouterInitializedBeforeProfileLogging;
+    public bool ConsoleRouterInitializedBeforeConfigLogging => TradingBot.Services.Phase1ConsoleLogging.RouterInitializedBeforeConfigLogging;
+    public long ConsoleUnexpectedStartupEventsPrinted => TradingBot.Services.Phase1ConsoleLogging.UnexpectedStartupEventsPrinted;
     public bool ConsoleLoggingStrictModeOk => TradingBot.Services.Phase1ConsoleLogging.StrictModeOk;
     public bool FormulaDiagnosticsEnabled => TradingBot.Services.FormulaDiagnostics.Current.Enabled;
     private TradingBot.Services.PaperPhase1RealWatchState RealWatch => TradingBot.Services.PaperPhase1RealWatchService.Latest;

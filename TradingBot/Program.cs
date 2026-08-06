@@ -14,6 +14,7 @@ using TradingBot.Services.MultiOutcome;
 
 var originalOut = Console.Out;
 var builder = WebApplication.CreateBuilder(args);
+Console.SetOut(Phase1ConsoleLogging.CreateEarlyWriter(originalOut, args, builder.Configuration, builder.Environment.ContentRootPath));
 var runtimeProfileResolution = RuntimeProfileService.Resolve(args, builder.Configuration);
 Console.WriteLine(RuntimeProfileService.RegistryLog());
 Console.WriteLine(RuntimeProfileService.ResolutionLog(runtimeProfileResolution));
@@ -390,6 +391,7 @@ state.ClearTransientLogBuffers();
 var consoleDestination = new MultiTextWriter(originalOut, msg => logger.LogInfo("console", msg));
 Console.SetOut(Phase1ConsoleLogging.CreateWriter(consoleDestination, options, app.Environment.ContentRootPath));
 Phase1ConsoleLogging.EmitStartup(consoleDestination, options);
+Phase1ConsoleLogging.MarkStartupComplete();
 Console.WriteLine($"[LOG_BUFFER_RESET] ProcessRunId={ProcessRunContext.ProcessRunId} Reason=FreshProcessStart");
 logger.LogSuccess("startup", $"Bot API listening on {listenUrl}");
 logger.LogSuccess("startup", $"ExecutionMode={options.ExecutionMode}; EnablePaperTrading={options.EnablePaperTrading}; EnableLiveExecution={options.EnableLiveExecution}");
