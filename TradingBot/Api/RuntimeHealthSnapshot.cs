@@ -444,6 +444,9 @@ public sealed record RuntimeHealthSnapshot(
 {
     public string ConsoleMode => TradingBot.Services.Phase1ConsoleLogging.Mode;
     public int ConsoleSummaryIntervalSeconds => TradingBot.Services.Phase1ConsoleLogging.SummaryIntervalSeconds;
+    public int ConsoleSummaryWindowSeconds => TradingBot.Services.Phase1ConsoleLogging.SummaryWindowSeconds;
+    public bool ConsoleSummaryWindowCountersConsistent => TradingBot.Services.Phase1ConsoleLogging.SummaryWindowCountersConsistent;
+    public string ConsoleSummaryWindowCountersReason => TradingBot.Services.Phase1ConsoleLogging.SummaryWindowCountersReason;
     public long ConsoleSummaryLogsWritten => TradingBot.Services.Phase1ConsoleLogging.SummaryLogsWritten;
     public long ConsoleVerboseEventsSuppressed => TradingBot.Services.Phase1ConsoleLogging.VerboseEventsSuppressed;
     public long ConsoleVerboseEventsWritten => TradingBot.Services.Phase1ConsoleLogging.VerboseEventsWritten;

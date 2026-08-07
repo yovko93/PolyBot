@@ -32,22 +32,29 @@ public static class Phase1ConsoleLogging
     public static bool RouterInitializedBeforeProfileLogging { get; private set; }
     public static bool RouterInitializedBeforeConfigLogging { get; private set; }
     public static long UnexpectedStartupEventsPrinted { get; private set; }
+    public static int SummaryWindowSeconds => _options.SummaryIntervalSeconds;
+    public static bool SummaryWindowCountersConsistent { get; private set; } = true;
+    public static string SummaryWindowCountersReason { get; private set; } = "None";
     public static string UnexpectedVerboseEventNames => "None";
     public static bool StrictModeOk => UnexpectedVerboseEventsPrinted == 0 && UnexpectedStartupEventsPrinted == 0;
     private static AlertConsoleState? _lastAlert;
     private static bool _startupRouting;
     private static readonly HashSet<string> _startupSuppressedNames = new(StringComparer.OrdinalIgnoreCase);
+    private static DateTime _summaryWindowStartUtc = DateTime.UtcNow;
+    private static SummaryCounters _summaryBaseline = new();
     public static string Mode => _options.Mode;
     public static int SummaryIntervalSeconds => _options.SummaryIntervalSeconds;
     public static string VerboseLogPath => _options.VerboseLogPath;
     public static string SummaryLogPath => _options.SummaryLogPath;
-    public static bool Consistent => StrictModeOk && LastWriteError == "None" && (!IsSummary || !_options.SuppressVerboseEvents || !_options.WriteVerboseEventsToFile || VerboseEventsWritten == VerboseEventsSuppressed);
-    public static string ConsistencyReason => Consistent ? "None" : !StrictModeOk ? "UnexpectedVerboseEventPrinted" : LastWriteError != "None" ? LastWriteError : "VerboseWriteCountMismatch";
+    public static bool Consistent => StrictModeOk && SummaryWindowCountersConsistent && LastWriteError == "None" && (!IsSummary || !_options.SuppressVerboseEvents || !_options.WriteVerboseEventsToFile || VerboseEventsWritten == VerboseEventsSuppressed);
+    public static string ConsistencyReason => Consistent ? "None" : !StrictModeOk ? "UnexpectedVerboseEventPrinted" : !SummaryWindowCountersConsistent ? SummaryWindowCountersReason : LastWriteError != "None" ? LastWriteError : "VerboseWriteCountMismatch";
     private static bool IsSummary => _options.Mode.Equals("Summary5Min", StringComparison.OrdinalIgnoreCase);
 
     public static TextWriter CreateWriter(TextWriter destination, TradingBotOptions options, string contentRoot)
     {
         _options = options.Console; _root = contentRoot; _lastAlert = null;
+        _summaryWindowStartUtc=DateTime.UtcNow; _summaryBaseline=new();
+        SummaryWindowCountersConsistent=true; SummaryWindowCountersReason="None";
         return new FilteringWriter(destination);
     }
 
@@ -109,6 +116,22 @@ public static class Phase1ConsoleLogging
     {
         if (!IsSummary) return;
         var now = DateTime.UtcNow;
+        h.StrategyCounters.TryGetValue("SingleMarketBuyBoth",out var singleMarket);
+        var totals = new SummaryCounters(singleMarket?.Candidates ?? h.PaperPhase1LadderSeen,
+            singleMarket?.ExecutionReady ?? h.PaperPhase1LadderPaperEligible,
+            singleMarket?.ValidPriced ?? h.PaperPhase1LadderValidPriced,
+            singleMarket?.PositiveEdges ?? h.PaperPhase1LadderPositiveAfterSafety,
+            PaperPhase1PositiveCaptureService.InvalidArtifactsObservedTotal);
+        var reset = totals.GateCandidatesSeen < _summaryBaseline.GateCandidatesSeen
+            || totals.GateEligible < _summaryBaseline.GateEligible
+            || totals.LadderValidPriced < _summaryBaseline.LadderValidPriced
+            || totals.LadderPositiveAfterSafety < _summaryBaseline.LadderPositiveAfterSafety
+            || totals.InvalidArtifacts < _summaryBaseline.InvalidArtifacts;
+        var window = reset ? totals : totals.Subtract(_summaryBaseline);
+        var scopeMismatch = window.LadderValidPriced > window.GateCandidatesSeen;
+        SummaryWindowCountersConsistent=!reset && !scopeMismatch;
+        SummaryWindowCountersReason=reset ? "SourceCounterResetDetected" : scopeMismatch ? "LadderValidPricedExceedsGateCandidates" : "None";
+        var windowStart = _summaryWindowStartUtc;
         var best = h.PaperPhase1RealWatchBestAfterSafetyEdge;
         var distance = h.PaperPhase1RealWatchBestDistanceToMinEdge;
         var status = h.PaperPhase1RealWatchWaitingForEdge ? "ReadyWaitingForEdge" : h.PaperPhase1RealWatchArmed ? "Ready" : "NotReady";
@@ -116,19 +139,27 @@ public static class Phase1ConsoleLogging
         var summary = new
         {
             tsUtc=now, processRunId=h.ProcessRunId, profile=options.RuntimeProfile, mode="PaperOnly", status,
+            windowSeconds=options.Console.SummaryIntervalSeconds, windowStartUtc=windowStart, windowEndUtc=now,
             alert=new { level=h.PaperPhase1RealAlertLevel, name=h.PaperPhase1RealAlertName, reason=h.PaperPhase1RealAlertReason },
             edge=new { bestAfterSafety=best, distanceToMinEdge=distance, cleanNearOpen=h.PaperPhase1CleanNearOpenCount, paperEligible=h.PaperPhase1LadderPaperEligible },
             paper=new { opened=h.PaperPhase1PaperOpened, openPositions=h.PaperOpenPositions, realizedPnl=h.PaperRealizedPnl, normalRuntimeOpened=h.PaperPhase1NormalRuntimeOpened },
             safety=new { fixtureIsolationOk=h.PaperPhase1ContractFixtureIsolationOk, signingAttempts=h.SigningAttempts, liveTradingBlocked=h.LiveTradingBlockedCount, dashboardWarnings=h.DiagnosticsCounterMismatchCount },
             soak=new { stable=h.PaperPhase1RealSoakReadinessStable, orderbookStable=h.OrderbookStableNow, readinessStableMinutes=h.PaperPhase1RealSoakReadinessStableMinutes, orderbookStableMinutes=h.PaperPhase1RealSoakOrderbookStableMinutes },
-            scanner5m=new { candidatesSeen=h.PaperPhase1CandidatesSeen, validPriced=h.PaperPhase1LadderValidPriced, positiveAfterSafety=h.PaperPhase1LadderPositiveAfterSafety, invalidArtifacts=h.PaperPhase1InvalidPositiveArtifactsTotal, topReject=h.PaperPhase1LadderTopBlockingReason, topArtifact=h.PaperPhase1InvalidPositiveArtifactBestFirstReason }, exportsOk
+            scanner5m=new { gateCandidatesSeen5m=window.GateCandidatesSeen, gateEligible5m=window.GateEligible,
+                ladderValidPriced5m=window.LadderValidPriced, ladderPositiveAfterSafety5m=window.LadderPositiveAfterSafety,
+                invalidArtifacts5m=window.InvalidArtifacts, candidatesSeen5m=window.GateCandidatesSeen,
+                validPriced5m=window.LadderValidPriced, positiveAfterSafety5m=window.LadderPositiveAfterSafety,
+                topReject=h.PaperPhase1LadderTopBlockingReason, topArtifact=h.PaperPhase1InvalidPositiveArtifactBestFirstReason },
+            scannerTotals=new { gateCandidatesSeen=totals.GateCandidatesSeen, gateEligible=totals.GateEligible,
+                ladderValidPriced=totals.LadderValidPriced, ladderPositiveAfterSafety=totals.LadderPositiveAfterSafety,
+                invalidArtifacts=totals.InvalidArtifacts }, exportsOk
         };
         if (!AppendJson(options.Console.SummaryLogPath, summary)) return;
-        SummaryLogsWritten++; LastSummaryUtc=now;
-        destination.WriteLine($"[PHASE1_SUMMARY_5M] TimeUtc={now:O} Uptime={h.Uptime:c} Profile={options.RuntimeProfile} Mode=PaperOnly Status={status} Alert={h.PaperPhase1RealAlertLevel}/{h.PaperPhase1RealAlertName} BestEdge={best?.ToString("0.####")??"N/A"} DistanceToMinEdge={distance?.ToString("0.####")??"N/A"} CleanNearOpen={h.PaperPhase1CleanNearOpenCount} PaperEligible={h.PaperPhase1LadderPaperEligible} PaperOpened={h.PaperPhase1PaperOpened} OpenPositions={h.PaperOpenPositions} RealizedPnl={h.PaperRealizedPnl:0.####} NormalRuntimeOpened={h.PaperPhase1NormalRuntimeOpened} FixtureIsolationOk={h.PaperPhase1ContractFixtureIsolationOk.ToString().ToLowerInvariant()} SoakStable={h.PaperPhase1RealSoakReadinessStable.ToString().ToLowerInvariant()} OrderbookStable={h.OrderbookStableNow.ToString().ToLowerInvariant()} DashboardWarnings={h.DiagnosticsCounterMismatchCount} SigningAttempts={h.SigningAttempts} LiveTradingBlocked={h.LiveTradingBlockedCount} DiscoveryMode=ReducedUniverseDiagnosticsOnly ReducedUniverseMarkets={h.ReducedUniverseMarkets} CandidatesSeen5m={h.PaperPhase1CandidatesSeen} ValidPriced5m={h.PaperPhase1LadderValidPriced} PositiveAfterSafety5m={h.PaperPhase1LadderPositiveAfterSafety} InvalidArtifacts5m={h.PaperPhase1InvalidPositiveArtifactsTotal} TopReject={h.PaperPhase1LadderTopBlockingReason} TopArtifact={h.PaperPhase1InvalidPositiveArtifactBestFirstReason} ExportsOk={exportsOk.ToString().ToLowerInvariant()} ProcessRunId={h.ProcessRunId}");
+        SummaryLogsWritten++; LastSummaryUtc=now; _summaryBaseline=totals; _summaryWindowStartUtc=now;
+        destination.WriteLine($"[PHASE1_SUMMARY_5M] TimeUtc={now:O} WindowSeconds={options.Console.SummaryIntervalSeconds} WindowStartUtc={windowStart:O} WindowEndUtc={now:O} Uptime={h.Uptime:c} Profile={options.RuntimeProfile} Mode=PaperOnly Status={status} Alert={h.PaperPhase1RealAlertLevel}/{h.PaperPhase1RealAlertName} BestEdge={best?.ToString("0.####")??"N/A"} DistanceToMinEdge={distance?.ToString("0.####")??"N/A"} CleanNearOpen={h.PaperPhase1CleanNearOpenCount} PaperEligible={h.PaperPhase1LadderPaperEligible} PaperOpened={h.PaperPhase1PaperOpened} OpenPositions={h.PaperOpenPositions} RealizedPnl={h.PaperRealizedPnl:0.####} NormalRuntimeOpened={h.PaperPhase1NormalRuntimeOpened} FixtureIsolationOk={h.PaperPhase1ContractFixtureIsolationOk.ToString().ToLowerInvariant()} SoakStable={h.PaperPhase1RealSoakReadinessStable.ToString().ToLowerInvariant()} OrderbookStable={h.OrderbookStableNow.ToString().ToLowerInvariant()} DashboardWarnings={h.DiagnosticsCounterMismatchCount} SigningAttempts={h.SigningAttempts} LiveTradingBlocked={h.LiveTradingBlockedCount} DiscoveryMode=ReducedUniverseDiagnosticsOnly ReducedUniverseMarkets={h.ReducedUniverseMarkets} GateCandidatesSeen5m={window.GateCandidatesSeen} GateEligible5m={window.GateEligible} LadderValidPriced5m={window.LadderValidPriced} LadderPositiveAfterSafety5m={window.LadderPositiveAfterSafety} InvalidArtifacts5m={window.InvalidArtifacts} CandidatesSeen5m={window.GateCandidatesSeen} ValidPriced5m={window.LadderValidPriced} PositiveAfterSafety5m={window.LadderPositiveAfterSafety} GateCandidatesSeenTotal={totals.GateCandidatesSeen} GateEligibleTotal={totals.GateEligible} LadderValidPricedTotal={totals.LadderValidPriced} LadderPositiveAfterSafetyTotal={totals.LadderPositiveAfterSafety} CandidatesSeenTotal={totals.GateCandidatesSeen} ValidPricedTotal={totals.LadderValidPriced} PositiveAfterSafetyTotal={totals.LadderPositiveAfterSafety} InvalidArtifactsTotal={totals.InvalidArtifacts} TopReject={h.PaperPhase1LadderTopBlockingReason} TopArtifact={h.PaperPhase1InvalidPositiveArtifactBestFirstReason} ExportsOk={exportsOk.ToString().ToLowerInvariant()} ProcessRunId={h.ProcessRunId}");
     }
 
-    public static string TelemetryFields() => $"ConsoleMode={Mode} ConsoleSummaryIntervalSeconds={SummaryIntervalSeconds} ConsoleSummaryLogsWritten={SummaryLogsWritten} ConsoleVerboseEventsSuppressed={VerboseEventsSuppressed} ConsoleVerboseEventsWritten={VerboseEventsWritten} ConsoleLastSummaryUtc={LastSummaryUtc:O} ConsoleLastImmediateEventUtc={LastImmediateEventUtc:O} ConsoleVerboseLogPath={VerboseLogPath} ConsoleSummaryLogPath={SummaryLogPath} ConsoleAllowedEvents={AllowedEvents} ConsoleUnexpectedVerboseEventsPrinted={UnexpectedVerboseEventsPrinted} ConsoleUnexpectedVerboseEventNames={UnexpectedVerboseEventNames} ConsoleAlertNoopChangesSuppressed={AlertNoopChangesSuppressed} ConsoleLastSuppressedAlertNoopReason={LastSuppressedAlertNoopReason} ConsoleStartupVerboseEventsSuppressed={StartupVerboseEventsSuppressed} ConsoleStartupVerboseEventNamesSuppressed={StartupVerboseEventNamesSuppressed} ConsoleRouterInitializedBeforeProfileLogging={RouterInitializedBeforeProfileLogging.ToString().ToLowerInvariant()} ConsoleRouterInitializedBeforeConfigLogging={RouterInitializedBeforeConfigLogging.ToString().ToLowerInvariant()} ConsoleUnexpectedStartupEventsPrinted={UnexpectedStartupEventsPrinted} ConsoleLoggingStrictModeOk={StrictModeOk.ToString().ToLowerInvariant()} ConsoleLoggingConsistent={Consistent.ToString().ToLowerInvariant()} ConsoleLoggingConsistencyReason={ConsistencyReason}";
+    public static string TelemetryFields() => $"ConsoleMode={Mode} ConsoleSummaryIntervalSeconds={SummaryIntervalSeconds} ConsoleSummaryWindowSeconds={SummaryWindowSeconds} ConsoleSummaryWindowCountersConsistent={SummaryWindowCountersConsistent.ToString().ToLowerInvariant()} ConsoleSummaryWindowCountersReason={SummaryWindowCountersReason} ConsoleSummaryLogsWritten={SummaryLogsWritten} ConsoleVerboseEventsSuppressed={VerboseEventsSuppressed} ConsoleVerboseEventsWritten={VerboseEventsWritten} ConsoleLastSummaryUtc={LastSummaryUtc:O} ConsoleLastImmediateEventUtc={LastImmediateEventUtc:O} ConsoleVerboseLogPath={VerboseLogPath} ConsoleSummaryLogPath={SummaryLogPath} ConsoleAllowedEvents={AllowedEvents} ConsoleUnexpectedVerboseEventsPrinted={UnexpectedVerboseEventsPrinted} ConsoleUnexpectedVerboseEventNames={UnexpectedVerboseEventNames} ConsoleAlertNoopChangesSuppressed={AlertNoopChangesSuppressed} ConsoleLastSuppressedAlertNoopReason={LastSuppressedAlertNoopReason} ConsoleStartupVerboseEventsSuppressed={StartupVerboseEventsSuppressed} ConsoleStartupVerboseEventNamesSuppressed={StartupVerboseEventNamesSuppressed} ConsoleRouterInitializedBeforeProfileLogging={RouterInitializedBeforeProfileLogging.ToString().ToLowerInvariant()} ConsoleRouterInitializedBeforeConfigLogging={RouterInitializedBeforeConfigLogging.ToString().ToLowerInvariant()} ConsoleUnexpectedStartupEventsPrinted={UnexpectedStartupEventsPrinted} ConsoleLoggingStrictModeOk={StrictModeOk.ToString().ToLowerInvariant()} ConsoleLoggingConsistent={Consistent.ToString().ToLowerInvariant()} ConsoleLoggingConsistencyReason={ConsistencyReason}";
 
     private static bool AppendJson(string relativePath, object value)
     {
@@ -168,4 +199,11 @@ public static class Phase1ConsoleLogging
         }
     }
     private sealed record AlertConsoleState(int Level, string Name, string Reason, string CandidateId, decimal? Edge, bool PaperEligible);
+    private sealed record SummaryCounters(long GateCandidatesSeen=0, long GateEligible=0, long LadderValidPriced=0,
+        long LadderPositiveAfterSafety=0, long InvalidArtifacts=0)
+    {
+        public SummaryCounters Subtract(SummaryCounters previous) => new(GateCandidatesSeen-previous.GateCandidatesSeen,
+            GateEligible-previous.GateEligible, LadderValidPriced-previous.LadderValidPriced,
+            LadderPositiveAfterSafety-previous.LadderPositiveAfterSafety, InvalidArtifacts-previous.InvalidArtifacts);
+    }
 }

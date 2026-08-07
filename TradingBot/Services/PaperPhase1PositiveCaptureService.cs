@@ -56,6 +56,8 @@ public static class PaperPhase1PositiveCaptureService
     private static int _validLogs;
     private static int _invalidLogs;
     private static int _suppressedInvalidLogs;
+    private static long _invalidArtifactsObservedTotal;
+    public static long InvalidArtifactsObservedTotal => Interlocked.Read(ref _invalidArtifactsObservedTotal);
     public static PaperPhase1PositiveCaptureState Current { get; private set; } = Empty();
 
     public static void Configure(TradingBotOptions options, string root)
@@ -63,6 +65,7 @@ public static class PaperPhase1PositiveCaptureService
         lock (Sync)
         {
             _options = options; _root = root; Valid.Clear(); Invalid.Clear(); Current = Empty();
+            Interlocked.Exchange(ref _invalidArtifactsObservedTotal,0);
             _intervalStartedUtc = DateTime.UtcNow; _lastSummaryUtc = DateTime.MinValue;
             WriteExports();
         }
@@ -107,8 +110,10 @@ public static class PaperPhase1PositiveCaptureService
                 previous?.OpenedPositionId ?? "None");
 
             var target = validClean ? Valid : Invalid;
+            var isNewInvalid = !validClean && !Invalid.Any(x=>x.CaptureId==capture.CaptureId);
             (validClean ? Invalid : Valid).RemoveAll(x => x.CaptureId == capture.CaptureId);
             Upsert(target,capture);
+            if(isNewInvalid) Interlocked.Increment(ref _invalidArtifactsObservedTotal);
             Append(validClean ? "paper-phase1-positive-captures.jsonl" : "paper-phase1-invalid-positive-artifacts.jsonl",capture);
             if (validClean) LogValid(capture); else LogInvalid(capture);
             RefreshAndExport();

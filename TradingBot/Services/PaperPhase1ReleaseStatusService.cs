@@ -37,6 +37,9 @@ public sealed record PaperPhase1ReleaseStatus(DateTime GeneratedAtUtc, string Pr
 {
     public string ConsoleMode => Phase1ConsoleLogging.Mode;
     public int ConsoleSummaryIntervalSeconds => Phase1ConsoleLogging.SummaryIntervalSeconds;
+    public int ConsoleSummaryWindowSeconds => Phase1ConsoleLogging.SummaryWindowSeconds;
+    public bool ConsoleSummaryWindowCountersConsistent => Phase1ConsoleLogging.SummaryWindowCountersConsistent;
+    public string ConsoleSummaryWindowCountersReason => Phase1ConsoleLogging.SummaryWindowCountersReason;
     public long ConsoleSummaryLogsWritten => Phase1ConsoleLogging.SummaryLogsWritten;
     public long ConsoleVerboseEventsSuppressed => Phase1ConsoleLogging.VerboseEventsSuppressed;
     public long ConsoleVerboseEventsWritten => Phase1ConsoleLogging.VerboseEventsWritten;
