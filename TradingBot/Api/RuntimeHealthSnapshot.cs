@@ -442,6 +442,31 @@ public sealed record RuntimeHealthSnapshot(
     string ShadowStrategies,
     IReadOnlyDictionary<string, TradingBot.Services.StrategyRuntimeCounterSnapshot> StrategyCounters)
 {
+    public string ConsoleMode => TradingBot.Services.Phase1ConsoleLogging.Mode;
+    public int ConsoleSummaryIntervalSeconds => TradingBot.Services.Phase1ConsoleLogging.SummaryIntervalSeconds;
+    public int ConsoleSummaryWindowSeconds => TradingBot.Services.Phase1ConsoleLogging.SummaryWindowSeconds;
+    public bool ConsoleSummaryWindowCountersConsistent => TradingBot.Services.Phase1ConsoleLogging.SummaryWindowCountersConsistent;
+    public string ConsoleSummaryWindowCountersReason => TradingBot.Services.Phase1ConsoleLogging.SummaryWindowCountersReason;
+    public long ConsoleSummaryLogsWritten => TradingBot.Services.Phase1ConsoleLogging.SummaryLogsWritten;
+    public long ConsoleVerboseEventsSuppressed => TradingBot.Services.Phase1ConsoleLogging.VerboseEventsSuppressed;
+    public long ConsoleVerboseEventsWritten => TradingBot.Services.Phase1ConsoleLogging.VerboseEventsWritten;
+    public DateTime? ConsoleLastSummaryUtc => TradingBot.Services.Phase1ConsoleLogging.LastSummaryUtc;
+    public DateTime? ConsoleLastImmediateEventUtc => TradingBot.Services.Phase1ConsoleLogging.LastImmediateEventUtc;
+    public string ConsoleVerboseLogPath => TradingBot.Services.Phase1ConsoleLogging.VerboseLogPath;
+    public string ConsoleSummaryLogPath => TradingBot.Services.Phase1ConsoleLogging.SummaryLogPath;
+    public bool ConsoleLoggingConsistent => TradingBot.Services.Phase1ConsoleLogging.Consistent;
+    public string ConsoleLoggingConsistencyReason => TradingBot.Services.Phase1ConsoleLogging.ConsistencyReason;
+    public string ConsoleAllowedEvents => TradingBot.Services.Phase1ConsoleLogging.AllowedEvents;
+    public long ConsoleUnexpectedVerboseEventsPrinted => TradingBot.Services.Phase1ConsoleLogging.UnexpectedVerboseEventsPrinted;
+    public string ConsoleUnexpectedVerboseEventNames => TradingBot.Services.Phase1ConsoleLogging.UnexpectedVerboseEventNames;
+    public long ConsoleAlertNoopChangesSuppressed => TradingBot.Services.Phase1ConsoleLogging.AlertNoopChangesSuppressed;
+    public string ConsoleLastSuppressedAlertNoopReason => TradingBot.Services.Phase1ConsoleLogging.LastSuppressedAlertNoopReason;
+    public long ConsoleStartupVerboseEventsSuppressed => TradingBot.Services.Phase1ConsoleLogging.StartupVerboseEventsSuppressed;
+    public string ConsoleStartupVerboseEventNamesSuppressed => TradingBot.Services.Phase1ConsoleLogging.StartupVerboseEventNamesSuppressed;
+    public bool ConsoleRouterInitializedBeforeProfileLogging => TradingBot.Services.Phase1ConsoleLogging.RouterInitializedBeforeProfileLogging;
+    public bool ConsoleRouterInitializedBeforeConfigLogging => TradingBot.Services.Phase1ConsoleLogging.RouterInitializedBeforeConfigLogging;
+    public long ConsoleUnexpectedStartupEventsPrinted => TradingBot.Services.Phase1ConsoleLogging.UnexpectedStartupEventsPrinted;
+    public bool ConsoleLoggingStrictModeOk => TradingBot.Services.Phase1ConsoleLogging.StrictModeOk;
     public bool FormulaDiagnosticsEnabled => TradingBot.Services.FormulaDiagnostics.Current.Enabled;
     private TradingBot.Services.PaperPhase1RealWatchState RealWatch => TradingBot.Services.PaperPhase1RealWatchService.Latest;
     private TradingBot.Services.PaperPhase1PositiveReconciliationState PositiveReconciliation => TradingBot.Services.PaperPhase1PositiveReconciliationService.Latest;

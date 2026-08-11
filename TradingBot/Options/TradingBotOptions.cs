@@ -99,6 +99,7 @@ public class TradingBotOptions
     [Range(1000, int.MaxValue)] public int HeartbeatIntervalMs { get; set; } = 3000;
     [Range(1, int.MaxValue)] public int ExternalApiTimeoutSeconds { get; set; } = 10;
     public DiagnosticsOptions Diagnostics { get; set; } = new();
+    public ConsoleLoggingOptions Console { get; set; } = new();
     public MultiOutcomeArbitrageOptions MultiOutcomeArbitrage { get; set; } = new();
     public MultiOutcomeLoggingOptions Logging { get; set; } = new();
     public MultiOutcomeReviewOptions MultiOutcomeReview { get; set; } = new();
@@ -136,6 +137,20 @@ public class TradingBotOptions
         ["MultiOutcomeNearMiss"] = new(true, StrategyMode.DiagnosticsOnly, 10),
         ["ExperimentalMultiOutcome"] = new(false, StrategyMode.Disabled, 0)
     };
+}
+
+public sealed class ConsoleLoggingOptions
+{
+    [RegularExpression("VerboseLegacy|Summary5Min|Quiet", ErrorMessage = "Console Mode must be VerboseLegacy, Summary5Min, or Quiet.")]
+    public string Mode { get; set; } = "VerboseLegacy";
+    [Range(1, 86400)] public int SummaryIntervalSeconds { get; set; } = 300;
+    public bool EmitStartupBanner { get; set; } = true;
+    public bool EmitOnStateChange { get; set; } = true;
+    public bool EmitSafetyEventsImmediately { get; set; } = true;
+    public bool SuppressVerboseEvents { get; set; } = true;
+    public bool WriteVerboseEventsToFile { get; set; } = true;
+    public string VerboseLogPath { get; set; } = "exports/logs/verbose-events.jsonl";
+    public string SummaryLogPath { get; set; } = "exports/logs/summary.jsonl";
 }
 
 public sealed class PaperPhase1Options
