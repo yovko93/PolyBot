@@ -2434,6 +2434,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     OpportunityFamilyRankingService.WriteExportAtomic(Path.Combine(shadowExportDir, "opportunity-family-ranking-latest.json"), OpportunityFamilyRankingService.ToExport(familyRanking, familyHealth));
                     var focusSnapshot = focusUniverse.Update(familyRanking, familyHealth, contentRootPath);
                     state.SetFocusUniverse(focusSnapshot);
+                    Phase1NoEdgeDiagnosticService.Update(familyRanking, focusSnapshot, familyHealth, options, contentRootPath);
                     var transitionSnapshot = edgeTransition.Update(focusSnapshot, RuntimeHealthSnapshot.From(state, options), contentRootPath);
                     state.SetEdgeTransition(transitionSnapshot);
                     var edgeCompressionSnapshot = edgeCompression.Update(focusSnapshot, transitionSnapshot, RuntimeHealthSnapshot.From(state, options), contentRootPath);
