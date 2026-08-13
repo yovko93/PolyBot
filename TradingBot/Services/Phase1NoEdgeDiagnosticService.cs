@@ -18,7 +18,7 @@ public static class Phase1NoEdgeDiagnosticService
         lock(Sync){var now=DateTime.UtcNow;var min=options.PaperDiagnosticsLimited.MinEdgeOverride;
         var rows=focus.Items.Where(x=>x.ValidPriced&&x.CurrentRawEdge.HasValue&&x.CurrentAfterCostEdge.HasValue).OrderByDescending(x=>x.CurrentAfterSafetyEdge).ToArray();
         var edges=rows.Select(x=>x.CurrentAfterSafetyEdge).OrderBy(x=>x).ToArray();var cap=PaperPhase1PositiveCaptureService.Current;
-        var reasons=rows.SelectMany(x=>Split(x.LastRejectedReason)).ToArray();int RC(string s)=>reasons.Count(x=>x.Contains(s,StringComparison.OrdinalIgnoreCase));
+        var reasons=rows.SelectMany(x=>Split(x.LastRejectedReason)).ToArray();
         var top=reasons.GroupBy(x=>x,StringComparer.OrdinalIgnoreCase).OrderByDescending(x=>x.Count()).FirstOrDefault();
         decimal? raw=rows.Select(x=>x.CurrentRawEdge).Max(),cost=rows.Select(x=>x.CurrentAfterCostEdge).Max(),safe=rows.Select(x=>(decimal?)x.CurrentAfterSafetyEdge).Max();
         var diagnosis=Diagnose(raw,cost,safe,min,rows.Length,cap.InvalidArtifactsTotal);int Shadow(decimal threshold)=>rows.Count(x=>x.CurrentAfterSafetyEdge>=threshold);
