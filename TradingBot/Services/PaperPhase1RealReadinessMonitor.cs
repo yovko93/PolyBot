@@ -11,12 +11,15 @@ public sealed record PaperPhase1RealReadinessState(
     bool Consistent, string ConsistencyReason, int AlertLevel, string AlertName,
     string AlertReason, string CandidateId, string MarketId, decimal? AfterSafetyEdge,
     decimal? DistanceToMinEdge, string FirstBlockingReason, DateTime LastChangedUtc,
+    bool AlertFresh, double? AlertAgeSeconds, DateTime? AlertLastCleanPositiveUtc,
+    long AlertStaleSuppressedCount, string AlertDowngradeReason, int CleanPositiveAlertTtlSeconds,
+    int CleanPositiveTtlCount, DateTime? CleanPositiveLastSeenUtc, double? CleanPositiveAgeSeconds,
     int CleanNearOpenCount, decimal CleanNearOpenThresholdDistance,
     string CleanNearOpenBestCandidateId, decimal? CleanNearOpenBestAfterSafetyEdge,
     decimal? CleanNearOpenBestDistanceToMinEdge, string CleanNearOpenFirstBlockingReason,
     string CleanNearOpenAllBlockingReasons)
 {
-    public static readonly PaperPhase1RealReadinessState Empty = new(false, DateTime.UtcNow, TimeSpan.Zero, false, false, 0, 0, false, false, true, true, true, true, false, "NotEvaluated", 0, "WaitingForEdge", "NotEvaluated", "None", "None", null, null, "None", DateTime.UtcNow, 0, .005m, "None", null, null, "None", "None");
+    public static readonly PaperPhase1RealReadinessState Empty = new(false, DateTime.UtcNow, TimeSpan.Zero, false, false, 0, 0, false, false, true, true, true, true, false, "NotEvaluated", 0, "WaitingForEdge", "NotEvaluated", "None", "None", null, null, "None", DateTime.UtcNow, false, null, null, 0, "NotEvaluated", 600, 0, null, null, 0, .005m, "None", null, null, "None", "None");
 }
 
 public static class PaperPhase1RealReadinessMonitor
@@ -25,7 +28,14 @@ public static class PaperPhase1RealReadinessMonitor
     private static DateTime? _readinessSince;
     private static DateTime? _orderbookSince;
     private static string _alertKey = "";
+    private static int _cleanPositiveAlertTtlSeconds = 600;
+    private static long _alertStaleSuppressedCount;
     public static PaperPhase1RealReadinessState Current { get; private set; } = PaperPhase1RealReadinessState.Empty;
+
+    public static void Configure(int cleanPositiveAlertTtlSeconds)
+    {
+        lock (Gate) _cleanPositiveAlertTtlSeconds = Math.Max(1, cleanPositiveAlertTtlSeconds);
+    }
 
     public static PaperPhase1RealReadinessState Evaluate(RuntimeHealthSnapshot h)
     {
@@ -37,32 +47,42 @@ public static class PaperPhase1RealReadinessMonitor
             _orderbookSince = h.ReducedUniverseOrderbookStable ? _orderbookSince ?? now : null;
             var noUnexpected = h.PaperPhase1PositiveOpenedTotal <= h.PaperPhase1PositivePaperEligibleTotal
                 && h.PaperCounterRealScannerCountedExecutions == h.PaperPhase1PositiveOpenedTotal;
-
-            var level = h.PaperPhase1PositiveOpenedTotal > 0 ? 5 : h.PaperPhase1PositivePaperEligibleTotal > 0 ? 4
-                : h.PaperPhase1PositiveExecutableLikeTotal > 0 ? 3 : h.PaperPhase1PositiveRealWatchTotal > 0 ? 2
-                : h.PaperPhase1PositiveCleanCapturesTotal > 0 ? 1 : 0;
+            var ttlStart = now.AddSeconds(-_cleanPositiveAlertTtlSeconds);
+            var fresh = PaperPhase1PositiveCaptureService.Current.TopCaptures
+                .Where(x => x.IsValidClean && x.YesOrderbookSnapshotTimestamp >= ttlStart).ToArray();
+            var lastCleanPositiveUtc = PaperPhase1PositiveCaptureService.Current.TopCaptures
+                .Where(x => x.IsValidClean).Select(x => (DateTime?)x.YesOrderbookSnapshotTimestamp).Max();
+            var cleanAgeSeconds = lastCleanPositiveUtc.HasValue ? Math.Max(0, (now-lastCleanPositiveUtc.Value).TotalSeconds) : (double?)null;
+            var alertFresh = fresh.Length > 0;
+            var staleCumulativeCleanPositive = !alertFresh && h.PaperPhase1PositiveCleanCapturesTotal > 0;
+            if (staleCumulativeCleanPositive && Current.AlertLevel > 0) _alertStaleSuppressedCount++;
+            var level = fresh.Any(x => x.ActualOpened) ? 5 : fresh.Any(x => x.PaperEligible) ? 4
+                : fresh.Any(x => x.ExecutableLike) ? 3 : fresh.Any(x => x.RealWatchAccepted) ? 2
+                : alertFresh ? 1 : 0;
             var names = new[] { "WaitingForEdge", "CleanPositiveDetected", "RealWatchPositiveDetected", "ExecutableLikeDetected", "PaperEligibleDetected", "PaperOpened" };
             var reason = level switch
             {
-                0 => h.PaperPhase1RealWatchBestAfterSafetyEdge < h.PaperPhase1MinEdge ? "BestRealWatchBelowMinEdge" : "NoCleanPositive",
+                0 => staleCumulativeCleanPositive ? "NoFreshCleanPositive" : h.PaperPhase1RealWatchBestAfterSafetyEdge < h.PaperPhase1MinEdge ? "BestRealWatchBelowMinEdge" : "NoFreshCleanPositive",
                 1 => h.PaperPhase1BestCleanPositiveExcludedFromRealWatchReason,
                 2 => h.PaperPhase1RealWatchTopBlockingReason,
                 3 => "AwaitingPaperEligibility",
                 4 => "PaperOpenRequired",
                 _ => "RealPaperPositionOpened"
             };
-            var candidate = level >= 5 ? h.PaperPhase1RealWatchOpenedPositionId : level >= 4 ? h.PaperPhase1RealWatchLastEligibleCandidateId
-                : level >= 3 ? h.BestExecutableLikeCandidateId : level >= 2 ? h.PaperPhase1PositiveRealWatchBestCandidateId
-                : level == 1 ? h.PaperPhase1PositiveCleanBestCandidateId : h.PaperPhase1RealWatchBestCandidateId;
-            var edge = level == 1 ? h.PaperPhase1PositiveCleanBestAfterSafetyEdge : h.PaperPhase1RealWatchBestAfterSafetyEdge;
+            var alertCapture = level switch { 5 => fresh.FirstOrDefault(x=>x.ActualOpened), 4 => fresh.FirstOrDefault(x=>x.PaperEligible),
+                3 => fresh.FirstOrDefault(x=>x.ExecutableLike), 2 => fresh.FirstOrDefault(x=>x.RealWatchAccepted),
+                1 => fresh.OrderByDescending(x=>x.AfterSafetyEdge).FirstOrDefault(), _ => null };
+            var candidate = alertCapture?.CandidateId ?? h.PaperPhase1RealWatchBestCandidateId;
+            var edge = alertCapture?.AfterSafetyEdge ?? (level == 0 ? h.PaperPhase1RealWatchBestAfterSafetyEdge : null);
             var distance = edge.HasValue ? Math.Max(0m, h.PaperPhase1MinEdge - edge.Value) : h.PaperPhase1RealWatchBestDistanceToMinEdge;
             var key = $"{level}|{names[level]}|{reason}|{candidate}";
             var changed = key != _alertKey;
             if (changed) _alertKey = key;
 
-            var nearEdge = h.PaperPhase1PositiveCleanBestAfterSafetyEdge;
+            var bestFresh = fresh.OrderByDescending(x => x.AfterSafetyEdge).FirstOrDefault();
+            var nearEdge = bestFresh?.AfterSafetyEdge;
             decimal? nearDistance = nearEdge.HasValue ? Math.Max(0m, h.PaperPhase1MinEdge - nearEdge.Value) : null;
-            var near = h.PaperPhase1PositiveCleanCapturesTotal > 0 || nearDistance <= .005m;
+            var near = alertFresh && (nearEdge > 0m || nearDistance <= .005m);
             var memory = h.PaperPhase1ReadinessUsedCurrentMemoryStable;
             var logs = h.PaperPhase1ReadinessUsedCurrentLogVolumeStable;
             var counters = h.DiagnosticsCounterMismatchCount == 0 && h.PaperCounterAuditConsistent;
@@ -77,9 +97,11 @@ public static class PaperPhase1RealReadinessMonitor
                 Minutes(_readinessSince, now), Minutes(_orderbookSince, now), memory, logs, counters, noUnexpected,
                 h.SigningAttempts == 0, h.LiveTradingBlockedCount == 0, consistent, consistencyReason, level, names[level], reason,
                 candidate ?? "None", h.PaperPhase1RealWatchBestMarketId, edge, distance, h.PaperPhase1RealWatchTopBlockingReason,
-                changed ? now : Current.LastChangedUtc, near ? Math.Max(1, h.PaperPhase1PositiveCleanCapturesTotal) : 0, .005m,
-                near ? h.PaperPhase1PositiveCleanBestCandidateId : "None", near ? nearEdge : null, near ? nearDistance : null,
-                near ? h.PaperPhase1PositiveCleanBestFirstBlockingReason : "None", near ? h.PaperPhase1BestCleanPositiveExcludedFromRealWatchAllReasons : "None");
+                changed ? now : Current.LastChangedUtc, alertFresh, cleanAgeSeconds, lastCleanPositiveUtc,
+                _alertStaleSuppressedCount, staleCumulativeCleanPositive ? "NoFreshCleanPositive" : "None",
+                _cleanPositiveAlertTtlSeconds, fresh.Length, lastCleanPositiveUtc, cleanAgeSeconds,
+                near ? fresh.Length : 0, .005m, near ? bestFresh!.CandidateId : "None", near ? nearEdge : null, near ? nearDistance : null,
+                near ? bestFresh!.FirstBlockingReason : "None", near ? string.Join("|", bestFresh!.AllBlockingReasons) : "None");
             return Current;
         }
     }
@@ -93,7 +115,7 @@ public static class PaperPhase1RealReadinessMonitor
     {
         var s = Evaluate(h);
         var payload = new { generatedAtUtc = DateTime.UtcNow, processRunId = h.ProcessRunId, profile = h.RuntimeProfile,
-            alert = new { level=s.AlertLevel, name=s.AlertName, reason=s.AlertReason, candidateId=s.CandidateId, marketId=s.MarketId, afterSafetyEdge=s.AfterSafetyEdge, distanceToMinEdge=s.DistanceToMinEdge, firstBlockingReason=s.FirstBlockingReason, lastChangedUtc=s.LastChangedUtc },
+            alert = new { level=s.AlertLevel, name=s.AlertName, reason=s.AlertReason, candidateId=s.CandidateId, marketId=s.MarketId, afterSafetyEdge=s.AfterSafetyEdge, distanceToMinEdge=s.DistanceToMinEdge, firstBlockingReason=s.FirstBlockingReason, lastChangedUtc=s.LastChangedUtc, fresh=s.AlertFresh, ageSeconds=s.AlertAgeSeconds, lastCleanPositiveUtc=s.AlertLastCleanPositiveUtc, staleSuppressedCount=s.AlertStaleSuppressedCount, downgradeReason=s.AlertDowngradeReason, cleanPositiveAlertTtlSeconds=s.CleanPositiveAlertTtlSeconds },
             soak = new { enabled=s.Enabled, readinessStable=s.ReadinessStable, orderbookStableMinutes=s.OrderbookStableMinutes, memoryStable=s.MemoryStable, logVolumeStable=s.LogVolumeStable, noCounterMismatches=s.NoCounterMismatches, noUnexpectedPaperOpens=s.NoUnexpectedPaperOpens, noSigningAttempts=s.NoSigningAttempts, noLiveTradingBlocks=s.NoLiveTradingBlocks, consistent=s.Consistent },
             stageCounts = new { invalidArtifacts=h.PaperPhase1PositiveInvalidArtifactsTotal, cleanPositive=h.PaperPhase1PositiveCleanCapturesTotal, realWatchPositive=h.PaperPhase1PositiveRealWatchTotal, executableLike=h.PaperPhase1PositiveExecutableLikeTotal, paperEligible=h.PaperPhase1PositivePaperEligibleTotal, opened=h.PaperPhase1PositiveOpenedTotal },
             safety = new { liveTradingDisabled=h.PaperPhase1LiveTradingDisabled, signingDisabled=s.NoSigningAttempts, paperOnly=h.PaperPhase1Enabled && h.PaperPhase1LiveTradingDisabled } };

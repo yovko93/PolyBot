@@ -69,6 +69,7 @@ var app = builder.Build();
 app.UseCors("ui");
 var options = app.Services.GetRequiredService<IOptions<TradingBotOptions>>().Value;
 PaperPhase1PositiveCaptureService.Configure(options, app.Environment.ContentRootPath);
+PaperPhase1RealReadinessMonitor.Configure(options.PaperPhase1.CleanPositiveAlertTtlSeconds);
 var replayIndex = Array.IndexOf(args, "--replay-paper-phase1-capture");
 if (replayIndex >= 0)
 {

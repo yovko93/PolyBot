@@ -155,6 +155,7 @@ public sealed class ConsoleLoggingOptions
 
 public sealed class PaperPhase1Options
 {
+    [Range(1, 86400)] public int CleanPositiveAlertTtlSeconds { get; set; } = 600;
     public bool ReleaseStatusEnabled { get; set; } = true;
     [Range(1, 3600)] public int ReleaseStatusLogIntervalSeconds { get; set; } = 60;
     public bool ReleaseStatusEmitOnChange { get; set; } = true;
