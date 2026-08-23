@@ -7,6 +7,9 @@ public static class ProcessRunContext
 {
     private static long _diagnosticsCounterMismatchCount;
     private static string _diagnosticsCounterMismatchLastReason = string.Empty;
+    private static readonly object DiagnosticsWarningsSync = new();
+    private static readonly Dictionary<string, long> _diagnosticsWarningsByReason = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Queue<string> _lastDiagnosticsWarnings = new();
     private static long _batchBookTokenQuarantinedLogs;
     private static long _marketOrderbookQuarantinedLogs;
     private static long _orderbookCircuitBreakerOpenedLogs;
@@ -17,6 +20,21 @@ public static class ProcessRunContext
     public static DateTime StartedAtUtc { get; } = DateTime.UtcNow;
     public static long DiagnosticsCounterMismatchCount => Interlocked.Read(ref _diagnosticsCounterMismatchCount);
     public static string DiagnosticsCounterMismatchLastReason => Volatile.Read(ref _diagnosticsCounterMismatchLastReason);
+    public static (IReadOnlyDictionary<string, long> ByReason, string[] LastWarnings) DiagnosticsWarningsSnapshot()
+    {
+        lock (DiagnosticsWarningsSync)
+            return (new Dictionary<string, long>(_diagnosticsWarningsByReason, StringComparer.OrdinalIgnoreCase), _lastDiagnosticsWarnings.ToArray());
+    }
+
+    private static void RecordDiagnosticsWarning(string reason)
+    {
+        lock (DiagnosticsWarningsSync)
+        {
+            _diagnosticsWarningsByReason[reason] = _diagnosticsWarningsByReason.GetValueOrDefault(reason) + 1;
+            _lastDiagnosticsWarnings.Enqueue(reason);
+            while (_lastDiagnosticsWarnings.Count > 20) _lastDiagnosticsWarnings.Dequeue();
+        }
+    }
 
     public static string EnrichLogLine(string line)
     {
@@ -53,6 +71,7 @@ public static class ProcessRunContext
         var reason = string.Join(";", reasons);
         Volatile.Write(ref _diagnosticsCounterMismatchLastReason, reason);
         Interlocked.Increment(ref _diagnosticsCounterMismatchCount);
+        RecordDiagnosticsWarning(reason);
         return reason;
     }
 
@@ -63,6 +82,7 @@ public static class ProcessRunContext
     {
         Volatile.Write(ref _diagnosticsCounterMismatchLastReason, $"ReadinessInvariant:{reason}");
         Interlocked.Increment(ref _diagnosticsCounterMismatchCount);
+        RecordDiagnosticsWarning($"ReadinessInvariant:{reason}");
         var logs = Interlocked.Increment(ref _readinessInvariantCorrectionLogs);
         if (logs <= 5 || logs % 50 == 0)
             Console.WriteLine($"[READINESS_INVARIANT_CORRECTED] ProcessRunId={ProcessRunId} Count={logs} Reason={reason}");
