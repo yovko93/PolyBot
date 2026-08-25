@@ -46,6 +46,8 @@ public static class DashboardWarningsService
         }
 
         if (!LastExportOk) byReason[$"DashboardExportFailure:{LastExportError}"] = 1;
+        var jsonlHealth = RobustJsonlExportWriter.Snapshot();
+        if (jsonlHealth.Health != "Ok") byReason["ExportWriteError:InvalidPositiveArtifacts"] = 1;
         return Classify(byReason, snapshot.LastWarnings, health.LocalPaperPhase1Readiness,
             health.OrderbookStableNow, health.PaperPhase1ContractFixtureIsolationOk);
     }
@@ -116,7 +118,8 @@ public static class DashboardWarningsService
         if (reason.Contains("StaleUI", StringComparison.OrdinalIgnoreCase)
             || reason.Contains("Historical", StringComparison.OrdinalIgnoreCase)
             || reason.Contains("DiagnosticOnly", StringComparison.OrdinalIgnoreCase)
-            || reason.Contains("SnapshotSkew", StringComparison.OrdinalIgnoreCase)) return false;
+            || reason.Contains("SnapshotSkew", StringComparison.OrdinalIgnoreCase)
+            || reason.StartsWith("ExportWriteError:InvalidPositiveArtifacts", StringComparison.OrdinalIgnoreCase)) return false;
         // Unknown warnings are blockers by default. Only the explicitly recognized diagnostic-only
         // cases above may be allowed through to the operator as non-blocking.
         return true;
@@ -133,5 +136,6 @@ public static class DashboardWarningsService
         || reason.Contains("Safety", StringComparison.OrdinalIgnoreCase)
         || reason.Contains("Counter", StringComparison.OrdinalIgnoreCase)
         || reason.Contains("Orderbook", StringComparison.OrdinalIgnoreCase)
-        || reason.Contains("Export", StringComparison.OrdinalIgnoreCase);
+        || (reason.Contains("Export", StringComparison.OrdinalIgnoreCase)
+            && !reason.StartsWith("ExportWriteError:InvalidPositiveArtifacts", StringComparison.OrdinalIgnoreCase));
 }

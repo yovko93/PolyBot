@@ -401,6 +401,12 @@ public class SingleMarketOrderBookArbEngine
             diagnostics.RecordAuditCandidate(AuditNearMiss(book, market.conditionId, yes, no, rawCost, validRawEdge, edge, fill.AdjustedEdgePerShare, quantityAvailable, quantity, fill.SimulatedCost, "None", null, true, true, true, true));
             return new SingleMarketScanResult(true,true,true,true,adjustedCost,book.Question,edge,null,null);
         }
+        catch (IOException ex) when (ex.Message.Contains("exports", StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("jsonl", StringComparison.OrdinalIgnoreCase))
+        {
+            RobustJsonlExportWriter.ObserveExternalFailure(ex, "exports/paper-phase1-invalid-positive-artifacts.jsonl");
+            return SingleMarketScanResult.Empty;
+        }
         catch (Exception ex)
         {
             Console.WriteLine($"[SINGLE_MARKET_ERROR] {ex.Message}");

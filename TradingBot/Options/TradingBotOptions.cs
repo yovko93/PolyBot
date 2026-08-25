@@ -100,6 +100,7 @@ public class TradingBotOptions
     [Range(1, int.MaxValue)] public int ExternalApiTimeoutSeconds { get; set; } = 10;
     public DiagnosticsOptions Diagnostics { get; set; } = new();
     public ConsoleLoggingOptions Console { get; set; } = new();
+    public JsonlExportOptions Exports { get; set; } = new();
     public MultiOutcomeArbitrageOptions MultiOutcomeArbitrage { get; set; } = new();
     public MultiOutcomeLoggingOptions Logging { get; set; } = new();
     public MultiOutcomeReviewOptions MultiOutcomeReview { get; set; } = new();
@@ -137,6 +138,17 @@ public class TradingBotOptions
         ["MultiOutcomeNearMiss"] = new(true, StrategyMode.DiagnosticsOnly, 10),
         ["ExperimentalMultiOutcome"] = new(false, StrategyMode.Disabled, 0)
     };
+}
+
+public sealed class JsonlExportOptions
+{
+    [Range(1, 1024)] public int JsonlMaxFileMb { get; set; } = 50;
+    public bool JsonlRotateByRun { get; set; } = true;
+    public bool JsonlRotateByDate { get; set; } = true;
+    [Range(0, 10)] public int JsonlMaxRetries { get; set; } = 3;
+    [Range(1, 10000)] public int JsonlBackoffMs { get; set; } = 250;
+    [Range(1, 100)] public int JsonlDisableAfterConsecutiveFailures { get; set; } = 5;
+    [Range(1, 100000)] public int JsonlWriteQueueCapacity { get; set; } = 10000;
 }
 
 public sealed class ConsoleLoggingOptions
