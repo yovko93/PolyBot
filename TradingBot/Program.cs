@@ -610,6 +610,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     var kalshiHttp = new HttpClient { Timeout = TimeSpan.FromMilliseconds(kalshiOptions.RequestTimeoutMs) };
     var kalshiBookService = new KalshiOrderbookService(kalshiHttp, kalshiOptions);
     var discoveredMarkets = new List<Market>();
+    // Retain the most recent unfiltered discovery result for shadow-only group
+    // diagnostics. This is deliberately separate from the executable scan pool.
+    var shadowDiscoveryCandidateMarkets = new List<Market>();
     var rollingOffset = 0;
     var scanId = 0L;
     var fullCoverageCompletedCount = 0;
@@ -1095,6 +1098,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 discoveryBootstrapLastAttemptUtc = discoveryStartedAt;
                 var discovery = await marketService.GetMarketsAsync(options, stoppingToken, discoveryBootstrapBackoffSeconds);
                 var discoveredCandidateMarkets = discovery.Markets.Where(m => m?.outcomes?.Count == 2 && m.clobTokenIds?.Count >= 2).Take(Math.Max(1, options.RuntimeMemory.MaxMarketCacheEntries)).ToList();
+                shadowDiscoveryCandidateMarkets = discoveredCandidateMarkets.ToList();
                 var attemptSummary = discovery.Summary;
                 var discoveryHealth = ScanLogSummaryService.DiscoveryHealth(attemptSummary, options.MarketDiscovery.MinHealthyActiveMarkets);
                 lastDiscoveryAt = DateTime.UtcNow;
@@ -1355,13 +1359,13 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 {
                     // The normal scan pool stays reduced.  The optional union is consumed only by the
                     // shadow VerifiedMultiOutcome evaluator and can never enter paper eligibility/execution.
-                    var shadowDiscoveryPool = options.PaperPhase1.ShadowMultiOutcomeDiscoveryEnabled
-                        ? discoveredMarkets.Concat(discoveredCandidateMarkets).GroupBy(m => m.id, StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList()
+                    IReadOnlyList<Market> shadowDiscoveryPool = options.PaperPhase1.ShadowMultiOutcomeDiscoveryEnabled
+                        ? discoveredMarkets.Concat(shadowDiscoveryCandidateMarkets).GroupBy(m => m.id, StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList()
                         : discoveredMarkets;
                     var allByMarketId = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(shadowDiscoveryPool.Where(m => !string.IsNullOrWhiteSpace(m.id)), m => m.id, "Scanner.ShadowVerifiedDiscoveredMarketsById", DuplicateGroupKeyPolicy.KeepLatest);
                     var allowlistedGroups = multiOutcomeValidator.GetAllowlistedGroups()
                         .Where(g => !options.PaperPhase1.ShadowMultiOutcomeRequireVerified || string.Equals(g.VerificationStatus, "Verified", StringComparison.OrdinalIgnoreCase))
-                        .Take(options.PaperPhase1.ShadowMultiOutcomeMaxGroups).ToArray();
+                        .Take(options.PaperPhase1.ShadowMultiOutcomeMaxGroups).ToList();
                     var resolved = verifiedResolver.ResolveVerifiedGroups(allowlistedGroups, allByMarketId, options.MultiOutcomeArbitrage, lastDiscoverySummary.DiscoveryHealthy);
                     var verifiedMismatch = resolved.Count(x => x.ValidationStatus != "VerifiedGroupResolved");
                     var verifiedResolved = resolved.Count - verifiedMismatch;
