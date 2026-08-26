@@ -39,6 +39,20 @@ public sealed class DashboardWarningsServiceTests
     }
 
     [Fact]
+    public void InvalidPositiveArtifactExportFailureIsVisibleButNonBlocking()
+    {
+        const string reason = "ExportWriteError:InvalidPositiveArtifacts";
+        var result = DashboardWarningsService.Classify(new Dictionary<string, long> { [reason] = 1 },
+            [reason], true, true, true);
+
+        Assert.Equal(1, result.NonBlocking);
+        Assert.Equal(0, result.Blocking);
+        Assert.False(result.AffectsPaperPhase1);
+        Assert.False(result.AffectsTradingSafety);
+        Assert.Equal(reason, result.TopReason);
+    }
+
+    [Fact]
     public void ExportWritesLatestAndJsonlHistory()
     {
         var root = Path.Combine(Path.GetTempPath(), $"polybot-dashboard-warnings-{Guid.NewGuid():N}");
