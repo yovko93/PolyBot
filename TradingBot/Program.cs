@@ -1353,8 +1353,15 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
 
                 if (options.MultiOutcomeArbitrage.EvaluateVerifiedGroupsAgainstFullPool)
                 {
-                    var allByMarketId = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(discoveredMarkets.Where(m => !string.IsNullOrWhiteSpace(m.id)), m => m.id, "Scanner.DiscoveredMarketsById", DuplicateGroupKeyPolicy.KeepLatest);
-                    var allowlistedGroups = multiOutcomeValidator.GetAllowlistedGroups();
+                    // The normal scan pool stays reduced.  The optional union is consumed only by the
+                    // shadow VerifiedMultiOutcome evaluator and can never enter paper eligibility/execution.
+                    var shadowDiscoveryPool = options.PaperPhase1.ShadowMultiOutcomeDiscoveryEnabled
+                        ? discoveredMarkets.Concat(discoveredCandidateMarkets).GroupBy(m => m.id, StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList()
+                        : discoveredMarkets;
+                    var allByMarketId = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(shadowDiscoveryPool.Where(m => !string.IsNullOrWhiteSpace(m.id)), m => m.id, "Scanner.ShadowVerifiedDiscoveredMarketsById", DuplicateGroupKeyPolicy.KeepLatest);
+                    var allowlistedGroups = multiOutcomeValidator.GetAllowlistedGroups()
+                        .Where(g => !options.PaperPhase1.ShadowMultiOutcomeRequireVerified || string.Equals(g.VerificationStatus, "Verified", StringComparison.OrdinalIgnoreCase))
+                        .Take(options.PaperPhase1.ShadowMultiOutcomeMaxGroups).ToArray();
                     var resolved = verifiedResolver.ResolveVerifiedGroups(allowlistedGroups, allByMarketId, options.MultiOutcomeArbitrage, lastDiscoverySummary.DiscoveryHealthy);
                     var verifiedMismatch = resolved.Count(x => x.ValidationStatus != "VerifiedGroupResolved");
                     var verifiedResolved = resolved.Count - verifiedMismatch;
@@ -2564,6 +2571,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         Console.WriteLine($"[VERIFIED_GROUP_PORTFOLIO] Total={multiOutcomeValidator.LoadedAllowlistCount} Keep={triageRows.Count(x => x.recommendedConfigAction is "KeepEnabled" or "KeepForMonitoring")} DisableRecommended={triageRows.Count(x => x.recommendedConfigAction == "DisableUntilBetterPricing")} NeedsPruning={triageRows.Count(x => x.recommendedConfigAction == "PruneMissingNoAskLegs")} Executable={verifiedExecutable} Best={(bestPricing?.GroupKey ?? "N/A")}");
                     lastPortfolioFingerprint = portfolioFingerprint;
                     exportService.ExportVerifiedPricing(verifiedPricingExport);
+                    VerifiedMultiOutcomeDiscoveryDiagnostics.Observe(resolved, groupDiagnostics, allByMarketId.Count, discoveredMarkets.Count, discoveryMode);
                     state.SetMultiOutcomeDiagnostics(new MultiOutcomeDiagnosticsDto(multiOutcomeReport.GroupsDetected,multiOutcomeReport.GroupsVerified,Math.Max(0,multiOutcomeReport.GroupsDetected - multiOutcomeReport.GroupsVerified),multiOutcomeReport.ExecutableGroups,multiOutcomeReport.RejectedByReason.ToDictionary(k=>k.Key,v=>v.Value),multiOutcomeReport.TopRejectedSamples.Take(25).Select(x=>$"{x.GroupKey}:{x.Reason}").ToArray(),Array.Empty<string>(),multiOutcomeValidator.LoadedAllowlistCount,Array.Empty<string>(),Guid.NewGuid().ToString("N"),DateTime.UtcNow,state.NextSeq(),multiOutcomeValidator.LoadedAllowlistCount,verifiedResolved,verifiedMismatch,verifiedEvaluated,verifiedExecutable,groupDiagnostics,skipReason,pricingDiagnostics,basketCostDiagnostics));
                 }
             }
