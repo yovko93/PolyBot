@@ -613,6 +613,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
     // Retain the most recent unfiltered discovery result for shadow-only group
     // diagnostics. This is deliberately separate from the executable scan pool.
     var shadowDiscoveryCandidateMarkets = new List<Market>();
+    var shadowCompletionMarkets = new Dictionary<string,Market>(StringComparer.OrdinalIgnoreCase);
+    var shadowCompletedGroupKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    VerifiedMultiOutcomeDiscoveryDiagnostics.Configure(options.PaperPhase1);
     var rollingOffset = 0;
     var scanId = 0L;
     var fullCoverageCompletedCount = 0;
@@ -1359,13 +1362,55 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                 {
                     // The normal scan pool stays reduced.  The optional union is consumed only by the
                     // shadow VerifiedMultiOutcome evaluator and can never enter paper eligibility/execution.
-                    IReadOnlyList<Market> shadowDiscoveryPool = options.PaperPhase1.ShadowMultiOutcomeDiscoveryEnabled
-                        ? discoveredMarkets.Concat(shadowDiscoveryCandidateMarkets).GroupBy(m => m.id, StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList()
-                        : discoveredMarkets;
-                    var allByMarketId = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(shadowDiscoveryPool.Where(m => !string.IsNullOrWhiteSpace(m.id)), m => m.id, "Scanner.ShadowVerifiedDiscoveredMarketsById", DuplicateGroupKeyPolicy.KeepLatest);
                     var allowlistedGroups = multiOutcomeValidator.GetAllowlistedGroups()
                         .Where(g => !options.PaperPhase1.ShadowMultiOutcomeRequireVerified || string.Equals(g.VerificationStatus, "Verified", StringComparison.OrdinalIgnoreCase))
                         .Take(options.PaperPhase1.ShadowMultiOutcomeMaxGroups).ToList();
+                    var shadowNaturalPool = options.PaperPhase1.ShadowMultiOutcomeDiscoveryEnabled
+                        ? discoveredMarkets.Concat(shadowDiscoveryCandidateMarkets).GroupBy(m => m.id, StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList()
+                        : discoveredMarkets;
+                    var shadowBasePool=shadowNaturalPool.Concat(shadowCompletionMarkets.Values).GroupBy(m=>m.id,StringComparer.OrdinalIgnoreCase).Select(g=>g.First()).ToList();
+                    var baseIds=shadowBasePool.Select(m=>m.id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var incompleteGroups=allowlistedGroups
+                        .Where(g=>!options.PaperPhase1.ShadowGroupCompletionRequireVerified||string.Equals(g.VerificationStatus,"Verified",StringComparison.OrdinalIgnoreCase))
+                        .Where(g=>!shadowCompletedGroupKeys.Contains(g.GroupKey)&&g.MarketIds.Any(id=>!shadowNaturalPool.Any(m=>m.id.Equals(id,StringComparison.OrdinalIgnoreCase)))).Take(options.PaperPhase1.ShadowGroupCompletionMaxGroups).ToArray();
+                    var completionSamples=new List<ShadowGroupCompletionSample>();
+                    var additionalMarketsRequested=0; var additionalMarketsLoaded=0; var additionalBooksRequested=0; var additionalBooksLoaded=0;
+                    var requestedCompletionIds=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    var loadedCompletionBookIds=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    if(options.PaperPhase1.ShadowGroupCompletionEnabled)
+                    {
+                        var missingIds=incompleteGroups.SelectMany(g=>g.MarketIds).Where(id=>!baseIds.Contains(id)).Distinct(StringComparer.OrdinalIgnoreCase).Take(options.PaperPhase1.ShadowGroupCompletionMaxAdditionalMarkets).ToArray();
+                        requestedCompletionIds.UnionWith(missingIds);
+                        additionalMarketsRequested=missingIds.Length;
+                        var loaded=await marketService.GetMarketsByIdsForDiagnosticsAsync(missingIds,stoppingToken);
+                        foreach(var market in loaded) shadowCompletionMarkets[market.id]=market;
+                        additionalMarketsLoaded=loaded.Count;
+                        var completionGroupIds=incompleteGroups.SelectMany(g=>g.MarketIds).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                        var loadedForBooks=loaded.Concat(shadowCompletionMarkets.Values.Where(m=>completionGroupIds.Contains(m.id))).Where(m=>m.clobTokenIds.Count>=2).GroupBy(m=>m.id,StringComparer.OrdinalIgnoreCase).Select(g=>g.First()).ToList(); additionalBooksRequested=loadedForBooks.Count;
+                        foreach(var market in loadedForBooks) if(await orderbookService.GetBinarySnapshotAsync(market,stoppingToken) is not null) { additionalBooksLoaded++; loadedCompletionBookIds.Add(market.id); }
+                        baseIds.UnionWith(shadowCompletionMarkets.Keys);
+                    }
+                    foreach(var group in incompleteGroups)
+                    {
+                        var missingBefore=group.MarketIds.Where(id=>!shadowNaturalPool.Any(m=>m.id.Equals(id,StringComparison.OrdinalIgnoreCase))).ToArray();
+                        var missingAfter=group.MarketIds.Where(id=>!baseIds.Contains(id)).ToArray();
+                        var attempted=options.PaperPhase1.ShadowGroupCompletionEnabled;
+                        var missingTokenMap=group.MarketIds.Any(id=>shadowCompletionMarkets.TryGetValue(id,out var market)&&market.clobTokenIds.Count<2);
+                        var missingSiblingBook=missingBefore.Any(id=>shadowCompletionMarkets.ContainsKey(id)&&!loadedCompletionBookIds.Contains(id));
+                        var succeeded=attempted&&missingAfter.Length==0&&!missingTokenMap&&!missingSiblingBook;
+                        if(succeeded) shadowCompletedGroupKeys.Add(group.GroupKey);
+                        var reason=!attempted?"ShadowGroupCompletionDisabled":succeeded?"None":missingBefore.Any(id=>!requestedCompletionIds.Contains(id)&&!shadowCompletionMarkets.ContainsKey(id))?"VerifiedGroupCompletionLimitReached":missingTokenMap?"VerifiedGroupSiblingTokenMapMissing":missingSiblingBook?"VerifiedGroupSiblingOrderbookMissing":"VerifiedGroupSiblingMarketLoadFailed";
+                        var groupMarketsLoaded=missingBefore.Count(id=>shadowCompletionMarkets.ContainsKey(id));
+                        var groupBooksRequested=missingBefore.Count(id=>shadowCompletionMarkets.TryGetValue(id,out var market)&&market.clobTokenIds.Count>=2);
+                        var groupBooksLoaded=missingBefore.Count(id=>loadedCompletionBookIds.Contains(id));
+                        completionSamples.Add(new(group.GroupKey,group.GroupKey,group.MarketIds.Except(missingBefore,StringComparer.OrdinalIgnoreCase).ToArray(),missingBefore,attempted,succeeded,missingBefore.Length,groupMarketsLoaded,groupBooksRequested,groupBooksLoaded,reason));
+                    }
+                    var newlyCompleted=completionSamples.Count(x=>x.CompletionSucceeded);
+                    foreach(var group in allowlistedGroups.Where(g=>shadowCompletedGroupKeys.Contains(g.GroupKey)&&completionSamples.All(x=>!x.GroupKey.Equals(g.GroupKey,StringComparison.OrdinalIgnoreCase))))
+                        completionSamples.Add(new(group.GroupKey,group.GroupKey,group.MarketIds,[],false,true,0,0,0,0,"None"));
+                    VerifiedMultiOutcomeDiscoveryDiagnostics.ObserveCompletion(new(options.PaperPhase1.ShadowGroupCompletionEnabled?incompleteGroups.Length:0,newlyCompleted,additionalMarketsRequested,additionalMarketsLoaded,additionalBooksRequested,additionalBooksLoaded,completionSamples));
+                    IReadOnlyList<Market> shadowDiscoveryPool=shadowBasePool.Concat(shadowCompletionMarkets.Values).GroupBy(m=>m.id,StringComparer.OrdinalIgnoreCase).Select(g=>g.First()).ToList();
+                    var allByMarketId = GroupKeyDictionaryBuilder.BuildUniqueByGroupKey(shadowDiscoveryPool.Where(m => !string.IsNullOrWhiteSpace(m.id)), m => m.id, "Scanner.ShadowVerifiedDiscoveredMarketsById", DuplicateGroupKeyPolicy.KeepLatest);
                     var resolved = verifiedResolver.ResolveVerifiedGroups(allowlistedGroups, allByMarketId, options.MultiOutcomeArbitrage, lastDiscoverySummary.DiscoveryHealthy);
                     var verifiedMismatch = resolved.Count(x => x.ValidationStatus != "VerifiedGroupResolved");
                     var verifiedResolved = resolved.Count - verifiedMismatch;
@@ -1608,6 +1653,14 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                                 .ToDictionary(kv => kv.Key, kv => kv.Value.question ?? kv.Value.id, StringComparer.OrdinalIgnoreCase);
                             var legs = resolvedNoAsks.Select(x => new VerifiedMultiOutcomeOpportunityLeg(x.MarketId, x.ConditionId ?? x.MarketId, questionByMarket.TryGetValue(x.MarketId, out var q) ? q : x.MarketId, "NO", x.NoTokenId ?? x.MarketId, x.NoAsk ?? 0m, x.NoAskQuantity ?? 0m, x.Source, maxLiquidityQty, maxLiquidityQty * (x.NoAsk ?? 0m))).ToArray();
                             var opp = new VerifiedMultiOutcomeOpportunity($"verified-{g.GroupKey}-{DateTime.UtcNow:yyyyMMddHHmmss}", strategyName, g.GroupKey, g.Title, "Verified", legs.Length, formula.GuaranteedPayout, formula.NoAskSum, formula.GrossEdge, formula.NetEdge, activeCostProfileName, maxLiquidityQty, maxLiquidityExpectedProfit, options.MultiOutcomeArbitrage.MaxNotionalPerGroup, maxLiquidityQty * formula.NoAskSum, "PaperExecutable", legs);
+                            // Completed groups are deliberately terminated at the diagnostics boundary.
+                            // They never reach execution readiness, PaperPreTradeGate, or paper opening.
+                            if(shadowCompletedGroupKeys.Contains(g.GroupKey))
+                            {
+                                var completionReason=edge>0?"DiagnosticsOnlyCompletedGroup":"VerifiedGroupCompletedBelowMinEdge";
+                                groupDiagnostics.Add(new VerifiedGroupDiagnosticDto(g.GroupKey,g.MarketIds.Count,g.ResolvedMarkets.Count,g.MissingMarketIds.Count,"DiagnosticsOnly",completionReason,edge,0,0,Array.Empty<string>(),Array.Empty<string>()));
+                                continue;
+                            }
                             promotedVerifiedOpportunities.Add(opp);
 
                             verifiedExecution.AuditQuiet(new ExecutionAuditEvent(DateTime.UtcNow, opp.Id, opp.GroupKey, opp.Strategy, "Detected", "Ok", "VerifiedExecutable", opp.NetEdge, opp.ExpectedProfit, opp.EstimatedCost, opp.ExecutableQty, ""), options.Logging.MaxVerifiedArbDetectedAuditPerHour, true, 100);

@@ -52,13 +52,15 @@ public static class Phase1StrategyExpansionDiagnosticService
     private static object Candidate(FocusUniverseItem x,decimal min){var strategy=Map(x.Strategy,x.FamilyType);var reasons=Split(x.LastRejectedReason);var vr=reasons.FirstOrDefault(r=>r.Contains("Verif",StringComparison.OrdinalIgnoreCase))??"None";return new{candidateId=x.WatchlistId,marketId=x.MarketIdOrGroupKey,strategy,rawEdge=x.CurrentRawEdge,afterCostEdge=x.CurrentAfterCostEdge,afterSafetyEdge=x.CurrentAfterSafetyEdge,distanceToMinEdge=min-x.CurrentAfterSafetyEdge,isPaperEligibleStrategy=false,paperOpenAllowed=false,executableLike=x.ExecutionReady,depthPassed=!Has(reasons,"Depth"),fillPassed=!Has(reasons,"Fill"),riskPassed=!Has(reasons,"Risk"),firstBlockingReason=reasons.FirstOrDefault()??"None",allBlockingReasons=reasons,verificationConfidence=vr=="None"?"Unknown":"Low",verificationReason=vr,lastSeenUtc=x.LastSeenUtc};}
     private static string Diagnose(StrategyRow p,StrategyRow s,decimal min)
     {
-        var v=VerifiedMultiOutcomeDiscoveryDiagnostics.Current;
-        if(v.Discovered==0)return "VerifiedMultiOutcomeDiscoveryBlocked";
-        if(v.Evaluated>0&&v.ValidPriced==0&&v.Reason("VerifiedGroupMissingOrderbooks")>0)return "VerifiedMultiOutcomeMissingOrderbooks";
-        if(v.ValidPriced>0&&v.PositiveAfterSafety==0)return "VerifiedMultiOutcomeBelowMinEdge";
-        if(v.PositiveAfterSafety>0&&v.ExecutableLike==0)return "VerifiedMultiOutcomeHasEdgeButNotExecutable";
-        if(v.ExecutableLike>0)return "VerifiedMultiOutcomeShadowCandidateFound";
-        return (p.BestAfterSafetyEdge5m??decimal.MinValue)>=min?"PaperStrategyHasEdge":"VerifiedMultiOutcomeDiscoveryBlocked";
+        var c=VerifiedMultiOutcomeDiscoveryDiagnostics.CompletionCurrent;
+        if(!c.ConfigPresent)return "VerifiedMultiOutcomeCompletionNotWired";
+        if(!c.Enabled)return "VerifiedMultiOutcomeCompletionDisabled";
+        if(c.Attempted5m>0&&c.Completed5m==0)return "VerifiedMultiOutcomeCompletionAttemptedFailed";
+        if(c.Completed5m>0&&c.ValidPricedAfterCompletion5m==0)return "VerifiedMultiOutcomeCompletedNoValidPricing";
+        if(c.ValidPricedAfterCompletion5m>0&&c.PositiveAfterSafetyAfterCompletion5m==0)return "VerifiedMultiOutcomeCompletedBelowMinEdge";
+        if(c.PositiveAfterSafetyAfterCompletion5m>0&&c.ExecutableLikeAfterCompletion5m==0)return "VerifiedMultiOutcomeCompletedHasEdgeButNotExecutable";
+        if(c.ExecutableLikeAfterCompletion5m>0)return "VerifiedMultiOutcomeShadowCandidateFound";
+        return "VerifiedMultiOutcomeCompletionAttemptedFailed";
     }
     private static string Recommend(StrategyRow[] rows,decimal min){var s=rows.Where(x=>!x.PaperOpenAllowed).OrderByDescending(x=>x.BestAfterSafetyEdge5m??decimal.MinValue).First();if(s.Strategy=="VerifiedMultiOutcome"&&s.ExecutableLike5m>0&&s.BestAfterSafetyEdge5m>=min)return"PromoteVerifiedMultiOutcomeToPaperCandidateAfterFixtureTests";if(s.Strategy=="AutoCandidateMultiOutcome"&&s.BlockedByVerification5m>0)return"ImproveAutoCandidateVerification";if(s.BlockedByPricing5m>0&&s.ValidPriced5m==0)return"ImprovePricingCoverage";if(s.BlockedByDepth5m+s.BlockedByFill5m>0)return"ImproveDepthOrFillModel";if(rows.All(x=>!x.BestAfterSafetyEdge5m.HasValue))return"ExpandUniverseCoverage";if(rows.All(x=>(x.BestAfterSafetyEdge5m??decimal.MinValue)<min))return"NoEdgeAcrossStrategies";return"KeepMonitoringSingleMarket";}
     private static string Map(string s,string f=""){var v=s+" "+f;if(v.Contains("NearMiss",StringComparison.OrdinalIgnoreCase))return"MultiOutcomeNearMiss";if(v.Contains("Auto",StringComparison.OrdinalIgnoreCase))return"AutoCandidateMultiOutcome";if(v.Contains("Verified",StringComparison.OrdinalIgnoreCase))return"VerifiedMultiOutcome";if(v.Contains("Multi",StringComparison.OrdinalIgnoreCase))return"MultiOutcomeNearMiss";return"SingleMarketBuyBoth";}

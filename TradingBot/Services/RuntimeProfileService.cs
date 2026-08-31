@@ -83,6 +83,7 @@ public static class RuntimeProfileService
         if (Mode(o,"SingleMarketBuyBoth")!=StrategyMode.PaperEligible) violations.Add("SingleMarketBuyBothMustBePaperEligible");
         if (Mode(o,"VerifiedMultiOutcome")==StrategyMode.PaperEligible) violations.Add("VerifiedMultiOutcomeMustNotBePaperEligible");
         if (o.PaperPhase1.ShadowMultiOutcomePaperOpenAllowed) violations.Add("ShadowMultiOutcomePaperOpenAllowedMustBeFalse");
+        if (o.PaperPhase1.ShadowGroupCompletionPaperOpenAllowed) violations.Add("ShadowGroupCompletionPaperOpenAllowedMustBeFalse");
         if (Mode(o,"AutoCandidateMultiOutcome")==StrategyMode.PaperEligible) violations.Add("AutoCandidateMultiOutcomeMustNotBePaperEligible");
         if (Mode(o,"ExperimentalMultiOutcome")!=StrategyMode.Disabled) violations.Add("ExperimentalMultiOutcomeMustBeDisabled");
         if (!o.AutoCandidatePricing.DiagnosticsOnly||!o.FocusUniverse.DiagnosticsOnly||!o.EdgeTransition.DiagnosticsOnly||!o.EdgeCompression.DiagnosticsOnly||!o.SpreadMicrostructure.DiagnosticsOnly||!o.DiagnosticsDashboard.DiagnosticsOnly||!o.DiagnosticsDashboardHistory.DiagnosticsOnly) violations.Add("AnalyticsLayersMustBeDiagnosticsOnly");
