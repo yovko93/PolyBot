@@ -37,7 +37,37 @@ public sealed record ShadowCompletionSnapshot(
     long EvaluatedAfterCompletionTotal, long ValidPricedAfterCompletionTotal, long PositiveAfterSafetyAfterCompletionTotal,
     long ExecutableLikeAfterCompletionTotal)
 {
-    public static ShadowCompletionSnapshot Empty { get; } = new(false,false,true,0,0,false,0,0,0,0,0,0,0,"ShadowGroupCompletionNotWired",0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+    public static ShadowCompletionSnapshot Empty { get; } = new(
+        ConfigPresent: false,
+        Enabled: false,
+        RequireVerified: true,
+        MaxGroups: 0,
+        MaxAdditionalMarkets: 0,
+        PaperOpenAllowed: false,
+        Attempted5m: 0,
+        Completed5m: 0,
+        MarketsRequested5m: 0,
+        MarketsLoaded5m: 0,
+        OrderbooksRequested5m: 0,
+        OrderbooksLoaded5m: 0,
+        Failed5m: 0,
+        TopFailure5m: "ShadowGroupCompletionNotWired",
+        SkippedAfterCompletion5m: 0,
+        ValidPricedAfterCompletion5m: 0,
+        EvaluatedAfterCompletion5m: 0,
+        PositiveAfterSafetyAfterCompletion5m: 0,
+        ExecutableLikeAfterCompletion5m: 0,
+        AttemptedTotal: 0,
+        CompletedTotal: 0,
+        MarketsRequestedTotal: 0,
+        MarketsLoadedTotal: 0,
+        OrderbooksRequestedTotal: 0,
+        OrderbooksLoadedTotal: 0,
+        FailedTotal: 0,
+        EvaluatedAfterCompletionTotal: 0,
+        ValidPricedAfterCompletionTotal: 0,
+        PositiveAfterSafetyAfterCompletionTotal: 0,
+        ExecutableLikeAfterCompletionTotal: 0);
 }
 
 /// <summary>Shadow-only observability for verified-group discovery; never feeds eligibility or execution.</summary>
