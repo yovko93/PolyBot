@@ -167,6 +167,15 @@ public sealed class ConsoleLoggingOptions
 
 public sealed class PaperPhase1Options
 {
+    public bool ShadowGroupCompletionEnabled { get; set; } = true;
+    public bool ShadowGroupCompletionRequireVerified { get; set; } = true;
+    [Range(1, 1000)] public int ShadowGroupCompletionMaxGroups { get; set; } = 100;
+    [Range(1, 5000)] public int ShadowGroupCompletionMaxAdditionalMarkets { get; set; } = 500;
+    public bool ShadowGroupCompletionPaperOpenAllowed { get; set; } = false;
+    public bool ShadowMultiOutcomeDiscoveryEnabled { get; set; } = true;
+    [Range(1, 1000)] public int ShadowMultiOutcomeMaxGroups { get; set; } = 100;
+    public bool ShadowMultiOutcomeRequireVerified { get; set; } = true;
+    public bool ShadowMultiOutcomePaperOpenAllowed { get; set; } = false;
     [Range(1, 86400)] public int CleanPositiveAlertTtlSeconds { get; set; } = 600;
     public bool ReleaseStatusEnabled { get; set; } = true;
     [Range(1, 3600)] public int ReleaseStatusLogIntervalSeconds { get; set; } = 60;

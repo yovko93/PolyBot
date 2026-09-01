@@ -43,8 +43,8 @@ public sealed class VerifiedMultiOutcomeGroupResolver
             var resolvedMarkets = resolved.Values.Where(m => MatchGroupKey(item.GroupKey, m.question)).ToList();
             var status = "VerifiedGroupResolved";
             var reason = "VerifiedGroupResolved";
-            if (resolvedMarkets.Count == 0) { status = "Rejected"; reason = "VerifiedGroupNotFoundInDiscoveredPool"; }
-            else if (missingMarkets.Count > 0) { status = "Rejected"; reason = discoveryHealthy ? "VerifiedGroupMarketMismatch" : "VerifiedGroupMissingBecauseDiscoveryIncomplete"; }
+            if (resolvedMarkets.Count == 0) { status = "Rejected"; reason = item.MarketIds.Count == 0 && item.ConditionIds.Count == 0 ? "VerifiedGroupMissingMarketIds" : "VerifiedGroupOutsideReducedUniverse"; }
+            else if (missingMarkets.Count > 0) { status = "Rejected"; reason = discoveryHealthy ? "VerifiedGroupMarketMismatch" : "VerifiedGroupMissingSiblingMarkets"; }
             else if (missingConditions.Count > 0) { status = "Rejected"; reason = "VerifiedGroupConditionMismatch"; }
             else if (item.RequiredOutcomeCount.HasValue && resolvedMarkets.Count != item.RequiredOutcomeCount.Value && options.RequireExactOutcomeCount) { status = "Rejected"; reason = "VerifiedGroupOutcomeCountMismatch"; }
 

@@ -49,6 +49,27 @@ public class MarketDataService
         _http = http;
     }
 
+    /// <summary>Targeted metadata lookup used only to complete verified shadow groups.</summary>
+    public async Task<IReadOnlyList<Market>> GetMarketsByIdsForDiagnosticsAsync(IEnumerable<string> marketIds, CancellationToken ct = default)
+    {
+        var markets = new List<Market>();
+        foreach (var id in marketIds.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            try
+            {
+                using var response = await _http.GetAsync($"https://gamma-api.polymarket.com/markets/{Uri.EscapeDataString(id)}", ct);
+                if (!response.IsSuccessStatusCode) continue;
+                var json = await response.Content.ReadAsStringAsync(ct);
+                var market = JsonConvert.DeserializeObject<Market>(json);
+                if (market is not null && market.id.Equals(id, StringComparison.OrdinalIgnoreCase)) markets.Add(market);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
+            catch (HttpRequestException) { }
+            catch (JsonException) { }
+        }
+        return markets;
+    }
+
     public async Task<(List<Market> Markets, MarketDiscoverySummary Summary)> GetMarketsAsync(TradingBotOptions options, CancellationToken ct = default, int? effectiveBackoffSeconds = null)
     {
         var pageSize = Math.Clamp(options.DiscoveryPageSize, 1, Math.Max(1, options.MarketDiscovery.MaxPageSize));
