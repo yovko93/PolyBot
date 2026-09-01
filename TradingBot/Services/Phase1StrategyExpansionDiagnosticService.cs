@@ -55,12 +55,16 @@ public static class Phase1StrategyExpansionDiagnosticService
         var c=VerifiedMultiOutcomeDiscoveryDiagnostics.CompletionCurrent;
         if(!c.ConfigPresent)return "VerifiedMultiOutcomeCompletionNotWired";
         if(!c.Enabled)return "VerifiedMultiOutcomeCompletionDisabled";
-        if(c.Attempted5m>0&&c.Completed5m==0)return "VerifiedMultiOutcomeCompletionAttemptedFailed";
+        var o=VerifiedMultiOutcomeDiscoveryDiagnostics.OrderbookCurrent;
+        if(!VerifiedMultiOutcomeDiscoveryDiagnostics.ShadowPrefetchEnabled)return "VerifiedMultiOutcomeShadowOrderbookPrefetchDisabled";
+        if(o.TopMissingReason5m=="ShadowSiblingOrderbookRateLimited")return "VerifiedMultiOutcomeShadowOrderbookPrefetchRateLimited";
+        if(o.TopMissingReason5m is "ShadowSiblingOrderbookProviderError" or "ShadowSiblingOrderbookTimeout")return "VerifiedMultiOutcomeShadowOrderbookPrefetchProviderFailing";
+        if(o.Requests5m>0&&o.SuccessRate5m<.5m)return "VerifiedMultiOutcomeShadowOrderbookCoverageTooLow";
         if(c.Completed5m>0&&c.ValidPricedAfterCompletion5m==0)return "VerifiedMultiOutcomeCompletedNoValidPricing";
         if(c.ValidPricedAfterCompletion5m>0&&c.PositiveAfterSafetyAfterCompletion5m==0)return "VerifiedMultiOutcomeCompletedBelowMinEdge";
         if(c.PositiveAfterSafetyAfterCompletion5m>0&&c.ExecutableLikeAfterCompletion5m==0)return "VerifiedMultiOutcomeCompletedHasEdgeButNotExecutable";
         if(c.ExecutableLikeAfterCompletion5m>0)return "VerifiedMultiOutcomeShadowCandidateFound";
-        return "VerifiedMultiOutcomeCompletionAttemptedFailed";
+        return "VerifiedMultiOutcomeShadowOrderbookCoverageTooLow";
     }
     private static string Recommend(StrategyRow[] rows,decimal min){var s=rows.Where(x=>!x.PaperOpenAllowed).OrderByDescending(x=>x.BestAfterSafetyEdge5m??decimal.MinValue).First();if(s.Strategy=="VerifiedMultiOutcome"&&s.ExecutableLike5m>0&&s.BestAfterSafetyEdge5m>=min)return"PromoteVerifiedMultiOutcomeToPaperCandidateAfterFixtureTests";if(s.Strategy=="AutoCandidateMultiOutcome"&&s.BlockedByVerification5m>0)return"ImproveAutoCandidateVerification";if(s.BlockedByPricing5m>0&&s.ValidPriced5m==0)return"ImprovePricingCoverage";if(s.BlockedByDepth5m+s.BlockedByFill5m>0)return"ImproveDepthOrFillModel";if(rows.All(x=>!x.BestAfterSafetyEdge5m.HasValue))return"ExpandUniverseCoverage";if(rows.All(x=>(x.BestAfterSafetyEdge5m??decimal.MinValue)<min))return"NoEdgeAcrossStrategies";return"KeepMonitoringSingleMarket";}
     private static string Map(string s,string f=""){var v=s+" "+f;if(v.Contains("NearMiss",StringComparison.OrdinalIgnoreCase))return"MultiOutcomeNearMiss";if(v.Contains("Auto",StringComparison.OrdinalIgnoreCase))return"AutoCandidateMultiOutcome";if(v.Contains("Verified",StringComparison.OrdinalIgnoreCase))return"VerifiedMultiOutcome";if(v.Contains("Multi",StringComparison.OrdinalIgnoreCase))return"MultiOutcomeNearMiss";return"SingleMarketBuyBoth";}

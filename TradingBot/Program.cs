@@ -1373,6 +1373,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var incompleteGroups=allowlistedGroups
                         .Where(g=>!options.PaperPhase1.ShadowGroupCompletionRequireVerified||string.Equals(g.VerificationStatus,"Verified",StringComparison.OrdinalIgnoreCase))
                         .Where(g=>!shadowCompletedGroupKeys.Contains(g.GroupKey)&&g.MarketIds.Any(id=>!shadowNaturalPool.Any(m=>m.id.Equals(id,StringComparison.OrdinalIgnoreCase)))).Take(options.PaperPhase1.ShadowGroupCompletionMaxGroups).ToArray();
+                    var suppressedGroups=incompleteGroups.Where(g=>!VerifiedMultiOutcomeDiscoveryDiagnostics.TryBeginCompletion(g.GroupKey)).ToArray();
+                    var suppressedTokens=suppressedGroups.SelectMany(g=>g.MarketIds).Distinct(StringComparer.OrdinalIgnoreCase).Count()*2;
+                    VerifiedMultiOutcomeDiscoveryDiagnostics.ObserveSuppressedOrderbooks(suppressedTokens);
+                    incompleteGroups=incompleteGroups.Except(suppressedGroups).ToArray();
                     var completionSamples=new List<ShadowGroupCompletionSample>();
                     var additionalMarketsRequested=0; var additionalMarketsLoaded=0; var additionalBooksRequested=0; var additionalBooksLoaded=0;
                     var requestedCompletionIds=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -1386,8 +1390,16 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         foreach(var market in loaded) shadowCompletionMarkets[market.id]=market;
                         additionalMarketsLoaded=loaded.Count;
                         var completionGroupIds=incompleteGroups.SelectMany(g=>g.MarketIds).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                        var loadedForBooks=loaded.Concat(shadowCompletionMarkets.Values.Where(m=>completionGroupIds.Contains(m.id))).Where(m=>m.clobTokenIds.Count>=2).GroupBy(m=>m.id,StringComparer.OrdinalIgnoreCase).Select(g=>g.First()).ToList(); additionalBooksRequested=loadedForBooks.Count;
-                        foreach(var market in loadedForBooks) if(await orderbookService.GetBinarySnapshotAsync(market,stoppingToken) is not null) { additionalBooksLoaded++; loadedCompletionBookIds.Add(market.id); }
+                        var tokenLimit=options.PaperPhase1.ShadowSiblingOrderbookPrefetchMaxTokensPerWindow;
+                        var loadedForBooks=loaded.Concat(shadowCompletionMarkets.Values.Where(m=>completionGroupIds.Contains(m.id))).Where(m=>m.clobTokenIds.Count>=2).GroupBy(m=>m.id,StringComparer.OrdinalIgnoreCase).Select(g=>g.First()).Take(Math.Max(1,tokenLimit/2)).ToList();
+                        additionalBooksRequested=options.PaperPhase1.ShadowSiblingOrderbookPrefetchEnabled?loadedForBooks.Sum(m=>m.clobTokenIds.Take(2).Count()):0;
+                        if(options.PaperPhase1.ShadowSiblingOrderbookPrefetchEnabled)
+                        {
+                            var batches=loadedForBooks.Chunk(Math.Max(1,options.PaperPhase1.ShadowSiblingOrderbookPrefetchBatchSize/2)).ToArray();
+                            using var prefetchGate=new SemaphoreSlim(options.PaperPhase1.ShadowSiblingOrderbookPrefetchConcurrency);
+                            await Task.WhenAll(batches.Select(async batch=>{ await prefetchGate.WaitAsync(stoppingToken); try { for(var retry=0;retry<=options.PaperPhase1.ShadowSiblingOrderbookRetryCount;retry++){ await orderbookService.PrefetchBinarySnapshotsAsync(batch.ToList(),stoppingToken); if(retry<options.PaperPhase1.ShadowSiblingOrderbookRetryCount) await Task.Delay(options.PaperPhase1.ShadowSiblingOrderbookRetryBackoffMs,stoppingToken); } } finally { prefetchGate.Release(); } }));
+                        }
+                        foreach(var market in options.PaperPhase1.ShadowSiblingOrderbookPrefetchEnabled?loadedForBooks:[]) if(await orderbookService.GetBinarySnapshotAsync(market,stoppingToken) is not null) { additionalBooksLoaded+=Math.Min(2,market.clobTokenIds.Count); loadedCompletionBookIds.Add(market.id); }
                         baseIds.UnionWith(shadowCompletionMarkets.Keys);
                     }
                     foreach(var group in incompleteGroups)
@@ -1399,11 +1411,15 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         var missingSiblingBook=missingBefore.Any(id=>shadowCompletionMarkets.ContainsKey(id)&&!loadedCompletionBookIds.Contains(id));
                         var succeeded=attempted&&missingAfter.Length==0&&!missingTokenMap&&!missingSiblingBook;
                         if(succeeded) shadowCompletedGroupKeys.Add(group.GroupKey);
-                        var reason=!attempted?"ShadowGroupCompletionDisabled":succeeded?"None":missingBefore.Any(id=>!requestedCompletionIds.Contains(id)&&!shadowCompletionMarkets.ContainsKey(id))?"VerifiedGroupCompletionLimitReached":missingTokenMap?"VerifiedGroupSiblingTokenMapMissing":missingSiblingBook?"VerifiedGroupSiblingOrderbookMissing":"VerifiedGroupSiblingMarketLoadFailed";
+                        var reason=!attempted?"ShadowGroupCompletionDisabled":succeeded?"None":!options.PaperPhase1.ShadowSiblingOrderbookPrefetchEnabled?"ShadowSiblingOrderbookNotRequested":missingBefore.Any(id=>!requestedCompletionIds.Contains(id)&&!shadowCompletionMarkets.ContainsKey(id))?"ShadowSiblingOrderbookNotRequested":missingTokenMap?"ShadowSiblingOrderbookTokenMapMissing":missingSiblingBook?"ShadowSiblingOrderbookNotFound":"ShadowSiblingOrderbookRequestFailed";
                         var groupMarketsLoaded=missingBefore.Count(id=>shadowCompletionMarkets.ContainsKey(id));
-                        var groupBooksRequested=missingBefore.Count(id=>shadowCompletionMarkets.TryGetValue(id,out var market)&&market.clobTokenIds.Count>=2);
-                        var groupBooksLoaded=missingBefore.Count(id=>loadedCompletionBookIds.Contains(id));
-                        completionSamples.Add(new(group.GroupKey,group.GroupKey,group.MarketIds.Except(missingBefore,StringComparer.OrdinalIgnoreCase).ToArray(),missingBefore,attempted,succeeded,missingBefore.Length,groupMarketsLoaded,groupBooksRequested,groupBooksLoaded,reason));
+                        var requiredTokens=missingBefore.Where(shadowCompletionMarkets.ContainsKey).SelectMany(id=>shadowCompletionMarkets[id].clobTokenIds.Take(2)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                        var loadedTokens=missingBefore.Where(loadedCompletionBookIds.Contains).SelectMany(id=>shadowCompletionMarkets[id].clobTokenIds.Take(2)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                        var missingTokens=requiredTokens.Except(loadedTokens,StringComparer.OrdinalIgnoreCase).ToArray();
+                        var missingReasons=missingTokens.ToDictionary(x=>x,_=>reason,StringComparer.OrdinalIgnoreCase);
+                        var groupBooksRequested=requiredTokens.Length;
+                        var groupBooksLoaded=loadedTokens.Length;
+                        completionSamples.Add(new(group.GroupKey,group.GroupKey,group.MarketIds.Except(missingBefore,StringComparer.OrdinalIgnoreCase).ToArray(),missingBefore,attempted,succeeded,missingBefore.Length,groupMarketsLoaded,groupBooksRequested,groupBooksLoaded,reason,TokenIdsRequired:requiredTokens,TokenIdsWithOrderbook:loadedTokens,TokenIdsMissingOrderbook:missingTokens,TokenIdsStaleOrderbook:[],OrderbookMissingReasonsByToken:missingReasons));
                     }
                     var newlyCompleted=completionSamples.Count(x=>x.CompletionSucceeded);
                     foreach(var group in allowlistedGroups.Where(g=>shadowCompletedGroupKeys.Contains(g.GroupKey)&&completionSamples.All(x=>!x.GroupKey.Equals(g.GroupKey,StringComparison.OrdinalIgnoreCase))))

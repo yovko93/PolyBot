@@ -172,6 +172,14 @@ public sealed class PaperPhase1Options
     [Range(1, 1000)] public int ShadowGroupCompletionMaxGroups { get; set; } = 100;
     [Range(1, 5000)] public int ShadowGroupCompletionMaxAdditionalMarkets { get; set; } = 500;
     public bool ShadowGroupCompletionPaperOpenAllowed { get; set; } = false;
+    public bool ShadowSiblingOrderbookPrefetchEnabled { get; set; } = true;
+    [Range(1, 10000)] public int ShadowSiblingOrderbookPrefetchMaxTokensPerWindow { get; set; } = 1000;
+    [Range(1, 1000)] public int ShadowSiblingOrderbookPrefetchBatchSize { get; set; } = 100;
+    [Range(1, 32)] public int ShadowSiblingOrderbookPrefetchConcurrency { get; set; } = 4;
+    [Range(1, 300000)] public int ShadowSiblingOrderbookMaxAgeMs { get; set; } = 30000;
+    public bool ShadowSiblingOrderbookAllowStaleForDiagnostics { get; set; } = false;
+    [Range(0, 10)] public int ShadowSiblingOrderbookRetryCount { get; set; } = 2;
+    [Range(0, 30000)] public int ShadowSiblingOrderbookRetryBackoffMs { get; set; } = 250;
     public bool ShadowMultiOutcomeDiscoveryEnabled { get; set; } = true;
     [Range(1, 1000)] public int ShadowMultiOutcomeMaxGroups { get; set; } = 100;
     public bool ShadowMultiOutcomeRequireVerified { get; set; } = true;
