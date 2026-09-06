@@ -5,6 +5,11 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- The React UI is built and served as a separate project. TradingBot has no
+         wwwroot/static-web-asset inputs, so do not create or consume the SDK's
+         staticwebassets JSON cache. A zero-byte cache left by a full disk must
+         never prevent the diagnostics process from rebuilding or starting. -->
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
   </PropertyGroup>
 
   <ItemGroup>
