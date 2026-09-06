@@ -234,5 +234,6 @@ public static class VerifiedMultiOutcomeDiscoveryDiagnostics
             : x.CompletionFailureReason;
         return new { x.GroupId,x.GroupKey,x.MarketIdsPresent,x.MarketIdsMissing,TokenIdsRequired=x.TokenIdsRequired??[],TokenIdsWithOrderbook=x.TokenIdsWithOrderbook??Enumerable.Empty<string>(),TokenIdsMissingOrderbook=x.TokenIdsMissingOrderbook??[],TokenIdsStaleOrderbook=x.TokenIdsStaleOrderbook??[],x.CompletionAttempted,x.CompletionSucceeded,GroupCompletionFailureReason=x.CompletionFailureReason,OrderbookRequests=x.AdditionalOrderbooksRequested,OrderbooksLoaded=x.AdditionalOrderbooksLoaded,OrderbooksMissing=Math.Max(0,x.AdditionalOrderbooksRequested-x.AdditionalOrderbooksLoaded),OrderbooksStale=(x.TokenIdsStaleOrderbook?.Count??0),OrderbookMissingReasonsByToken=x.OrderbookMissingReasonsByToken??new Dictionary<string,string>(),DiagnosticsOnly=true,PaperOpenAllowed=false,ValidPricedAfterCompletion=valid,AfterSafetyEdgeAfterCompletion=edge,ExecutableLikeAfterCompletion=valid&&edge>0&&(d!.EvaluationStatus.Contains("Executable",StringComparison.OrdinalIgnoreCase)||d.SkipReason=="None"),FirstBlockingReasonAfterCompletion=first,AllBlockingReasonsAfterCompletion=new[]{first} };
     }
-    private static void Write(string path,object value)=>SafeExportWriter.WriteJson(path,JsonSerializer.Serialize(value,new JsonSerializerOptions{WriteIndented=true}));}
+    private static void Write(string path, object value) =>
+        SafeExportWriter.WriteJson(path, JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true }));
 }
