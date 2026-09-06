@@ -46,11 +46,11 @@ public static class RobustJsonlExportWriter
     {
         var data=string.Join(Environment.NewLine,records)+Environment.NewLine; var primary=PathFor(name,false);
         for(var attempt=0;attempt<=_options.JsonlMaxRetries;attempt++)
-        { try{RotateIfNeeded(name,primary,Encoding.UTF8.GetByteCount(data));Directory.CreateDirectory(Path.GetDirectoryName(primary)!);await File.AppendAllTextAsync(primary,data,Encoding.UTF8,ct);lock(Sync){_failures=0;_fallback=false;_lastPath=primary;}WritePointer(name,primary);return;}
+        { try{RotateIfNeeded(name,primary,Encoding.UTF8.GetByteCount(data));Directory.CreateDirectory(Path.GetDirectoryName(primary)!);if(!SafeExportWriter.AppendText(primary,data,name,critical:false))throw new IOException("Safe export append failed");lock(Sync){_failures=0;_fallback=false;_lastPath=primary;}WritePointer(name,primary);return;}
           catch(IOException ex){RecordFailure(ex,primary);if(attempt<_options.JsonlMaxRetries)await Task.Delay(_options.JsonlBackoffMs*(attempt+1),ct);}
           catch(UnauthorizedAccessException ex){RecordFailure(ex,primary);break;} }
         var fallback=PathFor(name,true);
-        try{Directory.CreateDirectory(Path.GetDirectoryName(fallback)!);await File.AppendAllTextAsync(fallback,data,Encoding.UTF8,ct);lock(Sync){_fallback=true;_lastPath=fallback;}WritePointer(name,fallback);}
+        try{Directory.CreateDirectory(Path.GetDirectoryName(fallback)!);if(!SafeExportWriter.AppendText(fallback,data,name,critical:false))throw new IOException("Safe fallback append failed");lock(Sync){_fallback=true;_lastPath=fallback;}WritePointer(name,fallback);}
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException){RecordFailure(ex,fallback);if(_failures>=_options.JsonlDisableAfterConsecutiveFailures)_disabled=true;}
     }
 
@@ -63,5 +63,5 @@ public static class RobustJsonlExportWriter
         var emit=false; lock(Sync){_errors++;_failures++;_lastKind=ex.GetType().Name;_lastPath=path;_lastErrorUtc=DateTime.UtcNow;if(_lastErrorUtc.Value-_lastVerboseErrorUtc>=TimeSpan.FromMinutes(10)){_lastVerboseErrorUtc=_lastErrorUtc.Value;emit=true;}}
         if(emit) Phase1ConsoleLogging.RecordNonBlockingEvent("EXPORT_WRITE_ERROR",new Dictionary<string,object?>{{"kind",ex.GetType().Name},{"path",path},{"message",ex.Message},{"export","InvalidPositiveArtifacts"}});
     }
-    private static void WritePointer(string name,string path){try{var pointer=Path.Combine(_root,"exports",Path.GetFileNameWithoutExtension(name)+"-jsonl-latest.json");File.WriteAllText(pointer,JsonSerializer.Serialize(new{activePath=path,updatedAtUtc=DateTime.UtcNow,fallbackActive=_fallback}));}catch{/* pointer is convenience-only */}}
+    private static void WritePointer(string name,string path){try{var pointer=Path.Combine(_root,"exports",Path.GetFileNameWithoutExtension(name)+"-jsonl-latest.json");SafeExportWriter.WriteText(pointer,JsonSerializer.Serialize(new{activePath=path,updatedAtUtc=DateTime.UtcNow,fallbackActive=_fallback}));}catch{/* pointer is convenience-only */}}
 }

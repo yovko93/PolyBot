@@ -183,13 +183,13 @@ public sealed class VerifiedOpportunityStabilityTracker
     public void Export(string path)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, JsonSerializer.Serialize(Summaries(), new JsonSerializerOptions { WriteIndented = true }));
+        SafeExportWriter.WriteText(path, JsonSerializer.Serialize(Summaries(), new JsonSerializerOptions { WriteIndented = true }));
     }
 
     public void ExportExecutionReadiness(string path, int requiredConsecutiveReadyScans)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var payload = new { timestamp = DateTime.UtcNow, groups = ReadinessSummaries(requiredConsecutiveReadyScans).Select(x => new { groupKey = x.GroupKey, state = x.State.ToString(), netEdge = x.LatestReadinessSample?.NetEdge, plannedQty = x.LatestReadinessSample?.PlannedQty, plannedCost = x.LatestReadinessSample?.PlannedCost, plannedExpectedProfit = x.LatestReadinessSample?.PlannedExpectedProfit, maxQtyByLiquidity = x.LatestReadinessSample?.MaxQtyByLiquidity, maxQtyByNotional = x.LatestReadinessSample?.MaxQtyByNotional, limitingFactor = x.LatestReadinessSample?.LimitingFactor, ready = x.LatestReadinessSample?.Ready, notReadyReason = x.NotReadyReason, consecutiveReadyScans = x.ConsecutiveReadyScans, requiredConsecutiveReadyScans }) };
-        File.WriteAllText(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
+        SafeExportWriter.WriteText(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
     }
 }

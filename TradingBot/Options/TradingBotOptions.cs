@@ -149,6 +149,15 @@ public sealed class JsonlExportOptions
     [Range(1, 10000)] public int JsonlBackoffMs { get; set; } = 250;
     [Range(1, 100)] public int JsonlDisableAfterConsecutiveFailures { get; set; } = 5;
     [Range(1, 100000)] public int JsonlWriteQueueCapacity { get; set; } = 10000;
+    [Range(0, int.MaxValue)] public int MinFreeDiskMb { get; set; } = 1024;
+    [Range(0, int.MaxValue)] public int CriticalFreeDiskMb { get; set; } = 256;
+    [Range(1, 3600)] public int DiskCheckIntervalSeconds { get; set; } = 60;
+    public bool DisableNonCriticalExportsWhenLowDisk { get; set; } = true;
+    public bool RetentionEnabled { get; set; } = true;
+    [Range(1, int.MaxValue)] public int RetentionMaxTotalMb { get; set; } = 2048;
+    [Range(1, 3650)] public int RetentionMaxFileAgeDays { get; set; } = 3;
+    public string[] RetentionDeletePatterns { get; set; } = ["exports/logs/*.jsonl", "exports/*history*.jsonl", "exports/*invalid-positive-artifacts*.jsonl", "exports/*shadow-orderbook-availability*.jsonl", "exports/*near-misses*.json"];
+    public bool InjectDiskFullForTesting { get; set; }
 }
 
 public sealed class ConsoleLoggingOptions

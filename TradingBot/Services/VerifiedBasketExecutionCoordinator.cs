@@ -159,7 +159,7 @@ public sealed class VerifiedBasketExecutionCoordinator
             })
         };
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
+        SafeExportWriter.WriteText(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
     }
 
 
@@ -195,7 +195,7 @@ public sealed class VerifiedBasketExecutionCoordinator
             })
         };
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
+        SafeExportWriter.WriteText(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
     }
 
     public int MarkDuplicateSuppressed(string groupKey)
@@ -220,7 +220,7 @@ public sealed class VerifiedBasketExecutionCoordinator
     public void ExportAudit(string path, int limit = 500)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, JsonSerializer.Serialize(ListAudit(limit), new JsonSerializerOptions { WriteIndented = true }));
+        SafeExportWriter.WriteText(path, JsonSerializer.Serialize(ListAudit(limit), new JsonSerializerOptions { WriteIndented = true }));
     }
 
     public VerifiedBasketPreTradeValidationResult Validate(VerifiedMultiOutcomeOpportunity opp, PaperPositionBook book)
@@ -366,7 +366,7 @@ public sealed class VerifiedBasketExecutionCoordinator
             paperPositions = paperPositions.Select(x => new { x.PositionId, x.GroupKey, x.Strategy, x.TotalCost, x.ExpectedProfit, x.OpenedAtUtc, status = x.Status.ToString() }).ToArray()
         };
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
+        SafeExportWriter.WriteText(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
     }
 
     private VerifiedBasketPreTradeValidationResult Reject(VerifiedMultiOutcomeOpportunity opp, string reason)

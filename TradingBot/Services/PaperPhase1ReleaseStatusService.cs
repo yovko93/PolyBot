@@ -204,10 +204,8 @@ public static class PaperPhase1ReleaseStatusService
         var path=Path.Combine(root,ExportRelativePath);
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!); var temp=path+".tmp";
-            File.WriteAllText(temp,JsonSerializer.Serialize(Current,new JsonSerializerOptions{WriteIndented=true,PropertyNamingPolicy=JsonNamingPolicy.CamelCase}));
-            File.Move(temp,path,true);
-            return (true, ExportRelativePath, "None");
+            var written=SafeExportWriter.WriteJson(path,JsonSerializer.Serialize(Current,new JsonSerializerOptions{WriteIndented=true,PropertyNamingPolicy=JsonNamingPolicy.CamelCase}),"ReleaseStatusLatest",critical:true);
+            return (written, ExportRelativePath, written?"None":SafeExportWriter.Snapshot().LastExceptionType);
         }
         catch (Exception ex)
         {
@@ -248,9 +246,8 @@ public static class PaperPhase1ReleaseStatusService
                 },
                 consistent = status.OperatorRunbookConsistent
             };
-            File.WriteAllText(temp, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
-            File.Move(temp, path, true);
-            return (true, RunbookExportRelativePath, "None");
+            var written=SafeExportWriter.WriteJson(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }),"OperatorRunbookLatest",critical:true);
+            return (written, RunbookExportRelativePath, written?"None":SafeExportWriter.Snapshot().LastExceptionType);
         }
         catch (Exception ex)
         {

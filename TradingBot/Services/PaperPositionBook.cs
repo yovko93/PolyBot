@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text;
 using TradingBot.Models;
 using TradingBot.Api;
@@ -589,12 +589,12 @@ public class PaperPositionBook
         var header =
             "timestampUtc,positionId,status,engine,strategy,groupKey,quantity,totalCost,guaranteedPayout,edgePerShare,expectedProfit,realizedPayout,realizedProfit,legs";
 
-        File.WriteAllText(_csvPath, header + Environment.NewLine);
+        SafeExportWriter.WriteText(_csvPath, header + Environment.NewLine);
     }
 
     private void AppendCsv(PaperPosition position)
     {
-        File.AppendAllText(_csvPath, ToCsvLine(position) + Environment.NewLine);
+        SafeExportWriter.AppendText(_csvPath, ToCsvLine(position) + Environment.NewLine);
     }
 
     private static string ToCsvLine(PaperPosition p)

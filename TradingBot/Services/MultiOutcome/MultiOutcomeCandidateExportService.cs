@@ -204,8 +204,8 @@ public sealed class MultiOutcomeCandidateExportService
         var payload = BuildBoundedCandidates(groups, _options.TopCandidateGroupsForReview, _options.MaxMarketsPerCandidateGroup, includeMarkets: true);
         var review = BuildReviewReport(groups, _options.AllowUnpricedLegsInTemplate);
         Directory.CreateDirectory(Path.GetDirectoryName(_absolutePath)!);
-        File.WriteAllText(_absolutePath, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
-        File.WriteAllText(_reviewAbsolutePath, JsonSerializer.Serialize(review, new JsonSerializerOptions { WriteIndented = true }));
+        SafeExportWriter.WriteText(_absolutePath, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
+        SafeExportWriter.WriteText(_reviewAbsolutePath, JsonSerializer.Serialize(review, new JsonSerializerOptions { WriteIndented = true }));
         _lastExportAtUtc = now;
         _hasLoggedNoCandidates = false;
         Console.WriteLine($"[MULTI_REVIEW] Candidate export written Groups={payload.Count} Path={_absolutePath}");
@@ -216,6 +216,6 @@ public sealed class MultiOutcomeCandidateExportService
     {
         if (!_options.ExportVerifiedPricing) return;
         Directory.CreateDirectory(Path.GetDirectoryName(_verifiedPricingAbsolutePath)!);
-        File.WriteAllText(_verifiedPricingAbsolutePath, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
+        SafeExportWriter.WriteText(_verifiedPricingAbsolutePath, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
     }
 }

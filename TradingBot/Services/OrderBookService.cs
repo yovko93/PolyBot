@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Globalization;
 using System.Net;
@@ -556,7 +556,7 @@ public class OrderBookService : IOrderBookProvider
             Directory.CreateDirectory(ExportDirectory);
             var json = System.Text.Json.JsonSerializer.Serialize(_reducedUniverseBadHistory.Values.OrderBy(x => x.Key).ToList());
             var temp = ReducedUniverseBadHistoryPath + ".tmp";
-            File.WriteAllText(temp, json);
+            SafeExportWriter.WriteText(temp, json);
             for (var attempt = 0; attempt < 3; attempt++)
             {
                 try
@@ -1765,7 +1765,7 @@ public class OrderBookService : IOrderBookProvider
         Directory.CreateDirectory(ExportDirectory);
         var path = Path.Combine(ExportDirectory, "batch-book-errors-latest.json");
         var payload = new { timestamp = DateTime.UtcNow, status = 400, cause, batchSize = batch.Count, tokenSamples, marketSamples, responseBodyHash = hash, responseBodySample = Short(responseBody ?? "", 500), splitDepth, quarantineApplied, repeatedTokenCount };
-        File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
+        SafeExportWriter.WriteText(path, System.Text.Json.JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
     }
 
     private void ExportInvalidTokenQuarantineSnapshot()
@@ -1774,7 +1774,7 @@ public class OrderBookService : IOrderBookProvider
         Dictionary<string, DateTime> copy;
         lock (_cacheLock) copy = new Dictionary<string, DateTime>(_invalidTokenQuarantine, StringComparer.Ordinal);
         var payload = new { timestamp = DateTime.UtcNow, ttlMinutes = (int)Math.Round(InvalidTokenQuarantineTtl.TotalMinutes), tokens = copy.OrderBy(x => x.Key).Select(x => new { tokenId = x.Key, expiresAt = x.Value, marketId = _tokenMarketIds.TryGetValue(x.Key, out var m) ? m : "" }).ToArray() };
-        File.WriteAllText(Path.Combine(ExportDirectory, "invalid-token-quarantine-latest.json"), System.Text.Json.JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
+        SafeExportWriter.WriteText(Path.Combine(ExportDirectory, "invalid-token-quarantine-latest.json"), System.Text.Json.JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
     }
 
     public bool IsTokenQuarantined(string? tokenId)

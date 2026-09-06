@@ -255,7 +255,7 @@ public static class OpportunityFamilyRankingService
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var tmp = path + ".tmp";
         var json = JsonSerializer.Serialize(export, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-        for (var i = 0; i < 3; i++) { try { File.WriteAllText(tmp, json); File.Move(tmp, path, true); return; } catch when (i < 2) { Thread.Sleep(50); } }
+        for (var i = 0; i < 3; i++) { try { SafeExportWriter.WriteText(tmp, json); File.Move(tmp, path, true); return; } catch when (i < 2) { Thread.Sleep(50); } }
     }
 
     private static decimal? P(decimal[] sorted, decimal p) => sorted.Length == 0 ? null : sorted[Math.Clamp((int)Math.Ceiling(sorted.Length * p) - 1, 0, sorted.Length - 1)];

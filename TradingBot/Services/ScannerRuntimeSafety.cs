@@ -203,7 +203,7 @@ public sealed class ScannerExceptionReporter
             lock (_gate) records = _records.ToArray();
             var path = Path.Combine(_contentRootPath, "exports", "scanner-errors-latest.json");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, JsonSerializer.Serialize(new { timestampUtc = DateTime.UtcNow, errors = records }, new JsonSerializerOptions { WriteIndented = true }));
+            SafeExportWriter.WriteText(path, JsonSerializer.Serialize(new { timestampUtc = DateTime.UtcNow, errors = records }, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch
         {

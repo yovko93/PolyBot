@@ -200,7 +200,7 @@ public sealed class PaperPhaseValidationHarness
     {
         var exports = Path.Combine(contentRootPath, "exports");
         Directory.CreateDirectory(exports);
-        File.WriteAllText(Path.Combine(exports, "paper-phase-validation-latest.json"), JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+        SafeExportWriter.WriteText(Path.Combine(exports, "paper-phase-validation-latest.json"), JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
     }
 
     public const string SectionPath = $"{TradingBotOptions.SectionName}:PaperPhaseValidation";

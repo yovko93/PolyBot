@@ -165,7 +165,7 @@ public sealed class DryRunLiveOrderBuilder
             WriteIndented = false
         });
 
-        File.AppendAllText(file, json + Environment.NewLine);
+        SafeExportWriter.AppendText(file, json + Environment.NewLine);
     }
 
     #region Helpers

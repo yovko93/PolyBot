@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using TradingBot.Api;
 using TradingBot.Models;
@@ -829,9 +829,9 @@ public class SingleMarketOrderBookArbEngine
         var dir = Path.Combine(_contentRootPath, "exports");
         Directory.CreateDirectory(dir);
         var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
-        File.WriteAllText(Path.Combine(dir, "single-market-arb-opportunities-latest.json"), JsonSerializer.Serialize(_state.SingleMarketSnapshot, jsonOptions));
-        File.WriteAllText(Path.Combine(dir, "single-market-paper-executions-latest.json"), JsonSerializer.Serialize(_state.SingleMarketExecutions().TakeLast(100), jsonOptions));
-        File.WriteAllText(Path.Combine(dir, "single-market-near-misses-latest.json"), JsonSerializer.Serialize(_state.SingleMarketSnapshot.TopOpportunityAuditNearMisses.Take(50), jsonOptions));
+        SafeExportWriter.WriteText(Path.Combine(dir, "single-market-arb-opportunities-latest.json"), JsonSerializer.Serialize(_state.SingleMarketSnapshot, jsonOptions));
+        SafeExportWriter.WriteText(Path.Combine(dir, "single-market-paper-executions-latest.json"), JsonSerializer.Serialize(_state.SingleMarketExecutions().TakeLast(100), jsonOptions));
+        SafeExportWriter.WriteText(Path.Combine(dir, "single-market-near-misses-latest.json"), JsonSerializer.Serialize(_state.SingleMarketSnapshot.TopOpportunityAuditNearMisses.Take(50), jsonOptions));
         ExportEdgeDistributionLatest(dir, jsonOptions);
     }
 
@@ -929,7 +929,7 @@ public class SingleMarketOrderBookArbEngine
         {
             try
             {
-                File.WriteAllText(tmp, JsonSerializer.Serialize(payload, jsonOptions));
+                SafeExportWriter.WriteText(tmp, JsonSerializer.Serialize(payload, jsonOptions));
                 if (File.Exists(path)) File.Replace(tmp, path, null);
                 else File.Move(tmp, path);
                 return;

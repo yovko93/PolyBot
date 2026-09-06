@@ -56,7 +56,7 @@ public static class PaperPhase1ReadinessExporter
             var path = Path.Combine(root, "exports/paper-phase1-readiness-latest.json");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var json = JsonSerializer.Serialize(Build(h), new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-            File.WriteAllText(path + ".tmp", json);
+            SafeExportWriter.WriteText(path + ".tmp", json);
             File.Move(path + ".tmp", path, true);
         }
         catch (Exception ex) { Console.WriteLine($"[PAPER_PHASE1_EXPORT_WARNING] Error={ex.Message}"); }

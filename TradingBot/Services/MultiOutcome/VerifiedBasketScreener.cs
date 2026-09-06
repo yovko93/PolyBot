@@ -76,6 +76,6 @@ public sealed class VerifiedBasketScreener
     public static void Export(string path, Snapshot snapshot)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true }));
+        SafeExportWriter.WriteText(path, JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true }));
     }
 }

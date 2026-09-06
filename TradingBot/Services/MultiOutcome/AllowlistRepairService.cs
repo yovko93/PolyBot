@@ -206,7 +206,7 @@ public sealed class AllowlistRepairService
     {
         var export = BuildRefreshDiagnostics(report, configuredGroups);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, JsonSerializer.Serialize(export, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+        SafeExportWriter.WriteText(path, JsonSerializer.Serialize(export, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
         return export;
     }
 
@@ -274,8 +274,8 @@ public sealed class AllowlistRepairService
         Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
         Directory.CreateDirectory(Path.GetDirectoryName(suggestedConfigPath)!);
         var json = new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-        File.WriteAllText(reportPath, JsonSerializer.Serialize(report, json));
-        File.WriteAllText(suggestedConfigPath, JsonSerializer.Serialize(suggested, json));
+        SafeExportWriter.WriteText(reportPath, JsonSerializer.Serialize(report, json));
+        SafeExportWriter.WriteText(suggestedConfigPath, JsonSerializer.Serialize(suggested, json));
         return (report, suggested);
     }
 
@@ -293,10 +293,10 @@ public sealed class AllowlistRepairService
         Directory.CreateDirectory(Path.GetDirectoryName(patchedPreviewPath)!);
         Directory.CreateDirectory(Path.GetDirectoryName(patchedPreviewMetadataPath)!);
         var json = new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-        File.WriteAllText(patchPreviewPath, JsonSerializer.Serialize(export.PatchPreview, json));
-        File.WriteAllText(patchedPreviewPath, export.PatchedPreviewConfig.ToJsonString(json));
+        SafeExportWriter.WriteText(patchPreviewPath, JsonSerializer.Serialize(export.PatchPreview, json));
+        SafeExportWriter.WriteText(patchedPreviewPath, export.PatchedPreviewConfig.ToJsonString(json));
         if (export.PatchedPreviewWithMetadata is not null)
-            File.WriteAllText(patchedPreviewMetadataPath, export.PatchedPreviewWithMetadata.ToJsonString(json));
+            SafeExportWriter.WriteText(patchedPreviewMetadataPath, export.PatchedPreviewWithMetadata.ToJsonString(json));
         ExportRepairHistory(Path.Combine(Path.GetDirectoryName(patchPreviewPath)!, "allowlist-repair-history-latest.json"));
         return export;
     }
@@ -426,7 +426,7 @@ public sealed class AllowlistRepairService
     {
         Directory.CreateDirectory(Path.GetDirectoryName(historyPath)!);
         var json = new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-        File.WriteAllText(historyPath, JsonSerializer.Serialize(BuildRepairHistoryExport(), json));
+        SafeExportWriter.WriteText(historyPath, JsonSerializer.Serialize(BuildRepairHistoryExport(), json));
     }
 
 

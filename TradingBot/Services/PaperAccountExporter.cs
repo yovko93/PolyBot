@@ -40,10 +40,10 @@ public static class PaperAccountExporter
     {
         Directory.CreateDirectory(exportsRoot);
         var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
-        File.WriteAllText(Path.Combine(exportsRoot, "paper-account-latest.json"), JsonSerializer.Serialize(BuildAccount(paper, book, blockedCounts), jsonOptions));
-        File.WriteAllText(Path.Combine(exportsRoot, "paper-positions-latest.json"), JsonSerializer.Serialize(book.OpenPositions.Concat(book.ClosedPositions).Select(ToDto), jsonOptions));
-        File.WriteAllText(Path.Combine(exportsRoot, "paper-executions-latest.json"), JsonSerializer.Serialize(executions ?? Array.Empty<object>(), jsonOptions));
-        File.WriteAllText(Path.Combine(exportsRoot, "paper-settlements-latest.json"), JsonSerializer.Serialize(book.Settlements, jsonOptions));
+        SafeExportWriter.WriteText(Path.Combine(exportsRoot, "paper-account-latest.json"), JsonSerializer.Serialize(BuildAccount(paper, book, blockedCounts), jsonOptions));
+        SafeExportWriter.WriteText(Path.Combine(exportsRoot, "paper-positions-latest.json"), JsonSerializer.Serialize(book.OpenPositions.Concat(book.ClosedPositions).Select(ToDto), jsonOptions));
+        SafeExportWriter.WriteText(Path.Combine(exportsRoot, "paper-executions-latest.json"), JsonSerializer.Serialize(executions ?? Array.Empty<object>(), jsonOptions));
+        SafeExportWriter.WriteText(Path.Combine(exportsRoot, "paper-settlements-latest.json"), JsonSerializer.Serialize(book.Settlements, jsonOptions));
     }
 
     public static object ToDto(PaperPosition p) => new
