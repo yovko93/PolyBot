@@ -539,7 +539,7 @@ public class OrderBookService : IOrderBookProvider
         return _orderbookEligibility.Get(marketId);
     }
 
-    private string ReducedUniverseBadHistoryPath => Path.Combine(ExportDirectory, "reduced-universe-bad-orderbook-history.json");
+    private string ReducedUniverseBadHistoryPath => Path.Combine(ExportDirectory, "latest", "reduced-universe-bad-orderbook-history.json");
 
     private void EnsureReducedUniverseBadHistoryLoadedLocked(DateTime now)
     {
@@ -562,23 +562,8 @@ public class OrderBookService : IOrderBookProvider
 
     private void PersistReducedUniverseBadHistoryLocked()
     {
-        try
-        {
-            Directory.CreateDirectory(ExportDirectory);
-            var json = System.Text.Json.JsonSerializer.Serialize(_reducedUniverseBadHistory.Values.OrderBy(x => x.Key).ToList());
-            var temp = ReducedUniverseBadHistoryPath + ".tmp";
-            SafeExportWriter.WriteText(temp, json);
-            for (var attempt = 0; attempt < 3; attempt++)
-            {
-                try
-                {
-                    File.Move(temp, ReducedUniverseBadHistoryPath, overwrite: true);
-                    break;
-                }
-                catch (IOException) when (attempt < 2) { System.Threading.Thread.Sleep(25); }
-            }
-        }
-        catch { }
+        var json=System.Text.Json.JsonSerializer.Serialize(_reducedUniverseBadHistory.Values.OrderBy(x=>x.Key).ToList());
+        SafeExportWriter.WriteText(ReducedUniverseBadHistoryPath,json,"ReducedUniverseBadOrderbookHistory",critical:false);
     }
 
     private void RememberReducedUniverseBadHistoryLocked(string key, DateTime now, string reason = "OrderbookQuarantine", string lastFailureKind = "OrderbookQuarantine", string? marketId = null, string? tokenId = null, DateTime? quarantineUntilUtc = null)

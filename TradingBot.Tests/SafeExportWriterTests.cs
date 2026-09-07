@@ -48,17 +48,35 @@ public sealed class SafeExportWriterTests
     public void DirectoryCollisionUsesNormalizedExportsFallback()
     {
         var root=Path.Combine(Path.GetTempPath(),$"polybot-safe-export-{Guid.NewGuid():N}");
-        var primary=Path.Combine(root,"exports","paper-phase1-positive-captures-latest.json");
-        Directory.CreateDirectory(primary); // Simulates a denied/non-file latest target.
+        var legacy=Path.Combine(root,"exports","paper-phase1-positive-captures-latest.json");
+        var primary=Path.Combine(root,"exports","latest","paper-phase1-positive-captures.json");
         SafeExportWriter.Configure(new JsonlExportOptions { JsonlMaxRetries=0,MinFreeDiskMb=0,CriticalFreeDiskMb=0,RetentionEnabled=false },root);
+        Directory.CreateDirectory(primary); // Simulates a denied/non-file consolidated target.
 
-        Assert.True(SafeExportWriter.WriteJson(primary,"{}","paper-phase1-positive-captures-latest",critical:false));
+        Assert.True(SafeExportWriter.WriteJson(legacy,"{}","paper-phase1-positive-captures-latest",critical:false));
 
         var stream=SafeExportWriter.StreamSnapshot("paper-phase1-positive-captures-latest");
         Assert.Equal("Fallback",stream.Health);
         Assert.True(stream.FallbackActive);
         Assert.Equal(Path.GetFullPath(primary),stream.PrimaryPath);
-        Assert.Equal(Path.Combine(root,"exports","fallback","paper-phase1-positive-captures-latest.json"),stream.FallbackPath);
+        Assert.Equal(Path.Combine(root,"exports","archive","fallback","paper-phase1-positive-captures.json"),stream.FallbackPath);
         Assert.True(File.Exists(stream.FallbackPath));
+    }
+
+    [Fact]
+    public void ConsolidatedLayoutRoutesLatestHistoryAndDebugWithoutTopLevelArtifacts()
+    {
+        var root=Path.Combine(Path.GetTempPath(),$"polybot-safe-export-{Guid.NewGuid():N}");
+        SafeExportWriter.Configure(new JsonlExportOptions { Root="exports",Layout="Consolidated",MinFreeDiskMb=0,CriticalFreeDiskMb=0,RetentionEnabled=false },root);
+
+        Assert.True(SafeExportWriter.WriteJson(Path.Combine(root,"exports","diagnostics-dashboard-latest.json"),"{}","DiagnosticsDashboardLatest"));
+        Assert.True(SafeExportWriter.AppendText(Path.Combine(root,"exports","dashboard-warnings-history.jsonl"),"{}\n","DashboardHistory"));
+        Assert.True(SafeExportWriter.AppendText(Path.Combine(root,"exports","logs","verbose-events.jsonl"),"{}\n","verbose-events"));
+
+        Assert.True(File.Exists(Path.Combine(root,"exports","latest","diagnostics-dashboard.json")));
+        Assert.True(File.Exists(Path.Combine(root,"exports","history","dashboard-warnings.jsonl")));
+        Assert.True(File.Exists(Path.Combine(root,"exports","debug","verbose-events","verbose-events.jsonl")));
+        Assert.Empty(Directory.GetFiles(Path.Combine(root,"exports")));
+        Assert.Equal(0,SafeExportWriter.Snapshot().TopLevelGeneratedFilesCount);
     }
 }

@@ -25,14 +25,14 @@ public sealed record PaperPhase1ReleaseStatus(DateTime GeneratedAtUtc, string Pr
     bool ReleaseStatusEnabled = true, int ReleaseStatusLogIntervalSeconds = 60,
     long ReleaseStatusLogsWritten = 0, long ReleaseStatusLogsSuppressed = 0, DateTime? ReleaseStatusLastEmittedUtc = null,
     string ReleaseStatusLastChangeReason = "Startup", bool ReleaseStatusConsistent = true,
-    bool ReleaseStatusExportWritten = false, string ReleaseStatusExportPath = "exports/paper-phase1-release-status-latest.json",
+    bool ReleaseStatusExportWritten = false, string ReleaseStatusExportPath = "exports/latest/release-status.json",
     string ReleaseStatusLastWriteError = "None", DateTime? ReleaseStatusLastExportUtc = null,
     PaperPhase1ReleaseOperatorRunbook? OperatorRunbook = null,
     bool OperatorRunbookEnabled = true, int OperatorRunbookIntervalSeconds = 600,
     long OperatorRunbookLogsWritten = 0, long OperatorRunbookLogsSuppressed = 0,
     DateTime? OperatorRunbookLastEmittedUtc = null, string OperatorRunbookLastReason = "Startup",
     bool OperatorRunbookConsistent = true, string OperatorRunbookConsistencyReason = "None",
-    bool OperatorRunbookExportWritten = false, string OperatorRunbookExportPath = "exports/paper-phase1-operator-runbook-latest.json",
+    bool OperatorRunbookExportWritten = false, string OperatorRunbookExportPath = "exports/latest/operator-runbook.json",
     string OperatorRunbookLastWriteError = "None", DateTime? OperatorRunbookLastExportUtc = null)
 {
     public string ConsoleMode => Phase1ConsoleLogging.Mode;
@@ -64,8 +64,8 @@ public sealed record PaperPhase1ReleaseStatus(DateTime GeneratedAtUtc, string Pr
 
 public static class PaperPhase1ReleaseStatusService
 {
-    private const string ExportRelativePath = "exports/paper-phase1-release-status-latest.json";
-    private const string RunbookExportRelativePath = "exports/paper-phase1-operator-runbook-latest.json";
+    private const string ExportRelativePath = "exports/latest/release-status.json";
+    private const string RunbookExportRelativePath = "exports/latest/operator-runbook.json";
     private static readonly object Sync = new();
     private static long _logsWritten;
     private static long _logsSuppressed;
@@ -239,6 +239,13 @@ public static class PaperPhase1ReleaseStatusService
                 verboseLogPath = Phase1ConsoleLogging.VerboseLogPath,
                 summaryLogPath = Phase1ConsoleLogging.SummaryLogPath,
                 toDebugVerbose = "run with Console:Mode=VerboseLegacy or --console-mode VerboseLegacy",
+                exportGuide = new
+                {
+                    lookFirst = new[] { "exports/latest/phase1-summary.json", "exports/latest/operator-runbook.json", "exports/latest/export-health.json", "exports/latest/strategy-comparison.json" },
+                    highVolumeDiagnostics = "exports/debug/",
+                    cleanup = "Stop the bot, then delete exports/debug and exports/archive if needed.",
+                    git = "Generated runtime exports are intentionally ignored; do not commit them."
+                },
                 expected = new
                 {
                     currentAlert = status.OperatorRunbook?.ExpectedCurrentAlert ?? "WaitingForEdge",

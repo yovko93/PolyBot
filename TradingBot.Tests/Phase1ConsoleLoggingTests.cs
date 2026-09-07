@@ -20,7 +20,7 @@ public sealed class Phase1ConsoleLoggingTests
         Assert.True(Phase1ConsoleLogging.RouterInitializedBeforeProfileLogging);
         Assert.True(Phase1ConsoleLogging.RouterInitializedBeforeConfigLogging);
         Assert.Contains("PROFILE_REGISTRY", Phase1ConsoleLogging.StartupVerboseEventNamesSuppressed);
-        Assert.Contains("PAPER_MODE", File.ReadAllText(Path.Combine(root, "exports/logs/verbose-events.jsonl")));
+        Assert.Contains("PAPER_MODE", File.ReadAllText(Path.Combine(root,"exports","debug","verbose-events","verbose-events.jsonl")));
         Phase1ConsoleLogging.MarkStartupComplete();
     }
 
@@ -35,7 +35,7 @@ public sealed class Phase1ConsoleLoggingTests
         writer.WriteLine("[RUNTIME_HEALTH] SigningAttempts=0 Detail=preserved");
 
         Assert.DoesNotContain("RUNTIME_HEALTH", destination.ToString());
-        var jsonl = File.ReadAllText(Path.Combine(root, "logs/verbose.jsonl"));
+        var jsonl = File.ReadAllText(Path.Combine(root,"exports","debug","verbose-events","verbose.jsonl"));
         Assert.Contains("\"event\":\"RUNTIME_HEALTH\"", jsonl);
         Assert.Contains("\"SigningAttempts\":\"0\"", jsonl);
     }
@@ -52,7 +52,7 @@ public sealed class Phase1ConsoleLoggingTests
         var writer = Phase1ConsoleLogging.CreateWriter(destination, options, root);
         writer.WriteLine(line);
         Assert.Equal(string.Empty, destination.ToString());
-        Assert.Contains(line[1..line.IndexOf(']')], File.ReadAllText(Path.Combine(root, "verbose.jsonl")));
+        Assert.Contains(line[1..line.IndexOf(']')], File.ReadAllText(Path.Combine(root,"exports","debug","verbose-events","verbose.jsonl")));
     }
 
     [Fact]

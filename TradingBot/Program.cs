@@ -187,13 +187,13 @@ app.MapPost("/api/bot/paper/phase1/settle", (PaperPhase1SettlementRequest reques
 });
 app.MapGet("/api/bot/verified-allowlist-health", (IHostEnvironment env) =>
 {
-    var path = Path.Combine(env.ContentRootPath, "exports/verified-allowlist-health-latest.json");
+    var path = SafeExportWriter.Resolve(Path.Combine(env.ContentRootPath, "exports/verified-allowlist-health-latest.json"));
     if (!File.Exists(path)) return Results.Ok(Array.Empty<object>());
     return Results.Text(File.ReadAllText(path), "application/json");
 });
 app.MapGet("/api/bot/verified-unresolved-groups", (IHostEnvironment env) =>
 {
-    var path = Path.Combine(env.ContentRootPath, "exports/verified-unresolved-groups-latest.json");
+    var path = SafeExportWriter.Resolve(Path.Combine(env.ContentRootPath, "exports/verified-unresolved-groups-latest.json"));
     if (!File.Exists(path)) return Results.Ok(new { total = 0, groups = Array.Empty<object>() });
     return Results.Text(File.ReadAllText(path), "application/json");
 });
@@ -241,27 +241,27 @@ app.MapGet("/api/bot/multi-outcome-review-report", (BotRuntimeState s, int? limi
 });
 app.MapGet("/api/bot/verified-group-triage", (IHostEnvironment env, int? limit) =>
 {
-    var path = Path.Combine(env.ContentRootPath, "exports/verified-group-triage-latest.json");
+    var path = SafeExportWriter.Resolve(Path.Combine(env.ContentRootPath, "exports/verified-group-triage-latest.json"));
     if (!File.Exists(path)) return Results.Ok(Array.Empty<object>());
     var arr = System.Text.Json.JsonSerializer.Deserialize<object[]>(File.ReadAllText(path)) ?? Array.Empty<object>();
     return Results.Ok(arr.Take(Math.Clamp(limit ?? 25, 1, 200)).ToArray());
 });
 app.MapGet("/api/bot/next-groups-to-verify", (IHostEnvironment env, int? limit) =>
 {
-    var path = Path.Combine(env.ContentRootPath, "exports/next-groups-to-verify-latest.json");
+    var path = SafeExportWriter.Resolve(Path.Combine(env.ContentRootPath, "exports/next-groups-to-verify-latest.json"));
     if (!File.Exists(path)) return Results.Ok(Array.Empty<object>());
     var arr = System.Text.Json.JsonSerializer.Deserialize<object[]>(File.ReadAllText(path)) ?? Array.Empty<object>();
     return Results.Ok(arr.Take(Math.Clamp(limit ?? 10, 1, 100)).ToArray());
 });
 app.MapGet("/api/bot/verified-allowlist-suggestion", (IHostEnvironment env) =>
 {
-    var path = Path.Combine(env.ContentRootPath, "exports/verified-multi-outcome-groups-suggested.json");
+    var path = SafeExportWriter.Resolve(Path.Combine(env.ContentRootPath, "exports/verified-multi-outcome-groups-suggested.json"));
     if (!File.Exists(path)) return Results.Ok(new { items = Array.Empty<object>() });
     return Results.Text(File.ReadAllText(path), "application/json");
 });
 app.MapGet("/api/bot/auto-candidate-verification", (IHostEnvironment env, int? limit) =>
 {
-    var path = Path.Combine(env.ContentRootPath, "exports/auto-candidate-verification-latest.json");
+    var path = SafeExportWriter.Resolve(Path.Combine(env.ContentRootPath, "exports/auto-candidate-verification-latest.json"));
     if (!File.Exists(path)) return Results.Ok(Array.Empty<object>());
     try
     {
@@ -273,7 +273,7 @@ app.MapGet("/api/bot/auto-candidate-verification", (IHostEnvironment env, int? l
 });
 app.MapGet("/api/bot/verified-allowlist-repair-report", (IHostEnvironment env, int? limit) =>
 {
-    var path = Path.Combine(env.ContentRootPath, "exports/verified-allowlist-repair-report-latest.json");
+    var path = SafeExportWriter.Resolve(Path.Combine(env.ContentRootPath, "exports/verified-allowlist-repair-report-latest.json"));
     if (!File.Exists(path)) return Results.Ok(new { groups = Array.Empty<object>() });
     var node = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.Nodes.JsonObject>(File.ReadAllText(path));
     var capped = Math.Clamp(limit ?? 50, 1, 500);
@@ -287,7 +287,7 @@ app.MapGet("/api/bot/verified-allowlist-repair-report", (IHostEnvironment env, i
 });
 app.MapGet("/api/bot/verified-allowlist-suggested-config", (IHostEnvironment env, int? limit) =>
 {
-    var path = Path.Combine(env.ContentRootPath, "exports/verified-multi-outcome-groups-repair-suggested.json");
+    var path = SafeExportWriter.Resolve(Path.Combine(env.ContentRootPath, "exports/verified-multi-outcome-groups-repair-suggested.json"));
     if (!File.Exists(path)) return Results.Ok(new { groups = Array.Empty<object>() });
     var node = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.Nodes.JsonObject>(File.ReadAllText(path));
     if (node?["groups"] is System.Text.Json.Nodes.JsonArray groups)
@@ -299,7 +299,7 @@ app.MapGet("/api/bot/verified-allowlist-suggested-config", (IHostEnvironment env
 });
 app.MapGet("/api/bot/allowlist-repair-patch-preview", (IHostEnvironment env) =>
 {
-    var path = Path.Combine(env.ContentRootPath, "exports/verified-allowlist-repair-patch-preview-latest.json");
+    var path = SafeExportWriter.Resolve(Path.Combine(env.ContentRootPath, "exports/verified-allowlist-repair-patch-preview-latest.json"));
     if (!File.Exists(path)) return Results.Ok(new { mode = "ManualPreviewOnly", willOverwriteRealConfig = false, patches = Array.Empty<object>() });
     return Results.Text(File.ReadAllText(path), "application/json");
 });
@@ -770,7 +770,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         var tmp = path + ".tmp";
         for (var i = 0; i < 3; i++)
         {
-            try { SafeExportWriter.WriteText(tmp, json); File.Move(tmp, path, true); Console.WriteLine($"[REDUCED_UNIVERSE_HEALTHY_SNAPSHOT_WRITTEN] Path={path} Markets={markets.Count} Eligible={filter.EligibleMarkets}"); return; }
+            try { SafeExportWriter.WriteText(path, json); Console.WriteLine($"[REDUCED_UNIVERSE_HEALTHY_SNAPSHOT_WRITTEN] Path={path} Markets={markets.Count} Eligible={filter.EligibleMarkets}"); return; }
             catch (IOException) when (i < 2) { Thread.Sleep(50); }
             catch (Exception ex) { Console.WriteLine($"[REDUCED_UNIVERSE_HEALTHY_SNAPSHOT_WRITE_WARNING] Error={ex.Message.Replace(' ', '_')}"); return; }
         }

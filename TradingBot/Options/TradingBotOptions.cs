@@ -142,6 +142,13 @@ public class TradingBotOptions
 
 public sealed class JsonlExportOptions
 {
+    public string Root { get; set; } = "exports";
+    public string Layout { get; set; } = "Consolidated";
+    public bool WriteLegacyPointerFiles { get; set; }
+    public bool HistoryEnabled { get; set; } = true;
+    public bool DebugExportsEnabled { get; set; } = true;
+    [Range(1, 1024)] public int MaxHistoryFileMb { get; set; } = 25;
+    [Range(1, 1024)] public int MaxDebugFileMb { get; set; } = 50;
     [Range(1, 1024)] public int JsonlMaxFileMb { get; set; } = 50;
     public bool JsonlRotateByRun { get; set; } = true;
     public bool JsonlRotateByDate { get; set; } = true;
@@ -156,7 +163,7 @@ public sealed class JsonlExportOptions
     public bool RetentionEnabled { get; set; } = true;
     [Range(1, int.MaxValue)] public int RetentionMaxTotalMb { get; set; } = 2048;
     [Range(1, 3650)] public int RetentionMaxFileAgeDays { get; set; } = 3;
-    public string[] RetentionDeletePatterns { get; set; } = ["exports/logs/*.jsonl", "exports/*history*.jsonl", "exports/*invalid-positive-artifacts*.jsonl", "exports/*shadow-orderbook-availability*.jsonl", "exports/*near-misses*.json"];
+    public string[] RetentionDeletePatterns { get; set; } = ["exports/history/*.jsonl", "exports/debug/**/*.jsonl", "exports/debug/**/*.json", "exports/archive/**/*"];
     public bool InjectDiskFullForTesting { get; set; }
 }
 
@@ -170,8 +177,8 @@ public sealed class ConsoleLoggingOptions
     public bool EmitSafetyEventsImmediately { get; set; } = true;
     public bool SuppressVerboseEvents { get; set; } = true;
     public bool WriteVerboseEventsToFile { get; set; } = true;
-    public string VerboseLogPath { get; set; } = "exports/logs/verbose-events.jsonl";
-    public string SummaryLogPath { get; set; } = "exports/logs/summary.jsonl";
+    public string VerboseLogPath { get; set; } = "exports/debug/verbose-events/verbose-events.jsonl";
+    public string SummaryLogPath { get; set; } = "exports/history/summary.jsonl";
 }
 
 public sealed class PaperPhase1Options
@@ -234,7 +241,7 @@ public class DiagnosticsDashboardOptions
 {
     public bool Enabled { get; set; } = true;
     public bool ExportEnabled { get; set; } = true;
-    public string ExportPath { get; set; } = "exports/diagnostics-dashboard-latest.json";
+    public string ExportPath { get; set; } = "exports/latest/diagnostics-dashboard.json";
     public bool IncludeTopItems { get; set; } = true;
     public int TopItemsLimit { get; set; } = 10;
     public int WriteIntervalSeconds { get; set; } = 15;

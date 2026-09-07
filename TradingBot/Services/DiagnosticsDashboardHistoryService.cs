@@ -40,7 +40,6 @@ public sealed class DiagnosticsDashboardHistoryService(TradingBotOptions options
         }
         if (cfg.ExportEnabled)
         {
-            WriteLatest(root);
             if (cfg.JsonlEnabled) AppendJsonl(root, sample);
             if (cfg.CsvEnabled) AppendCsv(root, sample);
         }
@@ -82,9 +81,8 @@ public sealed class DiagnosticsDashboardHistoryService(TradingBotOptions options
                 var tmp = $"{path}.{Guid.NewGuid():N}.tmp";
                 try
                 {
-                    SafeExportWriter.WriteText(tmp, json);
-                    File.Move(tmp, path, true);
-                    DiagnosticsDashboardHistoryLastWriteOk = true;
+                    DiagnosticsDashboardHistoryLastWriteOk = SafeExportWriter.WriteText(path, json);
+                    if(!DiagnosticsDashboardHistoryLastWriteOk) { DiagnosticsDashboardHistoryLastWriteError=SafeExportWriter.StreamSnapshot(Path.GetFileNameWithoutExtension(path)).LastError; return; }
                     DiagnosticsDashboardHistoryLastWriteError = "None";
                     return;
                 }
@@ -117,7 +115,7 @@ public sealed class DiagnosticsDashboardHistoryService(TradingBotOptions options
         _lastWriteWarningUtc = now;
         Console.WriteLine($"[DIAGNOSTICS_DASHBOARD_HISTORY_WARNING] Reason=LatestWriteFailed Error={error}");
     }
-    private void AppendJsonl(string root, DiagnosticsDashboardHistorySample s) { try { var p=PathFor(root, options.DiagnosticsDashboardHistory.JsonlPath); Directory.CreateDirectory(Path.GetDirectoryName(p)!); if (File.Exists(p) && new FileInfo(p).Length > Math.Max(1, options.DiagnosticsDashboardHistory.MaxJsonlFileMb)*1024L*1024L) File.Move(p, Path.Combine(Path.GetDirectoryName(p)!, $"diagnostics-dashboard-history-{DateTime.UtcNow:yyyyMMdd-HHmmss}.jsonl"), true); SafeExportWriter.AppendText(p, JsonSerializer.Serialize(s, JsonOpts(false)) + Environment.NewLine); } catch(Exception ex) { Console.WriteLine($"[DIAGNOSTICS_DASHBOARD_HISTORY_WARNING] Reason=JsonlAppendFailed Error={ex.Message}"); } }
+    private void AppendJsonl(string root, DiagnosticsDashboardHistorySample s) { var p=PathFor(root, options.DiagnosticsDashboardHistory.JsonlPath); SafeExportWriter.AppendText(p,JsonSerializer.Serialize(s,JsonOpts(false))+Environment.NewLine,"DiagnosticsDashboardHistory",critical:false); }
     private void AppendCsv(string root, DiagnosticsDashboardHistorySample s) { var p=PathFor(root, options.DiagnosticsDashboardHistory.CsvPath); var exists=File.Exists(p); var text=(exists?string.Empty:string.Join(',',CsvFields.Select(x=>x.Name))+Environment.NewLine)+string.Join(',',CsvFields.Select(x=>Csv(x.GetValue(s))))+Environment.NewLine; SafeExportWriter.AppendText(p,text,"DiagnosticsDashboardHistoryCsv",critical:false); }
     private DiagnosticsDashboardHistoryTrend ComputeTrendLocked(bool enabled) { var o=_samples.FirstOrDefault(); var p=_samples.Count>1?_samples[^2]:o; var n=_samples.LastOrDefault(); decimal? edge=n?.SingleMarketBestAfterSafetyEdge??n?.EdgeTransitionBestCurrentEdge; decimal? oe=o is null?null:o.SingleMarketBestAfterSafetyEdge??o.EdgeTransitionBestCurrentEdge; decimal? pe=p is null?null:p.SingleMarketBestAfterSafetyEdge??p.EdgeTransitionBestCurrentEdge; decimal? mv=n?.SpreadBestMoveNeededToBreakEven; return new(enabled,_samples.Count,o?.TimestampUtc,n?.TimestampUtc, edge-oe, edge-pe, mv-(o?.SpreadBestMoveNeededToBreakEven), mv-(p?.SpreadBestMoveNeededToBreakEven), n?.SlopeMbPerMin, (n?.SignalRPayloadTrimmedSuppressed??0)-(o?.SignalRPayloadTrimmedSuppressed??0), (n?.FocusWatchlistSize??0)-(o?.FocusWatchlistSize??0), (n?.BatchBookBadRequests??0)-(o?.BatchBookBadRequests??0), n?.OverallConsistent ?? true); }
     private void LogSummary(DiagnosticsDashboardHistorySample s) { var t=CurrentTrend; Console.WriteLine($"[DIAGNOSTICS_DASHBOARD_HISTORY_SUMMARY] Enabled={options.DiagnosticsDashboardHistory.Enabled.ToString().ToLowerInvariant()} Samples={t.Samples} LatestEdge={s.SingleMarketBestAfterSafetyEdge?.ToString("0.####",CultureInfo.InvariantCulture)??"N/A"} EdgeDeltaFromOldest={t.EdgeBestDeltaFromOldest?.ToString("0.####",CultureInfo.InvariantCulture)??"N/A"} EdgeDeltaFromPrevious={t.EdgeBestDeltaFromPrevious?.ToString("0.####",CultureInfo.InvariantCulture)??"N/A"} LatestMoveNeeded={s.SpreadBestMoveNeededToBreakEven?.ToString("0.####",CultureInfo.InvariantCulture)??"N/A"} MoveNeededDeltaFromOldest={t.MoveNeededDeltaFromOldest?.ToString("0.####",CultureInfo.InvariantCulture)??"N/A"} SignalRTrimSuppressedDelta={t.SignalRTrimSuppressedDelta} FocusWatchlistDelta={t.FocusWatchlistDelta} OrderbookBadRequestsDelta={t.OrderbookBadRequestsDelta} Consistent={t.Consistent.ToString().ToLowerInvariant()} ProcessRunId={s.ProcessRunId}"); }

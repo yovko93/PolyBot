@@ -56,12 +56,13 @@ public sealed class DashboardWarningsServiceTests
     public void ExportWritesLatestAndJsonlHistory()
     {
         var root = Path.Combine(Path.GetTempPath(), $"polybot-dashboard-warnings-{Guid.NewGuid():N}");
+        SafeExportWriter.Configure(new TradingBot.Options.JsonlExportOptions { MinFreeDiskMb=0,CriticalFreeDiskMb=0,RetentionEnabled=false },root);
         var result = DashboardWarningsService.Classify(new Dictionary<string, long> { ["StaleUISample"] = 3 },
             ["StaleUISample"], true, true, true);
 
         Assert.True(DashboardWarningsService.Export(root, result, DateTime.UnixEpoch));
-        var latest = Path.Combine(root, "exports", "dashboard-warnings-latest.json");
-        var history = Path.Combine(root, "exports", "dashboard-warnings-history.jsonl");
+        var latest = Path.Combine(root, "exports", "latest", "dashboard-warnings.json");
+        var history = Path.Combine(root, "exports", "history", "dashboard-warnings.jsonl");
         Assert.True(File.Exists(latest));
         Assert.Single(File.ReadLines(history));
         using var json = JsonDocument.Parse(File.ReadAllText(latest));

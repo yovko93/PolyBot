@@ -922,33 +922,8 @@ public class SingleMarketOrderBookArbEngine
         WriteJsonAtomic(Path.Combine(dir, "single-market-edge-distribution-latest.json"), payload, jsonOptions);
     }
 
-    private static void WriteJsonAtomic<T>(string path, T payload, JsonSerializerOptions jsonOptions)
-    {
-        var tmp = $"{path}.{Guid.NewGuid():N}.tmp";
-        for (var attempt = 0; attempt < 3; attempt++)
-        {
-            try
-            {
-                SafeExportWriter.WriteText(tmp, JsonSerializer.Serialize(payload, jsonOptions));
-                if (File.Exists(path)) File.Replace(tmp, path, null);
-                else File.Move(tmp, path);
-                return;
-            }
-            catch (IOException)
-            {
-                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
-                if (attempt >= 2) return;
-                Thread.Sleep(25 * (attempt + 1));
-            }
-            catch (UnauthorizedAccessException)
-            {
-                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
-                if (attempt >= 2) return;
-                Thread.Sleep(25 * (attempt + 1));
-            }
-        }
-        try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
-    }
+    private static void WriteJsonAtomic<T>(string path, T payload, JsonSerializerOptions jsonOptions) =>
+        SafeExportWriter.WriteJson(path, JsonSerializer.Serialize(payload, jsonOptions));
 
     private SingleMarketOpportunityAuditDto AuditNearMiss(BinaryOrderBookSnapshot book, string? conditionId, decimal yes, decimal no, decimal rawCost, decimal rawEdge, decimal afterCostEdge, decimal afterSafetyEdge, decimal availableQty, decimal executableQty, decimal notionalAtCap, string rejectedReason, string? dataQualityReason, bool fillPassed, bool depthPassed, bool riskPassed, bool paperDiagnosticsLimitedGatePassed)
     {

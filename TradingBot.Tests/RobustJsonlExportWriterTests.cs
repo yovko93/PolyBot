@@ -14,7 +14,7 @@ public sealed class RobustJsonlExportWriterTests
         RobustJsonlExportWriter.Configure(new JsonlExportOptions{JsonlWriteQueueCapacity=10},root);
         Assert.True(RobustJsonlExportWriter.Enqueue("paper-phase1-invalid-positive-artifacts.jsonl",new{candidateId="test"}));
 
-        var pointer=Path.Combine(root,"exports","paper-phase1-invalid-positive-artifacts-jsonl-latest.json");
+        var pointer=Path.Combine(root,"exports","debug","invalid-positive-artifacts","paper-phase1-invalid-positive-artifacts-jsonl.json");
         for(var i=0;i<50&&!File.Exists(pointer);i++) await Task.Delay(20);
 
         Assert.True(File.Exists(pointer));

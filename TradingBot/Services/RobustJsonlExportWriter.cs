@@ -24,7 +24,7 @@ public static class RobustJsonlExportWriter
     private static bool _disabled,_fallback; private static DateTime _lastVerboseErrorUtc=DateTime.MinValue; private static readonly Dictionary<string,string> ActivePaths=new(StringComparer.OrdinalIgnoreCase);
 
     public static void Configure(JsonlExportOptions options,string root)
-    { lock(Sync){_options=options;_root=root;_disabled=false;_fallback=false;_failures=0;ActivePaths.Clear();if(_worker is null||_worker.IsCompleted){_cts=new();_worker=Task.Run(()=>Run(_cts.Token));}} }
+    { SafeExportWriter.Configure(options,root); lock(Sync){_options=options;_root=root;_disabled=false;_fallback=false;_failures=0;ActivePaths.Clear();if(_worker is null||_worker.IsCompleted){_cts=new();_worker=Task.Run(()=>Run(_cts.Token));}} }
 
     public static bool Enqueue(string logicalName,object value)
     {
