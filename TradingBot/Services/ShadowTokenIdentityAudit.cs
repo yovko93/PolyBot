@@ -26,6 +26,15 @@ public sealed record ShadowTokenAuditSnapshot(
     public static ShadowTokenAuditSnapshot Empty { get; } = new(0,0,0,0,0,0,0,0,0,0,0,0,"None",0,0,0,0,0,"ClobTokenId",0,0,0,0,0,0,0);
 }
 
+public sealed record ActiveVerifiedGroupFunnelSnapshot(long RawDiscovered5m,long Active5m,long Closed5m,
+    long Inactive5m,long Archived5m,long NotAcceptingOrders5m,long MissingClobTokenId5m,
+    long TokenMapMismatch5m,long Orderbookable5m,long ActiveComplete5m,long EligibleForShadowEvaluation5m,
+    long FilteredBeforeCompletion5m,string FilteredTopReason5m,long RawDiscoveredTotal,long ActiveTotal,
+    long OrderbookableTotal,long EligibleForShadowEvaluationTotal,long FilteredBeforeCompletionTotal)
+{
+    public static ActiveVerifiedGroupFunnelSnapshot Empty { get; }=new(0,0,0,0,0,0,0,0,0,0,0,0,"None",0,0,0,0,0);
+}
+
 /// <summary>Diagnostics-only identity ledger. It is deliberately disconnected from paper eligibility.</summary>
 public static class ShadowTokenIdentityAudit
 {
@@ -35,6 +44,24 @@ public static class ShadowTokenIdentityAudit
     private static long _requestsTotal, _wrongTotal, _missingClobTotal, _notBookableTotal, _actuallyMissingTotal;
     private static long _filteredNonBookable, _filteredInactive, _filteredClosed, _filteredMissingClob, _filteredMap, _eligible;
     public static ShadowTokenAuditSnapshot Current { get; private set; } = ShadowTokenAuditSnapshot.Empty;
+    public static ActiveVerifiedGroupFunnelSnapshot GroupCurrent { get; private set; } = ActiveVerifiedGroupFunnelSnapshot.Empty;
+    private static long _groupRawTotal,_groupActiveTotal,_groupBookableTotal,_groupEligibleTotal,_groupFilteredTotal;
+
+    public static void ObserveVerifiedGroupFunnel(IEnumerable<string> reasons)
+    {
+        lock(Sync)
+        {
+            var values=reasons.ToArray(); long N(string reason)=>values.LongCount(x=>x==reason);
+            var eligible=N("None"); var closed=N("ShadowSiblingMarketClosed"); var inactive=N("ShadowSiblingMarketInactive");
+            var archived=N("ShadowSiblingMarketArchived"); var accepting=N("ShadowSiblingMarketNotAcceptingOrders");
+            var missing=N("ShadowSiblingClobTokenIdMissing")+N("ShadowSiblingTokenIdMissing");
+            var map=N("ShadowSiblingOutcomeTokenMapMismatch")+N("ShadowSiblingConditionIdMismatch");
+            var active=values.Length-closed-inactive-archived; var bookable=active-accepting-missing-map-N("ShadowSiblingMarketNotOrderbookable");
+            var filtered=values.Length-eligible;
+            var top=values.Where(x=>x!="None").GroupBy(x=>x).OrderByDescending(x=>x.Count()).ThenBy(x=>x.Key).FirstOrDefault()?.Key??"None";
+            GroupCurrent=new(values.Length,active,closed,inactive,archived,accepting,missing,map,Math.Max(0,bookable),eligible,eligible,filtered,top,_groupRawTotal,_groupActiveTotal,_groupBookableTotal,_groupEligibleTotal,_groupFilteredTotal);
+        }
+    }
 
     public static string ClassifyMarket(Market market)
     {
@@ -89,6 +116,12 @@ public static class ShadowTokenIdentityAudit
     {
         lock (Sync)
         {
+            _groupRawTotal+=GroupCurrent.RawDiscovered5m; _groupActiveTotal+=GroupCurrent.Active5m;
+            _groupBookableTotal+=GroupCurrent.Orderbookable5m; _groupEligibleTotal+=GroupCurrent.EligibleForShadowEvaluation5m;
+            _groupFilteredTotal+=GroupCurrent.FilteredBeforeCompletion5m;
+            GroupCurrent=GroupCurrent with { RawDiscoveredTotal=_groupRawTotal,ActiveTotal=_groupActiveTotal,
+                OrderbookableTotal=_groupBookableTotal,EligibleForShadowEvaluationTotal=_groupEligibleTotal,
+                FilteredBeforeCompletionTotal=_groupFilteredTotal };
             long N(string r)=>Samples.LongCount(x=>x.MissingReason==r);
             var failures=Samples.Where(x=>x.MissingReason!="None").GroupBy(x=>x.MissingReason).OrderByDescending(x=>x.Count()).ThenBy(x=>x.Key).ToArray();
             var wrong=N("ShadowSiblingWrongTokenIdentifier")+N("ShadowSiblingCLOBAssetIdMismatch");
@@ -99,7 +132,7 @@ public static class ShadowTokenIdentityAudit
             var topFailure=failures.FirstOrDefault()?.Key??(_filteredMissingClob>0?"ShadowSiblingClobTokenIdMissing":_filteredClosed>0?"ShadowSiblingMarketClosed":_filteredInactive>0?"ShadowSiblingMarketInactive":_filteredMap>0?"ShadowSiblingOutcomeTokenMapMismatch":_filteredNonBookable>0?"ShadowSiblingMarketNotOrderbookable":"None");
             Current=new(Samples.Count,wrong,missingClob,N("ShadowSiblingMarketInactive")+_filteredInactive,N("ShadowSiblingMarketClosed")+_filteredClosed,N("ShadowSiblingMarketArchived"),N("ShadowSiblingMarketNotAcceptingOrders"),notBookable,N("ShadowSiblingConditionIdMismatch"),N("ShadowSiblingOutcomeTokenMapMismatch")+_filteredMap,actual,N("ShadowSiblingOrderbookProviderReturnedPartialBatch"),topFailure,_requestsTotal,_wrongTotal,_missingClobTotal,_notBookableTotal,_actuallyMissingTotal,"ClobTokenId",0,_filteredNonBookable,_filteredInactive,_filteredClosed,_filteredMissingClob,_filteredMap,_eligible);
             var missing=Samples.Where(x=>!x.OrderbookFound).ToArray();
-            var payload=new {TimeUtc=now,WindowStartUtc=_windowStart,WindowEndUtc=now,RequestedTokenCount=Samples.Count,FoundOrderbookCount=Samples.Count(x=>x.OrderbookFound),MissingOrderbookCount=missing.Length,MissingByReason=failures.ToDictionary(x=>x.Key,x=>x.Count()),WrongIdentifierCount=wrong,MissingClobTokenIdCount=missingClob,NotOrderbookableCount=notBookable,InactiveMarketCount=Current.InactiveMarket5m,ClosedMarketCount=Current.ClosedMarket5m,ArchivedMarketCount=Current.ArchivedMarket5m,NotAcceptingOrdersCount=Current.NotAcceptingOrders5m,ActuallyMissingOrderbookCount=actual,PartialBatchResponses=Current.PartialBatchResponse5m,RecommendedAction=Recommend(Current.TopFailure5m)};
+            var payload=new {TimeUtc=now,WindowStartUtc=_windowStart,WindowEndUtc=now,RequestedTokenCount=Samples.Count,FoundOrderbookCount=Samples.Count(x=>x.OrderbookFound),MissingOrderbookCount=missing.Length,MissingByReason=failures.ToDictionary(x=>x.Key,x=>x.Count()),WrongIdentifierCount=wrong,MissingClobTokenIdCount=missingClob,NotOrderbookableCount=notBookable,InactiveMarketCount=Current.InactiveMarket5m,ClosedMarketCount=Current.ClosedMarket5m,ArchivedMarketCount=Current.ArchivedMarket5m,NotAcceptingOrdersCount=Current.NotAcceptingOrders5m,ActuallyMissingOrderbookCount=actual,PartialBatchResponses=Current.PartialBatchResponse5m,ActiveOrderbookableFunnel=GroupCurrent,RecommendedAction=GroupCurrent.RawDiscovered5m>0&&GroupCurrent.EligibleForShadowEvaluation5m==0?"ReplaceVerifiedGroupSourceWithActiveMarketsOnly":Recommend(Current.TopFailure5m)};
             Write(Path.Combine(root,"exports/latest/shadow-token-identity-audit.json"),payload);
             SafeExportWriter.AppendText(Path.Combine(root,"exports/history/shadow-token-identity-audit.jsonl"),JsonSerializer.Serialize(payload)+Environment.NewLine);
             Write(Path.Combine(root,"exports/debug/shadow-token-identity-audit/top-missing-tokens.json"),missing.Take(100).ToArray());

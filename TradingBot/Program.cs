@@ -1371,25 +1371,39 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         : discoveredMarkets;
                     var shadowBasePool=shadowNaturalPool.Concat(shadowCompletionMarkets.Values).GroupBy(m=>m.id,StringComparer.OrdinalIgnoreCase).Select(g=>g.First()).ToList();
                     var baseIds=shadowBasePool.Select(m=>m.id).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                    var incompleteGroups=allowlistedGroups
+                    var completionCandidates=allowlistedGroups
                         .Where(g=>!options.PaperPhase1.ShadowGroupCompletionRequireVerified||string.Equals(g.VerificationStatus,"Verified",StringComparison.OrdinalIgnoreCase))
                         .Where(g=>!shadowCompletedGroupKeys.Contains(g.GroupKey)&&g.MarketIds.Any(id=>!shadowNaturalPool.Any(m=>m.id.Equals(id,StringComparison.OrdinalIgnoreCase)))).Take(options.PaperPhase1.ShadowGroupCompletionMaxGroups).ToArray();
-                    var suppressedGroups=incompleteGroups.Where(g=>!VerifiedMultiOutcomeDiscoveryDiagnostics.TryBeginCompletion(g.GroupKey)).ToArray();
-                    var suppressedTokens=suppressedGroups.SelectMany(g=>g.MarketIds).Distinct(StringComparer.OrdinalIgnoreCase).Count()*2;
-                    VerifiedMultiOutcomeDiscoveryDiagnostics.ObserveSuppressedOrderbooks(suppressedTokens);
-                    incompleteGroups=incompleteGroups.Except(suppressedGroups).ToArray();
+                    var incompleteGroups=completionCandidates;
                     var completionSamples=new List<ShadowGroupCompletionSample>();
                     var additionalMarketsRequested=0; var additionalMarketsLoaded=0; var additionalBooksRequested=0; var additionalBooksLoaded=0;
                     var requestedCompletionIds=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     var loadedCompletionBookIds=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     if(options.PaperPhase1.ShadowGroupCompletionEnabled)
                     {
-                        var missingIds=incompleteGroups.SelectMany(g=>g.MarketIds).Where(id=>!baseIds.Contains(id)).Distinct(StringComparer.OrdinalIgnoreCase).Take(options.PaperPhase1.ShadowGroupCompletionMaxAdditionalMarkets).ToArray();
+                        var missingIds=completionCandidates.SelectMany(g=>g.MarketIds).Where(id=>!baseIds.Contains(id)).Distinct(StringComparer.OrdinalIgnoreCase).Take(options.PaperPhase1.ShadowGroupCompletionMaxAdditionalMarkets).ToArray();
                         requestedCompletionIds.UnionWith(missingIds);
                         additionalMarketsRequested=missingIds.Length;
                         var loaded=await marketService.GetMarketsByIdsForDiagnosticsAsync(missingIds,stoppingToken);
                         foreach(var market in loaded) shadowCompletionMarkets[market.id]=market;
                         additionalMarketsLoaded=loaded.Count;
+                        var groupMarketPool=shadowBasePool.Concat(shadowCompletionMarkets.Values).GroupBy(m=>m.id,StringComparer.OrdinalIgnoreCase).ToDictionary(g=>g.Key,g=>g.First(),StringComparer.OrdinalIgnoreCase);
+                        string StaticGroupReason(IEnumerable<string> ids)
+                        {
+                            foreach(var id in ids)
+                            {
+                                if(!groupMarketPool.TryGetValue(id,out var member)) return "ShadowSiblingTokenIdMissing";
+                                var reason=ShadowTokenIdentityAudit.ClassifyMarket(member); if(reason!="None") return reason;
+                            }
+                            return "None";
+                        }
+                        var groupReasons=allowlistedGroups.ToDictionary(g=>g.GroupKey,g=>StaticGroupReason(g.MarketIds),StringComparer.OrdinalIgnoreCase);
+                        ShadowTokenIdentityAudit.ObserveVerifiedGroupFunnel(groupReasons.Values);
+                        allowlistedGroups=allowlistedGroups.Where(g=>groupReasons[g.GroupKey]=="None").ToList();
+                        incompleteGroups=completionCandidates.Where(g=>groupReasons.GetValueOrDefault(g.GroupKey)=="None").ToArray();
+                        var suppressedGroups=incompleteGroups.Where(g=>!VerifiedMultiOutcomeDiscoveryDiagnostics.TryBeginCompletion(g.GroupKey)).ToArray();
+                        VerifiedMultiOutcomeDiscoveryDiagnostics.ObserveSuppressedOrderbooks(suppressedGroups.SelectMany(g=>g.MarketIds).Distinct(StringComparer.OrdinalIgnoreCase).Count()*2);
+                        incompleteGroups=incompleteGroups.Except(suppressedGroups).ToArray();
                         var completionGroupIds=incompleteGroups.SelectMany(g=>g.MarketIds).ToHashSet(StringComparer.OrdinalIgnoreCase);
                         var tokenLimit=options.PaperPhase1.ShadowSiblingOrderbookPrefetchMaxTokensPerWindow;
                         var completionMarketCandidates=loaded.Concat(shadowCompletionMarkets.Values.Where(m=>completionGroupIds.Contains(m.id))).GroupBy(m=>m.id,StringComparer.OrdinalIgnoreCase).Select(g=>g.First()).ToList();
@@ -1412,6 +1426,23 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             ShadowTokenIdentityAudit.Observe(owner?.GroupKey??market.id,market,found,batch.LastStatus,!found&&batch.Loaded>0);
                         }
                         baseIds.UnionWith(shadowCompletionMarkets.Keys);
+                    }
+                    else
+                    {
+                        var knownMarkets=shadowBasePool.ToDictionary(m=>m.id,StringComparer.OrdinalIgnoreCase);
+                        string KnownGroupReason(IEnumerable<string> ids)
+                        {
+                            foreach(var id in ids)
+                            {
+                                if(!knownMarkets.TryGetValue(id,out var member))return "ShadowSiblingTokenIdMissing";
+                                var reason=ShadowTokenIdentityAudit.ClassifyMarket(member);if(reason!="None")return reason;
+                            }
+                            return "None";
+                        }
+                        var reasons=allowlistedGroups.ToDictionary(g=>g.GroupKey,g=>KnownGroupReason(g.MarketIds),StringComparer.OrdinalIgnoreCase);
+                        ShadowTokenIdentityAudit.ObserveVerifiedGroupFunnel(reasons.Values);
+                        allowlistedGroups=allowlistedGroups.Where(g=>reasons[g.GroupKey]=="None").ToList();
+                        incompleteGroups=[];
                     }
                     foreach(var group in incompleteGroups)
                     {

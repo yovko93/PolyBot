@@ -18,6 +18,7 @@ public sealed class ShadowTokenIdentityAuditTests
             var closed=new Market { id="closed",question="Closed",conditionId="c",active=false,closed=true,acceptingOrders=false,enableOrderBook=true,outcomes=["Yes","No"],clobTokenIds=["1","2"] };
             var active=new Market { id="active",question="Active",conditionId="c2",active=true,closed=false,acceptingOrders=true,enableOrderBook=true,outcomes=["Yes","No"],clobTokenIds=["10","20"] };
             ShadowTokenIdentityAudit.ObserveFilter([closed,active]);
+            ShadowTokenIdentityAudit.ObserveVerifiedGroupFunnel(["ShadowSiblingMarketClosed","None"]);
             ShadowTokenIdentityAudit.Observe("g",active,false,"Ok",false);
 
             var snapshot=ShadowTokenIdentityAudit.Publish(root,DateTime.UtcNow);
@@ -27,6 +28,8 @@ public sealed class ShadowTokenIdentityAuditTests
             Assert.Equal(1,snapshot.GroupsFilteredClosed5m);
             Assert.Equal(1,snapshot.GroupsEligibleForOrderbookPrefetch5m);
             Assert.Equal(2,snapshot.ActuallyMissingOrderbook5m);
+            Assert.Equal(1,ShadowTokenIdentityAudit.GroupCurrent.EligibleForShadowEvaluation5m);
+            Assert.Equal(1,ShadowTokenIdentityAudit.GroupCurrent.FilteredBeforeCompletion5m);
             using var audit=JsonDocument.Parse(File.ReadAllText(Path.Combine(root,"exports/latest/shadow-token-identity-audit.json")));
             Assert.Equal(2,audit.RootElement.GetProperty("RequestedTokenCount").GetInt32());
             using var samples=JsonDocument.Parse(File.ReadAllText(Path.Combine(root,"exports/debug/shadow-token-identity-audit/top-missing-tokens.json")));

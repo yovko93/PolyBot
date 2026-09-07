@@ -79,4 +79,20 @@ public sealed class SafeExportWriterTests
         Assert.Empty(Directory.GetFiles(Path.Combine(root,"exports")));
         Assert.Equal(0,SafeExportWriter.Snapshot().TopLevelGeneratedFilesCount);
     }
+
+    [Fact]
+    public void ConsolidatedLayoutArchivesLegacyTopLevelArtifacts()
+    {
+        var root=Path.Combine(Path.GetTempPath(),$"polybot-safe-export-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(Path.Combine(root,"exports"));
+        File.WriteAllText(Path.Combine(root,"exports","old-generated.json"),"{}");
+        File.WriteAllText(Path.Combine(root,"exports","README.md"),"keep");
+
+        SafeExportWriter.Configure(new JsonlExportOptions { Root="exports",Layout="Consolidated",WriteLegacyPointerFiles=false,MinFreeDiskMb=0,CriticalFreeDiskMb=0,RetentionEnabled=false },root);
+
+        Assert.False(File.Exists(Path.Combine(root,"exports","old-generated.json")));
+        Assert.True(File.Exists(Path.Combine(root,"exports","archive","legacy-top-level","old-generated.json")));
+        Assert.True(File.Exists(Path.Combine(root,"exports","README.md")));
+        Assert.Equal(0,SafeExportWriter.Snapshot().TopLevelGeneratedFilesCount);
+    }
 }

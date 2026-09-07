@@ -26,7 +26,9 @@ public static class Phase1StrategyExpansionDiagnosticService
         var paper=rows.Single(x=>x.PaperOpenAllowed); var shadow=rows.Where(x=>!x.PaperOpenAllowed).OrderByDescending(x=>x.BestAfterSafetyEdge5m??decimal.MinValue).First();
         var diagnosis=Diagnose(paper,shadow,minEdge);
         Current=new(shadow.Strategy,shadow.BestAfterSafetyEdge5m,shadow.ExecutableLike5m,shadow.TopBlocker5m,paper.Strategy,paper.BestAfterSafetyEdge5m,paper.TopBlocker5m,diagnosis);
-        var payload=new{generatedAtUtc=now,windowMinutes=5,windowStartUtc=_windowStart,windowEndUtc=now,processRunId=runId,productionMinEdge=minEdge,strategies=rows};
+        var funnel=ShadowTokenIdentityAudit.GroupCurrent;
+        var recommended=funnel.RawDiscovered5m>0&&funnel.EligibleForShadowEvaluation5m==0?"ReplaceVerifiedGroupSourceWithActiveMarketsOnly":Recommend(rows,minEdge);
+        var payload=new{generatedAtUtc=now,windowMinutes=5,windowStartUtc=_windowStart,windowEndUtc=now,processRunId=runId,productionMinEdge=minEdge,activeOrderbookableFunnel=funnel,recommendedAction=recommended,strategies=rows};
         Write(Path.Combine(root,"exports/phase1-strategy-comparison-latest.json"),payload);
         Append(Path.Combine(root,"exports/phase1-strategy-comparison-history.jsonl"),payload);
         var candidates=(_focus?.Items??[]).Where(x=>Map(x.Strategy,x.FamilyType)!="SingleMarketBuyBoth").OrderByDescending(x=>x.CurrentAfterSafetyEdge).Take(50).Select(x=>Candidate(x,minEdge));
@@ -60,17 +62,11 @@ public static class Phase1StrategyExpansionDiagnosticService
         if(!VerifiedMultiOutcomeDiscoveryDiagnostics.ShadowPrefetchEnabled)return "VerifiedMultiOutcomeShadowOrderbookPrefetchDisabled";
         if(o.TopMissingReason5m=="ShadowSiblingOrderbookRateLimited")return "VerifiedMultiOutcomeShadowOrderbookPrefetchRateLimited";
         if(o.TopMissingReason5m is "ShadowSiblingOrderbookProviderError" or "ShadowSiblingOrderbookTimeout")return "VerifiedMultiOutcomeShadowOrderbookPrefetchProviderFailing";
-        var audit=ShadowTokenIdentityAudit.Current;
-        if(audit.WrongIdentifier5m>0)return "VerifiedMultiOutcomeShadowWrongTokenIdentifier";
-        if(audit.ClosedMarket5m+audit.InactiveMarket5m+audit.ArchivedMarket5m>0)return "VerifiedMultiOutcomeShadowClosedOrInactiveMarkets";
-        if(audit.MissingClobTokenId5m>0)return "VerifiedMultiOutcomeShadowMissingClobTokenIds";
-        if(audit.OutcomeMapMismatch5m+audit.ConditionMismatch5m>0)return "VerifiedMultiOutcomeShadowTokenMapMismatch";
-        if(audit.NotOrderbookable5m>0)return "VerifiedMultiOutcomeShadowNonOrderbookableMarkets";
-        if(audit.ActuallyMissingOrderbook5m>0)return "VerifiedMultiOutcomeShadowOrderbooksActuallyMissing";
-        if(o.Requests5m>0&&o.SuccessRate5m<.5m)return "VerifiedMultiOutcomeShadowOrderbookCoverageTooLow";
-        if(c.Completed5m>0&&c.ValidPricedAfterCompletion5m==0)return "VerifiedMultiOutcomeCompletedNoValidPricing";
-        if(c.ValidPricedAfterCompletion5m>0&&c.PositiveAfterSafetyAfterCompletion5m==0)return "VerifiedMultiOutcomeCompletedBelowMinEdge";
-        if(c.PositiveAfterSafetyAfterCompletion5m>0&&c.ExecutableLikeAfterCompletion5m==0)return "VerifiedMultiOutcomeCompletedHasEdgeButNotExecutable";
+        var groups=ShadowTokenIdentityAudit.GroupCurrent;
+        if(groups.RawDiscovered5m>0&&groups.EligibleForShadowEvaluation5m==0)return "VerifiedMultiOutcomeNoActiveOrderbookableGroups";
+        if(groups.EligibleForShadowEvaluation5m>0&&c.ValidPricedAfterCompletion5m==0)return "VerifiedMultiOutcomeActiveGroupsNoValidPricing";
+        if(c.ValidPricedAfterCompletion5m>0&&c.PositiveAfterSafetyAfterCompletion5m==0)return "VerifiedMultiOutcomeActiveGroupsBelowMinEdge";
+        if(c.PositiveAfterSafetyAfterCompletion5m>0&&c.ExecutableLikeAfterCompletion5m==0)return "VerifiedMultiOutcomeActiveGroupsHaveEdgeButNotExecutable";
         if(c.ExecutableLikeAfterCompletion5m>0)return "VerifiedMultiOutcomeShadowCandidateFound";
         return "VerifiedMultiOutcomeShadowOrderbookCoverageTooLow";
     }
