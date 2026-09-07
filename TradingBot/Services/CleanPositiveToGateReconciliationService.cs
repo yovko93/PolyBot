@@ -116,7 +116,7 @@ public static class CleanPositiveToGateReconciliationService
         !c.RiskPassed ? "P99CandidateRiskRejected" : c.FirstBlockingReason;
     private static FocusUniverseItem? Percentile(FocusUniverseItem[] rows, double p) => rows.Length == 0 ? null : rows.OrderBy(x => x.CurrentAfterSafetyEdge).ElementAt((int)Math.Clamp(Math.Ceiling(p*rows.Length)-1,0,rows.Length-1));
     private static string[] Split(string value) => string.IsNullOrWhiteSpace(value) || value == "None" ? [] : value.Split(['|',',',';'], StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries);
-    private static void Write(string path, object value) { Directory.CreateDirectory(Path.GetDirectoryName(path)!); var tmp=path+".tmp"; File.WriteAllText(tmp,JsonSerializer.Serialize(value,Options)); File.Move(tmp,path,true); }
-    private static void Append(string path, object value) { Directory.CreateDirectory(Path.GetDirectoryName(path)!); File.AppendAllText(path,JsonSerializer.Serialize(value)+Environment.NewLine); }
+    private static void Write(string path, object value) => SafeExportWriter.WriteJson(path,JsonSerializer.Serialize(value,Options));
+    private static void Append(string path, object value) { Directory.CreateDirectory(Path.GetDirectoryName(path)!); SafeExportWriter.AppendText(path,JsonSerializer.Serialize(value)+Environment.NewLine); }
     private static readonly JsonSerializerOptions Options = new() { WriteIndented=true, PropertyNamingPolicy=JsonNamingPolicy.CamelCase };
 }

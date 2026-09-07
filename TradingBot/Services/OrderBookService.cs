@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Globalization;
 using System.Net;
@@ -93,6 +93,12 @@ public class OrderBookService : IOrderBookProvider
     public bool LogBookCacheMissDetails { get; set; } = false;
     public int BookCacheMissSampleSize { get; set; } = 5;
     public int MaxBatchBookRequestSize { get; set; } = 100;
+    public bool BatchRetryEnabled { get; set; } = true;
+    public int BatchRetryCount { get; set; } = 2;
+    public int BatchRetryBackoffMs { get; set; } = 250;
+    public double BatchRetryBackoffMultiplier { get; set; } = 2;
+    public int BatchCircuitBreakerFailures { get; set; } = 10;
+    private int _consecutiveBatchFailures;
     public bool SplitBatchOnBadRequest { get; set; } = true;
     public bool LogInvalidBatchPayloadSamples { get; set; } = true;
     public int MaxInvalidPayloadSamplesToLog { get; set; } = 5;
@@ -187,6 +193,10 @@ public class OrderBookService : IOrderBookProvider
     public void ConfigureBatchOptions(TradingBot.Options.OrderBookOptions options, bool operationalQuietMode, TradingBot.Options.MultiOutcomeLoggingOptions logging, QuietLogGate? quietLogGate = null)
     {
         MaxBatchBookRequestSize = Math.Max(1, options.MaxBatchBookRequestSize);
+        BatchRetryEnabled=options.BatchRetryEnabled; BatchRetryCount=Math.Max(0,options.BatchRetryCount);
+        BatchRetryBackoffMs=Math.Max(0,options.BatchRetryBackoffMs); BatchRetryBackoffMultiplier=Math.Max(1,options.BatchRetryBackoffMultiplier);
+        BatchCircuitBreakerFailures=Math.Max(1,options.BatchCircuitBreakerFailures);
+        _http.Timeout=TimeSpan.FromMilliseconds(Math.Max(100,options.BatchTimeoutMs));
         SplitBatchOnBadRequest = options.SplitBatchOnBadRequest;
         LogInvalidBatchPayloadSamples = options.LogInvalidBatchPayloadSamples;
         MaxInvalidPayloadSamplesToLog = Math.Max(0, options.MaxInvalidPayloadSamplesToLog);
@@ -204,6 +214,7 @@ public class OrderBookService : IOrderBookProvider
         OrderbookCircuitBreakerCooldown = TimeSpan.FromMinutes(Math.Max(1, options.OrderbookCircuitBreakerCooldownMinutes));
         CircuitBreakerInitialCooldown = TimeSpan.FromMinutes(Math.Max(1, options.CircuitBreakerInitialCooldownMinutes > 0 ? options.CircuitBreakerInitialCooldownMinutes : options.OrderbookCircuitBreakerCooldownMinutes));
         CircuitBreakerMaxCooldown = TimeSpan.FromMinutes(Math.Max(1, options.CircuitBreakerMaxCooldownMinutes));
+        CircuitBreakerInitialCooldown=TimeSpan.FromSeconds(Math.Max(1,options.BatchCircuitBreakerCooldownSeconds));
         _currentCircuitBreakerCooldown = CircuitBreakerInitialCooldown;
         CircuitBreakerHalfOpenCanaryMarkets = Math.Max(1, options.CircuitBreakerHalfOpenCanaryMarkets);
         CircuitBreakerHalfOpenMaxBadRequests = Math.Max(0, options.CircuitBreakerHalfOpenMaxBadRequests);
@@ -528,7 +539,7 @@ public class OrderBookService : IOrderBookProvider
         return _orderbookEligibility.Get(marketId);
     }
 
-    private string ReducedUniverseBadHistoryPath => Path.Combine(ExportDirectory, "reduced-universe-bad-orderbook-history.json");
+    private string ReducedUniverseBadHistoryPath => Path.Combine(ExportDirectory, "latest", "reduced-universe-bad-orderbook-history.json");
 
     private void EnsureReducedUniverseBadHistoryLoadedLocked(DateTime now)
     {
@@ -551,23 +562,8 @@ public class OrderBookService : IOrderBookProvider
 
     private void PersistReducedUniverseBadHistoryLocked()
     {
-        try
-        {
-            Directory.CreateDirectory(ExportDirectory);
-            var json = System.Text.Json.JsonSerializer.Serialize(_reducedUniverseBadHistory.Values.OrderBy(x => x.Key).ToList());
-            var temp = ReducedUniverseBadHistoryPath + ".tmp";
-            File.WriteAllText(temp, json);
-            for (var attempt = 0; attempt < 3; attempt++)
-            {
-                try
-                {
-                    File.Move(temp, ReducedUniverseBadHistoryPath, overwrite: true);
-                    break;
-                }
-                catch (IOException) when (attempt < 2) { System.Threading.Thread.Sleep(25); }
-            }
-        }
-        catch { }
+        var json=System.Text.Json.JsonSerializer.Serialize(_reducedUniverseBadHistory.Values.OrderBy(x=>x.Key).ToList());
+        SafeExportWriter.WriteText(ReducedUniverseBadHistoryPath,json,"ReducedUniverseBadOrderbookHistory",critical:false);
     }
 
     private void RememberReducedUniverseBadHistoryLocked(string key, DateTime now, string reason = "OrderbookQuarantine", string lastFailureKind = "OrderbookQuarantine", string? marketId = null, string? tokenId = null, DateTime? quarantineUntilUtc = null)
@@ -1294,6 +1290,7 @@ public class OrderBookService : IOrderBookProvider
             return BatchPostResult.Success(0);
         }
 
+        var stopwatch=Stopwatch.StartNew();
         try
         {
             var url = "https://clob.polymarket.com/books";
@@ -1307,6 +1304,7 @@ public class OrderBookService : IOrderBookProvider
             {
                 Interlocked.Increment(ref _httpErrors);
                 Interlocked.Increment(ref _batchBadRequests);
+                BatchOrderbookDiagnostics.Result(batch.Count,0,"BadRequest","400","NotFound",json,stopwatch.ElapsedMilliseconds);
                 RecordModeBadRequest(requestState);
                 RecordBadRequestAndMaybeOpenCircuit();
                 PublishStats();
@@ -1340,7 +1338,7 @@ public class OrderBookService : IOrderBookProvider
                 {
                     var isolated = await IsolateInvalidTokensAsync(batch, bodyFactory, result, ct, depth + 1);
                     if (isolated.BadRequest || isolated.FailedTokens > 0) return isolated;
-                    if (ShouldLogBatchDiagnostic("BATCH_BOOK_ERROR", $"badrequest:size:{batch.Count}", batch.Count))
+                    if (!OperationalQuietMode && ShouldLogBatchDiagnostic("BATCH_BOOK_ERROR", $"badrequest:size:{batch.Count}", batch.Count))
                         Console.WriteLine($"[BATCH_BOOK_ERROR] Status=400 BatchSize={batch.Count} RetryStrategy=TokenIsolation");
                 }
 
@@ -1350,9 +1348,11 @@ public class OrderBookService : IOrderBookProvider
             if (!response.IsSuccessStatusCode)
             {
                 Interlocked.Increment(ref _httpErrors);
-                if (ShouldLogBatchDiagnostic("BATCH_BOOK_ERROR", response.StatusCode.ToString(), batch.Count))
+                var kind=response.StatusCode==HttpStatusCode.TooManyRequests?"RateLimited":(int)response.StatusCode>=500?"ProviderError":"NotFound";
+                BatchOrderbookDiagnostics.Result(batch.Count,0,"HttpError",((int)response.StatusCode).ToString(),kind,json,stopwatch.ElapsedMilliseconds);
+                if (!OperationalQuietMode && ShouldLogBatchDiagnostic("BATCH_BOOK_ERROR", response.StatusCode.ToString(), batch.Count))
                     Console.WriteLine($"[BATCH_BOOK_ERROR] Status={(int)response.StatusCode} BatchSize={batch.Count} RetryStrategy=None");
-                return BatchPostResult.Failed(0);
+                return BatchPostResult.Failed(0,failureKind:kind,httpStatus:((int)response.StatusCode).ToString());
             }
 
             var root = JToken.Parse(json);
@@ -1360,13 +1360,15 @@ public class OrderBookService : IOrderBookProvider
             if (booksArray == null)
             {
                 Interlocked.Increment(ref _parseErrors);
-                if (ShouldLogBatchDiagnostic("BATCH_BOOK_ERROR", $"shape:{root.Type}", batch.Count))
+                BatchOrderbookDiagnostics.Result(batch.Count,0,"MalformedResponse",response.StatusCode.ToString(),"MalformedResponse",$"Shape={root.Type}",stopwatch.ElapsedMilliseconds);
+                if (!OperationalQuietMode && ShouldLogBatchDiagnostic("BATCH_BOOK_ERROR", $"shape:{root.Type}", batch.Count))
                     Console.WriteLine($"[BATCH_BOOK_ERROR] Status=ParseError BatchSize={batch.Count} RetryStrategy=None Shape={root.Type}");
-                return BatchPostResult.Failed(0);
+                return BatchPostResult.Failed(0,failureKind:"MalformedResponse");
             }
 
             var loaded = StoreBooks(booksArray, result);
-            if (loaded == 0 && ShouldLogBatchDiagnostic("BATCH_BOOK_ERROR", "loaded:0", batch.Count))
+            BatchOrderbookDiagnostics.Result(batch.Count,loaded,loaded==0?"NoBooksLoaded":"Ok",response.StatusCode.ToString(),loaded==0?"EmptyResponse":"None",loaded==0?"Batch response contained no usable books":"None",stopwatch.ElapsedMilliseconds);
+            if (loaded == 0 && !OperationalQuietMode && ShouldLogBatchDiagnostic("BATCH_BOOK_ERROR", "loaded:0", batch.Count))
                 Console.WriteLine($"[BATCH_BOOK_ERROR] Status=NoBooksLoaded BatchSize={batch.Count} RetryStrategy=None");
 
             return BatchPostResult.Success(loaded);
@@ -1381,23 +1383,26 @@ public class OrderBookService : IOrderBookProvider
                 Console.WriteLine("[ORDERBOOK_CIRCUIT_BREAKER_RECOVERY_FAILED] Reason=RecoveringTimeout");
                 lock (_cacheLock) OpenCircuitBreakerLocked(DateTime.UtcNow, "RecoveringTimeout");
             }
-            if (ShouldLogBatchDiagnostic("BATCH_BOOK_TIMEOUT", "timeout", batch.Count))
+            BatchOrderbookDiagnostics.Result(batch.Count,0,"Timeout","None","Timeout","Batch request timed out",stopwatch.ElapsedMilliseconds);
+            if (!OperationalQuietMode && ShouldLogBatchDiagnostic("BATCH_BOOK_TIMEOUT", "timeout", batch.Count))
                 Console.WriteLine($"[BATCH_BOOK_TIMEOUT] BatchSize={batch.Count}");
-            return BatchPostResult.Failed(0, timeout: true);
+            return BatchPostResult.Failed(0, timeout: true,failureKind:"Timeout");
         }
         catch (HttpRequestException ex)
         {
             Interlocked.Increment(ref _httpErrors);
-            if (ShouldLogBatchDiagnostic("BATCH_BOOK_HTTP_ERROR", ex.Message, batch.Count))
+            BatchOrderbookDiagnostics.Result(batch.Count,0,"ProviderError","None","ProviderError",ex.Message,stopwatch.ElapsedMilliseconds);
+            if (!OperationalQuietMode && ShouldLogBatchDiagnostic("BATCH_BOOK_HTTP_ERROR", ex.Message, batch.Count))
                 Console.WriteLine($"[BATCH_BOOK_HTTP_ERROR] BatchSize={batch.Count} Message={Short(ex.Message)}");
-            return BatchPostResult.Failed(0);
+            return BatchPostResult.Failed(0,failureKind:"ProviderError");
         }
         catch (Exception ex)
         {
             Interlocked.Increment(ref _parseErrors);
-            if (ShouldLogBatchDiagnostic("BATCH_BOOK_ERROR", ex.Message, batch.Count))
+            BatchOrderbookDiagnostics.Result(batch.Count,0,"MalformedResponse","None","MalformedResponse",ex.Message,stopwatch.ElapsedMilliseconds);
+            if (!OperationalQuietMode && ShouldLogBatchDiagnostic("BATCH_BOOK_ERROR", ex.Message, batch.Count))
                 Console.WriteLine($"[BATCH_BOOK_ERROR] BatchSize={batch.Count} Message={Short(ex.Message)}");
-            return BatchPostResult.Failed(0);
+            return BatchPostResult.Failed(0,failureKind:"MalformedResponse");
         }
     }
 
@@ -1509,7 +1514,7 @@ public class OrderBookService : IOrderBookProvider
     {
         Interlocked.Increment(ref _batchSplitRetriesAttempted);
         ExportBatchBookBadRequestDiagnostic(batch, responseBody, depth, quarantineApplied: false);
-        if (ShouldLogBatchDiagnostic("BATCH_BOOK_BAD_REQUEST", $"size:{batch.Count}|failed:{batch.Count}", batch.Count))
+        if (!OperationalQuietMode && ShouldLogBatchDiagnostic("BATCH_BOOK_BAD_REQUEST", $"size:{batch.Count}|failed:{batch.Count}", batch.Count))
         {
             Console.WriteLine($"[BATCH_BOOK_BAD_REQUEST] BatchSize={batch.Count} Action=SplitAndRetry");
             Console.WriteLine($"[BATCH_BOOK_ERROR] Status=400 BatchSize={batch.Count} RetryStrategy=Split");
@@ -1694,25 +1699,41 @@ public class OrderBookService : IOrderBookProvider
             Interlocked.Increment(ref _batchRequests);
             var requestState = RecordModeRequest();
 
-            var primary = await TryPostBooksBatchAsync(
-                batchArray,
-                bodyFactory: idsBatch => idsBatch
-                    .Select(tokenId => new { token_id = tokenId })
-                    .ToList(),
-                result,
-                ct,
-                requestState: requestState
-            );
+            BatchPostResult primary=BatchPostResult.Failed(0);
+            var maxAttempts=BatchRetryEnabled?BatchRetryCount+1:1;
+            for(var attempt=0;attempt<maxAttempts;attempt++)
+            {
+                if(attempt>0)
+                {
+                    BatchOrderbookDiagnostics.Retry();
+                    await Task.Delay((int)(BatchRetryBackoffMs*Math.Pow(BatchRetryBackoffMultiplier,attempt-1)),ct);
+                }
+                BatchOrderbookDiagnostics.Requested(batchArray.Length);
+                primary = await TryPostBooksBatchAsync(batchArray, idsBatch => idsBatch.Select(tokenId => new { token_id = tokenId }).ToList(), result, ct, requestState:requestState);
+                if(primary.Loaded>0||primary.BadRequest||primary.FailureKind=="NotFound") break;
+            }
 
             if (primary.Loaded > 0 || primary.BadRequest)
+            { _consecutiveBatchFailures=0;
                 continue;
+            }
+            if(primary.FailureKind=="NotFound") continue;
+            if(++_consecutiveBatchFailures>=BatchCircuitBreakerFailures)
+            {
+                lock(_cacheLock) OpenCircuitBreakerLocked(DateTime.UtcNow,"RepeatedNoBooksLoaded");
+                BatchOrderbookDiagnostics.CircuitOpen();
+                continue;
+            }
             if (CircuitBreakerState == OrderbookCircuitBreakerState.Open)
             {
                 Interlocked.Add(ref _orderbookRequestsBlockedByCircuitBreaker, batchArray.Length);
                 continue;
             }
 
-            _ = await TryPostBooksBatchAsync(
+            BatchOrderbookDiagnostics.Retry();
+            BatchOrderbookDiagnostics.Fallback();
+            BatchOrderbookDiagnostics.Requested(batchArray.Length);
+            var fallbackResult = await TryPostBooksBatchAsync(
                 batchArray,
                 bodyFactory: idsBatch => new
                 {
@@ -1724,6 +1745,7 @@ public class OrderBookService : IOrderBookProvider
                 ct,
                 requestState: requestState
             );
+            if(fallbackResult.Loaded>0) _consecutiveBatchFailures=0;
         }
 
         var quarantinedAfterCycle = QuarantinedTokenCount;
@@ -1765,7 +1787,7 @@ public class OrderBookService : IOrderBookProvider
         Directory.CreateDirectory(ExportDirectory);
         var path = Path.Combine(ExportDirectory, "batch-book-errors-latest.json");
         var payload = new { timestamp = DateTime.UtcNow, status = 400, cause, batchSize = batch.Count, tokenSamples, marketSamples, responseBodyHash = hash, responseBodySample = Short(responseBody ?? "", 500), splitDepth, quarantineApplied, repeatedTokenCount };
-        File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
+        SafeExportWriter.WriteText(path, System.Text.Json.JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
     }
 
     private void ExportInvalidTokenQuarantineSnapshot()
@@ -1774,7 +1796,7 @@ public class OrderBookService : IOrderBookProvider
         Dictionary<string, DateTime> copy;
         lock (_cacheLock) copy = new Dictionary<string, DateTime>(_invalidTokenQuarantine, StringComparer.Ordinal);
         var payload = new { timestamp = DateTime.UtcNow, ttlMinutes = (int)Math.Round(InvalidTokenQuarantineTtl.TotalMinutes), tokens = copy.OrderBy(x => x.Key).Select(x => new { tokenId = x.Key, expiresAt = x.Value, marketId = _tokenMarketIds.TryGetValue(x.Key, out var m) ? m : "" }).ToArray() };
-        File.WriteAllText(Path.Combine(ExportDirectory, "invalid-token-quarantine-latest.json"), System.Text.Json.JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
+        SafeExportWriter.WriteText(Path.Combine(ExportDirectory, "invalid-token-quarantine-latest.json"), System.Text.Json.JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
     }
 
     public bool IsTokenQuarantined(string? tokenId)
@@ -1951,11 +1973,11 @@ public sealed record BatchPayloadValidationResult(
     bool Capped,
     IReadOnlyList<string> InvalidSamples);
 
-public sealed record BatchPostResult(int Loaded, bool BadRequest, bool Timeout, int FailedTokens)
+public sealed record BatchPostResult(int Loaded, bool BadRequest, bool Timeout, int FailedTokens, string FailureKind="None", string HttpStatus="None")
 {
     public static BatchPostResult Success(int loaded) => new(loaded, false, false, 0);
     public static BatchPostResult FromBadRequest(int loaded, int failedTokens) => new(loaded, true, false, failedTokens);
-    public static BatchPostResult Failed(int loaded, bool timeout = false) => new(loaded, false, timeout, 0);
+    public static BatchPostResult Failed(int loaded, bool timeout = false, string failureKind="Unknown", string httpStatus="None") => new(loaded, false, timeout, 0, failureKind, httpStatus);
 }
 
 public class ClobOrderBook

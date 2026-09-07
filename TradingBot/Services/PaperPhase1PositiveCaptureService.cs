@@ -261,7 +261,7 @@ public static class PaperPhase1PositiveCaptureService
         try
         {
             var s = Current;
-            WriteAtomic(Path.Combine(_root, "exports/paper-phase1-positive-captures-latest.json"), new
+            var positiveWritten = WriteAtomic(Path.Combine(_root, "exports", "paper-phase1-positive-captures-latest.json"), new
             {
                 generatedAtUtc = DateTime.UtcNow, processRunId = ProcessRunContext.ProcessRunId,
                 profile = _options?.RuntimeProfile ?? RuntimeProfileService.ReducedDiagnosticsPaperPhase1,
@@ -274,7 +274,8 @@ public static class PaperPhase1PositiveCaptureService
             });
             if (_options?.PaperPhase1PositiveCapture.InvalidArtifactExportEnabled != false)
                 WriteAtomic(Path.Combine(_root,"exports/paper-phase1-invalid-positive-artifacts-latest.json"),new{generatedAtUtc=DateTime.UtcNow,processRunId=ProcessRunContext.ProcessRunId,summary=new{artifactsTotal=s.InvalidArtifactsTotal,aboveMinEdge=s.InvalidArtifactsAboveMinEdge,bestAfterSafetyEdge=s.BestInvalidArtifactAfterSafetyEdge,bestCandidateId=s.BestInvalidArtifactCandidateId,topReason=s.InvalidArtifactsByReason.OrderByDescending(x=>x.Value).FirstOrDefault().Key??"None",byReason=s.InvalidArtifactsByReason,consistent=s.Consistent},topArtifacts=s.TopInvalidArtifacts.Select(x=>new{x.CandidateId,x.MarketId,x.AfterSafetyEdge,firstReason=x.FirstBlockingReason,allReasons=x.AllBlockingReasons,x.HasYesAsk,x.HasNoAsk,x.HasBothBooks,x.CandidateSnapshotMismatch,x.InvalidRawSpike,paperOpenAllowed=false})});
-            Current = s with { ExportWritten=true, LastWriteError="None" };
+            var stream = SafeExportWriter.StreamSnapshot("paper-phase1-positive-captures-latest");
+            Current = s with { ExportWritten=positiveWritten, LastWriteError=positiveWritten ? "None" : stream.LastError };
         }
         catch(Exception ex) { Current=Current with { ExportWritten=false,LastWriteError=ex.Message }; }
     }
@@ -283,7 +284,7 @@ public static class PaperPhase1PositiveCaptureService
     private static void LogInvalid(PaperPhase1PositiveCapture c){if(_invalidLogs++>=_options!.PaperPhase1PositiveCapture.LogFirstNInvalidArtifactsPerInterval){_suppressedInvalidLogs++;return;}Console.WriteLine($"[PAPER_PHASE1_INVALID_POSITIVE_ARTIFACT_CAPTURED] CandidateId={c.CandidateId} MarketId={c.MarketId} AfterSafetyEdge={c.AfterSafetyEdge:0.####} FirstReason={c.FirstBlockingReason} AllReasons={string.Join("|",c.AllBlockingReasons)} PaperOpenAllowed=false ProcessRunId={c.ProcessRunId}");}
     private static void MaybeLogSummaries(){var cfg=_options!.PaperPhase1PositiveCapture;if(cfg.SuppressRepeatedSummary&&DateTime.UtcNow-_lastSummaryUtc<TimeSpan.FromSeconds(cfg.SummaryIntervalSeconds))return;_lastSummaryUtc=DateTime.UtcNow;var s=Current;Console.WriteLine($"[PAPER_PHASE1_POSITIVE_CAPTURE_SUMMARY] ValidCapturesTotal={s.ValidCapturesTotal} ValidAboveMinEdge={s.ValidAboveMinEdge} ValidPaperEligible={s.ValidPaperEligible} ValidOpened={s.ValidOpened} BestValidAfterSafetyEdge={s.BestValidAfterSafetyEdge?.ToString("0.####")??"N/A"} BestValidFirstBlockingReason={s.BestValidFirstBlockingReason} ProcessRunId={ProcessRunContext.ProcessRunId}");Console.WriteLine($"[PAPER_PHASE1_INVALID_POSITIVE_ARTIFACT_SUMMARY] ArtifactsTotal={s.InvalidArtifactsTotal} AboveMinEdge={s.InvalidArtifactsAboveMinEdge} BestArtifactAfterSafetyEdge={s.BestInvalidArtifactAfterSafetyEdge?.ToString("0.####")??"N/A"} TopReason={s.BestInvalidArtifactFirstReason} ByReason={string.Join("|",s.InvalidArtifactsByReason.Select(x=>$"{x.Key}={x.Value}"))} SuppressedLogs={_suppressedInvalidLogs} ProcessRunId={ProcessRunContext.ProcessRunId}");}
     private static void Append(string name,PaperPhase1PositiveCapture c) => RobustJsonlExportWriter.Enqueue(name,c);
-    private static void WriteAtomic(string path,object value){Directory.CreateDirectory(Path.GetDirectoryName(path)!);var tmp=path+".tmp";File.WriteAllText(tmp,JsonSerializer.Serialize(value,JsonOptions));File.Move(tmp,path,true);}
+    private static bool WriteAtomic(string path,object value)=>SafeExportWriter.WriteJson(path,JsonSerializer.Serialize(value,JsonOptions),Path.GetFileNameWithoutExtension(path),critical:false);
     private static PaperPhase1PositiveCapture? TryParseCapture(string line){try{return JsonSerializer.Deserialize<PaperPhase1PositiveCapture>(line,JsonOptions);}catch(JsonException){return null;}}
     private static bool IsProfile()=>_options is not null&&(_options.RuntimeProfile==RuntimeProfileService.ReducedDiagnosticsPaperPhase1||_options.RuntimeProfile==RuntimeProfileService.ReducedDiagnosticsPaperPhase1Canary);
     private static PaperPhase1PositiveCaptureState Empty()=>new(true,0,0,0,0,0,null,"None","None",0,0,0,0,null,"None","None",0,0,new Dictionary<string,int>(),null,"None","None",0,0,null,"None",0,null,0,0,0,new Dictionary<string,int>(),"None",null,"None","None",true,false,"None",[],[],[],[],[]);

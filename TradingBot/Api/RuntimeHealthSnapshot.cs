@@ -767,6 +767,9 @@ public sealed record RuntimeHealthSnapshot(
     public bool PaperPhase1Readiness => PaperPhase1ReadinessCurrentBlockingReasons == "None";
     public string PaperPhase1ReadinessReason => PaperPhase1Readiness ? "Ready" : PaperPhase1ReadinessCurrentBlockingReasons;
 
+    public bool PaperPhase1SyntheticCanaryExportWritten => TradingBot.Services.PaperPhase1SyntheticCanaryService.Current.ExportWritten;
+    public string PaperPhase1SyntheticCanaryLastWriteError => TradingBot.Services.PaperPhase1SyntheticCanaryService.Current.LastWriteError;
+    public string PaperPhase1SyntheticCanaryExportHealth => TradingBot.Services.PaperPhase1SyntheticCanaryService.Current.ExportHealth;
     public bool PaperPhase1CanaryEnabled => TradingBot.Services.PaperPhase1SyntheticCanaryService.Current.Enabled;
     public bool PaperPhase1CanaryProfileActive => TradingBot.Services.PaperPhase1SyntheticCanaryService.Current.ProfileActive;
     public string PaperPhase1CanaryRequireProfile => TradingBot.Services.PaperPhase1SyntheticCanaryService.Current.RequireProfile;

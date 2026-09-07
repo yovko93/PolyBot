@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Numerics;
 using System.Text;
 using TradingBot.Models;
@@ -152,7 +152,7 @@ public class OpportunityMonitor
         foreach (var row in rows)
             sb.AppendLine(ToCsvLine(row));
 
-        File.AppendAllText(_csvPath, sb.ToString());
+        SafeExportWriter.AppendText(_csvPath, sb.ToString());
     }
 
     // todo remove debug
@@ -372,7 +372,7 @@ public class OpportunityMonitor
         var header =
             "timestampUtc,engine,strategy,key,edgePerShare,costOrProceeds,guaranteedPayout,quantityAvailable,isExecutable,groupKey,leg1,leg2";
 
-        File.WriteAllText(_csvPath, header + Environment.NewLine);
+        SafeExportWriter.WriteText(_csvPath, header + Environment.NewLine);
     }
 
     private static string ToCsvLine(ArbMonitorRecord row)

@@ -400,7 +400,7 @@ public class MarketDataService
         var report = new { CreatedAtUtc = DateTime.UtcNow, Mode = "DiscoverySourceAuditOnly", Scanner = "Disabled", Orderbooks = "Disabled", Paper = "Disabled", LiveTrading = "NotRequired", SourceSelectionOrder = new[] { "PersistedHealthySnapshot", "AlternativeFullMarketSource", "GammaOffset", "GammaPartitionedOffset", "Blocked" }, Sources = sources };
         var path = Path.Combine(contentRootPath, "exports/discovery-source-audit-latest.json");
         Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
-        File.WriteAllText(path, JsonConvert.SerializeObject(report, Formatting.Indented));
+        SafeExportWriter.WriteText(path, JsonConvert.SerializeObject(report, Formatting.Indented));
         var scannerSafeSources = sources.Count(x => x.SafeForScannerCandidate);
         var recommendedAction = scannerSafeSources == 0 ? "KeepBlocked" : "ReviewScannerSafeCandidate";
         Console.WriteLine($"[DISCOVERY_SOURCE_AUDIT_WRITTEN] Path={path} Sources={sources.Length} ScannerSafeSources={scannerSafeSources}");
@@ -441,7 +441,7 @@ public class MarketDataService
         diagnostics.Sources.Add(new DiscoverySourceReport("Blocked", !summary.DiscoveryHealthy, summary.ActiveMarketsAvailable, summary.DiscoveryLastFailureKind, false, null, true, false));
         const string path = "exports/discovery-diagnostics-latest.json";
         Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
-        File.WriteAllText(path, JsonConvert.SerializeObject(new { Summary = summary, diagnostics.CreatedAtUtc, diagnostics.PageSize, diagnostics.GammaMaxSafeOffset, diagnostics.Sources, diagnostics.Buckets }, Formatting.Indented));
+        SafeExportWriter.WriteText(path, JsonConvert.SerializeObject(new { Summary = summary, diagnostics.CreatedAtUtc, diagnostics.PageSize, diagnostics.GammaMaxSafeOffset, diagnostics.Sources, diagnostics.Buckets }, Formatting.Indented));
         Console.WriteLine($"[DISCOVERY_DIAGNOSTICS_EXPORTED] Path={path} Sources={diagnostics.Sources.Count} Buckets={diagnostics.Buckets.Count}");
     }
 

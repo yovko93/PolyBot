@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using TradingBot.Api;
 using TradingBot.Models;
@@ -829,9 +829,9 @@ public class SingleMarketOrderBookArbEngine
         var dir = Path.Combine(_contentRootPath, "exports");
         Directory.CreateDirectory(dir);
         var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
-        File.WriteAllText(Path.Combine(dir, "single-market-arb-opportunities-latest.json"), JsonSerializer.Serialize(_state.SingleMarketSnapshot, jsonOptions));
-        File.WriteAllText(Path.Combine(dir, "single-market-paper-executions-latest.json"), JsonSerializer.Serialize(_state.SingleMarketExecutions().TakeLast(100), jsonOptions));
-        File.WriteAllText(Path.Combine(dir, "single-market-near-misses-latest.json"), JsonSerializer.Serialize(_state.SingleMarketSnapshot.TopOpportunityAuditNearMisses.Take(50), jsonOptions));
+        SafeExportWriter.WriteText(Path.Combine(dir, "single-market-arb-opportunities-latest.json"), JsonSerializer.Serialize(_state.SingleMarketSnapshot, jsonOptions));
+        SafeExportWriter.WriteText(Path.Combine(dir, "single-market-paper-executions-latest.json"), JsonSerializer.Serialize(_state.SingleMarketExecutions().TakeLast(100), jsonOptions));
+        SafeExportWriter.WriteText(Path.Combine(dir, "single-market-near-misses-latest.json"), JsonSerializer.Serialize(_state.SingleMarketSnapshot.TopOpportunityAuditNearMisses.Take(50), jsonOptions));
         ExportEdgeDistributionLatest(dir, jsonOptions);
     }
 
@@ -922,33 +922,8 @@ public class SingleMarketOrderBookArbEngine
         WriteJsonAtomic(Path.Combine(dir, "single-market-edge-distribution-latest.json"), payload, jsonOptions);
     }
 
-    private static void WriteJsonAtomic<T>(string path, T payload, JsonSerializerOptions jsonOptions)
-    {
-        var tmp = $"{path}.{Guid.NewGuid():N}.tmp";
-        for (var attempt = 0; attempt < 3; attempt++)
-        {
-            try
-            {
-                File.WriteAllText(tmp, JsonSerializer.Serialize(payload, jsonOptions));
-                if (File.Exists(path)) File.Replace(tmp, path, null);
-                else File.Move(tmp, path);
-                return;
-            }
-            catch (IOException)
-            {
-                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
-                if (attempt >= 2) return;
-                Thread.Sleep(25 * (attempt + 1));
-            }
-            catch (UnauthorizedAccessException)
-            {
-                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
-                if (attempt >= 2) return;
-                Thread.Sleep(25 * (attempt + 1));
-            }
-        }
-        try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
-    }
+    private static void WriteJsonAtomic<T>(string path, T payload, JsonSerializerOptions jsonOptions) =>
+        SafeExportWriter.WriteJson(path, JsonSerializer.Serialize(payload, jsonOptions));
 
     private SingleMarketOpportunityAuditDto AuditNearMiss(BinaryOrderBookSnapshot book, string? conditionId, decimal yes, decimal no, decimal rawCost, decimal rawEdge, decimal afterCostEdge, decimal afterSafetyEdge, decimal availableQty, decimal executableQty, decimal notionalAtCap, string rejectedReason, string? dataQualityReason, bool fillPassed, bool depthPassed, bool riskPassed, bool paperDiagnosticsLimitedGatePassed)
     {

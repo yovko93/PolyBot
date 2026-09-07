@@ -1,5 +1,6 @@
 using System.Text.Json;
 using TradingBot.Options;
+using TradingBot.Services;
 
 namespace TradingBot.Api;
 
@@ -521,41 +522,10 @@ public static class RuntimeSoakStatusExporter
 
     private static void WriteAtomicWithRetry(string path, string contents, BotRuntimeState state)
     {
-        for (var attempt = 1; attempt <= MaxAttempts; attempt++)
-        {
-            var tempPath = $"{path}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp";
-            try
-            {
-                using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.Read, 64 * 1024, FileOptions.WriteThrough))
-                using (var writer = new StreamWriter(stream))
-                    writer.Write(contents);
-
-                if (File.Exists(path))
-                    File.Replace(tempPath, path, null);
-                else
-                    File.Move(tempPath, path);
-
-                state.RecordRuntimeStatusExportSuccess();
-                return;
-            }
-            catch (IOException ex) when (attempt < MaxAttempts)
-            {
-                TryDelete(tempPath);
-                Thread.Sleep(RetryDelays[Math.Min(attempt - 1, RetryDelays.Length - 1)]);
-                state.RecordRuntimeStatusExportFailure(write: true, CompactReason(ex));
-            }
-            catch (IOException ex)
-            {
-                TryDelete(tempPath);
-                state.RecordRuntimeStatusExportFailure(write: true, CompactReason(ex));
-                return;
-            }
-            catch
-            {
-                TryDelete(tempPath);
-                throw;
-            }
-        }
+        if (SafeExportWriter.WriteText(path, contents, "RuntimeSoakStatus", critical: true))
+            state.RecordRuntimeStatusExportSuccess();
+        else
+            state.RecordRuntimeStatusExportFailure(write: true, SafeExportWriter.Snapshot().LastExceptionMessageShort);
     }
 
     private static void TryDelete(string path)

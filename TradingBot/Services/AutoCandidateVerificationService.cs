@@ -215,7 +215,7 @@ public static class AutoCandidateVerificationService
         var temp = path + ".tmp";
         for (var i = 0; i < 3; i++)
         {
-            try { File.WriteAllText(temp, json); File.Move(temp, path, true); return; }
+            try { SafeExportWriter.WriteText(path, json); return; }
             catch (IOException) { Thread.Sleep(50 * (i + 1)); }
             catch (UnauthorizedAccessException) { Thread.Sleep(50 * (i + 1)); }
         }

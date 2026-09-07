@@ -77,7 +77,7 @@ public sealed class DiagnosticsDashboardService(TradingBotOptions options, Paper
     public bool TryWrite(BotRuntimeState state, string root, out object dashboard)
     {
         dashboard = Build(state); if (!options.DiagnosticsDashboard.Enabled || !options.DiagnosticsDashboard.ExportEnabled) return false;
-        try { var path = Path.IsPathRooted(options.DiagnosticsDashboard.ExportPath) ? options.DiagnosticsDashboard.ExportPath : Path.Combine(root, options.DiagnosticsDashboard.ExportPath); Directory.CreateDirectory(Path.GetDirectoryName(path)!); var json=JsonSerializer.Serialize(dashboard,new JsonSerializerOptions{WriteIndented=true,PropertyNamingPolicy=JsonNamingPolicy.CamelCase}); var tmp=path+".tmp"; for(var i=0;i<3;i++){try{File.WriteAllText(tmp,json);File.Move(tmp,path,true); return true;}catch(IOException) when(i<2){Thread.Sleep(50);}} return false; } catch(Exception ex){ Console.WriteLine($"[DIAGNOSTICS_DASHBOARD_EXPORT_WARNING] Error={ex.Message}"); return false; }
+        var path = Path.IsPathRooted(options.DiagnosticsDashboard.ExportPath) ? options.DiagnosticsDashboard.ExportPath : Path.Combine(root, options.DiagnosticsDashboard.ExportPath); var json=JsonSerializer.Serialize(dashboard,new JsonSerializerOptions{WriteIndented=true,PropertyNamingPolicy=JsonNamingPolicy.CamelCase}); return SafeExportWriter.WriteJson(path,json,"DiagnosticsDashboardLatest",critical:true);
     }
     public void MaybeLogSummary(object dashboard, bool written)
     {

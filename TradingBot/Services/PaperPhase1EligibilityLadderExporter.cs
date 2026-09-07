@@ -72,9 +72,7 @@ public static class PaperPhase1EligibilityLadderExporter
             var path = Path.IsPathRooted(options.PaperPhase1EligibilityLadder.ExportPath) ? options.PaperPhase1EligibilityLadder.ExportPath : Path.Combine(root, options.PaperPhase1EligibilityLadder.ExportPath);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var json = JsonSerializer.Serialize(Build(state, options, health), new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-            var tmp = $"{path}.{Guid.NewGuid():N}.tmp";
-            File.WriteAllText(tmp, json);
-            File.Move(tmp, path, true);
+            SafeExportWriter.WriteJson(path, json, "PaperPhase1EligibilityLadder", critical:true);
         }
         catch (Exception ex) { Console.WriteLine($"[PAPER_PHASE1_ELIGIBILITY_LADDER_EXPORT_WARNING] Error={ex.Message}"); }
     }

@@ -184,8 +184,8 @@ public static class PaperPhase1ContractFixtureService
             settlement=new { requested=s.SettlementRequested, succeeded=s.SettlementSucceeded, rejected=s.SettlementRejected, positionId=s.SettlementLastPositionId, reason=s.SettlementLastReason, realizedPayout=s.SettlementLastRealizedPayout, realizedPnl=s.SettlementLastRealizedPnl, settledAtUtc=s.SettledAtUtc },
             lifecycle=new { paperOpened=s.PaperOpened, paperClosed=s.PaperClosed, paperOpenPositions=s.PaperOpenPositions, paperExposure=s.PaperExposure, paperLocked=s.PaperLocked, paperRealizedPnl=s.PaperRealizedPnl, balanceOk=s.LifecycleBalanceOk, balanceReason=s.LifecycleBalanceReason },
             safety=new { liveTradingDisabled=true, signingDisabled=true, liveOrderSent=false, signingAttempted=false }, consistent=s.Consistent && s.SettlementConsistent && s.LifecycleBalanceOk };
-        var directory=Path.Combine(root,"exports"); Directory.CreateDirectory(directory); var path=Path.Combine(directory,"paper-phase1-contract-fixture-latest.json"); var temp=path+".tmp";
-        File.WriteAllText(temp,JsonSerializer.Serialize(payload,new JsonSerializerOptions{WriteIndented=true,PropertyNamingPolicy=JsonNamingPolicy.CamelCase})); File.Move(temp,path,true);
+        var directory=Path.Combine(root,"exports"); var path=Path.Combine(directory,"paper-phase1-contract-fixture-latest.json");
+        SafeExportWriter.WriteJson(path,JsonSerializer.Serialize(payload,new JsonSerializerOptions{WriteIndented=true,PropertyNamingPolicy=JsonNamingPolicy.CamelCase}),"PaperPhase1ContractFixture",critical:true);
     }
 
     public static void ExportDisabledMarker(string root)
@@ -195,9 +195,7 @@ public static class PaperPhase1ContractFixtureService
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var payload = new { enabled=false, opened=false, settled=false, candidateInjected=false,
             staleFixtureResultIgnored=true, lastFixtureRunUtc, normalRuntimeUnaffected=true };
-        var temp = path + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented=true, PropertyNamingPolicy=JsonNamingPolicy.CamelCase }));
-        File.Move(temp, path, true);
+        SafeExportWriter.WriteJson(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented=true, PropertyNamingPolicy=JsonNamingPolicy.CamelCase }), "PaperPhase1ContractFixture", critical:true);
         Current = new();
         Console.WriteLine("[PAPER_PHASE1_FIXTURE_ISOLATION] PaperPhase1ContractFixtureEnabled=false PaperPhase1ContractFixtureOpened=false PaperPhase1ContractFixtureSettled=false PaperPhase1ContractFixtureCandidateInjected=false PaperPhase1ContractFixtureAffectsRuntime=false PaperPhase1ContractFixtureIsolationOk=true");
     }

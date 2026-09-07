@@ -68,6 +68,7 @@ builder.Services.AddSingleton(sp => new DiagnosticsDashboardHistoryService(sp.Ge
 var app = builder.Build();
 app.UseCors("ui");
 var options = app.Services.GetRequiredService<IOptions<TradingBotOptions>>().Value;
+SafeExportWriter.Configure(options.Exports, app.Environment.ContentRootPath);
 PaperPhase1PositiveCaptureService.Configure(options, app.Environment.ContentRootPath);
 PaperPhase1RealReadinessMonitor.Configure(options.PaperPhase1.CleanPositiveAlertTtlSeconds);
 var replayIndex = Array.IndexOf(args, "--replay-paper-phase1-capture");
@@ -186,13 +187,13 @@ app.MapPost("/api/bot/paper/phase1/settle", (PaperPhase1SettlementRequest reques
 });
 app.MapGet("/api/bot/verified-allowlist-health", (IHostEnvironment env) =>
 {
-    var path = Path.Combine(env.ContentRootPath, "exports/verified-allowlist-health-latest.json");
+    var path = SafeExportWriter.Resolve(Path.Combine(env.ContentRootPath, "exports/verified-allowlist-health-latest.json"));
     if (!File.Exists(path)) return Results.Ok(Array.Empty<object>());
     return Results.Text(File.ReadAllText(path), "application/json");
 });
 app.MapGet("/api/bot/verified-unresolved-groups", (IHostEnvironment env) =>
 {
-    var path = Path.Combine(env.ContentRootPath, "exports/verified-unresolved-groups-latest.json");
+    var path = SafeExportWriter.Resolve(Path.Combine(env.ContentRootPath, "exports/verified-unresolved-groups-latest.json"));
     if (!File.Exists(path)) return Results.Ok(new { total = 0, groups = Array.Empty<object>() });
     return Results.Text(File.ReadAllText(path), "application/json");
 });
@@ -240,27 +241,27 @@ app.MapGet("/api/bot/multi-outcome-review-report", (BotRuntimeState s, int? limi
 });
 app.MapGet("/api/bot/verified-group-triage", (IHostEnvironment env, int? limit) =>
 {
-    var path = Path.Combine(env.ContentRootPath, "exports/verified-group-triage-latest.json");
+    var path = SafeExportWriter.Resolve(Path.Combine(env.ContentRootPath, "exports/verified-group-triage-latest.json"));
     if (!File.Exists(path)) return Results.Ok(Array.Empty<object>());
     var arr = System.Text.Json.JsonSerializer.Deserialize<object[]>(File.ReadAllText(path)) ?? Array.Empty<object>();
     return Results.Ok(arr.Take(Math.Clamp(limit ?? 25, 1, 200)).ToArray());
 });
 app.MapGet("/api/bot/next-groups-to-verify", (IHostEnvironment env, int? limit) =>
 {
-    var path = Path.Combine(env.ContentRootPath, "exports/next-groups-to-verify-latest.json");
+    var path = SafeExportWriter.Resolve(Path.Combine(env.ContentRootPath, "exports/next-groups-to-verify-latest.json"));
     if (!File.Exists(path)) return Results.Ok(Array.Empty<object>());
     var arr = System.Text.Json.JsonSerializer.Deserialize<object[]>(File.ReadAllText(path)) ?? Array.Empty<object>();
     return Results.Ok(arr.Take(Math.Clamp(limit ?? 10, 1, 100)).ToArray());
 });
 app.MapGet("/api/bot/verified-allowlist-suggestion", (IHostEnvironment env) =>
 {
-    var path = Path.Combine(env.ContentRootPath, "exports/verified-multi-outcome-groups-suggested.json");
+    var path = SafeExportWriter.Resolve(Path.Combine(env.ContentRootPath, "exports/verified-multi-outcome-groups-suggested.json"));
     if (!File.Exists(path)) return Results.Ok(new { items = Array.Empty<object>() });
     return Results.Text(File.ReadAllText(path), "application/json");
 });
 app.MapGet("/api/bot/auto-candidate-verification", (IHostEnvironment env, int? limit) =>
 {
-    var path = Path.Combine(env.ContentRootPath, "exports/auto-candidate-verification-latest.json");
+    var path = SafeExportWriter.Resolve(Path.Combine(env.ContentRootPath, "exports/auto-candidate-verification-latest.json"));
     if (!File.Exists(path)) return Results.Ok(Array.Empty<object>());
     try
     {
@@ -272,7 +273,7 @@ app.MapGet("/api/bot/auto-candidate-verification", (IHostEnvironment env, int? l
 });
 app.MapGet("/api/bot/verified-allowlist-repair-report", (IHostEnvironment env, int? limit) =>
 {
-    var path = Path.Combine(env.ContentRootPath, "exports/verified-allowlist-repair-report-latest.json");
+    var path = SafeExportWriter.Resolve(Path.Combine(env.ContentRootPath, "exports/verified-allowlist-repair-report-latest.json"));
     if (!File.Exists(path)) return Results.Ok(new { groups = Array.Empty<object>() });
     var node = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.Nodes.JsonObject>(File.ReadAllText(path));
     var capped = Math.Clamp(limit ?? 50, 1, 500);
@@ -286,7 +287,7 @@ app.MapGet("/api/bot/verified-allowlist-repair-report", (IHostEnvironment env, i
 });
 app.MapGet("/api/bot/verified-allowlist-suggested-config", (IHostEnvironment env, int? limit) =>
 {
-    var path = Path.Combine(env.ContentRootPath, "exports/verified-multi-outcome-groups-repair-suggested.json");
+    var path = SafeExportWriter.Resolve(Path.Combine(env.ContentRootPath, "exports/verified-multi-outcome-groups-repair-suggested.json"));
     if (!File.Exists(path)) return Results.Ok(new { groups = Array.Empty<object>() });
     var node = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.Nodes.JsonObject>(File.ReadAllText(path));
     if (node?["groups"] is System.Text.Json.Nodes.JsonArray groups)
@@ -298,7 +299,7 @@ app.MapGet("/api/bot/verified-allowlist-suggested-config", (IHostEnvironment env
 });
 app.MapGet("/api/bot/allowlist-repair-patch-preview", (IHostEnvironment env) =>
 {
-    var path = Path.Combine(env.ContentRootPath, "exports/verified-allowlist-repair-patch-preview-latest.json");
+    var path = SafeExportWriter.Resolve(Path.Combine(env.ContentRootPath, "exports/verified-allowlist-repair-patch-preview-latest.json"));
     if (!File.Exists(path)) return Results.Ok(new { mode = "ManualPreviewOnly", willOverwriteRealConfig = false, patches = Array.Empty<object>() });
     return Results.Text(File.ReadAllText(path), "application/json");
 });
@@ -732,7 +733,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
             markets.Count,
             summary.RawLoadedTotal,
             markets.Select(m => new PersistedHealthyMarket(m.id, m.question, m.conditionId, m.outcomes, m.clobTokenIds, m.active, m.closed, m.archived, m.accepting_orders, m.acceptingOrders, m.liquidity, m.volume24hr)).ToArray());
-        File.WriteAllText(path, Newtonsoft.Json.JsonConvert.SerializeObject(snapshot, Newtonsoft.Json.Formatting.Indented));
+        SafeExportWriter.WriteText(path, Newtonsoft.Json.JsonConvert.SerializeObject(snapshot, Newtonsoft.Json.Formatting.Indented));
         Console.WriteLine($"[DISCOVERY_PERSISTED_SNAPSHOT_WRITTEN] Path={path} ActiveMarkets={markets.Count} CreatedAtUtc={snapshot.CreatedAtUtc:O}");
     }
 
@@ -769,7 +770,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
         var tmp = path + ".tmp";
         for (var i = 0; i < 3; i++)
         {
-            try { File.WriteAllText(tmp, json); File.Move(tmp, path, true); Console.WriteLine($"[REDUCED_UNIVERSE_HEALTHY_SNAPSHOT_WRITTEN] Path={path} Markets={markets.Count} Eligible={filter.EligibleMarkets}"); return; }
+            try { SafeExportWriter.WriteText(path, json); Console.WriteLine($"[REDUCED_UNIVERSE_HEALTHY_SNAPSHOT_WRITTEN] Path={path} Markets={markets.Count} Eligible={filter.EligibleMarkets}"); return; }
             catch (IOException) when (i < 2) { Thread.Sleep(50); }
             catch (Exception ex) { Console.WriteLine($"[REDUCED_UNIVERSE_HEALTHY_SNAPSHOT_WRITE_WARNING] Error={ex.Message.Replace(' ', '_')}"); return; }
         }
@@ -1373,6 +1374,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var incompleteGroups=allowlistedGroups
                         .Where(g=>!options.PaperPhase1.ShadowGroupCompletionRequireVerified||string.Equals(g.VerificationStatus,"Verified",StringComparison.OrdinalIgnoreCase))
                         .Where(g=>!shadowCompletedGroupKeys.Contains(g.GroupKey)&&g.MarketIds.Any(id=>!shadowNaturalPool.Any(m=>m.id.Equals(id,StringComparison.OrdinalIgnoreCase)))).Take(options.PaperPhase1.ShadowGroupCompletionMaxGroups).ToArray();
+                    var suppressedGroups=incompleteGroups.Where(g=>!VerifiedMultiOutcomeDiscoveryDiagnostics.TryBeginCompletion(g.GroupKey)).ToArray();
+                    var suppressedTokens=suppressedGroups.SelectMany(g=>g.MarketIds).Distinct(StringComparer.OrdinalIgnoreCase).Count()*2;
+                    VerifiedMultiOutcomeDiscoveryDiagnostics.ObserveSuppressedOrderbooks(suppressedTokens);
+                    incompleteGroups=incompleteGroups.Except(suppressedGroups).ToArray();
                     var completionSamples=new List<ShadowGroupCompletionSample>();
                     var additionalMarketsRequested=0; var additionalMarketsLoaded=0; var additionalBooksRequested=0; var additionalBooksLoaded=0;
                     var requestedCompletionIds=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -1386,8 +1391,16 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         foreach(var market in loaded) shadowCompletionMarkets[market.id]=market;
                         additionalMarketsLoaded=loaded.Count;
                         var completionGroupIds=incompleteGroups.SelectMany(g=>g.MarketIds).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                        var loadedForBooks=loaded.Concat(shadowCompletionMarkets.Values.Where(m=>completionGroupIds.Contains(m.id))).Where(m=>m.clobTokenIds.Count>=2).GroupBy(m=>m.id,StringComparer.OrdinalIgnoreCase).Select(g=>g.First()).ToList(); additionalBooksRequested=loadedForBooks.Count;
-                        foreach(var market in loadedForBooks) if(await orderbookService.GetBinarySnapshotAsync(market,stoppingToken) is not null) { additionalBooksLoaded++; loadedCompletionBookIds.Add(market.id); }
+                        var tokenLimit=options.PaperPhase1.ShadowSiblingOrderbookPrefetchMaxTokensPerWindow;
+                        var loadedForBooks=loaded.Concat(shadowCompletionMarkets.Values.Where(m=>completionGroupIds.Contains(m.id))).Where(m=>m.clobTokenIds.Count>=2).GroupBy(m=>m.id,StringComparer.OrdinalIgnoreCase).Select(g=>g.First()).Take(Math.Max(1,tokenLimit/2)).ToList();
+                        additionalBooksRequested=options.PaperPhase1.ShadowSiblingOrderbookPrefetchEnabled?loadedForBooks.Sum(m=>m.clobTokenIds.Take(2).Count()):0;
+                        if(options.PaperPhase1.ShadowSiblingOrderbookPrefetchEnabled)
+                        {
+                            var batches=loadedForBooks.Chunk(Math.Max(1,options.PaperPhase1.ShadowSiblingOrderbookPrefetchBatchSize/2)).ToArray();
+                            using var prefetchGate=new SemaphoreSlim(options.PaperPhase1.ShadowSiblingOrderbookPrefetchConcurrency);
+                            await Task.WhenAll(batches.Select(async batch=>{ await prefetchGate.WaitAsync(stoppingToken); try { for(var retry=0;retry<=options.PaperPhase1.ShadowSiblingOrderbookRetryCount;retry++){ await orderbookService.PrefetchBinarySnapshotsAsync(batch.ToList(),stoppingToken); if(retry<options.PaperPhase1.ShadowSiblingOrderbookRetryCount) await Task.Delay(options.PaperPhase1.ShadowSiblingOrderbookRetryBackoffMs,stoppingToken); } } finally { prefetchGate.Release(); } }));
+                        }
+                        foreach(var market in options.PaperPhase1.ShadowSiblingOrderbookPrefetchEnabled?loadedForBooks:[]) if(await orderbookService.GetBinarySnapshotAsync(market,stoppingToken) is not null) { additionalBooksLoaded+=Math.Min(2,market.clobTokenIds.Count); loadedCompletionBookIds.Add(market.id); }
                         baseIds.UnionWith(shadowCompletionMarkets.Keys);
                     }
                     foreach(var group in incompleteGroups)
@@ -1399,11 +1412,15 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         var missingSiblingBook=missingBefore.Any(id=>shadowCompletionMarkets.ContainsKey(id)&&!loadedCompletionBookIds.Contains(id));
                         var succeeded=attempted&&missingAfter.Length==0&&!missingTokenMap&&!missingSiblingBook;
                         if(succeeded) shadowCompletedGroupKeys.Add(group.GroupKey);
-                        var reason=!attempted?"ShadowGroupCompletionDisabled":succeeded?"None":missingBefore.Any(id=>!requestedCompletionIds.Contains(id)&&!shadowCompletionMarkets.ContainsKey(id))?"VerifiedGroupCompletionLimitReached":missingTokenMap?"VerifiedGroupSiblingTokenMapMissing":missingSiblingBook?"VerifiedGroupSiblingOrderbookMissing":"VerifiedGroupSiblingMarketLoadFailed";
+                        var reason=!attempted?"ShadowGroupCompletionDisabled":succeeded?"None":!options.PaperPhase1.ShadowSiblingOrderbookPrefetchEnabled?"ShadowSiblingOrderbookNotRequested":missingBefore.Any(id=>!requestedCompletionIds.Contains(id)&&!shadowCompletionMarkets.ContainsKey(id))?"ShadowSiblingOrderbookNotRequested":missingTokenMap?"ShadowSiblingOrderbookTokenMapMissing":missingSiblingBook?ShadowOrderbookFailureReason():"ShadowSiblingOrderbookRequestFailed";
                         var groupMarketsLoaded=missingBefore.Count(id=>shadowCompletionMarkets.ContainsKey(id));
-                        var groupBooksRequested=missingBefore.Count(id=>shadowCompletionMarkets.TryGetValue(id,out var market)&&market.clobTokenIds.Count>=2);
-                        var groupBooksLoaded=missingBefore.Count(id=>loadedCompletionBookIds.Contains(id));
-                        completionSamples.Add(new(group.GroupKey,group.GroupKey,group.MarketIds.Except(missingBefore,StringComparer.OrdinalIgnoreCase).ToArray(),missingBefore,attempted,succeeded,missingBefore.Length,groupMarketsLoaded,groupBooksRequested,groupBooksLoaded,reason));
+                        var requiredTokens=missingBefore.Where(shadowCompletionMarkets.ContainsKey).SelectMany(id=>shadowCompletionMarkets[id].clobTokenIds.Take(2)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                        var loadedTokens=missingBefore.Where(loadedCompletionBookIds.Contains).SelectMany(id=>shadowCompletionMarkets[id].clobTokenIds.Take(2)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                        var missingTokens=requiredTokens.Except(loadedTokens,StringComparer.OrdinalIgnoreCase).ToArray();
+                        var missingReasons=missingTokens.ToDictionary(x=>x,_=>reason,StringComparer.OrdinalIgnoreCase);
+                        var groupBooksRequested=requiredTokens.Length;
+                        var groupBooksLoaded=loadedTokens.Length;
+                        completionSamples.Add(new(group.GroupKey,group.GroupKey,group.MarketIds.Except(missingBefore,StringComparer.OrdinalIgnoreCase).ToArray(),missingBefore,attempted,succeeded,missingBefore.Length,groupMarketsLoaded,groupBooksRequested,groupBooksLoaded,reason,TokenIdsRequired:requiredTokens,TokenIdsWithOrderbook:loadedTokens,TokenIdsMissingOrderbook:missingTokens,TokenIdsStaleOrderbook:[],OrderbookMissingReasonsByToken:missingReasons));
                     }
                     var newlyCompleted=completionSamples.Count(x=>x.CompletionSucceeded);
                     foreach(var group in allowlistedGroups.Where(g=>shadowCompletedGroupKeys.Contains(g.GroupKey)&&completionSamples.All(x=>!x.GroupKey.Equals(g.GroupKey,StringComparison.OrdinalIgnoreCase))))
@@ -1917,9 +1934,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         if (logThrottle.ShouldLog($"ALLOWLIST_CONFIG_REPAIR_REMAINING:{remaining.GroupKey}", remainingFingerprint, options.Logging.LogAllowlistRepairOnChangeOnly, options.Logging.LogAllowlistRepairEveryNCycles))
                             Console.WriteLine($"[ALLOWLIST_CONFIG_REPAIR_REMAINING] Group={remaining.GroupKey} Action=PruneMissingNoAskLegs MissingMarketIds=[{missingIds}]");
                     }
-                    var healthPath = Path.Combine(contentRootPath, "exports/verified-allowlist-health-latest.json"); Directory.CreateDirectory(Path.GetDirectoryName(healthPath)!); File.WriteAllText(healthPath, System.Text.Json.JsonSerializer.Serialize(new { configured = finalClassification.Configured, healthy = finalClassification.Healthy, monitoringOnly = finalClassification.MonitoringOnly, needsPricingPrune = finalClassification.NeedsPricingPrune, needsRefresh = finalClassification.NeedsRefresh, reviewOnly = finalClassification.ReviewOnly, brokenConfig = finalClassification.BrokenConfig, disabled = finalClassification.Disabled, ignored = finalClassification.Ignored, brokenTotal = brokenCount, classificationTotal, classificationValid, invariantResult = classificationValid, categoryCounts = repairReport.CategoryCounts, groups = allowlistHealth }, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
+                    var healthPath = Path.Combine(contentRootPath, "exports/verified-allowlist-health-latest.json"); Directory.CreateDirectory(Path.GetDirectoryName(healthPath)!); SafeExportWriter.WriteText(healthPath, System.Text.Json.JsonSerializer.Serialize(new { configured = finalClassification.Configured, healthy = finalClassification.Healthy, monitoringOnly = finalClassification.MonitoringOnly, needsPricingPrune = finalClassification.NeedsPricingPrune, needsRefresh = finalClassification.NeedsRefresh, reviewOnly = finalClassification.ReviewOnly, brokenConfig = finalClassification.BrokenConfig, disabled = finalClassification.Disabled, ignored = finalClassification.Ignored, brokenTotal = brokenCount, classificationTotal, classificationValid, invariantResult = classificationValid, categoryCounts = repairReport.CategoryCounts, groups = allowlistHealth }, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
                     var cleanup = new { metadata = new { generatedAtUtc = DateTime.UtcNow, note = "suggested only" }, groups = allowlistRepairService.BuildSuggestedConfig(repairReport).Groups };
-                    var cleanupPath = Path.Combine(contentRootPath, "exports/verified-allowlist-cleanup-suggested.json"); File.WriteAllText(cleanupPath, System.Text.Json.JsonSerializer.Serialize(cleanup, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
+                    var cleanupPath = Path.Combine(contentRootPath, "exports/verified-allowlist-cleanup-suggested.json"); SafeExportWriter.WriteText(cleanupPath, System.Text.Json.JsonSerializer.Serialize(cleanup, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
                     var repairLogEveryNCycles = options.Logging.SuppressRepeatedRepairSnapshotLogs && !options.Diagnostics.DebuggerSafeMode ? 0 : options.Logging.LogAllowlistRepairEveryNCycles;
                     var repairSuggestionEveryNCycles = options.Logging.SuppressRepeatedRepairSnapshotLogs && !options.Diagnostics.DebuggerSafeMode ? 0 : options.Logging.LogRepairSuggestionsEveryNCycles;
                     var repairSuggestionMaxPerHour = options.Diagnostics.OperationalQuietMode ? Math.Min(3, Math.Max(1, options.Logging.MaxRepairSuggestionLogsPerHour)) : options.Logging.MaxRepairSuggestionLogsPerHour;
@@ -2180,7 +2197,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             Console.WriteLine($"[EXPERIMENTAL_PROFILE_CANDIDATE] Group={row.GroupKey} ActiveProfile={snapshot.ActiveProfile} ActiveNet={row.ActiveProfileNetEdge} ExperimentalProfile={snapshot.ExperimentalProfile} ExperimentalNet={row.ExperimentalProfileNetEdge} Status={expState}");
                     }
                     var experimentalExportPath = Path.Combine(contentRootPath, "exports/experimental-profile-paper-candidates-latest.json");
-                    File.WriteAllText(experimentalExportPath, System.Text.Json.JsonSerializer.Serialize(new { timestamp = DateTime.UtcNow, activeProfile = snapshot.ActiveProfile, experimentalProfile = snapshot.ExperimentalProfile, candidates = snapshot.ExperimentalCandidates, stabilityState = stability.Summaries(), paperActions = Array.Empty<object>(), blockedReasons = Array.Empty<object>() }, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
+                    SafeExportWriter.WriteText(experimentalExportPath, System.Text.Json.JsonSerializer.Serialize(new { timestamp = DateTime.UtcNow, activeProfile = snapshot.ActiveProfile, experimentalProfile = snapshot.ExperimentalProfile, candidates = snapshot.ExperimentalCandidates, stabilityState = stability.Summaries(), paperActions = Array.Empty<object>(), blockedReasons = Array.Empty<object>() }, new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
                     foreach (var row in snapshot.VerifiedBaskets)
                     {
                         var prevState = basketStateByGroup.TryGetValue(row.GroupKey, out var pstate) ? pstate : VerifiedBasketState.NotExecutable;
@@ -2382,7 +2399,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     var unresolvedExport = ScanLogSummaryService.BuildUnresolvedExport(unresolvedDiagnostics.Take(options.RuntimeState.MaxUnresolvedDiagnostics).ToArray(), DateTime.UtcNow);
                     var unresolvedExportPath = Path.Combine(contentRootPath, options.MultiOutcomeReview.ExportVerifiedUnresolvedGroupsPath);
                     Directory.CreateDirectory(Path.GetDirectoryName(unresolvedExportPath)!);
-                    File.WriteAllText(unresolvedExportPath, System.Text.Json.JsonSerializer.Serialize(unresolvedExport, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
+                    SafeExportWriter.WriteText(unresolvedExportPath, System.Text.Json.JsonSerializer.Serialize(unresolvedExport, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
                     var suppressedUnresolvedKeys = unresolvedDiagnostics.Where(x => x.SuppressedInConsole).Select(x => x.GroupKey).ToArray();
                     var unresolvedGroupSetFingerprint = ScanLogSummaryService.VerifiedUnresolvedGroupSetFingerprint(unresolvedDiagnostics.Select(x => x.GroupKey));
                     var quietVerifiedFingerprint = $"configured:{multiOutcomeValidator.LoadedAllowlistCount}|resolved:{verifiedResolved}|unresolved:{unresolved}|" + ScanLogSummaryService.MultiVerifiedScanQuietFingerprint(unresolvedCounts, unresolvedGroupSetFingerprint, activeExecutable, paperOpenedCount, bestConservativeNet, options.Logging.VerifiedScanSignificantEdgeDelta);
@@ -2487,10 +2504,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         if (!autoShadowRowsAdded && multiOutcomeReport.GroupsDetected > 0)
                             shadowRows.Add(new { timestampUtc = DateTime.UtcNow, processRunId = state.ProcessRunId, strategy = "AutoCandidateMultiOutcome", mode = autoConfig.Mode.ToString(), marketOrGroupKey = "auto-candidate-multi-outcome", legs = 0, rawEdge = (decimal?)null, afterCostEdge = (decimal?)null, afterSafetyEdge = (decimal?)null, executableQty = 0, notionalAtCap = 0, wouldOpen = false, blockedReason = autoTopSkipReason, paperDiagnosticsLimitedEligible = shadowHealth.PaperDiagnosticsLimitedEligible, orderbookStableNow = shadowHealth.OrderbookStableNow, reducedUniverseOrderbookStableNow = shadowHealth.ReducedUniverseOrderbookStableNow });
                     }
-                    File.WriteAllText(Path.Combine(shadowExportDir, "shadow-paper-candidates-latest.json"), System.Text.Json.JsonSerializer.Serialize(shadowRows, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
-                    File.WriteAllText(Path.Combine(shadowExportDir, "verified-multi-outcome-near-misses-latest.json"), System.Text.Json.JsonSerializer.Serialize(groupDiagnostics.Take(100), new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
-                    File.WriteAllText(Path.Combine(shadowExportDir, "auto-candidate-near-misses-latest.json"), System.Text.Json.JsonSerializer.Serialize(multiOutcomeReport.TopRejectedSamples.Take(100), new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
-                    File.WriteAllText(Path.Combine(shadowExportDir, "multi-strategy-near-misses-latest.json"), System.Text.Json.JsonSerializer.Serialize(new { verified = groupDiagnostics.Take(50).Select(x => new { item = x, bestCandidateValid = false, bestCandidatePriced = x.BestEdge.HasValue, bestCandidateExecutableLike = false, bestCandidateReason = x.SkipReason, invalidCategory = InvalidCategory(x.SkipReason) }), autoCandidate = multiOutcomeReport.TopRejectedSamples.Take(50).Select(x => new { x.GroupKey, x.Reason, bestCandidateValid = false, bestCandidatePriced = false, bestCandidateExecutableLike = false, bestCandidateReason = x.Reason, invalidCategory = InvalidCategory(x.Reason) }), singleMarket = state.SingleMarketSnapshot.TopOpportunityAuditNearMisses.Take(50) }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
+                    SafeExportWriter.WriteText(Path.Combine(shadowExportDir, "shadow-paper-candidates-latest.json"), System.Text.Json.JsonSerializer.Serialize(shadowRows, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
+                    SafeExportWriter.WriteText(Path.Combine(shadowExportDir, "verified-multi-outcome-near-misses-latest.json"), System.Text.Json.JsonSerializer.Serialize(groupDiagnostics.Take(100), new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
+                    SafeExportWriter.WriteText(Path.Combine(shadowExportDir, "auto-candidate-near-misses-latest.json"), System.Text.Json.JsonSerializer.Serialize(multiOutcomeReport.TopRejectedSamples.Take(100), new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
+                    SafeExportWriter.WriteText(Path.Combine(shadowExportDir, "multi-strategy-near-misses-latest.json"), System.Text.Json.JsonSerializer.Serialize(new { verified = groupDiagnostics.Take(50).Select(x => new { item = x, bestCandidateValid = false, bestCandidatePriced = x.BestEdge.HasValue, bestCandidateExecutableLike = false, bestCandidateReason = x.SkipReason, invalidCategory = InvalidCategory(x.SkipReason) }), autoCandidate = multiOutcomeReport.TopRejectedSamples.Take(50).Select(x => new { x.GroupKey, x.Reason, bestCandidateValid = false, bestCandidatePriced = false, bestCandidateExecutableLike = false, bestCandidateReason = x.Reason, invalidCategory = InvalidCategory(x.Reason) }), singleMarket = state.SingleMarketSnapshot.TopOpportunityAuditNearMisses.Take(50) }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
                     var familyRanking = OpportunityFamilyRankingService.Build(state.SingleMarketSnapshot.TopOpportunityAuditNearMisses, groupDiagnostics, pricingDiagnostics, autoVerification);
                     var familyCounterSnapshot = state.StrategyCountersSnapshot();
                     familyRanking = OpportunityFamilyRankingService.WithConsistency(familyRanking, familyCounterSnapshot.Values.Sum(x => x.PositiveEdges), state.SingleMarketSnapshot.Summary.ValidAfterSafetyPositive);
@@ -2575,7 +2592,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                     }).ToArray();
                     var triagePath = Path.Combine(contentRootPath, options.MultiOutcomeReview.ExportVerifiedTriagePath);
                     Directory.CreateDirectory(Path.GetDirectoryName(triagePath)!);
-                    File.WriteAllText(triagePath, System.Text.Json.JsonSerializer.Serialize(triageRows, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+                    SafeExportWriter.WriteText(triagePath, System.Text.Json.JsonSerializer.Serialize(triageRows, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
                     var nextGroups = reviewReport
                         .Select(x => System.Text.Json.JsonSerializer.SerializeToNode(x)!.AsObject())
                         .Where(n => (n["recommendedAction"]?.GetValue<string>() ?? "") == "SafeCandidateForManualVerification")
@@ -2597,9 +2614,9 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         }).ToArray<object>();
                     var nextPath = Path.Combine(contentRootPath, options.MultiOutcomeReview.ExportNextGroupsToVerifyPath);
                     Directory.CreateDirectory(Path.GetDirectoryName(nextPath)!);
-                    File.WriteAllText(nextPath, System.Text.Json.JsonSerializer.Serialize(nextGroups, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+                    SafeExportWriter.WriteText(nextPath, System.Text.Json.JsonSerializer.Serialize(nextGroups, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
                     var suggestedPath = Path.Combine(contentRootPath, options.MultiOutcomeReview.ExportSuggestedVerifiedGroupsPath);
-                    File.WriteAllText(suggestedPath, System.Text.Json.JsonSerializer.Serialize(new
+                    SafeExportWriter.WriteText(suggestedPath, System.Text.Json.JsonSerializer.Serialize(new
                     {
                         metadata = new { note = "Suggested only. Does not overwrite config/verified-multi-outcome-groups.json.", generatedAtUtc = DateTime.UtcNow },
                         groups = triageRows.Select(t => new
@@ -2831,9 +2848,9 @@ static async Task PushUiUpdates(BotRuntimeState state, IHubContext<BotHub> hub, 
         verifiedExecution.ExportAudit(Path.Combine(contentRootPath, "exports/execution-audit-latest.json"));
         verifiedExecution.ExportDryRunPlans(Path.Combine(contentRootPath, "exports/dry-run-order-plans-latest.json"), options.MultiOutcomeArbitrage.CostProfiles.ActiveProfile, true);
         verifiedExecution.ExportFillSimulations(Path.Combine(contentRootPath, "exports/dry-run-fill-simulations-latest.json"));
-        File.WriteAllText(Path.Combine(contentRootPath, "exports/paper-positions-latest.json"), System.Text.Json.JsonSerializer.Serialize(state.Positions().TakeLast(200), new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
-        File.WriteAllText(Path.Combine(contentRootPath, "exports/paper-executions-latest.json"), System.Text.Json.JsonSerializer.Serialize(state.SingleMarketExecutions().TakeLast(options.RuntimeState.MaxSingleMarketExecutions), new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
-        File.WriteAllText(Path.Combine(contentRootPath, "exports/paper-account-latest.json"), System.Text.Json.JsonSerializer.Serialize(new {
+        SafeExportWriter.WriteText(Path.Combine(contentRootPath, "exports/paper-positions-latest.json"), System.Text.Json.JsonSerializer.Serialize(state.Positions().TakeLast(200), new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        SafeExportWriter.WriteText(Path.Combine(contentRootPath, "exports/paper-executions-latest.json"), System.Text.Json.JsonSerializer.Serialize(state.SingleMarketExecutions().TakeLast(options.RuntimeState.MaxSingleMarketExecutions), new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        SafeExportWriter.WriteText(Path.Combine(contentRootPath, "exports/paper-account-latest.json"), System.Text.Json.JsonSerializer.Serialize(new {
             initialCash = 1000m,
             cash = state.Status.Cash,
             locked = state.Status.LockedCapital,
@@ -2919,6 +2936,17 @@ static SingleMarketArbSnapshotDto BuildSingleMarketSignalRPayload(BotRuntimeStat
     }
     return payload;
 }
+
+static string ShadowOrderbookFailureReason() => BatchOrderbookDiagnostics.Current switch
+{
+    { CircuitBreakerOpen: true } => "ShadowSiblingOrderbookCircuitBreakerOpen",
+    { LastHttpStatus: "429" } => "ShadowSiblingOrderbookRateLimited",
+    { LastErrorKind: "Timeout" } => "ShadowSiblingOrderbookTimeout",
+    { LastErrorKind: "ProviderError" } => "ShadowSiblingOrderbookProviderError",
+    { LastErrorKind: "MalformedResponse" } => "ShadowSiblingOrderbookMalformedResponse",
+    { LastStatus: "NoBooksLoaded" } => "ShadowSiblingOrderbookBatchEmptyResponse",
+    _ => "ShadowSiblingOrderbookNotFound"
+};
 
 static List<Market> BuildRollingBatch(List<Market> markets, ref int offset, int batchSize, TradingBotOptions options)
 {

@@ -124,7 +124,7 @@ public static class PaperOpportunityFunnelExporter
     public static void ExportLatest(string exportsRoot, PaperOpportunityFunnelSnapshot snapshot)
     {
         Directory.CreateDirectory(exportsRoot);
-        File.WriteAllText(Path.Combine(exportsRoot, "paper-opportunity-funnel-latest.json"), JsonSerializer.Serialize(snapshot, JsonOptions));
+        SafeExportWriter.WriteText(Path.Combine(exportsRoot, "paper-opportunity-funnel-latest.json"), JsonSerializer.Serialize(snapshot, JsonOptions));
     }
 
     private static Dictionary<string, int> Merge(params IReadOnlyDictionary<string, int>[] dictionaries)

@@ -128,7 +128,7 @@ public sealed class MemoryGuard
                 lastLogsSummary = state.Logs().TakeLast(20).Select(l => new { l.Timestamp, l.Level, l.Source, Message = l.Message.Length > 240 ? l.Message[..240] : l.Message }),
                 process = new { p.Threads.Count, p.HandleCount, p.PrivateMemorySize64, p.WorkingSet64 }
             };
-            File.WriteAllText(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
+            SafeExportWriter.WriteText(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch (Exception ex)
         {

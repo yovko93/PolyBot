@@ -121,6 +121,6 @@ public static class PaperPhase1RealReadinessMonitor
             safety = new { liveTradingDisabled=h.PaperPhase1LiveTradingDisabled, signingDisabled=s.NoSigningAttempts, paperOnly=h.PaperPhase1Enabled && h.PaperPhase1LiveTradingDisabled } };
         var directory = Path.Combine(contentRoot, "exports"); Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, "paper-phase1-real-alert-latest.json");
-        var temp = path + ".tmp"; File.WriteAllText(temp, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true })); File.Move(temp, path, true);
+        SafeExportWriter.WriteJson(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }), "PaperPhase1RealReadiness", critical: true);
     }
 }

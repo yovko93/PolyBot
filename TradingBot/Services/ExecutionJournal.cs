@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text;
 using TradingBot.Models;
 
@@ -19,7 +19,7 @@ public class ExecutionJournal
     {
         lock (_lock)
         {
-            File.AppendAllText(_csvPath, ToCsvLine(record) + Environment.NewLine);
+            SafeExportWriter.AppendText(_csvPath, ToCsvLine(record) + Environment.NewLine);
         }
     }
 
@@ -36,7 +36,7 @@ public class ExecutionJournal
         var header =
             "timestampUtc,mode,engine,strategy,key,quantity,totalCost,guaranteedPayout,edgePerShare,expectedProfit,balanceAfter,lockedCapitalAfter,equityAfter,status,legs";
 
-        File.WriteAllText(_csvPath, header + Environment.NewLine);
+        SafeExportWriter.WriteText(_csvPath, header + Environment.NewLine);
     }
 
     private static string ToCsvLine(ExecutionJournalRecord row)

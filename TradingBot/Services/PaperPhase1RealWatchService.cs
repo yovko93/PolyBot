@@ -135,7 +135,7 @@ public sealed class PaperPhase1RealWatchService(TradingBotOptions options)
         var path = Path.Combine(Directory.GetCurrentDirectory(), "exports/paper-phase1-real-watch-latest.json");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var payload = new { generatedAtUtc=DateTime.UtcNow, processRunId=ProcessRunContext.ProcessRunId, profile=options.RuntimeProfile, enabled=Current.Enabled, armed=Current.Armed, waitingForEdge=Current.WaitingForEdge, minEdge=options.PaperDiagnosticsLimited.MinEdgeOverride, limits=new { maxOpenPositions=1,maxNotional=5,maxExposure=5,maxOpensPerHour=1 }, summary=new { candidatesSeen=h.PaperPhase1LadderSeen,validPriced=h.PaperPhase1LadderValidPriced,nearBreakEven=h.PaperPhase1LadderNearBreakEven,positiveAfterSafety=h.PaperPhase1LadderPositiveAfterSafety,paperEligible=h.PaperPhase1LadderPaperEligible,openAttempts=Current.OpenAttempts,openSucceeded=Current.OpenSucceeded,openFailed=Current.OpenFailed,openedPositionId=Current.OpenedPositionId,bestAfterSafetyEdge=Current.BestAfterSafetyEdge,bestDistanceToMinEdge=Current.BestDistanceToMinEdge,topBlockingReason=Current.TopBlockingReason,consistent=Current.Consistent }, topDecisions=PaperPhase1EligibilityLadderExporter.LatestTopNearEligible.Take(5), openedPosition=_book?.OpenPositions.FirstOrDefault(IsRealPhase1), safety=new { liveTradingDisabled=true,signingDisabled=LiveTradingGuard.SigningAttempts==0,realOrderSent=false,signingAttempted=false } };
-        File.WriteAllText(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented=true, PropertyNamingPolicy=JsonNamingPolicy.CamelCase }));
+        SafeExportWriter.WriteText(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented=true, PropertyNamingPolicy=JsonNamingPolicy.CamelCase }));
     }
 
     private void ExportSettlement(PaperSettlementResult result, string requestedReason)
@@ -143,6 +143,6 @@ public sealed class PaperPhase1RealWatchService(TradingBotOptions options)
         var configured = options.PaperPhase1RealSettlement.ExportPath;
         var path = Path.IsPathRooted(configured) ? configured : Path.Combine(Directory.GetCurrentDirectory(), configured);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, JsonSerializer.Serialize(new { generatedAtUtc=DateTime.UtcNow, processRunId=ProcessRunContext.ProcessRunId, accepted=result.Accepted, result.Reason, requestedReason, position=result.Position, settlement=result.Settlement, safety=new { paperOnly=true, liveTradingDisabled=true, signingDisabled=LiveTradingGuard.SigningAttempts==0 } }, new JsonSerializerOptions { WriteIndented=true, PropertyNamingPolicy=JsonNamingPolicy.CamelCase }));
+        SafeExportWriter.WriteText(path, JsonSerializer.Serialize(new { generatedAtUtc=DateTime.UtcNow, processRunId=ProcessRunContext.ProcessRunId, accepted=result.Accepted, result.Reason, requestedReason, position=result.Position, settlement=result.Settlement, safety=new { paperOnly=true, liveTradingDisabled=true, signingDisabled=LiveTradingGuard.SigningAttempts==0 } }, new JsonSerializerOptions { WriteIndented=true, PropertyNamingPolicy=JsonNamingPolicy.CamelCase }));
     }
 }

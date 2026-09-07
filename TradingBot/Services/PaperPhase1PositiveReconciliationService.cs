@@ -147,7 +147,7 @@ public sealed class PaperPhase1PositiveReconciliationService(TradingBotOptions o
             positiveExcluded=new { total=x.PositiveExcludedTotal,byReason=x.ExcludedByReason,bestExcluded=new { candidateId=x.BestExcludedCandidateId,marketId=x.BestExcludedMarketId,afterSafetyEdge=x.BestExcludedAfterSafetyEdge,firstReason=x.BestExcludedReason,allReasons=x.BestExcludedAllReasons } },
             topPositiveCandidates=x.TopCandidates.Select((c,i)=>new { rank=i+1,c.CandidateId,c.MarketId,c.Question,c.YesAsk,c.NoAsk,sumAsk=c.YesAsk+c.NoAsk,c.RawEdge,c.AfterCostEdge,c.AfterSafetyEdge,c.TokenMappingVerified,c.HasBothBooks,c.HasYesAsk,c.HasNoAsk,c.OrderbookStale,c.EdgeStable,c.DepthSufficient,c.FillPassed,c.RiskPassed,c.PaperEligible,c.FirstBlockingReason,c.AllBlockingReasons }),
             safety=new { paperOpenAllowed=!x.MismatchBlocking,reason=x.MismatchBlocking?"PositiveCandidateMismatchBlocking":"ReconciliationConsistent",liveTradingDisabled=true,signingDisabled=LiveTradingGuard.SigningAttempts==0 } };
-        File.WriteAllText(path, JsonSerializer.Serialize(payload,new JsonSerializerOptions{WriteIndented=true,PropertyNamingPolicy=JsonNamingPolicy.CamelCase}));
+        SafeExportWriter.WriteText(path, JsonSerializer.Serialize(payload,new JsonSerializerOptions{WriteIndented=true,PropertyNamingPolicy=JsonNamingPolicy.CamelCase}));
     }
 
     private void MaybeLog()

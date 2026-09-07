@@ -427,3 +427,16 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# TradingBot runtime diagnostics are generated and must not pollute Git.
+TradingBot/exports/**
+!TradingBot/exports/README.md
+!TradingBot/exports/.gitkeep
+!TradingBot/exports/latest/
+!TradingBot/exports/latest/.gitkeep
+!TradingBot/exports/history/
+!TradingBot/exports/history/.gitkeep
+!TradingBot/exports/debug/
+!TradingBot/exports/debug/.gitkeep
+!TradingBot/exports/archive/
+!TradingBot/exports/archive/.gitkeep

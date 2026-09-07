@@ -1,5 +1,6 @@
 using System.Text.Json;
 using TradingBot.Options;
+using TradingBot.Services;
 
 namespace TradingBot.Api;
 
@@ -62,7 +63,7 @@ public static class SignalRLogNoiseController
             var tmp = exportPath + ".tmp";
             for (var i = 0; i < 3; i++)
             {
-                try { File.WriteAllText(tmp, json); File.Move(tmp, exportPath, true); break; }
+                try { SafeExportWriter.WriteText(exportPath, json); break; }
                 catch (IOException) when (i < 2) { Thread.Sleep(50); }
             }
         }
