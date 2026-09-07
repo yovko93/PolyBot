@@ -484,6 +484,13 @@ public class PaperSettlementValidationOptions
 
 public class OrderBookOptions
 {
+    public bool BatchRetryEnabled { get; set; } = true;
+    public int BatchRetryCount { get; set; } = 2;
+    public int BatchRetryBackoffMs { get; set; } = 250;
+    public double BatchRetryBackoffMultiplier { get; set; } = 2;
+    public int BatchTimeoutMs { get; set; } = 10000;
+    public int BatchCircuitBreakerFailures { get; set; } = 10;
+    public int BatchCircuitBreakerCooldownSeconds { get; set; } = 60;
     public int MaxBatchBookRequestSize { get; set; } = 100;
     public bool SplitBatchOnBadRequest { get; set; } = true;
     public bool LogInvalidBatchPayloadSamples { get; set; } = true;

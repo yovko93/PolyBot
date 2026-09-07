@@ -9,7 +9,12 @@ public sealed record SafeExportHealthSnapshot(
     bool NonCriticalDisabled, long CriticalWriteFailuresTotal, long NonCriticalWriteFailuresTotal,
     long WriteFailuresTotal, string LastFailedStream, string LastFailedPath, string LastExceptionType,
     string LastExceptionMessageShort, string Health, long RetentionDeletedFilesTotal,
-    double RetentionFreedMbTotal, DateTime? RetentionLastRunUtc, string RetentionLastError);
+    double RetentionFreedMbTotal, DateTime? RetentionLastRunUtc, string RetentionLastError,
+    long FailedStreamsTotal, int FallbackStreamsActive, long PrimaryPathDeniedTotal,
+    long FallbackWritesTotal, IReadOnlyDictionary<string, SafeExportStreamHealth> Streams);
+
+public sealed record SafeExportStreamHealth(string Health, bool FallbackActive, string LastError,
+    string PrimaryPath, string? FallbackPath, long Failures, long FallbackWrites);
 
 /// <summary>Process-wide non-throwing boundary for every diagnostics/export file write.</summary>
 public static class SafeExportWriter
@@ -17,16 +22,17 @@ public static class SafeExportWriter
     private static readonly object Sync = new();
     private static readonly Dictionary<string, int> Failures = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> Disabled = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, SafeExportStreamHealth> Streams = new(StringComparer.OrdinalIgnoreCase);
     private static JsonlExportOptions _options = new();
     private static string _root = Directory.GetCurrentDirectory();
     private static DateTime _lastDiskCheckUtc = DateTime.MinValue, _lastRetentionUtc = DateTime.MinValue;
-    private static long _freeDiskMb = -1, _criticalFailures, _nonCriticalFailures, _deleted;
+    private static long _freeDiskMb = -1, _criticalFailures, _nonCriticalFailures, _deleted, _primaryDenied, _fallbackWrites;
     private static double _freedMb;
     private static string _diskStatus = "Unknown", _lastStream = "None", _lastPath = "None", _lastType = "None", _lastMessage = "None", _retentionError = "None";
 
     public static void Configure(JsonlExportOptions options, string root)
     {
-        lock (Sync) { _options = options; _root = root; Failures.Clear(); Disabled.Clear(); _criticalFailures=0; _nonCriticalFailures=0; _deleted=0; _freedMb=0; _lastStream=_lastPath=_lastType=_lastMessage="None"; _diskStatus="Unknown"; _lastDiskCheckUtc=DateTime.MinValue; _lastRetentionUtc=DateTime.MinValue; }
+        lock (Sync) { _options = options; _root = Path.GetFullPath(root); Failures.Clear(); Disabled.Clear(); Streams.Clear(); _criticalFailures=0; _nonCriticalFailures=0; _deleted=0; _primaryDenied=0; _fallbackWrites=0; _freedMb=0; _lastStream=_lastPath=_lastType=_lastMessage="None"; _diskStatus="Unknown"; _lastDiskCheckUtc=DateTime.MinValue; _lastRetentionUtc=DateTime.MinValue; }
         CheckDiskAndRetention(force: true);
     }
 
@@ -35,17 +41,17 @@ public static class SafeExportWriter
 
     public static bool WriteText(string path, string contents, string? streamName = null, bool? critical = null)
     {
-        var stream = Stream(streamName, path); var isCritical = critical ?? IsCritical(path);
+        path = Normalize(path); var stream = Stream(streamName, path); var isCritical = critical ?? IsCritical(path);
         if (!CanWrite(stream, isCritical)) return false;
         for (var attempt = 0; attempt <= _options.JsonlMaxRetries; attempt++)
         {
             var temp = path + "." + Environment.ProcessId + ".tmp";
             try
             {
-                ThrowIfInjected(); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                ThrowIfInjected(); PreparePath(path);
                 using (var file = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None, 64 * 1024, FileOptions.WriteThrough))
                 using (var writer = new StreamWriter(file, new UTF8Encoding(false))) { writer.Write(contents); writer.Flush(); file.Flush(true); }
-                File.Move(temp, path, true); Success(stream); return true;
+                File.Move(temp, path, true); Success(stream,path); return true;
             }
             catch (Exception ex) when (IsHandled(ex))
             {
@@ -58,11 +64,11 @@ public static class SafeExportWriter
 
     public static bool AppendText(string path, string contents, string? streamName = null, bool? critical = null)
     {
-        var stream = Stream(streamName, path); var isCritical = critical ?? IsCritical(path);
+        path = Normalize(path); var stream = Stream(streamName, path); var isCritical = critical ?? IsCritical(path);
         if (!CanWrite(stream, isCritical)) return false;
         lock (Sync)
         {
-            try { ThrowIfInjected(); Directory.CreateDirectory(Path.GetDirectoryName(path)!); File.AppendAllText(path, contents, new UTF8Encoding(false)); Success(stream); return true; }
+            try { ThrowIfInjected(); PreparePath(path); File.AppendAllText(path, contents, new UTF8Encoding(false)); Success(stream,path); return true; }
             catch (Exception ex) when (IsHandled(ex)) { RecordFailure(stream, path, ex, isCritical); return false; }
         }
     }
@@ -77,7 +83,9 @@ public static class SafeExportWriter
                 _options.DisableNonCriticalExportsWhenLowDisk && _diskStatus is "LowDisk" or "CriticalLowDisk",
                 _criticalFailures, _nonCriticalFailures, _criticalFailures + _nonCriticalFailures,
                 _lastStream, _lastPath, _lastType, _lastMessage, health, _deleted, _freedMb,
-                _lastRetentionUtc == DateTime.MinValue ? null : _lastRetentionUtc, _retentionError);
+                _lastRetentionUtc == DateTime.MinValue ? null : _lastRetentionUtc, _retentionError,
+                Streams.Values.LongCount(x=>x.Failures>0), Streams.Values.Count(x=>x.FallbackActive),
+                _primaryDenied, _fallbackWrites, new Dictionary<string,SafeExportStreamHealth>(Streams,StringComparer.OrdinalIgnoreCase));
         }
     }
 
@@ -88,20 +96,31 @@ public static class SafeExportWriter
     }
     private static bool TryFallback(string stream, string path, string contents, bool critical)
     {
-        var fallback = Path.Combine(Path.GetTempPath(), "PolyBot-exports-fallback", ProcessRunContext.ProcessRunId, Path.GetFileName(path));
-        try { ThrowIfInjected(); Directory.CreateDirectory(Path.GetDirectoryName(fallback)!); File.WriteAllText(fallback, contents); return false; }
+        var fallback = Path.Combine(_root, "exports", "fallback", Path.GetFileName(path));
+        var temp=fallback+"."+Environment.ProcessId+".tmp";
+        try
+        {
+            ThrowIfInjected(); PreparePath(fallback);
+            using(var file=new FileStream(temp,FileMode.Create,FileAccess.Write,FileShare.None,64*1024,FileOptions.WriteThrough))
+            using(var writer=new StreamWriter(file,new UTF8Encoding(false))){writer.Write(contents);writer.Flush();file.Flush(true);}
+            File.Move(temp,fallback,true);
+            lock(Sync){_fallbackWrites++;Failures[stream]=0;Disabled.Remove(stream);Streams[stream]=new("Fallback",true,$"{_lastType}:{_lastMessage}",path,fallback,Streams.GetValueOrDefault(stream)?.Failures??1,Streams.GetValueOrDefault(stream)?.FallbackWrites+1??1);} return true;
+        }
         catch (Exception ex) when (IsHandled(ex)) { RecordFailure(stream, fallback, ex, critical); return false; }
+        finally { TryDelete(temp); }
     }
-    private static void Success(string stream) { lock (Sync) Failures[stream] = 0; }
+    private static void Success(string stream,string path) { lock (Sync) { Failures[stream] = 0; var old=Streams.GetValueOrDefault(stream); Streams[stream]=new("Ok",false,"None",path,null,old?.Failures??0,old?.FallbackWrites??0); } }
     private static void RecordFailure(string stream, string path, Exception ex, bool critical)
     {
         lock (Sync)
         {
             if (critical) _criticalFailures++; else _nonCriticalFailures++;
+            if(ex is UnauthorizedAccessException&&!path.Contains(Path.Combine("exports","fallback"),StringComparison.OrdinalIgnoreCase)) _primaryDenied++;
             _lastStream = stream; _lastPath = path; _lastType = ex.GetType().Name;
             _lastMessage = ex.Message.Replace('\r', ' ').Replace('\n', ' '); if (_lastMessage.Length > 160) _lastMessage = _lastMessage[..160];
             Failures[stream] = Failures.GetValueOrDefault(stream) + 1;
             if (Failures[stream] >= _options.JsonlDisableAfterConsecutiveFailures) Disabled.Add(stream);
+            Streams[stream]=new(Disabled.Contains(stream)?"Disabled":"Degraded",false,$"{_lastType}:{_lastMessage}",path,null,Failures[stream],Streams.GetValueOrDefault(stream)?.FallbackWrites??0);
         }
     }
     private static void CheckDiskAndRetention(bool force = false)
@@ -130,6 +149,9 @@ public static class SafeExportWriter
     }
     private static bool IsCritical(string path) => path.Contains("release-status", StringComparison.OrdinalIgnoreCase) || path.Contains("operator-runbook", StringComparison.OrdinalIgnoreCase) || path.Contains("dashboard", StringComparison.OrdinalIgnoreCase) || path.Contains("paper-account", StringComparison.OrdinalIgnoreCase) || path.Contains("paper-execution", StringComparison.OrdinalIgnoreCase) || path.Contains("paper-position", StringComparison.OrdinalIgnoreCase);
     private static string Stream(string? name, string path) => string.IsNullOrWhiteSpace(name) ? Path.GetFileNameWithoutExtension(path) : name;
+    public static SafeExportStreamHealth StreamSnapshot(string stream) { lock(Sync) return Streams.GetValueOrDefault(stream)??new("Ok",false,"None","None",null,0,0); }
+    private static string Normalize(string path) => Path.GetFullPath(path.Replace(Path.AltDirectorySeparatorChar,Path.DirectorySeparatorChar));
+    private static void PreparePath(string path) { var parent=Path.GetDirectoryName(path)??throw new DirectoryNotFoundException(path); Directory.CreateDirectory(parent); if(Directory.Exists(path)) throw new UnauthorizedAccessException("Export path is a directory."); if(File.Exists(path)&&(File.GetAttributes(path)&FileAttributes.ReadOnly)!=0) File.SetAttributes(path,File.GetAttributes(path)&~FileAttributes.ReadOnly); }
     private static bool IsHandled(Exception ex) => ex is IOException or UnauthorizedAccessException or PathTooLongException or DirectoryNotFoundException || ex is Exception;
     private static void ThrowIfInjected() { if (_options.InjectDiskFullForTesting) throw new IOException("There is not enough space on the disk"); }
     private static void TryDelete(string path) { try { if (File.Exists(path)) File.Delete(path); } catch { } }

@@ -56,6 +56,7 @@ public static class Phase1StrategyExpansionDiagnosticService
         if(!c.ConfigPresent)return "VerifiedMultiOutcomeCompletionNotWired";
         if(!c.Enabled)return "VerifiedMultiOutcomeCompletionDisabled";
         var o=VerifiedMultiOutcomeDiscoveryDiagnostics.OrderbookCurrent;
+        if(BatchOrderbookDiagnostics.Current.CircuitBreakerOpen)return "VerifiedMultiOutcomeShadowOrderbookProviderUnavailable";
         if(!VerifiedMultiOutcomeDiscoveryDiagnostics.ShadowPrefetchEnabled)return "VerifiedMultiOutcomeShadowOrderbookPrefetchDisabled";
         if(o.TopMissingReason5m=="ShadowSiblingOrderbookRateLimited")return "VerifiedMultiOutcomeShadowOrderbookPrefetchRateLimited";
         if(o.TopMissingReason5m is "ShadowSiblingOrderbookProviderError" or "ShadowSiblingOrderbookTimeout")return "VerifiedMultiOutcomeShadowOrderbookPrefetchProviderFailing";

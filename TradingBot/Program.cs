@@ -1412,7 +1412,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         var missingSiblingBook=missingBefore.Any(id=>shadowCompletionMarkets.ContainsKey(id)&&!loadedCompletionBookIds.Contains(id));
                         var succeeded=attempted&&missingAfter.Length==0&&!missingTokenMap&&!missingSiblingBook;
                         if(succeeded) shadowCompletedGroupKeys.Add(group.GroupKey);
-                        var reason=!attempted?"ShadowGroupCompletionDisabled":succeeded?"None":!options.PaperPhase1.ShadowSiblingOrderbookPrefetchEnabled?"ShadowSiblingOrderbookNotRequested":missingBefore.Any(id=>!requestedCompletionIds.Contains(id)&&!shadowCompletionMarkets.ContainsKey(id))?"ShadowSiblingOrderbookNotRequested":missingTokenMap?"ShadowSiblingOrderbookTokenMapMissing":missingSiblingBook?"ShadowSiblingOrderbookNotFound":"ShadowSiblingOrderbookRequestFailed";
+                        var reason=!attempted?"ShadowGroupCompletionDisabled":succeeded?"None":!options.PaperPhase1.ShadowSiblingOrderbookPrefetchEnabled?"ShadowSiblingOrderbookNotRequested":missingBefore.Any(id=>!requestedCompletionIds.Contains(id)&&!shadowCompletionMarkets.ContainsKey(id))?"ShadowSiblingOrderbookNotRequested":missingTokenMap?"ShadowSiblingOrderbookTokenMapMissing":missingSiblingBook?ShadowOrderbookFailureReason():"ShadowSiblingOrderbookRequestFailed";
                         var groupMarketsLoaded=missingBefore.Count(id=>shadowCompletionMarkets.ContainsKey(id));
                         var requiredTokens=missingBefore.Where(shadowCompletionMarkets.ContainsKey).SelectMany(id=>shadowCompletionMarkets[id].clobTokenIds.Take(2)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
                         var loadedTokens=missingBefore.Where(loadedCompletionBookIds.Contains).SelectMany(id=>shadowCompletionMarkets[id].clobTokenIds.Take(2)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
@@ -2936,6 +2936,17 @@ static SingleMarketArbSnapshotDto BuildSingleMarketSignalRPayload(BotRuntimeStat
     }
     return payload;
 }
+
+static string ShadowOrderbookFailureReason() => BatchOrderbookDiagnostics.Current switch
+{
+    { CircuitBreakerOpen: true } => "ShadowSiblingOrderbookCircuitBreakerOpen",
+    { LastHttpStatus: "429" } => "ShadowSiblingOrderbookRateLimited",
+    { LastErrorKind: "Timeout" } => "ShadowSiblingOrderbookTimeout",
+    { LastErrorKind: "ProviderError" } => "ShadowSiblingOrderbookProviderError",
+    { LastErrorKind: "MalformedResponse" } => "ShadowSiblingOrderbookMalformedResponse",
+    { LastStatus: "NoBooksLoaded" } => "ShadowSiblingOrderbookBatchEmptyResponse",
+    _ => "ShadowSiblingOrderbookNotFound"
+};
 
 static List<Market> BuildRollingBatch(List<Market> markets, ref int offset, int batchSize, TradingBotOptions options)
 {

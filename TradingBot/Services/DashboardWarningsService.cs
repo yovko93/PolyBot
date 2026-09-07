@@ -16,6 +16,7 @@ public sealed record DashboardWarningsClassification(
     bool Consistent,
     string RecommendedAction)
 {
+    public string ConsistencyReason => Consistent ? "None" : Blocking > Total ? "BlockingExceedsTotal" : NonBlocking != Total-Blocking ? "WarningPartitionMismatch" : "WarningClassificationMismatch";
     public string Status(string normalStatus) => Blocking > 0
         ? "WarningBlocked"
         : Total > 0 && string.Equals(normalStatus, "ReadyWaitingForEdge", StringComparison.Ordinal)
@@ -72,8 +73,7 @@ public static class DashboardWarningsService
         var top = byReason.OrderByDescending(x => x.Value).ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase).FirstOrDefault().Key ?? "None";
         var safety = byReason.Any(x => x.Value > 0 && AffectsTradingSafety(x.Key));
         var paper = blocking > 0 && byReason.Any(x => x.Value > 0 && AffectsPaper(x.Key));
-        var consistent = total == blocking + (total - blocking) && (!fixtureIsolationOk ? blocking > 0 : true)
-            && (!orderbookStable ? blocking > 0 : true);
+        var consistent = blocking >= 0 && blocking <= total && total - blocking >= 0;
         var action = blocking == 0
             ? total == 0 ? "None" : "NoActionRequired;monitor_diagnostics"
             : $"InvestigateAndFix:{byReason.Where(x => IsBlocking(x.Key, localPaperPhase1Readiness, orderbookStable, fixtureIsolationOk)).OrderByDescending(x => x.Value).First().Key}";

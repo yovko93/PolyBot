@@ -43,4 +43,22 @@ public sealed class SafeExportWriterTests
         Assert.False(SafeExportWriter.WriteText(path, "{}", "Canary", false));
         Assert.Equal("Disabled", SafeExportWriter.Snapshot().Health);
     }
+
+    [Fact]
+    public void DirectoryCollisionUsesNormalizedExportsFallback()
+    {
+        var root=Path.Combine(Path.GetTempPath(),$"polybot-safe-export-{Guid.NewGuid():N}");
+        var primary=Path.Combine(root,"exports","paper-phase1-positive-captures-latest.json");
+        Directory.CreateDirectory(primary); // Simulates a denied/non-file latest target.
+        SafeExportWriter.Configure(new JsonlExportOptions { JsonlMaxRetries=0,MinFreeDiskMb=0,CriticalFreeDiskMb=0,RetentionEnabled=false },root);
+
+        Assert.True(SafeExportWriter.WriteJson(primary,"{}","paper-phase1-positive-captures-latest",critical:false));
+
+        var stream=SafeExportWriter.StreamSnapshot("paper-phase1-positive-captures-latest");
+        Assert.Equal("Fallback",stream.Health);
+        Assert.True(stream.FallbackActive);
+        Assert.Equal(Path.GetFullPath(primary),stream.PrimaryPath);
+        Assert.Equal(Path.Combine(root,"exports","fallback","paper-phase1-positive-captures-latest.json"),stream.FallbackPath);
+        Assert.True(File.Exists(stream.FallbackPath));
+    }
 }
