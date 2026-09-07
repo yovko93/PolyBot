@@ -1392,7 +1392,10 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         additionalMarketsLoaded=loaded.Count;
                         var completionGroupIds=incompleteGroups.SelectMany(g=>g.MarketIds).ToHashSet(StringComparer.OrdinalIgnoreCase);
                         var tokenLimit=options.PaperPhase1.ShadowSiblingOrderbookPrefetchMaxTokensPerWindow;
-                        var loadedForBooks=loaded.Concat(shadowCompletionMarkets.Values.Where(m=>completionGroupIds.Contains(m.id))).Where(m=>m.clobTokenIds.Count>=2).GroupBy(m=>m.id,StringComparer.OrdinalIgnoreCase).Select(g=>g.First()).Take(Math.Max(1,tokenLimit/2)).ToList();
+                        var completionMarketCandidates=loaded.Concat(shadowCompletionMarkets.Values.Where(m=>completionGroupIds.Contains(m.id))).GroupBy(m=>m.id,StringComparer.OrdinalIgnoreCase).Select(g=>g.First()).ToList();
+                        ShadowTokenIdentityAudit.ObserveFilter(completionMarketCandidates);
+                        // Completion is diagnostics-only, but it must not waste CLOB capacity on markets that cannot have a book.
+                        var loadedForBooks=completionMarketCandidates.Where(m=>ShadowTokenIdentityAudit.ClassifyMarket(m)=="None").Take(Math.Max(1,tokenLimit/2)).ToList();
                         additionalBooksRequested=options.PaperPhase1.ShadowSiblingOrderbookPrefetchEnabled?loadedForBooks.Sum(m=>m.clobTokenIds.Take(2).Count()):0;
                         if(options.PaperPhase1.ShadowSiblingOrderbookPrefetchEnabled)
                         {
@@ -1400,7 +1403,14 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             using var prefetchGate=new SemaphoreSlim(options.PaperPhase1.ShadowSiblingOrderbookPrefetchConcurrency);
                             await Task.WhenAll(batches.Select(async batch=>{ await prefetchGate.WaitAsync(stoppingToken); try { for(var retry=0;retry<=options.PaperPhase1.ShadowSiblingOrderbookRetryCount;retry++){ await orderbookService.PrefetchBinarySnapshotsAsync(batch.ToList(),stoppingToken); if(retry<options.PaperPhase1.ShadowSiblingOrderbookRetryCount) await Task.Delay(options.PaperPhase1.ShadowSiblingOrderbookRetryBackoffMs,stoppingToken); } } finally { prefetchGate.Release(); } }));
                         }
-                        foreach(var market in options.PaperPhase1.ShadowSiblingOrderbookPrefetchEnabled?loadedForBooks:[]) if(await orderbookService.GetBinarySnapshotAsync(market,stoppingToken) is not null) { additionalBooksLoaded+=Math.Min(2,market.clobTokenIds.Count); loadedCompletionBookIds.Add(market.id); }
+                        foreach(var market in options.PaperPhase1.ShadowSiblingOrderbookPrefetchEnabled?loadedForBooks:[])
+                        {
+                            var found=await orderbookService.GetBinarySnapshotAsync(market,stoppingToken) is not null;
+                            if(found) { additionalBooksLoaded+=Math.Min(2,market.clobTokenIds.Count); loadedCompletionBookIds.Add(market.id); }
+                            var owner=incompleteGroups.FirstOrDefault(g=>g.MarketIds.Contains(market.id,StringComparer.OrdinalIgnoreCase));
+                            var batch=BatchOrderbookDiagnostics.Current;
+                            ShadowTokenIdentityAudit.Observe(owner?.GroupKey??market.id,market,found,batch.LastStatus,!found&&batch.Loaded>0);
+                        }
                         baseIds.UnionWith(shadowCompletionMarkets.Keys);
                     }
                     foreach(var group in incompleteGroups)

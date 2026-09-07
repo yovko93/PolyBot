@@ -94,6 +94,12 @@ public static class VerifiedMultiOutcomeDiscoveryDiagnostics
         "ShadowSiblingOrderbookStale", "ShadowSiblingOrderbookTokenMapMissing", "ShadowSiblingOrderbookMarketInactive",
         "ShadowSiblingOrderbookRateLimited", "ShadowSiblingOrderbookProviderError", "ShadowSiblingOrderbookTimeout",
         "ShadowSiblingOrderbookLoadQueueDropped", "ShadowSiblingOrderbookCompletionWindowExpired", "ShadowSiblingOrderbookBatchEmptyResponse", "ShadowSiblingOrderbookMalformedResponse", "ShadowSiblingOrderbookCircuitBreakerOpen"
+        ,"ShadowSiblingWrongTokenIdentifier", "ShadowSiblingTokenIdMissing", "ShadowSiblingClobTokenIdMissing",
+        "ShadowSiblingMarketInactive", "ShadowSiblingMarketClosed", "ShadowSiblingMarketArchived",
+        "ShadowSiblingMarketNotAcceptingOrders", "ShadowSiblingMarketNotOrderbookable",
+        "ShadowSiblingConditionIdMismatch", "ShadowSiblingOutcomeTokenMapMismatch", "ShadowSiblingCLOBAssetIdMismatch",
+        "ShadowSiblingOrderbookActuallyMissing", "ShadowSiblingOrderbookProviderReturnedEmpty",
+        "ShadowSiblingOrderbookProviderReturnedPartialBatch"
     ];
     private static readonly object Sync = new();
     private static DateTime _windowStart = DateTime.UtcNow;

@@ -60,6 +60,13 @@ public static class Phase1StrategyExpansionDiagnosticService
         if(!VerifiedMultiOutcomeDiscoveryDiagnostics.ShadowPrefetchEnabled)return "VerifiedMultiOutcomeShadowOrderbookPrefetchDisabled";
         if(o.TopMissingReason5m=="ShadowSiblingOrderbookRateLimited")return "VerifiedMultiOutcomeShadowOrderbookPrefetchRateLimited";
         if(o.TopMissingReason5m is "ShadowSiblingOrderbookProviderError" or "ShadowSiblingOrderbookTimeout")return "VerifiedMultiOutcomeShadowOrderbookPrefetchProviderFailing";
+        var audit=ShadowTokenIdentityAudit.Current;
+        if(audit.WrongIdentifier5m>0)return "VerifiedMultiOutcomeShadowWrongTokenIdentifier";
+        if(audit.ClosedMarket5m+audit.InactiveMarket5m+audit.ArchivedMarket5m>0)return "VerifiedMultiOutcomeShadowClosedOrInactiveMarkets";
+        if(audit.MissingClobTokenId5m>0)return "VerifiedMultiOutcomeShadowMissingClobTokenIds";
+        if(audit.OutcomeMapMismatch5m+audit.ConditionMismatch5m>0)return "VerifiedMultiOutcomeShadowTokenMapMismatch";
+        if(audit.NotOrderbookable5m>0)return "VerifiedMultiOutcomeShadowNonOrderbookableMarkets";
+        if(audit.ActuallyMissingOrderbook5m>0)return "VerifiedMultiOutcomeShadowOrderbooksActuallyMissing";
         if(o.Requests5m>0&&o.SuccessRate5m<.5m)return "VerifiedMultiOutcomeShadowOrderbookCoverageTooLow";
         if(c.Completed5m>0&&c.ValidPricedAfterCompletion5m==0)return "VerifiedMultiOutcomeCompletedNoValidPricing";
         if(c.ValidPricedAfterCompletion5m>0&&c.PositiveAfterSafetyAfterCompletion5m==0)return "VerifiedMultiOutcomeCompletedBelowMinEdge";
