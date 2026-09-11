@@ -36,6 +36,7 @@ public static class SafeExportWriter
     {
         lock (Sync) { _options = options; _root = Path.GetFullPath(root); _exportRoot=Path.GetFullPath(Path.IsPathRooted(options.Root)?options.Root:Path.Combine(_root,options.Root)); Failures.Clear(); Disabled.Clear(); Streams.Clear(); _criticalFailures=0; _nonCriticalFailures=0; _deleted=0; _primaryDenied=0; _fallbackWrites=0; _freedMb=0; _lastStream=_lastPath=_lastType=_lastMessage="None"; _diskStatus="Unknown"; _lastDiskCheckUtc=DateTime.MinValue; _lastRetentionUtc=DateTime.MinValue; }
         try{foreach(var directory in new[]{"latest","history","debug","archive"}) Directory.CreateDirectory(Path.Combine(_exportRoot,directory));}catch(Exception ex) when(IsHandled(ex)){RecordFailure("ExportLayout",_exportRoot,ex,false);}
+        if(options.Layout.Equals("Consolidated",StringComparison.OrdinalIgnoreCase)&&!options.WriteLegacyPointerFiles) ArchiveLegacyTopLevelFiles();
         CheckDiskAndRetention(force: true);
     }
 
@@ -190,6 +191,22 @@ public static class SafeExportWriter
     private static void RotateIfNeeded(string path,int maxMb){if(!File.Exists(path)||new FileInfo(path).Length<maxMb*1024L*1024L)return;var archive=Path.Combine(_exportRoot,"archive",DateTime.UtcNow.ToString("yyyyMMdd"));Directory.CreateDirectory(archive);File.Move(path,Path.Combine(archive,$"{Path.GetFileNameWithoutExtension(path)}-{ProcessRunContext.ProcessRunId}-{DateTime.UtcNow:HHmmssfff}{Path.GetExtension(path)}"),true);}
     private static string Relative(string child)=>Path.Combine(_options.Root,child).Replace('\\','/');
     private static int TopLevelGeneratedCount()=>Directory.Exists(_exportRoot)?Directory.GetFiles(_exportRoot).Count(x=>Path.GetFileName(x) is not "README.md" and not ".gitkeep"):0;
+    private static void ArchiveLegacyTopLevelFiles()
+    {
+        try
+        {
+            if(!Directory.Exists(_exportRoot))return;
+            var destination=Path.Combine(_exportRoot,"archive","legacy-top-level");
+            foreach(var file in Directory.GetFiles(_exportRoot).Where(x=>Path.GetFileName(x) is not "README.md" and not ".gitkeep"))
+            {
+                Directory.CreateDirectory(destination);
+                var target=Path.Combine(destination,Path.GetFileName(file));
+                if(File.Exists(target)) target=Path.Combine(destination,$"{Path.GetFileNameWithoutExtension(file)}-{DateTime.UtcNow:yyyyMMddHHmmssfff}{Path.GetExtension(file)}");
+                File.Move(file,target);
+            }
+        }
+        catch(Exception ex) when(IsHandled(ex)){RecordFailure("LegacyExportCleanup",_exportRoot,ex,false);}
+    }
     private static bool GitIgnored(){try{for(var directory=new DirectoryInfo(_root);directory is not null;directory=directory.Parent){var path=Path.Combine(directory.FullName,".gitignore");if(File.Exists(path)&&File.ReadAllText(path).Contains("TradingBot/exports/**",StringComparison.Ordinal))return true;}return false;}catch{return false;}}
     private static void PreparePath(string path) { var parent=Path.GetDirectoryName(path)??throw new DirectoryNotFoundException(path); Directory.CreateDirectory(parent); if(Directory.Exists(path)) throw new UnauthorizedAccessException("Export path is a directory."); if(File.Exists(path)&&(File.GetAttributes(path)&FileAttributes.ReadOnly)!=0) File.SetAttributes(path,File.GetAttributes(path)&~FileAttributes.ReadOnly); }
     private static bool IsHandled(Exception ex) => ex is IOException or UnauthorizedAccessException or PathTooLongException or DirectoryNotFoundException || ex is Exception;
