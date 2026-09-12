@@ -1546,20 +1546,24 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                         if (options.MultiOutcomeArbitrage.VerifiedGroupOrderbookPrefetchEnabled)
                             await orderbookService.PrefetchBinarySnapshotsAsync(markets.Take(options.MultiOutcomeArbitrage.MaxVerifiedGroupOrderbookRequestsPerCycle).ToList(), stoppingToken);
                         var resolvedNoAsks = new List<ResolvedNoAsk>();
+                        var liquidityBooks = new List<(Market Market, BinaryOrderBookSnapshot? Book)>();
                         foreach (var m in markets.Take(options.MultiOutcomeArbitrage.MaxVerifiedGroupOrderbookRequestsPerCycle))
                         {
                             var tokens = VerifiedGroupPricingService.ResolveBinaryTokens(m);
                             if (orderbookService.GetStats().OrderbookCircuitBreakerActive)
                             {
+                                liquidityBooks.Add((m,null));
                                 resolvedNoAsks.Add(ResolvedNoAsk.Fail(m.id, m.conditionId, tokens.NoTokenId, "CircuitBreakerActive"));
                                 continue;
                             }
                             if (orderbookService.IsMarketOrderbookQuarantined(m.id))
                             {
+                                liquidityBooks.Add((m,null));
                                 resolvedNoAsks.Add(ResolvedNoAsk.Fail(m.id, m.conditionId, tokens.NoTokenId, "MarketOrderbookQuarantined"));
                                 continue;
                             }
                             var s = await orderbookService.GetBinarySnapshotAsync(m, stoppingToken);
+                            liquidityBooks.Add((m,s));
                             if ((tokens.YesTokenId is not null && orderbookService.IsTokenQuarantined(tokens.YesTokenId)) || (tokens.NoTokenId is not null && orderbookService.IsTokenQuarantined(tokens.NoTokenId)))
                                 resolvedNoAsks.Add(ResolvedNoAsk.Fail(m.id, m.conditionId, tokens.NoTokenId, "TokenQuarantined"));
                             else
@@ -1571,6 +1575,7 @@ static async Task RunScannerAsync(BotRuntimeState state, IBotUiLogger uiLogger, 
                             }
                         }
                         var missingNoAskLegs = resolvedNoAsks.Where(x => !x.NoAsk.HasValue).ToList();
+                        VerifiedMultiOutcomeLiquidityDiagnostics.Observe(g,liquidityBooks,missingNoAskLegs.Count==0,DateTime.UtcNow);
                         var noAskResolvedCount = resolvedNoAsks.Count - missingNoAskLegs.Count;
                         if (missingNoAskLegs.Count > 0)
                         {

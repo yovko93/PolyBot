@@ -75,8 +75,25 @@ public static class SafeExportWriter
         lock (Sync)
         {
             try { ThrowIfInjected(); PreparePath(path); RotateIfNeeded(path,IsDebug(stream,path)?_options.MaxDebugFileMb:_options.MaxHistoryFileMb); File.AppendAllText(path, contents, new UTF8Encoding(false)); Success(stream,path); return true; }
-            catch (Exception ex) when (IsHandled(ex)) { RecordFailure(stream, path, ex, isCritical); return false; }
+            catch (Exception ex) when (IsHandled(ex))
+            {
+                RecordFailure(stream, path, ex, isCritical);
+                return TryAppendFallback(stream,path,contents,isCritical);
+            }
         }
+    }
+
+    private static bool TryAppendFallback(string stream,string primary,string contents,bool critical)
+    {
+        var stem=Path.GetFileNameWithoutExtension(primary);
+        var fallback=Path.Combine(_exportRoot,"debug","fallback",Sanitize(stream),$"{stem}-{ProcessRunContext.ProcessRunId}-{DateTime.UtcNow:yyyyMMdd-HHmmssfff}.jsonl");
+        try
+        {
+            PreparePath(fallback); File.AppendAllText(fallback,contents,new UTF8Encoding(false));
+            lock(Sync){_fallbackWrites++;Failures[stream]=0;Disabled.Remove(stream);var old=Streams.GetValueOrDefault(stream);Streams[stream]=new("Fallback",true,"None",primary,fallback,old?.Failures??1,(old?.FallbackWrites??0)+1);ClearGlobalFailureIfRecovered(stream);}
+            return true;
+        }
+        catch(Exception ex) when(IsHandled(ex)){RecordFailure(stream,fallback,ex,critical);return false;}
     }
 
     public static SafeExportHealthSnapshot Snapshot()
@@ -84,13 +101,14 @@ public static class SafeExportWriter
         CheckDiskAndRetention();
         lock (Sync)
         {
-            var health = _diskStatus is "CriticalLowDisk" ? "CriticalLowDisk" : _diskStatus is "LowDisk" ? "LowDisk" : Disabled.Count > 0 ? "Disabled" : _criticalFailures + _nonCriticalFailures > 0 ? "Degraded" : "Ok";
+            var unhealthy=Streams.Values.Any(x=>x.Health is "Degraded" or "Disabled");
+            var health = _diskStatus is "CriticalLowDisk" ? "CriticalLowDisk" : _diskStatus is "LowDisk" ? "LowDisk" : Disabled.Count > 0 ? "Disabled" : unhealthy ? "Degraded" : "Ok";
             return new(_freeDiskMb, _options.MinFreeDiskMb, _options.CriticalFreeDiskMb, _diskStatus,
                 _options.DisableNonCriticalExportsWhenLowDisk && _diskStatus is "LowDisk" or "CriticalLowDisk",
                 _criticalFailures, _nonCriticalFailures, _criticalFailures + _nonCriticalFailures,
                 _lastStream, _lastPath, _lastType, _lastMessage, health, _deleted, _freedMb,
                 _lastRetentionUtc == DateTime.MinValue ? null : _lastRetentionUtc, _retentionError,
-                Streams.Values.LongCount(x=>x.Failures>0), Streams.Values.Count(x=>x.FallbackActive),
+                Streams.Values.LongCount(x=>x.Health is "Degraded" or "Disabled"), Streams.Values.Count(x=>x.FallbackActive),
                 _primaryDenied, _fallbackWrites, new Dictionary<string,SafeExportStreamHealth>(Streams,StringComparer.OrdinalIgnoreCase),
                 _options.Layout,_options.Root,Relative("latest"),Relative("history"),Relative("debug"),TopLevelGeneratedCount(),GitIgnored(),_options.RetentionEnabled);
         }
@@ -116,7 +134,8 @@ public static class SafeExportWriter
         catch (Exception ex) when (IsHandled(ex)) { RecordFailure(stream, fallback, ex, critical); return false; }
         finally { TryDelete(temp); }
     }
-    private static void Success(string stream,string path) { lock (Sync) { Failures[stream] = 0; var old=Streams.GetValueOrDefault(stream); Streams[stream]=new("Ok",false,"None",path,null,old?.Failures??0,old?.FallbackWrites??0); } }
+    private static void Success(string stream,string path) { lock (Sync) { Failures[stream] = 0; Disabled.Remove(stream); var old=Streams.GetValueOrDefault(stream); Streams[stream]=new("Ok",false,"None",path,null,old?.Failures??0,old?.FallbackWrites??0); ClearGlobalFailureIfRecovered(stream); } }
+    private static void ClearGlobalFailureIfRecovered(string stream){if(_lastStream.Equals(stream,StringComparison.OrdinalIgnoreCase)){_lastStream=_lastPath=_lastType=_lastMessage="None";}}
     private static void RecordFailure(string stream, string path, Exception ex, bool critical)
     {
         lock (Sync)
@@ -175,6 +194,10 @@ public static class SafeExportWriter
             "phase1-verified-multioutcome-completion-history"=>"verified-multioutcome-completion.jsonl",
             "phase1-shadow-orderbook-availability-latest"=>"shadow-orderbook-availability.json",
             "phase1-shadow-orderbook-availability-history"=>"shadow-orderbook-availability.jsonl",
+            "paper-phase1-invalid-positive-artifacts-latest"=>"invalid-positive-artifacts.json",
+            "verified-multioutcome-liquidity-latest"=>"verified-multioutcome-liquidity.json",
+            "verified-multioutcome-liquidity-history"=>"verified-multioutcome-liquidity.jsonl",
+            "verified-multioutcome-liquidity-top-blocked"=>"top-blocked-groups.json",
             "dashboardhistory" or "dashboard-warnings-history"=>"dashboard-warnings.jsonl",
             "releasestatuslatest" or "paper-phase1-release-status-latest"=>"release-status.json",
             "operatorrunbooklatest" or "paper-phase1-operator-runbook-latest"=>"operator-runbook.json",
@@ -186,8 +209,9 @@ public static class SafeExportWriter
         if(append){var history=required.EndsWith(".jsonl",StringComparison.OrdinalIgnoreCase)?required:Path.ChangeExtension(required,".jsonl");return Path.Combine(_exportRoot,"history",history);}
         return Path.Combine(_exportRoot,"latest",required);
     }
-    private static bool IsDebug(string stream,string path){var value=(stream+" "+path).ToLowerInvariant();return value.Contains("invalid-positive")||value.Contains("near-miss")||value.Contains("verification")||value.Contains("dry-run-order")||value.Contains("fill-simulation")||value.Contains("verbose-event");}
-    private static string DebugCategory(string key)=>key.Contains("invalid-positive")?"invalid-positive-artifacts":key.Contains("auto-candidate-near")?"auto-candidate-near-misses":key.Contains("verification")?"auto-candidate-verification":key.Contains("dry-run-order")?"dry-run-order-plans":key.Contains("fill-simulation")?"dry-run-fill-simulations":"verbose-events";
+    private static bool IsDebug(string stream,string path){var value=(stream+" "+path).ToLowerInvariant();return value.Contains("invalid-positive")||value.Contains("liquidity-top-blocked")||value.Contains("near-miss")||value.Contains("verification")||value.Contains("dry-run-order")||value.Contains("fill-simulation")||value.Contains("verbose-event");}
+    private static string DebugCategory(string key)=>key.Contains("invalid-positive")?"invalid-positive-artifacts":key.Contains("liquidity-top-blocked")?"verified-multioutcome-liquidity":key.Contains("auto-candidate-near")?"auto-candidate-near-misses":key.Contains("verification")?"auto-candidate-verification":key.Contains("dry-run-order")?"dry-run-order-plans":key.Contains("fill-simulation")?"dry-run-fill-simulations":"verbose-events";
+    private static string Sanitize(string value)=>string.Concat(value.Select(c=>char.IsLetterOrDigit(c)||c is '-' or '_'?c:'-')).Trim('-');
     private static void RotateIfNeeded(string path,int maxMb){if(!File.Exists(path)||new FileInfo(path).Length<maxMb*1024L*1024L)return;var archive=Path.Combine(_exportRoot,"archive",DateTime.UtcNow.ToString("yyyyMMdd"));Directory.CreateDirectory(archive);File.Move(path,Path.Combine(archive,$"{Path.GetFileNameWithoutExtension(path)}-{ProcessRunContext.ProcessRunId}-{DateTime.UtcNow:HHmmssfff}{Path.GetExtension(path)}"),true);}
     private static string Relative(string child)=>Path.Combine(_options.Root,child).Replace('\\','/');
     private static int TopLevelGeneratedCount()=>Directory.Exists(_exportRoot)?Directory.GetFiles(_exportRoot).Count(x=>Path.GetFileName(x) is not "README.md" and not ".gitkeep"):0;

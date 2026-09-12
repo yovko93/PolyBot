@@ -64,7 +64,14 @@ public static class Phase1StrategyExpansionDiagnosticService
         if(o.TopMissingReason5m is "ShadowSiblingOrderbookProviderError" or "ShadowSiblingOrderbookTimeout")return "VerifiedMultiOutcomeShadowOrderbookPrefetchProviderFailing";
         var groups=ShadowTokenIdentityAudit.GroupCurrent;
         if(groups.RawDiscovered5m>0&&groups.EligibleForShadowEvaluation5m==0)return "VerifiedMultiOutcomeNoActiveOrderbookableGroups";
-        if(groups.EligibleForShadowEvaluation5m>0&&c.ValidPricedAfterCompletion5m==0)return "VerifiedMultiOutcomeActiveGroupsNoValidPricing";
+        var liquidity=VerifiedMultiOutcomeLiquidityDiagnostics.Current;
+        if(groups.EligibleForShadowEvaluation5m>0&&c.ValidPricedAfterCompletion5m==0)
+        {
+            if(liquidity.EmptyBook5m>0)return "VerifiedMultiOutcomeActiveGroupsEmptyBooks";
+            if(liquidity.MissingNoAsk5m>0||liquidity.MissingAsk5m>0)return "VerifiedMultiOutcomeActiveGroupsMissingAskLiquidity";
+            if(liquidity.MissingBid5m>0)return "VerifiedMultiOutcomeActiveGroupsMissingBidLiquidity";
+            return "VerifiedMultiOutcomeActiveGroupsPartialLiquidityOnly";
+        }
         if(c.ValidPricedAfterCompletion5m>0&&c.PositiveAfterSafetyAfterCompletion5m==0)return "VerifiedMultiOutcomeActiveGroupsBelowMinEdge";
         if(c.PositiveAfterSafetyAfterCompletion5m>0&&c.ExecutableLikeAfterCompletion5m==0)return "VerifiedMultiOutcomeActiveGroupsHaveEdgeButNotExecutable";
         if(c.ExecutableLikeAfterCompletion5m>0)return "VerifiedMultiOutcomeShadowCandidateFound";
